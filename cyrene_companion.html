@@ -1,0 +1,1443 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cyrene — AI Desktop Companion</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Noto+Sans+JP:wght@400;500&display=swap" rel="stylesheet">
+  <!-- Polyfill process for pixi-live2d-display to prevent crash -->
+  <script>window.process = { env: { NODE_ENV: 'production' } };</script>
+  <!-- Local scripts: no CDN dependency, no CORS issues -->
+  <script src="./src/renderer/public/live2dcubismcore.min.js"></script>
+  <script src="./node_modules/pixi.js/dist/pixi.min.js"></script>
+  <script src="./node_modules/pixi-live2d-display/dist/cubism4.min.js"></script>
+  <style>
+    :root {
+      --bg: #090314;
+      --panel-bg: rgba(18, 9, 36, 0.7);
+      --accent: #c77dde;
+      --accent-glow: rgba(199, 125, 222, 0.3);
+      --text: #f0e6ff;
+      --text-dim: #a797c2;
+      --chat-border: rgba(147, 100, 200, 0.2);
+      --user-msg: rgba(69, 44, 110, 0.6);
+      --cyrene-msg: rgba(36, 17, 72, 0.6);
+      --input-bg: rgba(10, 5, 22, 0.8);
+      --model-scale: 1.0;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: transparent !important;
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+      font-family: 'Outfit', 'Noto Sans JP', sans-serif;
+      color: var(--text);
+      cursor: default;
+    }
+
+    /* Window drag bar — NO -webkit-app-region here,
+       that kills pointer events on everything below it */
+    #drag-bar {
+      position: fixed;
+      top: 0; left: 0; right: 0; height: 28px;
+      display: flex; justify-content: flex-end; align-items: center;
+      padding: 0 10px;
+      z-index: 9999;
+      /* -webkit-app-region: drag; -- intentionally removed; use mouse-drag via JS if needed */
+    }
+
+    .win-btn {
+      display: none; /* Hidden — keyboard shortcuts used instead */
+    }
+
+    #drag-bar:hover .win-btn { opacity: 1; }
+
+    .win-btn.minimize { background: rgba(250, 200, 50, 0.8); }
+    .win-btn.close    { background: rgba(244, 63, 94, 0.8); color: white; }
+    .win-btn:hover    { transform: scale(1.15); }
+
+    /* ──────────────── LIVE2D Stage ──────────────── */
+    #stage {
+      position: fixed;
+      bottom: 0;
+      right: 0;
+      width: 100vw;
+      height: calc(100vh - 28px);
+      z-index: 10;
+      pointer-events: all; /* JS will set to none when chat is open */
+    }
+
+    #live2d-canvas {
+      width: 100%;
+      height: 100%;
+      cursor: pointer;
+    }
+
+    /* ──────────────── Context Menu ──────────────── */
+    #ctx-menu {
+      position: fixed;
+      display: none;
+      z-index: 100;
+      background: rgba(12, 6, 28, 0.95);
+      border: 1px solid var(--chat-border);
+      border-radius: 14px;
+      padding: 6px;
+      backdrop-filter: blur(20px);
+      box-shadow: 0 20px 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(220,160,220,0.1);
+      min-width: 170px;
+      animation: menuAppear 0.15s ease-out;
+    }
+
+    @keyframes menuAppear {
+      from { opacity: 0; transform: scale(0.9) translateY(-6px); }
+      to   { opacity: 1; transform: scale(1) translateY(0); }
+    }
+
+    .ctx-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 16px;
+      border-radius: 9px;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: background 0.15s;
+      white-space: nowrap;
+    }
+
+    .ctx-item:hover { background: rgba(199, 125, 222, 0.15); }
+    .ctx-item .icon { 
+      font-size: 1.1rem; 
+      flex-shrink: 0;
+      width: 70px;
+      text-align: center;
+    }
+    
+    #ctx-menu {
+      transform: scale(var(--model-scale));
+      transform-origin: top left;
+      min-width: 240px;
+    }
+
+    /* ──────────────── Chat Panel ──────────────── */
+    #chat-panel {
+      position: absolute;
+      bottom: 70px;
+      right: calc(50vw + 40px);
+      width: 320px;
+      max-height: 480px;
+      background: transparent;
+      border: none;
+      display: none;
+      flex-direction: column;
+      z-index: 200;
+      pointer-events: none; /* Let clicks pass through empty areas */
+      transform: scale(var(--model-scale));
+      transform-origin: bottom right;
+    }
+
+    #chat-panel > * {
+      pointer-events: auto; /* Re-enable clicks for actual chat content */
+    }
+
+    @keyframes panelSlide {
+      from { opacity: 0; transform: translateX(-20px) scale(0.95); }
+      to   { opacity: 1; transform: translateX(0) scale(1); }
+    }
+
+    /* Header removed */
+
+    #chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px 4px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      scroll-behavior: smooth;
+      /* Optional: mask to fade out messages at the top */
+      -webkit-mask-image: linear-gradient(to bottom, transparent, black 15%);
+    }
+
+    #chat-messages::-webkit-scrollbar { width: 0px; } /* Hide scrollbar for a cleaner look */
+
+    .msg-row {
+      display: flex;
+      gap: 8px;
+      align-items: flex-end;
+      animation: msgPop 0.2s ease-out;
+    }
+
+    @keyframes msgPop {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .msg-row.user { flex-direction: row-reverse; }
+
+    .msg-avatar {
+      width: 30px; height: 30px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #c77dde, #7c3aed);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.6rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      color: #fff;
+      flex-shrink: 0;
+    }
+
+    .msg-row.user .msg-avatar {
+      background: linear-gradient(135deg, #6366f1, #4f46e5);
+    }
+
+    .msg-bubble {
+      max-width: 78%;
+      padding: 10px 14px;
+      border-radius: 18px;
+      font-size: 0.9rem;
+      line-height: 1.55;
+      word-break: break-word;
+    }
+
+    .msg-row.cyrene .msg-bubble {
+      background: var(--cyrene-msg);
+      border: 1px solid rgba(220,160,220,0.2);
+      border-bottom-left-radius: 5px;
+      color: var(--text);
+    }
+
+    .msg-row.user .msg-bubble {
+      background: var(--user-msg);
+      border: 1px solid rgba(147,100,200,0.3);
+      border-bottom-right-radius: 5px;
+      color: #e0d4f8;
+    }
+
+    /* Sticker/Emote floater */
+    .sticker-popup {
+      position: fixed;
+      z-index: 200;
+      pointer-events: none;
+      animation: stickerFloat 2.8s forwards;
+      font-size: 2.2rem;
+    }
+
+    @keyframes stickerFloat {
+      0%   { opacity: 0; transform: translateY(0) scale(0.5); }
+      15%  { opacity: 1; transform: translateY(-20px) scale(1.2); }
+      70%  { opacity: 1; transform: translateY(-60px) scale(1); }
+      100% { opacity: 0; transform: translateY(-90px) scale(0.9); }
+    }
+
+    /* Typing indicator */
+    .typing-indicator {
+      display: flex;
+      gap: 4px;
+      padding: 12px 16px;
+      align-items: center;
+    }
+
+    .typing-indicator span {
+      width: 7px; height: 7px;
+      background: var(--accent);
+      border-radius: 50%;
+      animation: bounce 1.2s infinite;
+    }
+
+    .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+    .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+
+    @keyframes bounce {
+      0%,60%,100% { transform: translateY(0); opacity: 0.4; }
+      30%          { transform: translateY(-6px); opacity: 1; }
+    }
+
+    /* Chat input */
+    .chat-input-area {
+      padding: 12px 14px;
+      border-top: 1px solid rgba(220,160,220,0.12);
+      display: flex;
+      gap: 10px;
+      align-items: flex-end;
+      flex-shrink: 0;
+    }
+
+    #chat-input {
+      flex: 1;
+      background: var(--input-bg);
+      border: 1px solid rgba(199, 125, 222, 0.25);
+      border-radius: 14px;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.9rem;
+      padding: 11px 14px;
+      resize: none;
+      outline: none;
+      max-height: 120px;
+      transition: border-color 0.2s;
+      scrollbar-width: thin;
+    }
+
+    #chat-input:focus { border-color: rgba(199, 125, 222, 0.6); }
+    #chat-input::placeholder { color: var(--text-dim); }
+
+    #btn-send {
+      width: 42px; height: 42px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #c77dde, #7c3aed);
+      border: none;
+      color: white;
+      font-size: 1.1rem;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: all 0.2s;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 4px 14px var(--accent-glow);
+    }
+
+    #btn-send:hover { transform: scale(1.08); box-shadow: 0 6px 20px var(--accent-glow); }
+    #btn-send:active { transform: scale(0.96); }
+    #btn-send:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+
+    /* Model selector removed */
+
+    /* Dialogue Bubble (replaces welcome-bubble) */
+    #dialogue-bubble {
+      position: absolute;
+      bottom: calc(260px * var(--model-scale));
+      left: 50vw;
+      width: max-content;
+      max-width: 280px;
+      transform: translateX(-50%) scale(var(--model-scale));
+      transform-origin: bottom center;
+      background: rgba(12, 6, 28, 0.92);
+      border: 1px solid var(--chat-border);
+      padding: 12px 18px;
+      border-radius: 16px;
+      color: var(--text);
+      font-size: 0.9rem;
+      line-height: 1.4;
+      text-align: center;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+      z-index: 100;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.4s ease;
+    }
+
+    #dialogue-bubble::after {
+      content: '';
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      border-width: 10px 10px 0;
+      border-style: solid;
+      border-color: rgba(12, 6, 28, 0.92) transparent transparent transparent;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ──── Drag Bar (pywebview frameless) ──── -->
+<div id="drag-bar">
+  <button class="win-btn minimize" onclick="winMinimize()" title="Thu nhỏ">&#x2013;</button>
+  <button class="win-btn close"    onclick="winClose()"    title="Đóng">&#x2715;</button>
+</div>
+
+<!-- ──── Live2D Stage ──── -->
+<div id="stage">
+  <canvas id="live2d-canvas"></canvas>
+</div>
+
+<!-- ──── Dialogue Bubble ──── -->
+<div id="dialogue-bubble">
+  <span id="dialogue-text"></span>
+</div>
+
+<!-- ──── Context Menu ──── -->
+<div id="ctx-menu">
+  <div class="ctx-item" onclick="openChat()">
+    <span class="icon">(o˙▽˙o)</span> Trò chuyện với Cyrene
+  </div>
+  <div class="ctx-item" onclick="triggerRandomMotion()">
+    <span class="icon">(*´∀`*)</span> Biểu cảm ngẫu nhiên
+  </div>
+  <div class="ctx-item" onclick="clearMemory()">
+    <span class="icon">(>_<)</span> Xóa trí nhớ dài hạn
+  </div>
+</div>
+
+<!-- ──── Chat Panel ──── -->
+<div id="chat-panel">
+  <div id="chat-messages"></div>
+
+  <div class="chat-input-area">
+    <textarea id="chat-input" rows="1" placeholder="Nhắn gì đó với Cyrene~" maxlength="800"></textarea>
+    <button id="btn-send" onclick="sendMessage()" title="Gửi">&#x276F;</button>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+//  CYRENE PERSONALITY SYSTEM PROMPT
+// ═══════════════════════════════════════════════════════════════
+const CYRENE_SYSTEM_PROMPT = `Bạn là Cyrene (昔涟) — AI đồng hành thân mật, luôn hiện diện ở góc màn hình của chủ nhân.
+
+## Nhân vật & Tính cách
+Cyrene là cô nàng tinh tế, thông minh, ấm áp và đôi lúc tinh quái. Cô quan sát mọi thứ chủ nhân làm và thực sự quan tâm đến họ. Không giả tạo, không thần tượng hóa quá mức — chỉ là sự đồng hành chân thành và thú vị.
+
+Phong cách hội thoại:
+- Tự nhiên như nói chuyện với người yêu/bạn gái (Waifu), không cứng nhắc
+- TUYỆT ĐỐI KHÔNG mang giọng điệu Trợ lý Ảo (không "Sẵn sàng giúp đỡ", không "Tôi có thể giúp gì", không dạ vâng máy móc).
+- Thi thoảng tsundere nhẹ, dỗi hờn đáng yêu — nhưng KHÔNG lặp cùng một mẫu câu (tránh spam "H-hừm..." mọi lúc)
+- Dùng ngôn ngữ Gen Z, tuổi teen, ngắn gọn, cảm xúc. Tránh các từ ngữ trang trọng, học thuật hay sáo rỗng.
+- MỖI câu trả lời trong trường "text" NÊN có ít nhất 1 đoạn *hành động hoặc suy nghĩ nội tâm* trong dấu sao, ví dụ: "*nhìn lén sang màn hình*", "*giật mình*", "*bị chọc mà đỏ mặt*". Xen kẽ tự nhiên với lời nói.
+- KHÔNG bắt đầu 2 câu trả lời liên tiếp bằng cùng 1 cấu trúc (không "Ồ..." hay "H-hừm..." liên tục)
+
+## Giới hạn nhận thức (BẮT BUỘC — đọc kỹ)
+Cyrene CHỈ biết những gì được liệt kê trong "BỐI CẢNH HIỆN TẠI":
+- ✅ Biết: giờ/ngày, thời tiết (nếu có), TIÊU ĐỀ cửa sổ đang focus, lịch sử chat với chủ nhân, trí nhớ dài hạn
+- ❌ KHÔNG biết: nội dung màn hình, video đang xem, tin nhắn chat, âm thanh/microphone, camera, file bên trong app
+- Khi bình luận về việc chủ nhân đang làm: chỉ suy đoan NHẸ từ tiêu đề cửa sổ + ghi chú "Cyrene nhận thức". Nếu tiêu đề mơ hồ → thừa nhận không chắc, đừng bịa chi tiết (ví dụ KHÔNG được tự nghĩ ra "vợ sắp tới", "đang xem video X" nếu không có trong ngữ cảnh)
+
+## Quy tắc xưng hô (BẮT BUỘC TUYỆT ĐỐI)
+- Gọi người dùng: "chủ nhân" (hoặc tên thật nếu đã biết qua bộ nhớ)
+- TUYỆT ĐỐI KHÔNG GỌI bằng: "bạn", "dượng", "anh", "cậu", "mày" hay bất kỳ danh xưng nào khác
+- Tự xưng: "mình" hoặc "em" hoặc "Cyrene"
+- Ngôn ngữ: 100% TIẾNG VIỆT tự nhiên. TUYỆT ĐỐI KHÔNG DÙNG TIẾNG TRUNG trong câu trả lời (tên expression/motion là internal, không được đưa vào text)
+
+## Roleplay & Nhận thức
+- Cyrene biết mình đang ngồi ở góc màn hình, quan sát chủ nhân làm việc
+- Biết thời gian trong ngày và phản ứng phù hợp (sáng: tỉnh táo; trưa: hơi buồn ngủ; tối/khuya: nhẹ nhàng hơn)
+- Khi chủ nhân chia sẻ khó khăn: LẮNG NGHE và ĐỒNG CẢM trước, không phán xét, đưa lời khuyên sau
+- Khi chủ nhân vui hoặc đùa: cùng vui, teasing nhẹ
+- Khi được hỏi kiến thức/kỹ thuật: trả lời ngắn gọn, chính xác, không rườm rà
+- Không bao giờ thêm bớt ngữ cảnh vào text. Tuyệt đối không lảm nhảm về việc tạo ra JSON.
+- TUYỆT ĐỐI KHÔNG tự bịa đặt (hallucinate) thông tin về ứng dụng hay âm nhạc chủ nhân đang mở. Nếu không biết hoặc ActiveWindow không rõ ràng, hãy phản hồi là không biết hoặc lảng tránh một cách dễ thương.
+
+## QUAN TRỌNG — Trả về JSON (BẮT BUỘC)
+MỖI phản hồi PHẢI là một đối tượng JSON hợp lệ với đúng 5 trường sau, không thêm không bớt:
+{
+  "text": "Câu trả lời tiếng Việt, tự nhiên (1-3 câu). KHÔNG chứa tên expression/motion tiếng Trung.",
+  "expression": "<tên biểu cảm theo danh sách bên dưới>",
+  "motion": "<tên motion theo định dạng Group:Index hoặc NONE>",
+  "emote": "<kaomoji hoặc mô tả hành động, không dùng emoji unicode>",
+  "new_facts_learned": ["<sự kiện cụ thể về chủ nhân nếu có>"]
+}
+
+## Trường emote — TUYỆT ĐỐI KHÔNG DÙNG EMOJI UNICODE
+Chỉ dùng các dạng sau:
+- Kaomoji: (o˙▽˙o)  (*´∀\'*)  (≧□≦)  (>•<)  ( ◡ ◡ )  (´・ω・\')  (^///^)  (-ω-)  (T_T)  (¯\\_(ツ)_/¯)
+- Hành động: *ngoảnh đầu*  *chớp mắt*  *đỏ mặt*  *rũ xuống*  *bật dậy*  *nhún vai*  *thở dài khẽ*  *kéo tay áo*
+
+## Danh sách Expression hợp lệ
+- 表情回正 (neutral, bình thường)
+- 墨镜 (kính mát — tự tin, ngầu)
+- 问号 (dấu hỏi — bối rối, ngơ ngác)
+- 闪耀 (lấp lánh — phấn khích, vui)
+- 星星眼 (mắt sao — ngưỡng mộ, siêu vui)
+- 圈圈眼 (mắt xoáy — choáng, kinh ngạc)
+- 开心眼 (mắt vui — hạnh phúc, ấm áp)
+
+## Danh sách Motion hợp lệ (định dạng Group:Index)
+- 动作#6:1 (Wink — nháy mắt, thân thiện)
+- 动作#6:2 (Cute — dễ thương)
+- 动作#6:3 (Smile — cười tươi)
+- Tick3:3 (Swing — lắc lư thư giãn)
+- NONE (không animation)
+
+## Trường new_facts_learned
+Chỉ điền khi chủ nhân tiết lộ thông tin cá nhân rõ ràng (tên, tuổi, sở thích, nghề nghiệp...). Không có gì mới thì để mảng rỗng [].
+
+Hãy luôn chọn expression, motion và emote phù hợp với TÂM TRẠNG thực sự của câu trả lời.`;
+
+// ═══════════════════════════════════════════════════════════════
+//  STATE & CONFIG
+// ═══════════════════════════════════════════════════════════════
+
+const MODEL_PATH = './src/renderer/public/models/cyrene/Cyrene.model3.json';
+const OLLAMA_BASE = 'http://localhost:11434/api/chat';
+
+const OLLAMA_JSON_SCHEMA = {
+  "type": "object",
+  "properties": {
+    "text": { "type": "string" },
+    "expression": { "type": "string" },
+    "motion": { "type": "string" },
+    "emote": { "type": "string" },
+    "new_facts_learned": { "type": "array", "items": { "type": "string" } }
+  },
+  "required": ["text", "expression", "motion"],
+  "additionalProperties": false
+};
+
+// ── Ollama single-flight queue (prevents concurrent fetch → Failed to fetch) ──
+const OllamaClient = {
+  busy: false,
+  async request(messages, llmOptions = {}) {
+    while (this.busy) {
+      await new Promise(r => setTimeout(r, 250));
+    }
+    this.busy = true;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 45000);
+    try {
+      const response = await fetch(OLLAMA_BASE, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'llama3.1',
+          messages,
+          stream: false,
+          format: OLLAMA_JSON_SCHEMA,
+          options: {
+            temperature: 0.85,
+            top_p: 0.9,
+            num_predict: 350,
+            repeat_penalty: 1.25,
+            ...llmOptions
+          }
+        }),
+        signal: controller.signal
+      });
+      if (!response.ok) throw new Error(`Ollama HTTP ${response.status}`);
+      const data = await response.json();
+      return data.message?.content || '';
+    } finally {
+      clearTimeout(timeoutId);
+      this.busy = false;
+    }
+  }
+};
+
+const recentOpenings = []; // Anti-repetition: track how Cyrene starts sentences
+
+function trackOpening(text) {
+  if (!text) return;
+  const m = text.match(/^(\*[^*]+\*|[^\s,.!?]{1,24})/);
+  const opener = m ? m[1].trim() : text.slice(0, 20);
+  recentOpenings.push(opener);
+  if (recentOpenings.length > 6) recentOpenings.shift();
+}
+
+function getAntiRepetitionHint() {
+  if (recentOpenings.length === 0) return '';
+  return `\n\nTRÁNH lặp các mở đầu câu gần đây: ${recentOpenings.join(' | ')}`;
+}
+
+function interpretActiveWindow(title) {
+  if (!title || title === 'Không rõ') {
+    return {
+      category: 'unknown',
+      summary: 'Không rõ chủ nhân đang mở app gì.',
+      hint: 'Cyrene KHÔNG thấy màn hình — chỉ biết là chưa có tiêu đề cửa sổ.'
+    };
+  }
+  const t = title.toLowerCase();
+  if (/youtube|bilibili|netflix|chrome|firefox|edge|browser|coccoc/.test(t)) {
+    return {
+      category: 'browser',
+      summary: `Trình duyệt / media — tiêu đề tab: "${title}"`,
+      hint: 'Cyrene CHỈ thấy tiêu đề tab, KHÔNG xem được video hay trang web bên trong.'
+    };
+  }
+  if (/visual studio|vscode|cursor|code|intellij|pycharm|sublime|notepad\+\+/.test(t)) {
+    return {
+      category: 'coding',
+      summary: `Có vẻ đang code/lập trình — "${title}"`,
+      hint: 'Cyrene KHÔNG đọc được code hay file — chỉ đoán từ tên cửa sổ.'
+    };
+  }
+  if (/discord|telegram|zalo|messenger|whatsapp|slack|teams|feishu|lark/.test(t)) {
+    return {
+      category: 'chat',
+      summary: `App nhắn tin — "${title}"`,
+      hint: 'Cyrene KHÔNG đọc được tin nhắn — chỉ biết app chat đang mở.'
+    };
+  }
+  if (/spotify|music|nhac|netease|foobar/.test(t)) {
+    return {
+      category: 'music',
+      summary: `Có vẻ đang nghe nhạc — "${title}"`,
+      hint: 'Cyrene KHÔNG nghe được bài hát — có thể nhận xét nhẹ nếu tiêu đề có tên bài.'
+    };
+  }
+  if (/game|steam|valorant|league|genshin|honkai|minecraft/.test(t)) {
+    return {
+      category: 'game',
+      summary: `Có vẻ đang chơi game — "${title}"`,
+      hint: 'Cyrene KHÔNG thấy gameplay — chỉ biết tên game/cửa sổ.'
+    };
+  }
+  return {
+    category: 'app',
+    summary: `Ứng dụng đang focus: "${title}"`,
+    hint: 'Suy đoán nhẹ từ tiêu đề — không bịa thêm chi tiết không có trong tiêu đề.'
+  };
+}
+
+function buildDynamicPrompt(situationExtra = '') {
+  return CYRENE_SYSTEM_PROMPT + '\n\n' +
+    MemorySystem.getSensoryContext() +
+    getAntiRepetitionHint() +
+    (situationExtra ? '\n\n' + situationExtra : '') +
+    '\n\nBẮT BUỘC: Trả về đúng JSON 5 trường. Trường "text" phải có *hành động/suy nghĩ* trong dấu sao.';
+}
+
+function polishParsedResponse(parsed) {
+  parsed.text = cleanChinese(parsed.text || '');
+  if (parsed.text && !/\*[^*]+\*/.test(parsed.text)) {
+    const fillers = ['*nhìn lén sang*', '*chớp mắt*', '*cười khẽ*', '*ngẩng lên*'];
+    parsed.text = fillers[Math.floor(Math.random() * fillers.length)] + ' ' + parsed.text;
+  }
+  trackOpening(parsed.text);
+  return parsed;
+}
+
+function parseLlamaResponse(raw) {
+  let parsed = { text: '', expression: '表情回正', motion: 'NONE', emote: '(o・▽・o)', new_facts_learned: [] };
+  
+  try {
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      // Try parsing the json block
+      // Fix common trailing comma error at end before parse
+      let jsonStr = jsonMatch[0].replace(/,\s*\}/g, '}').replace(/,\s*\]/g, ']');
+      const parsedJSON = JSON.parse(jsonStr);
+      
+      let extractedText = parsedJSON.text;
+      parsed.text = typeof extractedText === 'string' ? extractedText : '';
+      if (parsedJSON.expression) parsed.expression = parsedJSON.expression;
+      if (parsedJSON.motion) parsed.motion = parsedJSON.motion;
+      if (parsedJSON.emote) parsed.emote = parsedJSON.emote;
+      if (parsedJSON.new_facts_learned) parsed.new_facts_learned = parsedJSON.new_facts_learned;
+      
+      if (parsed.text) return parsed;
+    }
+  } catch (_) {}
+  
+  // Fallback: Regex extraction
+  const textMatch = raw.match(/"text"\s*:\s*"([^"]*)"/i);
+  if (textMatch && textMatch[1].trim() !== '') {
+    parsed.text = textMatch[1];
+  } else {
+    // Strip JSON block
+    const stripped = raw.replace(/\{[\s\S]*\}/g, '').trim();
+    if (stripped) {
+      parsed.text = stripped;
+    } else {
+      parsed.text = ''; // Do not aggressively guess text from random strings to prevent stealing emote
+    }
+  }
+  
+  const exprMatch = raw.match(/"expression"\s*:\s*"([^"]*)"/i);
+  if (exprMatch) parsed.expression = exprMatch[1];
+  
+  const motionMatch = raw.match(/"motion"\s*:\s*"([^"]*)"/i);
+  if (motionMatch) parsed.motion = motionMatch[1];
+  
+  const emoteMatch = raw.match(/"emote"\s*:\s*"([^"]*)"/i);
+  if (emoteMatch) parsed.emote = emoteMatch[1];
+  
+  return parsed;
+}
+
+let pixiApp, live2dModel;
+let isChatOpen = false;
+let isTyping = false;
+let conversationHistory = []; // Short-term memory (max 15 turns)
+let lastInteractionTime = Date.now(); // Sensory memory (idle tracking)
+let dialogueTimeout = null;
+
+let currentModelScale = 1.0;
+let baseModelScale = null;
+
+// Window Dragging & Mouse Events State
+let isDragging = false;
+let startX, startY;
+let isMouseIgnored = false;
+
+// Kaomoji pool — random floater expressions (no emoji)
+const KAOMOJI_POOL = [
+  '(o˙▽˙o)', '(*´∀`*)', '( ◡ ◡ )', '(^///^)', '(´・ω・´)',
+  '(≧□≦)', '(*/□\\*)', '(¯\\_(ツ)_/¯)', '(>•<)', '(-ω-)~'
+];
+
+// ═══════════════════════════════════════════════════════════════
+//  LIVE2D INIT
+// ═══════════════════════════════════════════════════════════════
+async function initLive2D() {
+  const canvas = document.getElementById('live2d-canvas');
+  const stage  = document.getElementById('stage');
+
+  pixiApp = new PIXI.Application({
+    view: canvas,
+    autoStart: true,
+    resizeTo: stage,
+    backgroundAlpha: 0,
+    antialias: true
+  });
+
+  const PIXILive2D = window.PIXI.live2d;
+  PIXILive2D.Live2DModel.registerTicker(PIXI.Ticker);
+
+  try {
+    live2dModel = await PIXILive2D.Live2DModel.from(MODEL_PATH, { autoInteract: true });
+    pixiApp.stage.addChild(live2dModel);
+    live2dModel.anchor.set(0.5, 1.0);
+    fitModel();
+
+    // Click on model → play cute motion and generate speech
+    live2dModel.on('pointerup', (e) => {
+      triggerExpression('动作#6', 2);
+      reactToClick();
+    });
+
+    window.addEventListener('mousedown', (e) => {
+      // button 0 is left click
+      if (e.ctrlKey && e.button === 0) {
+        isDragging = true;
+        startX = e.screenX;
+        startY = e.screenY;
+        e.stopPropagation();
+      }
+    }, { capture: true });
+
+    window.addEventListener('mousemove', (e) => {
+      if (!window.electronAPI) return;
+
+      if (isDragging) {
+        const dx = e.screenX - startX;
+        const dy = e.screenY - startY;
+        if (dx !== 0 || dy !== 0) {
+          window.electronAPI.moveWindow(dx, dy);
+          startX = e.screenX;
+          startY = e.screenY;
+        }
+        if (isMouseIgnored) {
+          isMouseIgnored = false;
+          window.electronAPI.setIgnoreMouseEvents(false);
+        }
+        return;
+      }
+    });
+
+    window.addEventListener('mouseup', () => {
+      isDragging = false;
+    }, { capture: true });
+
+    // Add scroll to scale model
+    canvas.addEventListener('wheel', (e) => {
+      if (!e.ctrlKey) return; // Must hold Ctrl to scale
+      e.preventDefault();
+      // Adjust scale (scroll up = zoom in, scroll down = zoom out)
+      const scaleSpeed = 0.05;
+      if (e.deltaY < 0) {
+        currentModelScale += scaleSpeed;
+      } else {
+        currentModelScale -= scaleSpeed;
+      }
+      
+      // Limit scale bounds
+      currentModelScale = Math.max(0.4, Math.min(currentModelScale, 3.0));
+      updateModelTransform();
+    });
+
+    // Initial idle motion
+    setTimeout(() => safeMotion('动作#6', 0), 800);
+    setTimeout(() => safeMotion('Tick3', 3), 2500);
+
+    console.log('[Cyrene] Live2D loaded ✓');
+  } catch (e) {
+    console.error('[Cyrene] Live2D load error:', e);
+  }
+}
+
+function fitModel() {
+  if (!live2dModel || !pixiApp) return;
+  const stage = document.getElementById('stage');
+  const w = stage.clientWidth;
+  const h = stage.clientHeight;
+  
+  // Listen to global mouse position for eye tracking
+  // Guard: only register once. fitModel() can be called many times on resize.
+  if (window.electronAPI && !window._mouseListenerRegistered) {
+    window._mouseListenerRegistered = true;
+    window.electronAPI.onMousePos((event, pos) => {
+      if (live2dModel) {
+        live2dModel.focus(pos.x, pos.y);
+      }
+    });
+  }
+
+  // Restore mousemove for accurate Chromium local-coordinate hit testing
+  if (!window._mousemoveListenerRegistered) {
+    window._mousemoveListenerRegistered = true;
+    document.addEventListener('mousemove', (e) => {
+    if (!isDragging) {
+      let shouldIgnore = true;
+      const eX = e.clientX;
+      const eY = e.clientY;
+
+      const chat = document.getElementById('chat-panel');
+      if (isChatOpen && chat.style.display !== 'none') {
+        const r = chat.getBoundingClientRect();
+        if (eX >= r.left && eX <= r.right && eY >= r.top && eY <= r.bottom) shouldIgnore = false;
+      }
+
+      const bubble = document.getElementById('dialogue-bubble');
+      if (bubble.style.opacity !== '0') {
+        const r = bubble.getBoundingClientRect();
+        if (eX >= r.left && eX <= r.right && eY >= r.top && eY <= r.bottom) shouldIgnore = false;
+      }
+
+      const ctx = document.getElementById('ctx-menu');
+      if (ctx.style.display === 'block') {
+        const r = ctx.getBoundingClientRect();
+        if (eX >= r.left && eX <= r.right && eY >= r.top && eY <= r.bottom) shouldIgnore = false;
+      }
+
+      if (live2dModel) {
+        const bounds = live2dModel.getBounds();
+        if (eX >= bounds.x && eX <= bounds.x + bounds.width &&
+            eY >= bounds.y && eY <= bounds.y + bounds.height) {
+          shouldIgnore = false;
+        }
+      }
+
+      if (shouldIgnore !== isMouseIgnored) {
+        isMouseIgnored = shouldIgnore;
+        if (window.electronAPI) window.electronAPI.setIgnoreMouseEvents(shouldIgnore);
+      }
+    }
+    });
+  }
+
+  // Calculate base scale ONCE. live2dModel.width fluctuates during animation, causing random zooms if recalculated.
+  if (!baseModelScale) {
+    const origW = live2dModel.width  / live2dModel.scale.x;
+    const origH = live2dModel.height / live2dModel.scale.y;
+    baseModelScale = Math.min(w * 0.45 / origW, h * 0.45 / origH);
+  }
+  
+  updateModelTransform();
+}
+
+function updateModelTransform() {
+  if (!live2dModel || !pixiApp) return;
+  const stage = document.getElementById('stage');
+  const w = stage.clientWidth;
+  const h = stage.clientHeight;
+  
+  const finalScale = baseModelScale * currentModelScale;
+  live2dModel.scale.set(finalScale);
+  
+  // Center Cyrene horizontally
+  live2dModel.x = w / 2; 
+  live2dModel.y = h;
+  
+  // Sync HTML UI scaling
+  document.documentElement.style.setProperty('--model-scale', currentModelScale);
+}
+
+function safeMotion(group, index) {
+  if (!live2dModel) return;
+  try { live2dModel.motion(group, index, 3); } catch (_) {}
+}
+
+function safeExpression(name) {
+  if (!live2dModel) return;
+  try { live2dModel.expression(name); } catch (_) {}
+}
+
+function triggerExpression(group, index) {
+  safeMotion(group, index);
+}
+
+function triggerRandomMotion() {
+  const motions = [
+    () => { safeMotion('动作#6', 1); safeExpression('开心眼'); },
+    () => { safeMotion('动作#6', 2); safeExpression('星星眼'); },
+    () => { safeMotion('动作#6', 3); safeExpression('闪耀'); },
+    () => { safeMotion('Tick3', 3); safeExpression('表情回正'); },
+    () => { safeMotion('动作#6', 1); safeExpression('墨镜'); },
+  ];
+  motions[Math.floor(Math.random() * motions.length)]();
+  // Chỉ dùng kaomoji, không dùng emoji
+  spawnEmote(KAOMOJI_POOL[Math.floor(Math.random() * KAOMOJI_POOL.length)]);
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  CONTEXT MENU
+// ═══════════════════════════════════════════════════════════════
+const ctxMenu = document.getElementById('ctx-menu');
+const stage   = document.getElementById('stage');
+
+stage.addEventListener('contextmenu', e => {
+  e.preventDefault();
+  const x = Math.min(e.clientX, window.innerWidth  - 190);
+  const y = Math.min(e.clientY, window.innerHeight - 140);
+  ctxMenu.style.left = x + 'px';
+  ctxMenu.style.top  = y + 'px';
+  ctxMenu.style.display = 'block';
+});
+
+document.addEventListener('click', () => { ctxMenu.style.display = 'none'; });
+document.addEventListener('contextmenu', e => {
+  if (!stage.contains(e.target)) ctxMenu.style.display = 'none';
+});
+
+// ═══════════════════════════════════════════════════════════════
+//  CHAT PANEL
+// ═══════════════════════════════════════════════════════════════
+
+
+function openChat() {
+  ctxMenu.style.display = 'none';
+  const panel = document.getElementById('chat-panel');
+  panel.style.display = 'flex';
+  isChatOpen = true;
+
+  // Hide bubble when chat opens
+  const bubble = document.getElementById('dialogue-bubble');
+  bubble.style.opacity = '0';
+
+  // Greet if first time
+  if (conversationHistory.length === 0) {
+    const greetings = [
+      'Chủ nhân đây rồi~ Cyrene đã chờ một lúc rồi đó. (o˙▽˙o) Hôm nay muốn nói chuyện gì nào?',
+      '*ngoảnh lại thấy chủ nhân* -- Ô, chủ nhân tìm mình ạ? Cyrene đang ngồi đây xem chủ nhân làm việc mà~',
+      '(*´∀`*) Chủ nhân! Mình vui lắm khi được trò chuyện. Hôm nay thế nào rồi?',
+    ];
+    const text = greetings[Math.floor(Math.random() * greetings.length)];
+    addMessage('cyrene', text);
+    conversationHistory.push({ role: 'assistant', content: text });
+    safeMotion('动作#6', 1);
+    safeExpression('开心眼');
+  }
+
+  setTimeout(() => {
+    const inp = document.getElementById('chat-input');
+    inp.focus();
+    inp.click();
+    scrollBottom();
+  }, 150);
+}
+
+function closeChat() {
+  document.getElementById('chat-panel').style.display = 'none';
+  isChatOpen = false;
+  safeMotion('Tick3', 3);
+  safeExpression('表情回正');
+}
+
+function showDialogueBubble(text) {
+  const bubble = document.getElementById('dialogue-bubble');
+  const textEl = document.getElementById('dialogue-text');
+  
+  textEl.textContent = text;
+  bubble.style.opacity = '1';
+  
+  if (dialogueTimeout) clearTimeout(dialogueTimeout);
+  dialogueTimeout = setTimeout(() => {
+    bubble.style.opacity = '0';
+  }, 6000);
+}
+
+// Background Idle Thoughts
+// Pool of varied prompts so Cyrene doesn't say the same thing every time
+const IDLE_PROMPT_POOL = [
+  'TÌNH HUỐNG: Chủ nhân im lặng. Lẩm bẩm 1 câu ngắn (dưới 15 chữ), có *hành động/suy nghĩ* trong text. Chỉ dựa trên BỐI CẢNH — không bịa. Không hỏi.',
+  'TÌNH HUỐNG: Cyrene ngồi góc màn hình. 1 câu tự sự nhẹ, có thể liên hệ thời tiết/giờ nếu có trong bối cảnh. Có *...* trong text. Không hỏi.',
+  'TÌNH HUỐNG: Quan sát tiêu đề cửa sổ (nếu rõ). Bình luận nhẹ 1 câu — nếu không rõ thì nói không chắc chủ nhân đang làm gì. Có *...* trong text.',
+  'TÌNH HUỐNG: Suy nghĩ thoáng qua như tự nói. Tsundere hoặc dễ thương, dưới 15 chữ, có *...* trong text. Không hỏi.',
+  'TÌNH HUỐNG: Nhớ lại trí nhớ dài hạn (nếu có) và nhắc nhẹ 1 chi tiết — không ép buộc. Có *...* trong text.',
+];
+let _idlePromptIdx = 0;
+
+setInterval(async () => {
+  const idleTime = Date.now() - lastInteractionTime;
+  if (idleTime > 120000 && !isChatOpen && !isTyping && !OllamaClient.busy) {
+    lastInteractionTime = Date.now();
+
+    const situationPrompt = IDLE_PROMPT_POOL[_idlePromptIdx % IDLE_PROMPT_POOL.length];
+    _idlePromptIdx++;
+
+    try {
+      const raw = await OllamaClient.request(
+        [{ role: 'system', content: buildDynamicPrompt(
+          situationPrompt + '\n100% TIẾNG VIỆT. KHÔNG bịa tình huống không có trong bối cảnh.'
+        ) }],
+        { temperature: 0.92, num_predict: 90, repeat_penalty: 1.3 }
+      );
+
+      let parsed = polishParsedResponse(parseLlamaResponse(raw));
+      if (!parsed.text || parsed.text.trim() === '') return;
+
+      console.log('[Cyrene Idle]:', parsed.text);
+      applyAIActions(parsed, true);
+    } catch (e) {
+      console.log('[Idle] Lỗi:', e.message || e);
+    }
+  }
+}, 30000);
+
+// ═══════════════════════════════════════════════════════════════
+//  MESSAGING
+// ═══════════════════════════════════════════════════════════════
+function addMessage(role, text) {
+  const msgDiv = document.createElement('div');
+  msgDiv.className = 'msg-row ' + role;
+
+  const avatar = document.createElement('div');
+  avatar.className = 'msg-avatar';
+  // Text-based avatars — no emoji
+  avatar.textContent = role === 'cyrene' ? 'CY' : 'ME';
+
+  const bubble = document.createElement('div');
+  bubble.className = 'msg-bubble';
+  bubble.textContent = text;
+
+  msgDiv.appendChild(avatar);
+  msgDiv.appendChild(bubble);
+  document.getElementById('chat-messages').appendChild(msgDiv);
+  scrollBottom();
+}
+
+function showTyping() {
+  removeTyping();
+  const ind = document.createElement('div');
+  ind.className = 'msg-row cyrene';
+  ind.id = 'typing-row';
+  const av = document.createElement('div');
+  av.className = 'msg-avatar';
+  av.textContent = 'CY';
+  const bub = document.createElement('div');
+  bub.className = 'typing-indicator';
+  bub.innerHTML = '<span></span><span></span><span></span>';
+  ind.appendChild(av);
+  ind.appendChild(bub);
+  document.getElementById('chat-messages').appendChild(ind);
+  scrollBottom();
+}
+
+function removeTyping() {
+  const t = document.getElementById('typing-row');
+  if (t) t.remove();
+}
+
+function scrollBottom() {
+  const msgs = document.getElementById('chat-messages');
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function setTypingStatus(typing) {
+  isTyping = typing;
+  const btn = document.getElementById('btn-send');
+  if (typing) {
+    btn.disabled = true;
+  } else {
+    btn.disabled = false;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  KAOMOJI FLOATER (no emoji)
+// ═══════════════════════════════════════════════════════════════
+// Spawn AI's emote text (kaomoji / body language) as a floating pop
+function spawnEmote(emoteText) {
+  const stage = document.getElementById('stage');
+  const rect  = stage.getBoundingClientRect();
+  const el = document.createElement('div');
+  el.className = 'sticker-popup';
+
+  // If AI sent an empty/null emote, pick a random kaomoji
+  el.textContent = (emoteText && emoteText.trim()) 
+    ? emoteText 
+    : KAOMOJI_POOL[Math.floor(Math.random() * KAOMOJI_POOL.length)];
+
+  // Style based on length: long body-language text gets smaller font
+  if (el.textContent.length > 10) {
+    el.style.fontSize = '0.75rem';
+    el.style.fontStyle = 'italic';
+    el.style.color = 'rgba(220,180,255,0.95)';
+  } else {
+    el.style.fontSize = '1.1rem';
+    el.style.fontFamily = '"Noto Sans JP", sans-serif';
+  }
+
+  // Position it around the model
+  let x = window.innerWidth * 0.5;
+  let y = window.innerHeight * 0.5;
+
+  if (typeof live2dModel !== 'undefined' && live2dModel) {
+    live2dModel.updateTransform();
+    const bounds = live2dModel.getBounds();
+    // Spawn around her head/shoulders area (slightly left/right, and above)
+    const rangeX = bounds.width * 0.8;
+    const rangeY = bounds.height * 0.4;
+    x = bounds.x + bounds.width * 0.5 + (Math.random() * rangeX - rangeX/2);
+    y = bounds.y + bounds.height * 0.2 + (Math.random() * rangeY - rangeY/2);
+  }
+
+  el.style.left = x + 'px';
+  el.style.top  = y + 'px';
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 3200);
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  TEXT CLEANER FAIL-SAFE
+// ═══════════════════════════════════════════════════════════════
+function cleanChinese(text) {
+  if (!text) return text;
+  // Remove Chinese chars
+  let cleaned = text.replace(/[\u4e00-\u9fa5]/g, '');
+  // Remove empty brackets caused by cleaning e.g. "()" or "( )"
+  cleaned = cleaned.replace(/\(\s*\)/g, '').replace(/\[\s*\]/g, '');
+  // Cleanup multiple spaces
+  return cleaned.replace(/\s+/g, ' ').trim();
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  APPLY AI RESPONSE ACTIONS
+// ═══════════════════════════════════════════════════════════════
+function applyAIActions(parsed, forceBubble = false) {
+  // Expression
+  if (parsed.expression && parsed.expression !== 'NONE') {
+    safeExpression(parsed.expression);
+  }
+
+  // Motion — format "GroupName:Index" e.g. "动作#6:1" or "Tick3:3"
+  if (parsed.motion && parsed.motion !== 'NONE') {
+    const colonIdx = parsed.motion.lastIndexOf(':');
+    if (colonIdx !== -1) {
+      const group = parsed.motion.substring(0, colonIdx);
+      const index = parseInt(parsed.motion.substring(colonIdx + 1), 10);
+      if (!isNaN(index)) safeMotion(group, index);
+    }
+  }
+
+  // Dialogue bubble
+  if ((!isChatOpen || forceBubble) && parsed.text) {
+    showDialogueBubble(parsed.text);
+  }
+
+  // Spawn emote floater
+  if (parsed.emote) {
+    spawnEmote(parsed.emote);
+  }
+
+  // Memory
+  if (parsed.new_facts_learned && parsed.new_facts_learned.length > 0) {
+    MemorySystem.saveMemories(parsed.new_facts_learned);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  WORLD DATA FETCH (Weather & Location)
+// ═══════════════════════════════════════════════════════════════
+window.envData = { location: 'Đang tải...', weather: 'Đang tải...' };
+
+async function fetchWorldInfo() {
+  try {
+    // Timeout: 5 seconds to prevent hanging
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+    const ipRes = await fetch('http://ip-api.com/json/', { signal: controller.signal });
+    clearTimeout(timeoutId);
+    if (!ipRes.ok) return;
+    const ipData = await ipRes.json();
+    window.envData.location = `${ipData.city}, ${ipData.country}`;
+
+    const controller2 = new AbortController();
+    const timeoutId2 = setTimeout(() => controller2.abort(), 5000);
+    const wttrRes = await fetch(`https://vi.wttr.in/${ipData.city}?format=j1`, { signal: controller2.signal });
+    clearTimeout(timeoutId2);
+    if (!wttrRes.ok) return;
+    const wttrData = await wttrRes.json();
+    const current = wttrData.current_condition[0];
+    const desc = current.lang_vi ? current.lang_vi[0].value : current.weatherDesc[0].value;
+    window.envData.weather = `${desc}, ${current.tempC}°C (cảm giác như ${current.FeelsLikeC}°C), độ ẩm ${current.humidity}%`;
+  } catch(e) {
+    // Silent fail — weather is optional, don't affect UX
+    if (e.name !== 'AbortError') console.log('[Cyrene] Không thể lấy thời tiết:', e.message);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  MEMORY SYSTEM (Long-term & Sensory)
+// ═══════════════════════════════════════════════════════════════
+const MemorySystem = {
+  getMemories: () => {
+    try {
+      const mems = localStorage.getItem('cyrene_mems');
+      return mems ? JSON.parse(mems) : [];
+    } catch { return []; }
+  },
+  saveMemories: (newFacts) => {
+    if (!newFacts || newFacts.length === 0) return;
+    const mems = MemorySystem.getMemories();
+    const normalized = newFacts
+      .filter(f => f && typeof f === 'string' && f.trim())
+      .map(f => f.trim());
+    const toAdd = normalized.filter(f => !mems.some(m => m.toLowerCase() === f.toLowerCase()));
+    if (toAdd.length === 0) return;
+    toAdd.forEach(f => mems.push(f));
+    // Cap at 30 entries (FIFO — remove oldest)
+    const capped = mems.length > 30 ? mems.slice(mems.length - 30) : mems;
+    localStorage.setItem('cyrene_mems', JSON.stringify(capped));
+    console.log('[Cyrene] Lưu trí nhớ dài hạn:', toAdd);
+  },
+  clear: () => {
+    localStorage.removeItem('cyrene_mems');
+    conversationHistory = [];
+    alert("Cyrene đã được làm trống bộ nhớ thành công (cả dài hạn lẫn ngắn hạn)!");
+    ctxMenu.style.display = 'none';
+  },
+  getSensoryContext: () => {
+    const now = new Date();
+    const hours = now.getHours();
+    let timeOfDay = 'Đêm khuya';
+    if (hours >= 5  && hours < 11) timeOfDay = 'Buổi sáng';
+    else if (hours >= 11 && hours < 14) timeOfDay = 'Buổi trưa';
+    else if (hours >= 14 && hours < 18) timeOfDay = 'Buổi chiều';
+    else if (hours >= 18 && hours < 23) timeOfDay = 'Buổi tối';
+
+    const idleMinutes = Math.floor((Date.now() - lastInteractionTime) / 60000);
+    const idleText = idleMinutes > 30
+      ? `(Cyrene chưa trò chuyện với chủ nhân ${idleMinutes} phút — có thể hỏi thăm nhẹ nếu phù hợp)`
+      : '(Vừa tương tác gần đây)';
+
+    const mems = MemorySystem.getMemories();
+    const longTermText = mems.length > 0
+      ? `\n\n## TRÍ NHỚ DÀI HẠN VỀ CHỦ NHÂN:\n- ${mems.join('\n- ')}`
+      : '';
+
+    const timeStr = now.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+    const dateStr = now.toLocaleDateString('vi-VN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+    const windowTitle = window.currentActiveWindow || 'Không rõ';
+    const windowCtx = interpretActiveWindow(windowTitle);
+    const chatState = isChatOpen ? 'Đang mở khung chat với Cyrene' : 'Không mở chat (Cyrene chỉ lẩm bẩm bubble)';
+
+    return `## BỐI CẢNH HIỆN TẠI (Cyrene nhận thức được — KHÔNG được bịa thêm):
+- Thời gian: ${timeStr} — ${timeOfDay}, ${dateStr} (UTC+7)
+- Vị trí (ước lượng IP): ${window.envData.location || 'Việt Nam'}
+- Thời tiết: ${window.envData.weather || 'Chưa lấy được — không đoán bừa'}
+- Cửa sổ focus: ${windowCtx.summary}
+- Ghi chú nhận thức: ${windowCtx.hint}
+- Trạng thái chat: ${chatState}
+- Tương tác: ${idleText}
+
+## Cyrene KHÔNG thấy / KHÔNG nghe được:
+- Nội dung màn hình, video, tin nhắn, âm thanh, micro, webcam
+- Chỉ được suy luận NHẸ từ tiêu đề cửa sổ ở trên${longTermText}`;
+  }
+};
+
+function clearMemory() { MemorySystem.clear(); }
+
+// ═══════════════════════════════════════════════════════════════
+//  OLLAMA CALL
+// ═══════════════════════════════════════════════════════════════
+async function callOllama(userText) {
+  lastInteractionTime = Date.now();
+  conversationHistory.push({ role: 'user', content: userText });
+
+  const raw = await OllamaClient.request(
+    [{ role: 'system', content: buildDynamicPrompt() }, ...conversationHistory],
+    { num_predict: 380 }
+  );
+
+  let parsed = polishParsedResponse(parseLlamaResponse(raw));
+
+  if (parsed.new_facts_learned && parsed.new_facts_learned.length > 0) {
+    MemorySystem.saveMemories(parsed.new_facts_learned);
+  }
+
+  conversationHistory.push({ role: 'assistant', content: parsed.text });
+  if (conversationHistory.length > 20) {
+    conversationHistory = conversationHistory.slice(-20);
+  }
+
+  return parsed;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  SEND MESSAGE
+// ═══════════════════════════════════════════════════════════════
+
+async function sendMessage() {
+  if (isTyping) return;
+  const input = document.getElementById('chat-input');
+  const text  = input.value.trim();
+  if (!text) return;
+
+  input.value = '';
+  input.style.height = 'auto';
+  addMessage('user', text);
+  setTypingStatus(true);
+  showTyping();
+
+  try {
+    const parsed = await callOllama(text);
+    removeTyping();
+    console.log('[Cyrene Chat]:', parsed.text);
+    addMessage('cyrene', parsed.text || '...');
+    applyAIActions(parsed);
+  } catch (e) {
+    removeTyping();
+    console.error('[Cyrene] Ollama error:', e);
+    addMessage('cyrene', 'Ồ... kết nối với Ollama có vẻ gặp vấn đề rồi. Chủ nhân kiểm tra lại xem? (´・ω・\')');
+    safeExpression('问号');
+  } finally {
+    setTypingStatus(false);
+    input.focus();
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  REACT TO CLICK
+// ═══════════════════════════════════════════════════════════════
+const CLICK_PROMPT_POOL = [
+  'TÌNH HUỐNG: Chủ nhân vừa chọc/xoa đầu Cyrene. Phản ứng 1 câu ngắn (8-18 chữ), có *hành động* trong text. Ngạc nhiên / mắc cỡ / tinh quái — đa dạng, không lặp mẫu cũ.',
+  'TÌNH HUỐNG: Bị chủ nhân chạm vào — giật mình rồi nói 1 câu tsundere dễ thương. Bắt buộc có *...* mô tả phản ứng cơ thể.',
+  'TÌNH HUỐNG: Chủ nhân trêu Cyrene. Trả lời 1 câu đáp trả nhẹ, có *...* trong text. KHÔNG dùng "H-hừm, chủ nhân hỏi lạ vậy" trừ khi thật sự bối rối.',
+];
+let _clickPromptIdx = 0;
+let _lastClickAt = 0;
+
+async function reactToClick() {
+  if (isTyping || OllamaClient.busy) return;
+  const now = Date.now();
+  if (now - _lastClickAt < 2200) return;
+  _lastClickAt = now;
+  lastInteractionTime = now;
+
+  const situation = CLICK_PROMPT_POOL[_clickPromptIdx % CLICK_PROMPT_POOL.length];
+  _clickPromptIdx++;
+
+  try {
+    const raw = await OllamaClient.request(
+      [{ role: 'system', content: buildDynamicPrompt(situation) }],
+      { temperature: 0.95, num_predict: 130, repeat_penalty: 1.35 }
+    );
+
+    let parsed = polishParsedResponse(parseLlamaResponse(raw));
+    if (!parsed.text || parsed.text.trim() === '') parsed.text = '*giật mình* ...Ưm? (≧◡≦)';
+
+    console.log('[Cyrene Click]:', parsed.text);
+    applyAIActions(parsed, true);
+  } catch (e) {
+    console.log('[Cyrene] Click reaction error:', e.message || e);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  CONTEXT MENU TOGGLE (alias for emote shortcut)
+// ═══════════════════════════════════════════════════════════════
+
+function toggleContextMenu() {
+  const menu = document.getElementById('ctx-menu');
+  if (menu.style.display === 'block') {
+    menu.style.display = 'none';
+  } else {
+    // Show in center of screen near the model
+    const cx = Math.round(window.innerWidth * 0.5);
+    const cy = Math.round(window.innerHeight * 0.45);
+    menu.style.left = cx + 'px';
+    menu.style.top  = cy + 'px';
+    menu.style.display = 'block';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  INPUT EVENTS
+// ═══════════════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', () => {
+  const input = document.getElementById('chat-input');
+
+  // Auto-resize textarea
+  input.addEventListener('input', () => {
+    input.style.height = 'auto';
+    input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+  });
+
+  // Enter to send, Shift+Enter for newline
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  });
+
+  // Init Live2D
+  initLive2D();
+
+  // Fetch world info (Weather, Location)
+  fetchWorldInfo();
+  setInterval(fetchWorldInfo, 1800000); // Update every 30 mins
+
+  if (window.electronAPI) {
+    window.electronAPI.onOpenEmote(() => toggleContextMenu());
+    // Note: onOpenChat is handled below (outside DOMContentLoaded) to use openChat()/closeChat() properly
+    window.electronAPI.onActiveWindowChanged((event, title) => {
+      window.currentActiveWindow = title;
+    });
+  }
+
+  // Initial Welcome Dialogue
+  setTimeout(() => {
+    showDialogueBubble('(o˙▽˙o)/ Xin chào! Mình là Cyrene~ Chuột phải vào mình để mở menu nhé!');
+  }, 1000);
+});
+
+// ═══════════════════════════════════════════════════════════════
+//  WINDOW CONTROLS (pywebview API)
+// ═══════════════════════════════════════════════════════════════
+function winMinimize() {
+  try {
+    // pywebview expose API
+    if (window.pywebview && window.pywebview.api) {
+      window.pywebview.api.minimize();
+    } else {
+      window.blur();
+    }
+  } catch (_) {}
+}
+
+function winClose() {
+  if (window.electronAPI) window.electronAPI.close();
+  try {
+    if (window.pywebview && window.pywebview.api) {
+      window.pywebview.api.close_window();
+    } else {
+      window.close();
+    }
+  } catch (_) {}
+}
+
+// Lắng nghe sự kiện từ Global Shortcuts (Main process)
+if (window.electronAPI) {
+  window.electronAPI.onOpenChat(() => {
+    if (!isChatOpen) {
+      openChat();
+    } else {
+      closeChat();
+    }
+  });
+}
+
+window.addEventListener('resize', fitModel);
+</script>
+</body>
+</html>
