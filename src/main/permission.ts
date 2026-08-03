@@ -50,16 +50,34 @@ export function policyFor(level: AgentFileAccessLevel, risk: ToolRiskLevel): "al
 
 // ── 当前档位的内存缓存（main 进程持有） ───────────────────
 let currentLevel: AgentFileAccessLevel = "read-only";
+let allowedRoot: string | null = null;
 
 export function getCurrentLevel(): AgentFileAccessLevel {
   return currentLevel;
+}
+
+export function getAllowedRoot(): string | null {
+  return allowedRoot;
 }
 
 export function setCurrentLevel(level: AgentFileAccessLevel): void {
   if (currentLevel === level) return;
   console.log(LOG_PREFIX, "档位切换:", currentLevel, "→", level);
   currentLevel = level;
-  persistLevel(level);
+  persistLevel(level, allowedRoot);
+}
+
+export function setAllowedRoot(rootPath: string | null): void {
+  allowedRoot = rootPath;
+  console.log(LOG_PREFIX, "设置授权目录:", allowedRoot);
+  persistLevel(currentLevel, allowedRoot);
+}
+
+export function isPathWithinScopedRoot(targetPath: string): boolean {
+  if (!allowedRoot) return false;
+  const resolvedTarget = path.resolve(targetPath);
+  const resolvedRoot = path.resolve(allowedRoot);
+  return resolvedTarget === resolvedRoot || resolvedTarget.startsWith(resolvedRoot + path.sep);
 }
 
 // ── 持久化 ────────────────────────────────────────────────
@@ -68,11 +86,11 @@ function getStorePath(): string {
   return path.join(app.getPath("userData"), "agent-permission.json");
 }
 
-function persistLevel(level: AgentFileAccessLevel): void {
+function persistLevel(level: AgentFileAccessLevel, root: string | null): void {
   try {
     const filePath = getStorePath();
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
-    fs.writeFileSync(filePath, JSON.stringify({ level }, null, 2), "utf8");
+    fs.writeFileSync(filePath, JSON.stringify({ level, allowedRoot: root }, null, 2), "utf8");
   } catch (err) {
     console.error(LOG_PREFIX, "持久化档位失败:", err);
   }
@@ -89,10 +107,11 @@ export function initPermissionFromDisk(): void {
       console.log(LOG_PREFIX, "未找到持久化档位文件，使用默认 read-only");
       return;
     }
-    const raw = JSON.parse(fs.readFileSync(filePath, "utf8")) as { level?: unknown };
+    const raw = JSON.parse(fs.readFileSync(filePath, "utf8")) as { level?: unknown, allowedRoot?: string | null };
     if (isValidLevel(raw?.level)) {
       currentLevel = raw.level;
-      console.log(LOG_PREFIX, "从磁盘加载档位:", currentLevel);
+      if (raw.allowedRoot) allowedRoot = raw.allowedRoot;
+      console.log(LOG_PREFIX, "从磁盘加载档位:", currentLevel, "Root:", allowedRoot);
     } else {
       console.warn(LOG_PREFIX, "档位文件内容无效，回退默认");
     }
@@ -209,7 +228,19 @@ export async function checkPermission(input: {
   const policy = policyFor(level, input.risk);
   console.log(LOG_PREFIX, "checkPermission:", input.toolId, "risk=" + input.risk, "level=" + level, "→", policy);
 
-  if (policy === "allow") return { allowed: true };
+  if (policy === "allow") {
+    // 强制校验 scoped 文件路径
+    if (level === "scoped" && (input.risk === "fs-read" || input.risk === "fs-write")) {
+      const targetPath = (input.args.path as string) || (input.args.filePath as string);
+      if (!targetPath) {
+        return { allowed: false, reason: "Scoped 模式下，工具调用缺少明确的 path 或 filePath 参数" };
+      }
+      if (!isPathWithinScopedRoot(targetPath)) {
+        return { allowed: false, reason: `路径 [${targetPath}] 超出了当前授权的工作目录范围 [${allowedRoot || "未设置"}]。` };
+      }
+    }
+    return { allowed: true };
+  }
   if (policy === "deny") {
     return {
       allowed: false,

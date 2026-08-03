@@ -2269,6 +2269,8 @@ function buildProactivePersonaPrompt(): string {
   if (canon) parts.push(canon);
   const style = loadPromptFile("styles/01_default.md");
   if (style) parts.push(style);
+  const toneRules = loadPromptFile("tone-rules.md");
+  if (toneRules) parts.push(toneRules);
   return parts.join("\n\n---\n\n");
 }
 
@@ -4020,6 +4022,20 @@ protocol.registerSchemesAsPrivileged([
 ]);
 
 app.whenReady().then(async () => {
+  log.info("App is ready, initializing...");
+  
+  // Register global shortcut
+  globalShortcut.register('Alt+C', () => {
+      const win = getMainWindow();
+      if (win) {
+        if (win.isVisible()) {
+          win.hide();
+        } else {
+          win.show();
+        }
+      }
+  });
+
   // 注册 local-sticker:// 协议处理器：将请求映射到 userData/stickers/ 下的文件
   protocol.handle("local-sticker", (request) => {
     const file = parseLocalStickerFileFromUrl(request.url);
@@ -5222,6 +5238,11 @@ app.whenReady().then(async () => {
   scheduleStartupEmbeddingRefreshes();
 
   schedulerEngine.start();
+});
+
+app.on("will-quit", () => {
+  globalShortcut.unregisterAll();
+  log.info("App will quit, unregistering global shortcuts");
 });
 
 app.on("window-all-closed", () => {});

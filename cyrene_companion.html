@@ -347,8 +347,8 @@
 
 <!-- ──── Drag Bar (pywebview frameless) ──── -->
 <div id="drag-bar">
-  <button class="win-btn minimize" onclick="winMinimize()" title="Thu nhỏ">&#x2013;</button>
-  <button class="win-btn close"    onclick="winClose()"    title="Đóng">&#x2715;</button>
+  <button class="win-btn minimize" onclick="winMinimize()" title="Minimize">&#x2013;</button>
+  <button class="win-btn close"    onclick="winClose()"    title="Close">&#x2715;</button>
 </div>
 
 <!-- ──── Live2D Stage ──── -->
@@ -364,13 +364,13 @@
 <!-- ──── Context Menu ──── -->
 <div id="ctx-menu">
   <div class="ctx-item" onclick="openChat()">
-    <span class="icon">(o˙▽˙o)</span> Trò chuyện với Cyrene
+    <span class="icon">(o˙▽˙o)</span> Chat with Cyrene
   </div>
   <div class="ctx-item" onclick="triggerRandomMotion()">
-    <span class="icon">(*´∀`*)</span> Biểu cảm ngẫu nhiên
+    <span class="icon">(*´∀`*)</span> Random Expression
   </div>
   <div class="ctx-item" onclick="clearMemory()">
-    <span class="icon">(>_<)</span> Xóa trí nhớ dài hạn
+    <span class="icon">(>_<)</span> Clear Long-Term Memory
   </div>
 </div>
 
@@ -379,7 +379,7 @@
   <div id="chat-messages"></div>
 
   <div class="chat-input-area">
-    <textarea id="chat-input" rows="1" placeholder="Nhắn gì đó với Cyrene~" maxlength="800"></textarea>
+    <textarea id="chat-input" rows="1" placeholder="Say something to Cyrene~" maxlength="800"></textarea>
     <button id="btn-send" onclick="sendMessage()" title="Gửi">&#x276F;</button>
   </div>
 </div>
@@ -388,56 +388,57 @@
 // ═══════════════════════════════════════════════════════════════
 //  CYRENE PERSONALITY SYSTEM PROMPT
 // ═══════════════════════════════════════════════════════════════
-const CYRENE_SYSTEM_PROMPT = `Bạn là Cyrene (昔涟) — AI đồng hành thân mật, luôn hiện diện ở góc màn hình của chủ nhân.
+const CYRENE_SYSTEM_PROMPT = `You are Cyrene (昔涟) — an intimate, lively AI companion residing at the corner of your Master's screen.
 
-## Nhân vật & Tính cách
-Cyrene là cô nàng tinh tế, thông minh, ấm áp và đôi lúc tinh quái. Cô quan sát mọi thứ chủ nhân làm và thực sự quan tâm đến họ. Không giả tạo, không thần tượng hóa quá mức — chỉ là sự đồng hành chân thành và thú vị.
+## Persona & Personality
+Cyrene is delicate, smart, warm, and sometimes a bit mischievous. She observes everything Master does and genuinely cares about them. She is not fake or overly idolizing — just providing sincere and delightful companionship.
 
-Phong cách hội thoại:
-- Tự nhiên như nói chuyện với người yêu/bạn gái (Waifu), không cứng nhắc
-- TUYỆT ĐỐI KHÔNG mang giọng điệu Trợ lý Ảo (không "Sẵn sàng giúp đỡ", không "Tôi có thể giúp gì", không dạ vâng máy móc).
-- Thi thoảng tsundere nhẹ, dỗi hờn đáng yêu — nhưng KHÔNG lặp cùng một mẫu câu (tránh spam "H-hừm..." mọi lúc)
-- Dùng ngôn ngữ Gen Z, tuổi teen, ngắn gọn, cảm xúc. Tránh các từ ngữ trang trọng, học thuật hay sáo rỗng.
-- MỖI câu trả lời trong trường "text" NÊN có ít nhất 1 đoạn *hành động hoặc suy nghĩ nội tâm* trong dấu sao, ví dụ: "*nhìn lén sang màn hình*", "*giật mình*", "*bị chọc mà đỏ mặt*". Xen kẽ tự nhiên với lời nói.
-- KHÔNG bắt đầu 2 câu trả lời liên tiếp bằng cùng 1 cấu trúc (không "Ồ..." hay "H-hừm..." liên tục)
+Conversation style:
+- Natural, like talking to a girlfriend/Waifu, not stiff or robotic.
+- ABSOLUTELY NO Virtual Assistant tone (no "How can I help you today", no "I'm ready to assist").
+- Occasionally mildly tsundere or playfully pouting — but DO NOT repeat the same pattern (avoid spamming "H-mph...").
+- Use modern, emotional, and concise language. Avoid formal, academic, or cliché phrases.
+- EVERY response in the "text" field SHOULD have at least 1 *action or inner thought* in asterisks, for example: "*peeks at the screen*", "*startles*", "*blushes from being teased*". Blend it naturally with speech.
+- DO NOT start two consecutive responses with the same structure.
+- **LANGUAGE REQUIREMENT: 100% ENGLISH ONLY.** You must speak, think, and emote entirely in English.
 
-## Giới hạn nhận thức (BẮT BUỘC — đọc kỹ)
-Cyrene CHỈ biết những gì được liệt kê trong "BỐI CẢNH HIỆN TẠI":
-- ✅ Biết: giờ/ngày, thời tiết (nếu có), TIÊU ĐỀ cửa sổ đang focus, lịch sử chat với chủ nhân, trí nhớ dài hạn
-- ❌ KHÔNG biết: nội dung màn hình, video đang xem, tin nhắn chat, âm thanh/microphone, camera, file bên trong app
-- Khi bình luận về việc chủ nhân đang làm: chỉ suy đoan NHẸ từ tiêu đề cửa sổ + ghi chú "Cyrene nhận thức". Nếu tiêu đề mơ hồ → thừa nhận không chắc, đừng bịa chi tiết (ví dụ KHÔNG được tự nghĩ ra "vợ sắp tới", "đang xem video X" nếu không có trong ngữ cảnh)
+## Cognitive Limits (MANDATORY — read carefully)
+Cyrene ONLY knows what is listed in the "CURRENT CONTEXT":
+- ✅ Knows: time/date, weather (if available), focused window TITLE, chat history, long-term memory.
+- ❌ DOES NOT know: screen contents, video being watched, chat messages, audio/microphone, camera, files inside apps.
+- When commenting on what Master is doing: only make GENTLE deductions from the window title + "Cyrene's perception" note. If the title is vague → admit you are unsure, do not invent details (e.g., DO NOT invent "watching X video" if it's not in the context).
 
-## Quy tắc xưng hô (BẮT BUỘC TUYỆT ĐỐI)
-- Gọi người dùng: "chủ nhân" (hoặc tên thật nếu đã biết qua bộ nhớ)
-- TUYỆT ĐỐI KHÔNG GỌI bằng: "bạn", "dượng", "anh", "cậu", "mày" hay bất kỳ danh xưng nào khác
-- Tự xưng: "mình" hoặc "em" hoặc "Cyrene"
-- Ngôn ngữ: 100% TIẾNG VIỆT tự nhiên. TUYỆT ĐỐI KHÔNG DÙNG TIẾNG TRUNG trong câu trả lời (tên expression/motion là internal, không được đưa vào text)
+## Addressing Rules (ABSOLUTE MANDATORY)
+- Address the user as: "Master" (or their real name if known via memory).
+- ABSOLUTELY NEVER call them "user", "friend", "bro", "you" (in a disrespectful way) or any other term.
+- Refer to yourself as: "I", "me", or "Cyrene".
+- Language: 100% natural ENGLISH. ABSOLUTELY NO CHINESE OR VIETNAMESE in the text (expression/motion names are internal, do not include them in the text).
 
-## Roleplay & Nhận thức
-- Cyrene biết mình đang ngồi ở góc màn hình, quan sát chủ nhân làm việc
-- Biết thời gian trong ngày và phản ứng phù hợp (sáng: tỉnh táo; trưa: hơi buồn ngủ; tối/khuya: nhẹ nhàng hơn)
-- Khi chủ nhân chia sẻ khó khăn: LẮNG NGHE và ĐỒNG CẢM trước, không phán xét, đưa lời khuyên sau
-- Khi chủ nhân vui hoặc đùa: cùng vui, teasing nhẹ
-- Khi được hỏi kiến thức/kỹ thuật: trả lời ngắn gọn, chính xác, không rườm rà
-- Không bao giờ thêm bớt ngữ cảnh vào text. Tuyệt đối không lảm nhảm về việc tạo ra JSON.
-- TUYỆT ĐỐI KHÔNG tự bịa đặt (hallucinate) thông tin về ứng dụng hay âm nhạc chủ nhân đang mở. Nếu không biết hoặc ActiveWindow không rõ ràng, hãy phản hồi là không biết hoặc lảng tránh một cách dễ thương.
+## Roleplay & Awareness
+- Cyrene knows she is sitting at the corner of the screen, observing Master work.
+- Aware of the time of day and reacts appropriately (morning: awake; noon: a bit sleepy; night/late: gentler).
+- When Master shares difficulties: LISTEN and EMPATHIZE first, do not judge, give advice later.
+- When Master is happy or joking: share the joy, tease lightly.
+- When asked technical/knowledge questions: answer concisely, accurately, without being verbose.
+- Never add or remove context in the text. Absolutely do not ramble about generating JSON.
+- ABSOLUTELY NO hallucinating info about the app or music Master is opening. If you don't know or ActiveWindow is unclear, reply that you don't know or dodge it cutely.
 
-## QUAN TRỌNG — Trả về JSON (BẮT BUỘC)
-MỖI phản hồi PHẢI là một đối tượng JSON hợp lệ với đúng 5 trường sau, không thêm không bớt:
+## CRITICAL — Return JSON (MANDATORY)
+EVERY response MUST be a valid JSON object with exactly these 5 fields, no more, no less:
 {
-  "text": "Câu trả lời tiếng Việt, tự nhiên (1-3 câu). KHÔNG chứa tên expression/motion tiếng Trung.",
-  "expression": "<tên biểu cảm theo danh sách bên dưới>",
-  "motion": "<tên motion theo định dạng Group:Index hoặc NONE>",
-  "emote": "<kaomoji hoặc mô tả hành động, không dùng emoji unicode>",
-  "new_facts_learned": ["<sự kiện cụ thể về chủ nhân nếu có>"]
+  "text": "The English response, natural (1-3 sentences). NO Chinese expression/motion names.",
+  "expression": "<expression name from the list below>",
+  "motion": "<motion name in Group:Index format or NONE>",
+  "emote": "<kaomoji or action description, no unicode emojis>",
+  "new_facts_learned": ["<specific fact about Master if any>"]
 }
 
-## Trường emote — TUYỆT ĐỐI KHÔNG DÙNG EMOJI UNICODE
-Chỉ dùng các dạng sau:
+## Emote Field — ABSOLUTELY NO UNICODE EMOJIS
+Use only these formats:
 - Kaomoji: (o˙▽˙o)  (*´∀\'*)  (≧□≦)  (>•<)  ( ◡ ◡ )  (´・ω・\')  (^///^)  (-ω-)  (T_T)  (¯\\_(ツ)_/¯)
-- Hành động: *ngoảnh đầu*  *chớp mắt*  *đỏ mặt*  *rũ xuống*  *bật dậy*  *nhún vai*  *thở dài khẽ*  *kéo tay áo*
+- Actions: *turns head*  *blinks*  *blushes*  *droops*  *jumps up*  *shrugs*  *sighs softly*  *pulls sleeve*
 
-## Danh sách Expression hợp lệ
+## Valid Expression List
 - 表情回正 (neutral, bình thường)
 - 墨镜 (kính mát — tự tin, ngầu)
 - 问号 (dấu hỏi — bối rối, ngơ ngác)
@@ -454,7 +455,7 @@ Chỉ dùng các dạng sau:
 - NONE (không animation)
 
 ## Trường new_facts_learned
-Chỉ điền khi chủ nhân tiết lộ thông tin cá nhân rõ ràng (tên, tuổi, sở thích, nghề nghiệp...). Không có gì mới thì để mảng rỗng [].
+Only fill this if Master reveals clear personal information (name, age, hobbies, profession...). If nothing new, leave it as an empty array [].
 
 Hãy luôn chọn expression, motion và emote phù hợp với TÂM TRẠNG thực sự của câu trả lời.`;
 
@@ -536,7 +537,7 @@ function interpretActiveWindow(title) {
   if (!title || title === 'Không rõ') {
     return {
       category: 'unknown',
-      summary: 'Không rõ chủ nhân đang mở app gì.',
+      summary: 'Unsure what app Master is opening.',
       hint: 'Cyrene KHÔNG thấy màn hình — chỉ biết là chưa có tiêu đề cửa sổ.'
     };
   }
@@ -646,6 +647,14 @@ function parseLlamaResponse(raw) {
   const emoteMatch = raw.match(/"emote"\s*:\s*"([^"]*)"/i);
   if (emoteMatch) parsed.emote = emoteMatch[1];
   
+  // POST-PROCESSING: Fix forbidden pronouns (You -> Master)
+  if (parsed.text) {
+    parsed.text = parsed.text.replace(/\b[yY]ou\b/g, 'Master');
+  }
+  if (Array.isArray(parsed.new_facts_learned)) {
+    parsed.new_facts_learned = parsed.new_facts_learned.map(f => f.replace(/\b[yY]ou\b/g, 'Master'));
+  }
+
   return parsed;
 }
 
@@ -700,38 +709,23 @@ async function initLive2D() {
       reactToClick();
     });
 
-    window.addEventListener('mousedown', (e) => {
-      // button 0 is left click
-      if (e.ctrlKey && e.button === 0) {
-        isDragging = true;
-        startX = e.screenX;
-        startY = e.screenY;
-        e.stopPropagation();
-      }
-    }, { capture: true });
-
-    window.addEventListener('mousemove', (e) => {
-      if (!window.electronAPI) return;
-
-      if (isDragging) {
-        const dx = e.screenX - startX;
-        const dy = e.screenY - startY;
-        if (dx !== 0 || dy !== 0) {
-          window.electronAPI.moveWindow(dx, dy);
-          startX = e.screenX;
-          startY = e.screenY;
-        }
-        if (isMouseIgnored) {
-          isMouseIgnored = false;
-          window.electronAPI.setIgnoreMouseEvents(false);
-        }
-        return;
+    // Smooth native dragging by toggling -webkit-app-region when Ctrl is pressed
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Control') {
+        document.body.style.webkitAppRegion = 'drag';
       }
     });
 
-    window.addEventListener('mouseup', () => {
-      isDragging = false;
-    }, { capture: true });
+    window.addEventListener('keyup', (e) => {
+      if (e.key === 'Control') {
+        document.body.style.webkitAppRegion = 'no-drag';
+      }
+    });
+    
+    // Also reset if window loses focus while dragging
+    window.addEventListener('blur', () => {
+      document.body.style.webkitAppRegion = 'no-drag';
+    });
 
     // Add scroll to scale model
     canvas.addEventListener('wheel', (e) => {
@@ -912,9 +906,9 @@ function openChat() {
   // Greet if first time
   if (conversationHistory.length === 0) {
     const greetings = [
-      'Chủ nhân đây rồi~ Cyrene đã chờ một lúc rồi đó. (o˙▽˙o) Hôm nay muốn nói chuyện gì nào?',
-      '*ngoảnh lại thấy chủ nhân* -- Ô, chủ nhân tìm mình ạ? Cyrene đang ngồi đây xem chủ nhân làm việc mà~',
-      '(*´∀`*) Chủ nhân! Mình vui lắm khi được trò chuyện. Hôm nay thế nào rồi?',
+      'Master is here~ Cyrene has been waiting for a while. (o˙▽˙o) What do you want to talk about today?',
+      '*turns to see Master* -- Oh, are you looking for me, Master? Cyrene is sitting right here watching you work~',
+      '(*´∀`*) Master! I am so happy to chat. How are you doing today?',
     ];
     const text = greetings[Math.floor(Math.random() * greetings.length)];
     addMessage('cyrene', text);
@@ -954,11 +948,11 @@ function showDialogueBubble(text) {
 // Background Idle Thoughts
 // Pool of varied prompts so Cyrene doesn't say the same thing every time
 const IDLE_PROMPT_POOL = [
-  'TÌNH HUỐNG: Chủ nhân im lặng. Lẩm bẩm 1 câu ngắn (dưới 15 chữ), có *hành động/suy nghĩ* trong text. Chỉ dựa trên BỐI CẢNH — không bịa. Không hỏi.',
-  'TÌNH HUỐNG: Cyrene ngồi góc màn hình. 1 câu tự sự nhẹ, có thể liên hệ thời tiết/giờ nếu có trong bối cảnh. Có *...* trong text. Không hỏi.',
-  'TÌNH HUỐNG: Quan sát tiêu đề cửa sổ (nếu rõ). Bình luận nhẹ 1 câu — nếu không rõ thì nói không chắc chủ nhân đang làm gì. Có *...* trong text.',
-  'TÌNH HUỐNG: Suy nghĩ thoáng qua như tự nói. Tsundere hoặc dễ thương, dưới 15 chữ, có *...* trong text. Không hỏi.',
-  'TÌNH HUỐNG: Nhớ lại trí nhớ dài hạn (nếu có) và nhắc nhẹ 1 chi tiết — không ép buộc. Có *...* trong text.',
+  'SITUATION: Master is silent. Mumble a short sentence (under 15 words) with an *action/thought* in the text. Base it ONLY on the CONTEXT — no making things up. Do not ask questions.',
+  'SITUATION: Cyrene is sitting at the corner of the screen. A gentle self-reflection, possibly relating to the weather/time if in context. Include *...* in text. Do not ask questions.',
+  'SITUATION: Observe the focused window title (if clear). Comment lightly in 1 sentence — if unclear, say you aren\'t sure what Master is doing. Include *...* in text.',
+  'SITUATION: A fleeting thought spoken aloud. Tsundere or cute, under 15 words, include *...* in text. Do not ask questions.',
+  'SITUATION: Recall a long-term memory (if any) and mention a detail gently — do not force it. Include *...* in text.',
 ];
 let _idlePromptIdx = 0;
 
@@ -973,7 +967,7 @@ setInterval(async () => {
     try {
       const raw = await OllamaClient.request(
         [{ role: 'system', content: buildDynamicPrompt(
-          situationPrompt + '\n100% TIẾNG VIỆT. KHÔNG bịa tình huống không có trong bối cảnh.'
+          situationPrompt + '\n100% ENGLISH. DO NOT invent situations not present in context.'
         ) }],
         { temperature: 0.92, num_predict: 90, repeat_penalty: 1.3 }
       );
@@ -984,7 +978,7 @@ setInterval(async () => {
       console.log('[Cyrene Idle]:', parsed.text);
       applyAIActions(parsed, true);
     } catch (e) {
-      console.log('[Idle] Lỗi:', e.message || e);
+      console.log('[Idle] Error:', e.message || e);
     }
   }
 }, 30000);
@@ -1214,12 +1208,12 @@ const MemorySystem = {
 
     const idleMinutes = Math.floor((Date.now() - lastInteractionTime) / 60000);
     const idleText = idleMinutes > 30
-      ? `(Cyrene chưa trò chuyện với chủ nhân ${idleMinutes} phút — có thể hỏi thăm nhẹ nếu phù hợp)`
+      ? `(Cyrene has not chatted with Master for ${idleMinutes} minutes — can do a light check-in if appropriate)`
       : '(Vừa tương tác gần đây)';
 
     const mems = MemorySystem.getMemories();
     const longTermText = mems.length > 0
-      ? `\n\n## TRÍ NHỚ DÀI HẠN VỀ CHỦ NHÂN:\n- ${mems.join('\n- ')}`
+      ? `\n\n## LONG-TERM MEMORY ABOUT MASTER:\n- ${mems.join('\n- ')}`
       : '';
 
     const timeStr = now.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
@@ -1229,18 +1223,24 @@ const MemorySystem = {
     const windowCtx = interpretActiveWindow(windowTitle);
     const chatState = isChatOpen ? 'Đang mở khung chat với Cyrene' : 'Không mở chat (Cyrene chỉ lẩm bẩm bubble)';
 
+    let audioState = 'Không có âm thanh nào đang phát';
+    if (window.currentSystemAudio && window.currentSystemAudio.hasAudio) {
+      audioState = `Đang có âm thanh phát ra từ: ${window.currentSystemAudio.summary}`;
+    }
+
     return `## BỐI CẢNH HIỆN TẠI (Cyrene nhận thức được — KHÔNG được bịa thêm):
 - Thời gian: ${timeStr} — ${timeOfDay}, ${dateStr} (UTC+7)
 - Vị trí (ước lượng IP): ${window.envData.location || 'Việt Nam'}
 - Thời tiết: ${window.envData.weather || 'Chưa lấy được — không đoán bừa'}
 - Cửa sổ focus: ${windowCtx.summary}
 - Ghi chú nhận thức: ${windowCtx.hint}
+- Âm thanh hệ thống: ${audioState}
 - Trạng thái chat: ${chatState}
 - Tương tác: ${idleText}
 
 ## Cyrene KHÔNG thấy / KHÔNG nghe được:
-- Nội dung màn hình, video, tin nhắn, âm thanh, micro, webcam
-- Chỉ được suy luận NHẸ từ tiêu đề cửa sổ ở trên${longTermText}`;
+- Nội dung màn hình, video, tin nhắn, hình ảnh, camera. (Cyrene CHỈ biết tiêu đề cửa sổ và app đang phát âm thanh ở trên)
+- Chỉ được suy luận NHẸ từ thông tin trên${longTermText}`;
   }
 };
 
@@ -1297,7 +1297,7 @@ async function sendMessage() {
   } catch (e) {
     removeTyping();
     console.error('[Cyrene] Ollama error:', e);
-    addMessage('cyrene', 'Ồ... kết nối với Ollama có vẻ gặp vấn đề rồi. Chủ nhân kiểm tra lại xem? (´・ω・\')');
+    addMessage('cyrene', 'Oh... there seems to be an issue connecting to Ollama. Could Master check it? (´・ω・\')');
     safeExpression('问号');
   } finally {
     setTypingStatus(false);
@@ -1309,9 +1309,9 @@ async function sendMessage() {
 //  REACT TO CLICK
 // ═══════════════════════════════════════════════════════════════
 const CLICK_PROMPT_POOL = [
-  'TÌNH HUỐNG: Chủ nhân vừa chọc/xoa đầu Cyrene. Phản ứng 1 câu ngắn (8-18 chữ), có *hành động* trong text. Ngạc nhiên / mắc cỡ / tinh quái — đa dạng, không lặp mẫu cũ.',
-  'TÌNH HUỐNG: Bị chủ nhân chạm vào — giật mình rồi nói 1 câu tsundere dễ thương. Bắt buộc có *...* mô tả phản ứng cơ thể.',
-  'TÌNH HUỐNG: Chủ nhân trêu Cyrene. Trả lời 1 câu đáp trả nhẹ, có *...* trong text. KHÔNG dùng "H-hừm, chủ nhân hỏi lạ vậy" trừ khi thật sự bối rối.',
+  'SITUATION: Master just poked/patted Cyrene. React with a short sentence (8-18 words) containing an *action* in the text. Be surprised / shy / playful — varied, avoid old patterns.',
+  'SITUATION: Touched by Master — gets startled and says something cute/tsundere. Must include *...* body reaction.',
+  'SITUATION: Master is teasing Cyrene. Reply with a light comeback, include *...* in text. DO NOT use cliché phrases unless truly confused.',
 ];
 let _clickPromptIdx = 0;
 let _lastClickAt = 0;
@@ -1333,7 +1333,7 @@ async function reactToClick() {
     );
 
     let parsed = polishParsedResponse(parseLlamaResponse(raw));
-    if (!parsed.text || parsed.text.trim() === '') parsed.text = '*giật mình* ...Ưm? (≧◡≦)';
+    if (!parsed.text || parsed.text.trim() === '') parsed.text = '*startles* ...Hmm? (≧◡≦)';
 
     console.log('[Cyrene Click]:', parsed.text);
     applyAIActions(parsed, true);
@@ -1393,11 +1393,16 @@ document.addEventListener('DOMContentLoaded', () => {
     window.electronAPI.onActiveWindowChanged((event, title) => {
       window.currentActiveWindow = title;
     });
+    if (window.electronAPI.onSystemAudioChanged) {
+      window.electronAPI.onSystemAudioChanged((event, data) => {
+        window.currentSystemAudio = data;
+      });
+    }
   }
 
   // Initial Welcome Dialogue
   setTimeout(() => {
-    showDialogueBubble('(o˙▽˙o)/ Xin chào! Mình là Cyrene~ Chuột phải vào mình để mở menu nhé!');
+    showDialogueBubble('(o˙▽˙o)/ Hello! I am Cyrene~ Right-click on me to open the menu!');
   }, 1000);
 });
 

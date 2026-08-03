@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cyrene Live2D Interactive Previewer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Live2D Cubism SDK Core (Local) -->
+  <script src="./src/renderer/public/live2dcubismcore.min.js"></script>
+  <!-- PixiJS v7 -->
+  <script src="https://cdn.jsdelivr.net/npm/pixi.js@7.3.3/dist/pixi.min.js"></script>
+  <!-- Pixi Live2D Display -->
+  <script src="https://cdn.jsdelivr.net/npm/pixi-live2d-display@0.4.0/dist/cubism4.min.js"></script>
+
+  <style>
+    :root {
+      --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #31103f 100%);
+      --glass-bg: rgba(255, 255, 255, 0.07);
+      --glass-border: rgba(255, 255, 255, 0.15);
+      --primary-color: #ec4899;
+      --accent-color: #a855f7;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
+
+    body {
+      font-family: 'Outfit', sans-serif;
+      background: var(--bg-gradient);
+      color: var(--text-main);
+      height: 100vh;
+      width: 100vw;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    header {
+      padding: 1rem 1.5rem;
+      background: rgba(15, 23, 42, 0.7);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--glass-border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 10;
+      flex-shrink: 0;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .logo-badge {
+      background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
+      padding: 0.3rem 0.75rem;
+      border-radius: 9999px;
+      font-weight: 700;
+      font-size: 0.8rem;
+      letter-spacing: 1px;
+      box-shadow: 0 4px 14px rgba(236, 72, 153, 0.4);
+    }
+
+    .title {
+      font-size: 1.15rem;
+      font-weight: 600;
+      background: linear-gradient(to right, #ffffff, #f472b6);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .status-tag {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      background-color: #22c55e;
+      border-radius: 50%;
+      box-shadow: 0 0 10px #22c55e;
+    }
+
+    main {
+      flex: 1;
+      display: flex;
+      position: relative;
+      overflow: hidden;
+    }
+
+    #stage-container {
+      flex: 1;
+      position: relative;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      overflow: hidden;
+    }
+
+    /* Important: Clean styling to prevent aspect ratio distortion (squishing) */
+    #canvas-live2d {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    #controls-panel {
+      width: 320px;
+      background: var(--glass-bg);
+      backdrop-filter: blur(20px);
+      border-left: 1px solid var(--glass-border);
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+      overflow-y: auto;
+      z-index: 10;
+      flex-shrink: 0;
+    }
+
+    .panel-section {
+      background: rgba(15, 23, 42, 0.4);
+      border: 1px solid var(--glass-border);
+      border-radius: 16px;
+      padding: 0.85rem;
+    }
+
+    .panel-title {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--accent-color);
+      margin-bottom: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .btn-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.4rem;
+    }
+
+    .btn {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--glass-border);
+      color: var(--text-main);
+      padding: 0.55rem 0.4rem;
+      border-radius: 10px;
+      font-size: 0.82rem;
+      font-family: inherit;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-align: center;
+    }
+
+    .btn:hover {
+      background: linear-gradient(135deg, rgba(236, 48, 153, 0.25), rgba(168, 85, 247, 0.25));
+      border-color: var(--primary-color);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(236, 72, 153, 0.2);
+    }
+
+    .btn:active {
+      transform: translateY(0);
+    }
+
+    .btn-full {
+      grid-column: span 2;
+    }
+
+    #log-box {
+      font-family: monospace;
+      font-size: 0.75rem;
+      color: #38bdf8;
+      background: rgba(0, 0, 0, 0.4);
+      padding: 0.5rem;
+      border-radius: 8px;
+      border: 1px solid rgba(56, 189, 248, 0.2);
+      min-height: 42px;
+      word-break: break-all;
+    }
+
+    #loading-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.95);
+      backdrop-filter: blur(10px);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      gap: 1rem;
+      z-index: 20;
+      transition: opacity 0.5s ease;
+    }
+
+    .spinner {
+      width: 48px;
+      height: 48px;
+      border: 4px solid rgba(236, 72, 153, 0.2);
+      border-top-color: var(--primary-color);
+      border-radius: 50%;
+      animation: spin 1s infinite linear;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .tip {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="logo">
+      <span class="logo-badge">LIVE2D</span>
+      <span class="title">Cyrene (昔涟) Fixed Previewer</span>
+    </div>
+    <div class="status-tag">
+      <div class="dot"></div>
+      <span id="status-text">Đang kết nối...</span>
+    </div>
+  </header>
+
+  <main>
+    <div id="stage-container">
+      <div id="loading-overlay">
+        <div class="spinner"></div>
+        <p id="loading-msg">Đang khởi tạo PixiJS & Cubism SDK...</p>
+      </div>
+      <canvas id="canvas-live2d"></canvas>
+    </div>
+
+    <div id="controls-panel">
+      <div class="panel-section">
+        <div class="panel-title">🎬 Chuyển động (Motions)</div>
+        <div class="btn-grid">
+          <button class="btn" onclick="playMotion('动作#6', 1)">Wink ~</button>
+          <button class="btn" onclick="playMotion('动作#6', 2)">Khoe dễ thương</button>
+          <button class="btn" onclick="playMotion('动作#6', 3)">Cười tươi</button>
+          <button class="btn" onclick="playMotion('Tick3', 3)">Đu đu quay</button>
+          <button class="btn btn-full" onclick="playMotion('动作#6', 0)">Reset Tư Thế</button>
+        </div>
+      </div>
+
+      <div class="panel-section">
+        <div class="panel-title">😊 Biểu cảm (Expressions)</div>
+        <div class="btn-grid">
+          <button class="btn" onclick="setExpression('墨镜')">🕶️ Kính râm</button>
+          <button class="btn" onclick="setExpression('问号')">❓ Dấu hỏi</button>
+          <button class="btn" onclick="setExpression('闪耀')">✨ Lấp lánh</button>
+          <button class="btn" onclick="setExpression('星星眼')">⭐ Mắt sao</button>
+          <button class="btn" onclick="setExpression('圈圈眼')">🌀 Mắt xoáy</button>
+          <button class="btn" onclick="setExpression('开心眼')">😄 Vui vẻ</button>
+          <button class="btn btn-full" onclick="setExpression('表情回正')">🔄 Reset Biểu cảm</button>
+        </div>
+      </div>
+
+      <div class="panel-section">
+        <div class="panel-title">📋 Nhật ký Lệnh</div>
+        <div id="log-box">Sẵn sàng.</div>
+      </div>
+
+      <div class="panel-section">
+        <div class="panel-title">⚙️ Điều khiển</div>
+        <button class="btn btn-full" onclick="resetScale()">Canh giữa & Chuẩn Tỷ lệ</button>
+        <p class="tip" style="margin-top: 0.5rem;">
+          💡 <b>Mẹo</b>: Rê chuột để Cyrene nhìn theo. Bấm trực tiếp vào Cyrene để phát animation ngẫu nhiên!
+        </p>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const MODEL_PATH = './src/renderer/public/models/cyrene/Cyrene.model3.json';
+    let app, model;
+
+    function log(msg) {
+      console.log(msg);
+      const box = document.getElementById('log-box');
+      if (box) box.innerText = msg;
+    }
+
+    async function init() {
+      const container = document.getElementById('stage-container');
+      const canvas = document.getElementById('canvas-live2d');
+      const statusText = document.getElementById('status-text');
+      const loadingOverlay = document.getElementById('loading-overlay');
+
+      try {
+        log('Khởi tạo PixiJS App...');
+        
+        // Init PixiJS Application
+        app = new PIXI.Application({
+          view: canvas,
+          autoStart: true,
+          resizeTo: container,
+          backgroundAlpha: 0,
+          antialias: true
+        });
+
+        // Register Live2D model plugin
+        const PIXILive2D = window.PIXI.live2d;
+        PIXILive2D.Live2DModel.registerTicker(PIXI.Ticker);
+
+        log('Đang tải Cyrene Live2D Model...');
+        // Load Cyrene Model
+        model = await PIXILive2D.Live2DModel.from(MODEL_PATH, {
+          autoInteract: true
+        });
+
+        app.stage.addChild(model);
+
+        // Anchor center
+        model.anchor.set(0.5, 0.5);
+
+        // Fit & Center Model
+        resetScale();
+
+        // Hit areas & interactions
+        model.on('hit', (hitAreas) => {
+          log('Chạm vào HitArea: ' + hitAreas.join(', '));
+          if (hitAreas.includes('ArtMesh11') || hitAreas.includes('ArtMesh12')) {
+            playMotion('秋千#1', 1);
+          } else {
+            const randIndex = Math.floor(Math.random() * 3) + 1;
+            playMotion('动作#6', randIndex);
+          }
+        });
+
+        // Hide overlay
+        loadingOverlay.style.opacity = '0';
+        setTimeout(() => loadingOverlay.style.display = 'none', 500);
+        statusText.innerText = 'Đã kết nối Live2D';
+        log('Cyrene đã tải xong! Bấm nút để thử animation.');
+
+      } catch (err) {
+        console.error('Error loading Live2D model:', err);
+        document.getElementById('loading-msg').innerText = 'Lỗi: ' + err.message;
+        statusText.innerText = 'Lỗi kết nối';
+        log('Lỗi: ' + err.message);
+      }
+    }
+
+    function resetScale() {
+      if (!model || !app) return;
+      const container = document.getElementById('stage-container');
+      const rect = container.getBoundingClientRect();
+
+      // Ensure canvas matches container exactly without stretching
+      app.renderer.resize(rect.width, rect.height);
+
+      // Compute unscaled model dimensions
+      const originalW = model.width / model.scale.x;
+      const originalH = model.height / model.scale.y;
+
+      // Fit strictly keeping 1:1 aspect ratio
+      const scaleX = (rect.width * 0.8) / originalW;
+      const scaleY = (rect.height * 0.8) / originalH;
+      const scale = Math.min(scaleX, scaleY);
+
+      model.scale.set(scale);
+      model.x = rect.width / 2;
+      model.y = rect.height / 2;
+
+      log(`Scale reset: ${scale.toFixed(3)} (Pos: ${model.x.toFixed(0)}, ${model.y.toFixed(0)})`);
+    }
+
+    function playMotion(group, index) {
+      if (!model) {
+        log('Mô hình chưa sẵn sàng!');
+        return;
+      }
+      log(`Phát Motion: Group [${group}] - Index [${index}]`);
+      try {
+        // Priority 3 = FORCE in pixi-live2d-display
+        model.motion(group, index, 3);
+      } catch (e) {
+        log(`Lỗi Motion: ${e.message}`);
+      }
+    }
+
+    function setExpression(nameOrIndex) {
+      if (!model) {
+        log('Mô hình chưa sẵn sàng!');
+        return;
+      }
+      log(`Đặt Biểu cảm: [${nameOrIndex}]`);
+      try {
+        model.expression(nameOrIndex);
+      } catch (e) {
+        log(`Lỗi Biểu cảm: ${e.message}`);
+      }
+    }
+
+    window.addEventListener('resize', () => {
+      if (model) resetScale();
+    });
+
+    window.onload = init;
+  </script>
+</body>
+</html>

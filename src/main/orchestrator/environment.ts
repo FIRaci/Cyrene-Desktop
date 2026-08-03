@@ -115,7 +115,12 @@ export function buildEnvironmentContext(modelInfo?: ModelInfo, userInfo?: UserIn
   const documents = safeGetPath("documents");
   const downloads = safeGetPath("downloads");
   const home = safeGetPath("home");
-  const username = os.userInfo().username;
+  let username = "Unknown User";
+  try {
+    username = os.userInfo().username;
+  } catch (err) {
+    console.warn(LOG_PREFIX, "os.userInfo() lookup failed:", err);
+  }
   // 用户时区（profile.timezone 缺/非法时由 resolver 回退 Asia/Shanghai），不再读系统时区。
   const tz = resolveChatContextTimezone(userInfo?.timezone);
   const dateStr = formatDate(new Date(), tz);

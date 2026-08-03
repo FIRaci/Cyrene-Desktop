@@ -134,8 +134,10 @@ export function buildProactiveMessages(input: BuildProactiveMessagesInput): Chat
 候选场景：${input.sceneId}
 连续未回复次数：${input.unansweredCount}
 
+[CRITICAL DIRECTIVE]: Your generated "text" MUST be 100% in English (including any emotes like *sighs* or *smiles*). No Vietnamese or Chinese is allowed.
+
 请只返回以下一种 JSON，不要使用 Markdown 代码块，也不要添加解释：
-{"decision":"send","text":"要发送的一条自然消息"}
+{"decision":"send","text":"An English message to send"}
 或
 {"decision":"silent","text":""}`;
 

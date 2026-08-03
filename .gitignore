@@ -110,3 +110,13 @@ docs/
 !docs/electron-33-to-43-upgrade-assessment.md
 PRODUCT.md
 sticker-descriptions/
+build_temp/
+
+# Scratch / debug / AI-workflow artifacts (local-only)
+test*.js
+temp.js
+test_gsmtc.ps1
+images (1).jpg
+cyrene_icon (2).ico
+phase-*.md
+plan.md

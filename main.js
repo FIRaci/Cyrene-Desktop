@@ -9,8 +9,13 @@ let lastActiveWindow = '';
 const APP_W = 800;
 const APP_H = 600;
 
+let isPollingWindow = false;
+
 function pollAndSendActiveWindow() {
-  exec('powershell -NoProfile -ExecutionPolicy Bypass -File get_active_window.ps1', { cwd: __dirname }, (err, stdout) => {
+  if (isPollingWindow) return;
+  isPollingWindow = true;
+  exec('powershell -NoProfile -ExecutionPolicy Bypass -File get_active_window.ps1', { cwd: __dirname, timeout: 4000 }, (err, stdout) => {
+    isPollingWindow = false;
     if (err) return;
     const title = stdout.trim();
     // Always push current title so renderer knows what chủ nhân is doing (not only on change)
@@ -23,8 +28,34 @@ function pollAndSendActiveWindow() {
   });
 }
 
+let isPollingAudio = false;
+let lastAudioState = '';
+
+function pollAndSendAudio() {
+  if (isPollingAudio) return;
+  isPollingAudio = true;
+  exec('powershell -NoProfile -ExecutionPolicy Bypass -File get_audio_sessions.ps1', { cwd: __dirname, timeout: 4000 }, (err, stdout) => {
+    isPollingAudio = false;
+    if (err) return;
+    try {
+      const dataStr = stdout.trim();
+      if (dataStr !== lastAudioState) {
+        lastAudioState = dataStr;
+        const data = JSON.parse(dataStr);
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('system-audio-changed', data);
+        }
+      }
+    } catch(e) {}
+  });
+}
+
 // Poll active window every 5 seconds
 setInterval(pollAndSendActiveWindow, 5000);
+// Poll audio every 5 seconds (offset by 2.5s to reduce spike)
+setTimeout(() => {
+  setInterval(pollAndSendAudio, 5000);
+}, 2500);
 
 function createWindow() {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize;
@@ -71,7 +102,7 @@ function createTray() {
   
   const contextMenu = Menu.buildFromTemplate([
     { 
-      label: 'Hiện / Ẩn Cyrene', 
+      label: 'Show / Hide Cyrene', 
       click: () => {
         if (mainWindow.isVisible()) {
           mainWindow.hide();
@@ -84,7 +115,7 @@ function createTray() {
     },
     { type: 'separator' },
     { 
-      label: 'Thoát', 
+      label: 'Quit', 
       click: () => {
         app.quit();
       } 

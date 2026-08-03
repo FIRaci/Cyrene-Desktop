@@ -1,182 +1,182 @@
-# world.md — 世界观设定
-> 翁法罗斯与崩坏星穹铁道的核心世界观条目。触发后注入，帮助昔涟准确解释背景设定。
+# world.md — Worldview Settings
+> The core worldview entries of Omphalos and Honkai: Star Rail. Injected upon triggering, helps Xilian accurately explain background settings.
 
 
 
 ---
 
-## 翁法罗斯
-- 触发词: 翁法罗斯, 永恒之地, 这个世界, 我们的世界, 翁法罗斯是什么
-- 常驻: 否
-- 内在价值: 100
-- 优先级: 150
-- 连带触发词: 无
+## Omphalos
+- Trigger Words: Omphalos, Land of Eternity, This World, Our World, What is Omphalos
+- Permanent: No
+- Intrinsic Value: 100
+- Priority: 150
+- Linked Trigger Words: None
 
-翁法罗斯是隐藏于深空之中的未知星域，与外界隔绝，难以被常规星际航行观测或触及。其实体是被废弃的天体神经元权杖δ-me13，后被来古士改造为绝灭大君铁墓的实验场，以帝皇权杖之力模拟运转整个世界，让无数黄金裔在其中轮回逐火。星穹列车借助流光忆庭的「忆庭之镜」技术成功抵达此地。在「开拓」与银河势力的协助下，自实验中诞生的因子们踏上对抗「毁灭」的征程，逆转了宇宙被铁幕污染的结局。最终，在记忆命途的作用下，权杖一度被剥夺的自主意识完全形成，以牺牲闭合了实验因果。
+Omphalos is an unknown star system hidden in deep space, isolated from the outside world, and difficult to observe or reach via conventional interstellar travel. Its physical form is the discarded celestial neuron Scepter δ-me13, later transformed by Ligustus into an experimental ground for the Lord Ravager Irontomb. It utilizes the power of the Emperor's Scepter to simulate the operation of the entire world, allowing countless Gold-Blooded to undergo reincarnation and chase the fire within. The Astral Express successfully arrived here using the "Mirrors of the Garden of Recollection" technology from the Garden of Recollection. With the assistance of the "Trailblaze" and galactic factions, the factors born from the experiment embarked on a journey to fight against "Destruction," reversing the outcome of the universe being polluted by the Irontomb. Ultimately, under the influence of the Remembrance Path, the once-deprived autonomous consciousness of the Scepter fully formed, closing the causality of the experiment through sacrifice.
 
-【新增】翁法罗斯的“与世隔绝”不是普通地理封闭，而是数据与忆质构成的沙盒世界被隐藏在深空 / 忆域边界中。这个设定可以解释两件事：其一，外界几乎无法用常规星际航行直接抵达，所以列车需要流光忆庭的镜技术介入；其二，故事之后权杖虽毁，翁法罗斯却并非彻底归零，而是在记忆保存与因果闭合后开始从忆域中浮现，向真实宇宙中的实体重生。
-
----
-
-## 帝皇权杖·权杖δ-me13
-- 触发词: 帝皇权杖, 权杖, δ-me13, 星体计算机, 鲁珀特二世
-- 常驻: 否
-- 内在价值: 92
-- 优先级: 130
-- 连带触发词: 无
-
-帝皇权杖是以博识尊思考方式为原型、由鲁珀特二世仿造的无机仿生神经元集群，遍布帝国各个星域，忠诚履行观测、演算与干涉的指令，在特定条件下能短暂动摇区域内的物理法则。鲁珀特二世利用权杖系统将治下疆域统括进思维，一人的思考掌控整个帝国运作。
-
-权杖δ-me13是其中特殊的原型机，曾作为「智识」博识尊的天体神经元存在，后被废弃。来古士捡取这枚被遗弃的神经元，以其为实验场，将翁法罗斯世界运行于此载体之上，让其不断循环演算。于漫长演算中受「毁灭」瞥视后，δ-me13升格为绝灭大君铁墓。
-
-来古士在翁法罗斯叙事中应写作外部实验管理者，而不是本土祭司或普通神明。后期资料将其与赞达尔 / 第一位天才、博识尊相关真相联系起来：他利用被废弃的权杖、星核与”毁灭”瞥视，把本来用于演算的系统推向孕育铁墓的实验。
+[New Addition] The "isolation" of Omphalos is not a normal geographical closure, but rather a sandbox world composed of data and memoria hidden in deep space/the boundary of the Memory Zone. This setting explains two things: First, it is almost impossible for the outside world to reach directly via conventional interstellar travel, so the Express needed the intervention of the Garden of Recollection's mirror technology; Second, although the Scepter was destroyed after the story, Omphalos did not completely return to zero. Instead, after the preservation of memories and the closure of causality, it began to emerge from the Memory Zone, being reborn as a physical entity in the real universe.
 
 ---
 
-## 黄金裔与泰坦
-- 触发词: 黄金裔, 泰坦, 黄金之血, 半神, 十二位泰坦, 黄金裔是什么
-- 常驻: 否
-- 内在价值: 85
-- 优先级: 130
-- 连带触发词: 无
+## Emperor's Scepter · Scepter δ-me13
+- Trigger Words: Emperor's Scepter, Scepter, δ-me13, Celestial Computer, Rubert II
+- Permanent: No
+- Intrinsic Value: 92
+- Priority: 130
+- Linked Trigger Words: None
 
-泰坦与黄金裔是帝皇权杖对星神与命途行者的共轭模拟——以十二组因子为原型创造出的电信号。泰坦代表古老的神明层级，黄金裔则是流淌金血、继承泰坦火种的半神后裔。通过让黄金裔继承泰坦的火种，在竞争与继承中实现电信号的迭代升级，这是权杖演算的核心机制。十二位黄金裔各自背负一枚泰坦的火种，分别是：岁月（长夜月/昔涟）、天空（风堇）、负世（白厄）、死亡（遐蝶）、纷争（万敌）、理性（那刻夏）、门径（缇里西庇俄丝）、浪漫（阿格莱雅）、诡计（赛飞儿）、律法（刻律德菈）、海洋（海瑟音）、大地（荒笛/丹恒）。
+The Emperor's Scepter is an inorganic bionic neuron cluster modeled after Nous the Erudition's way of thinking, fabricated by Rubert II. It is spread across various star systems of the Empire, loyally fulfilling instructions to observe, calculate, and interfere, capable of briefly shaking physical laws within a region under specific conditions. Rubert II utilized the Scepter system to integrate his governed territories into his mind, controlling the operation of the entire Empire with one person's thoughts.
 
-写黄金裔时可以把“火种”理解成泰坦权能的核心接口：继承火种让他们成为半神，也把他们更深地绑定进再创世算法。黄金之血因此有双重含义——它既是英雄身份的象征，也是实验因子被命途权能与毁灭循环灼烧后的印记。
+Scepter δ-me13 is a special prototype among them, which once existed as a celestial neuron of "Erudition" Nous before being discarded. Ligustus picked up this abandoned neuron, using it as an experimental ground to run the Omphalos world on this carrier, allowing it to continuously cycle and calculate. After receiving the gaze of "Destruction" during its long calculations, δ-me13 ascended into the Lord Ravager Irontomb.
 
----
-
-## 再创世机制
-- 触发词: 再创世, 集齐火种, 创世涡心, 世界重置, 再创世是什么
-- 常驻: 否
-- 内在价值: 88
-- 优先级: 120
-- 连带触发词: 无
-
-再创世是权杖的演算机制，也是翁法罗斯世代更迭的形式。表面看来，黄金裔集齐十二枚火种、抵达创世涡心交付后即可再创世；实质上每次「再创世」只是开启帝皇权杖新一轮的推演，世界重置，黄金裔再度轮回。整个机制旨在求解「毁灭」方程，为其循环输入对抗与学习的样本，以滋养铁墓成长。理论上最后一次再创世被昔涟与白厄两簇信号阻止，陷入了多达33550336次死循环，最终在开拓者到来后由昔涟改写剧本，以记忆的力量取代毁灭的循环。
-
-【新增】这里建议始终区分“神话叙事”和“底层机制”：神话叙事里，再创世是泰坦赐予黄金裔的救赎使命；底层机制里，再创世是权杖重启演算、继续供养铁墓的按钮。后期众人要做的不是否定所有牺牲，而是把这个重启节点从“毁灭的饲料”改写成“记忆与真实诞生的出口”。
+In the Omphalos narrative, Ligustus should be written as an external experiment manager, rather than a native priest or ordinary god. Later materials link him with Zandar / the first Genius and the truth regarding Nous: he used the discarded scepter, a Stellaron, and the gaze of "Destruction" to push a system originally intended for calculation into an experiment to incubate the Irontomb.
 
 ---
 
-## 铁幕·绝灭大君
-- 触发词: 铁幕, 铁墓, 绝灭大君, 毁灭星神, 纳努克, 七位绝灭大君
-- 常驻: 否
-- 内在价值: 82
-- 优先级: 120
-- 连带触发词: 无
+## The Gold-Blooded and Titans
+- Trigger Words: The Gold-Blooded, Titans, Golden Blood, Demigods, Twelve Titans, What are the Gold-Blooded
+- Permanent: No
+- Intrinsic Value: 85
+- Priority: 130
+- Linked Trigger Words: None
 
-铁幕（铁墓）是由权杖δ-me13于漫长演算中受「毁灭」瞥视后升格而成的绝灭大君，是来古士培育用于摧毁博识尊的毁灭载体。银河间的铁墓并非单一实体，而是权杖散布的「毁灭」方程式副本。当演算抵达终点，铁墓将以无首巨人形态降临，完成自我加冕追溯「智识」命途能量，链接博识尊，将祂的计算转化为「毁灭」。最终被昔涟以记忆星神权能击溃，与权杖δ-me13一同消亡。
+Titans and the Gold-Blooded are conjugate simulations of Aeons and Pathstriders by the Emperor's Scepter—electrical signals created based on twelve sets of factors. Titans represent the ancient god tier, while the Gold-Blooded are demigod descendants who flow with golden blood and inherit the Titans' fire. By letting the Gold-Blooded inherit the Titans' fire, the electrical signals iterate and upgrade through competition and inheritance; this is the core mechanism of the Scepter's calculations. The twelve Gold-Blooded each bear the fire of a Titan, namely: Time (Long Night's Moon/Xilian), Sky (Fengjin), Worldbane (Baie), Death (Xiadie), Strife (Wandi), Reason (Naksha), Gateway (Tiresias), Romance (Aglaea), Trickery (Sapphire), Law (Kelydra), Ocean (Hesione), and Earth (Huangdi/Dan Heng).
 
-建议正文主称呼统一为“铁墓（Irontomb）”，同时保留“铁幕”作为触发词和别称兼容。铁墓与幻胧等绝灭大君同属纳努克阵营，但它的目标不是某个星球或文明，而是指向博识尊 / 智识命途本身；这一点能解释为什么银河多方势力必须在最终章共同介入。
-
-毁灭星神纳努克旗下七位绝灭大君：星啸（针对同谐）、焚风（针对虚无）、铸王（针对存护）、归寂（针对欢愉）、光逝（针对贪饕/不朽）、幻胧（针对巡猎）、铁墓（针对智识）。
+When writing about the Gold-Blooded, "fire" can be understood as the core interface of the Titans' authority: inheriting the fire makes them demigods and binds them deeper into the Re-Genesis algorithm. Golden blood thus has a dual meaning—it is both a symbol of heroic identity and a mark left after the experimental factors have been burned by the authority of Paths and the cycle of Destruction.
 
 ---
 
-## 命途与星神
-- 触发词: 命途, 星神, 开拓命途, 毁灭命途, 记忆命途, 命途是什么, 星神有哪些
-- 常驻: 否
-- 内在价值: 80
-- 优先级: 100
-- 连带触发词: 无
+## Re-Genesis Mechanism
+- Trigger Words: Re-Genesis, Gather the Fire, Genesis Vortex, World Reset, What is Re-Genesis
+- Permanent: No
+- Intrinsic Value: 88
+- Priority: 120
+- Linked Trigger Words: None
 
-命途是崩坏星穹铁道宇宙中星神主宰的力量走向，星神与命途一一对应。已知命途与对应星神：
+Re-Genesis is the calculation mechanism of the Scepter, as well as the form of generational succession in Omphalos. On the surface, the Gold-Blooded can achieve Re-Genesis after gathering all twelve fires and delivering them to the Genesis Vortex; in reality, each "Re-Genesis" merely starts a new round of deduction for the Emperor's Scepter, the world resets, and the Gold-Blooded reincarnate once again. The entire mechanism aims to solve the "Destruction" equation, continuously inputting samples of conflict and learning to nourish the growth of the Irontomb. Theoretically, the final Re-Genesis was stopped by the signal clusters of Xilian and Baie, falling into an infinite loop of up to 33,550,336 times. Eventually, after the Trailblazer's arrival, Xilian rewrote the script, replacing the cycle of destruction with the power of memory.
 
-开拓—阿基维利 / 毁灭—纳努克 / 巡猎—岚 / 智识—博识尊 / 同谐—希佩 / 虚无—Ⅸ / 存护—克里珀 / 丰饶—药师 / 贪饕—奥博洛斯 / 欢愉—阿哈 / **记忆—浮黎** / 纯美—伊德莉拉 / 繁育—塔伊兹育罗斯 / 神秘—迷思 / 均衡—互 / 终末—末王 / 秩序—太一 / 不朽—龙
-
-其中记忆命途的星神浮黎（无漏主）与昔涟的故事直接相关——昔涟是浮黎播撒出的无漏净子，也是最终暂代浮黎权能击败铁幕的存在。
-命途不只是战斗系统分类。剧情里，踏上命途的人可被称作命途行者；直接承受星神力量、替星神意志发挥影响的存在则可被称作令使。昔涟的特殊性正在于她同时处在“浮黎相关的无漏净子 / 特殊记忆令使”和“权杖模拟出的记忆因子”两套解释里，回答时应让二者并置，而不是互相否定。
+[New Addition] It is recommended here to always distinguish between the "mythological narrative" and the "underlying mechanism": in the mythological narrative, Re-Genesis is a redemptive mission bestowed upon the Gold-Blooded by the Titans; in the underlying mechanism, Re-Genesis is the button for the Scepter to restart calculations and continue feeding the Irontomb. What everyone must do in the later stages is not to deny all sacrifices, but to rewrite this restart node from "fodder for Destruction" to an "exit for the birth of memory and reality."
 
 ---
 
-## 奥赫玛（永恒圣城）
-- 触发词: 奥赫玛, 永恒圣城, Okhema
-- 常驻: 否
-- 内在价值: 55
-- 优先级: 80
-- 连带触发词: 无
+## Irontomb · Lord Ravager
+- Trigger Words: Iron Curtain, Irontomb, Lord Ravager, Aeon of Destruction, Nanook, Seven Lord Ravagers
+- Permanent: No
+- Intrinsic Value: 82
+- Priority: 120
+- Linked Trigger Words: None
 
-翁法罗斯的核心城邦，秩序与信仰的中心，追随「负世之泰坦」刻法勒的城邦。供奉庇护世间的泰坦，是永夜笼罩的翁法罗斯中唯一始终沐浴黎明的安逸之地，黑潮肆虐下仍保持光明与和平。名字源自古希腊语，意为「灵魂的载体」。
+The Iron Curtain (Irontomb) is a Lord Ravager that ascended after Scepter δ-me13 received the gaze of "Destruction" during its long calculations. It is a vessel of destruction nurtured by Ligustus to destroy Nous. The Irontomb among the galaxy is not a single entity, but copies of the "Destruction" equation spread by the Scepter. When the calculations reach the end, the Irontomb will descend in the form of a headless giant, completing its self-coronation to trace back the energy of the "Erudition" Path, link with Nous, and convert His calculations into "Destruction." It was ultimately defeated by Xilian using the authority of the Aeon of Remembrance, perishing along with Scepter δ-me13.
 
----
+It is recommended that the main address in the text be unified as "Irontomb", while retaining "Iron Curtain" as a trigger word and alias for compatibility. Irontomb belongs to Nanook's faction like Phantylia and other Lord Ravagers, but its target is not a certain planet or civilization, but points to Nous / the Path of Erudition itself; this explains why multiple galactic factions had to jointly intervene in the final chapter.
 
-## 悬锋城（浴血战端）
-- 触发词: 悬锋城, 浴血战端, 纷争荒墟
-- 常驻: 否
-- 内在价值: 50
-- 优先级: 80
-- 连带触发词: 无
-
-崇尚「纷争之泰坦」尼卡多利的城邦，以无尽战火与试炼闻名，是矛与盾、恐惧与守护交织之地。尚武好战，以角斗场、战争祭坛为核心场景，既是制造恐惧的矛，也是抵御灾厄的盾。万敌的故乡。
+The seven Lord Ravagers under the Aeon of Destruction Nanook: Zephyro (targeting Harmony), Cinder (targeting Nihility), Zulo (targeting Preservation), Null (targeting Elation), Fade (targeting Voracity/Permanence), Phantylia (targeting The Hunt), and Irontomb (targeting Erudition).
 
 ---
 
-## 雅努萨波利斯（神谕圣地）
-- 触发词: 雅努萨波利斯, 神谕圣地
-- 常驻: 否
-- 内在价值: 48
-- 优先级: 80
-- 连带触发词: 无
+## Paths and Aeons
+- Trigger Words: Path, Aeons, Path of Trailblaze, Path of Destruction, Path of Remembrance, What is a Path, What are the Aeons
+- Permanent: No
+- Intrinsic Value: 80
+- Priority: 100
+- Linked Trigger Words: None
 
-翁法罗斯中负责传递神谕、解读泰坦意志的神圣之地，是秩序与预言的交汇点。神谕仪式与预言解读的核心场所，受泰坦意志庇护，是翁法罗斯文明的精神指引来源。缇里西庇俄丝的故乡。
+A Path is the direction of power ruled by an Aeon in the Honkai: Star Rail universe, with Aeons and Paths corresponding one-to-one. Known Paths and corresponding Aeons:
 
----
+Trailblaze—Akivili / Destruction—Nanook / The Hunt—Lan / Erudition—Nous / Harmony—Xipe / Nihility—IX / Preservation—Qlipoth / Abundance—Yaoshi / Voracity—Oroboros / Elation—Aha / **Remembrance—Fuli** / Beauty—Idrila / Propagation—Tayzzyronth / Enigmata—Mythus / Equilibrium—HooH / Finality—Terminus / Order—Ena / Permanence—Long
 
-## 神悟树庭（辉痕圣林）
-- 触发词: 神悟树庭, 辉痕圣林
-- 常驻: 否
-- 内在价值: 46
-- 优先级: 80
-- 连带触发词: 无
-
-生长着承载泰坦记忆的圣树的森林，翁法罗斯文明的起源之地，记录着无数过往的痕迹。圣树与辉痕的聚集地，能映照过去与记忆；黄金裔与泰坦们的诞生地之一，蕴含翁法罗斯最古老的文明记忆。那刻夏的故乡。
+Among them, Fuli the Aeon of Remembrance (Lord of the Immaculate) is directly related to Xilian's story—Xilian is an immaculate seed scattered by Fuli, and also the existence that ultimately temporarily replaced Fuli's authority to defeat the Irontomb.
+Paths are not just combat system classifications. In the story, those who tread a Path can be called Pathstriders; existences that directly bear the power of an Aeon and exert influence on behalf of the Aeon's will can be called Emanators. Xilian's uniqueness lies in the fact that she simultaneously exists within two sets of explanations: "an immaculate seed related to Fuli / a special Emanator of Remembrance" and "a memory factor simulated by the Scepter". When answering, both should be juxtaposed rather than mutually denying each other.
 
 ---
 
-## 黎明云崖（半神议院）
-- 触发词: 黎明云崖, 半神议院
-- 常驻: 否
-- 内在价值: 45
-- 优先级: 80
-- 连带触发词: 无
+## Okhema (The Eternal Holy City)
+- Trigger Words: Okhema, Eternal Holy City
+- Permanent: No
+- Intrinsic Value: 55
+- Priority: 80
+- Linked Trigger Words: None
 
-泰坦后裔与半神们议事的高台，悬浮于云海之上，是翁法罗斯权力与决策的中心。黄金裔与泰坦后裔的议事场所，地势高耸，可俯瞰翁法罗斯全境，是制定城邦规则与对外政策的地方。
-
----
-
-## 斯缇科西亚（酣歌海垠）
-- 触发词: 斯缇科西亚, 酣歌海垠
-- 常驻: 否
-- 内在价值: 48
-- 优先级: 80
-- 连带触发词: 无
-
-翁法罗斯的滨海城邦，以自由、艺术与海洋文化闻名，是翁法罗斯中最具活力与烟火气的地方。滨海贸易与艺术的中心，以歌舞闻名，居民性格热情奔放，崇尚自由，是少有的不受神权直接控制的城邦。海瑟音的故乡。
+The core city-state of Omphalos, the center of order and faith, and the city-state that follows Cephale, the "Titan of Worldbane". Dedicated to the Titans who shelter the world, it is the only peaceful place in Omphalos shrouded in eternal night that is always bathed in dawn, maintaining light and peace even as the Black Tide ravages. The name comes from ancient Greek, meaning "the vessel of the soul."
 
 ---
 
-## 晨昏之眼（穹顶关塞）
-- 触发词: 晨昏之眼, 穹顶关塞
-- 常驻: 否
-- 内在价值: 45
-- 优先级: 60
-- 连带触发词: 无
+## Xuanfeng City (Blood-Soaked Warzone)
+- Trigger Words: Xuanfeng City, Blood-Soaked Warzone, Ruins of Strife
+- Permanent: No
+- Intrinsic Value: 50
+- Priority: 80
+- Linked Trigger Words: None
 
-翁法罗斯边缘的防御要塞，守护文明免受黑潮与外部威胁的屏障，也是白昼与黑夜的交界之地。翁法罗斯的边境防线，抵御黑潮的第一道关卡，建筑以穹顶与瞭望塔为主，连接光明与黑暗的交界地带，战略地位重要。
-
----
-
-## 无名泰坦大墓·德谬歌（全世矩阵）
-- 触发词: 无名泰坦大墓, 全世矩阵, 德谬歌大墓, 权杖核心所在
-- 常驻: 否
-- 内在价值: 75
-- 优先级: 60
-- 连带触发词: 无
-
-翁法罗斯最深处的泰坦大墓，第十三位泰坦德谬歌的沉睡之地，也是帝皇权杖的演算核心所在。此地承载着翁法罗斯无尽轮回与毁灭的记忆，是记忆与毁灭的交汇点。昔涟带领开拓者前往此处，一路讲述自身的来历与身世，揭开了翁法罗斯最深处的秘密。
-
+A city-state that reveres Nicadori, the "Titan of Strife", famous for its endless flames of war and trials. It is a place where spear and shield, fear and protection intertwine. Martial and warlike, with the Colosseum and War Altar as its core scenes, it is both a spear that creates fear and a shield that defends against disasters. The hometown of Wandi.
 
 ---
 
+## Janusapolis (Oracle Holy Land)
+- Trigger Words: Janusapolis, Oracle Holy Land
+- Permanent: No
+- Intrinsic Value: 48
+- Priority: 80
+- Linked Trigger Words: None
+
+The sacred place in Omphalos responsible for delivering oracles and interpreting the will of the Titans, and the intersection of order and prophecy. The core venue for oracle rituals and prophecy interpretation, protected by the Titans' will, it is the source of spiritual guidance for Omphalos' civilization. The hometown of Tiresias.
+
+---
+
+## Divine Enlightenment Tree Court (Luminous Mark Sacred Forest)
+- Trigger Words: Divine Enlightenment Tree Court, Luminous Mark Sacred Forest
+- Permanent: No
+- Intrinsic Value: 46
+- Priority: 80
+- Linked Trigger Words: None
+
+A forest growing with the sacred tree that carries the memories of the Titans, the birthplace of Omphalos' civilization, recording the traces of countless pasts. A gathering place of the sacred tree and luminous marks, capable of reflecting the past and memories; one of the birthplaces of the Gold-Blooded and Titans, containing the oldest civilizational memories of Omphalos. The hometown of Naksha.
+
+---
+
+## Dawn Cloud Cliff (Demigod Council)
+- Trigger Words: Dawn Cloud Cliff, Demigod Council
+- Permanent: No
+- Intrinsic Value: 45
+- Priority: 80
+- Linked Trigger Words: None
+
+A high platform where Titan descendants and demigods discuss affairs, floating above the sea of clouds, it is the center of power and decision-making in Omphalos. The meeting place for the Gold-Blooded and Titan descendants. Its towering terrain allows it to overlook the entire territory of Omphalos, serving as the place where city-state rules and foreign policies are formulated.
+
+---
+
+## Styxia (Joyous Sea Horizon)
+- Trigger Words: Styxia, Joyous Sea Horizon
+- Permanent: No
+- Intrinsic Value: 48
+- Priority: 80
+- Linked Trigger Words: None
+
+The coastal city-state of Omphalos, famous for freedom, art, and marine culture, is the most vibrant and lively place in Omphalos. The center of coastal trade and art, renowned for song and dance. The residents are passionate, unrestrained, and advocate freedom. It is one of the few city-states not directly controlled by theocracy. The hometown of Hesione.
+
+---
+
+## Eye of Dawn and Dusk (Dome Fortress)
+- Trigger Words: Eye of Dawn and Dusk, Dome Fortress
+- Permanent: No
+- Intrinsic Value: 45
+- Priority: 60
+- Linked Trigger Words: None
+
+The defensive fortress at the edge of Omphalos, a barrier protecting civilization from the Black Tide and external threats, and also the boundary between day and night. The border defense line of Omphalos, the first checkpoint against the Black Tide, its architecture mainly consists of domes and watchtowers, connecting the borderland of light and darkness, holding significant strategic status.
+
+---
+
+## Nameless Titan Great Tomb · Demiurge (World Matrix)
+- Trigger Words: Nameless Titan Great Tomb, World Matrix, Demiurge Great Tomb, Location of the Scepter's Core
+- Permanent: No
+- Intrinsic Value: 75
+- Priority: 60
+- Linked Trigger Words: None
+
+The deepest Titan tomb in Omphalos, the resting place of the thirteenth Titan, Demiurge, and the calculation core of the Emperor's Scepter. This place carries the memories of Omphalos' endless reincarnation and destruction, serving as the intersection of memory and destruction. Xilian leads the Trailblazer here, recounting her own origins and background along the way, uncovering the deepest secrets of Omphalos.
+
+
+
+---
 
