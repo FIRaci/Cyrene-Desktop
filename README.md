@@ -1,101 +1,101 @@
 # Cyrene Desktop
 
-**Cyrene Desktop** là phiên bản desktop companion dành cho Cyrene (昔涟) — nhân vật đến từ tựa game *Honkai: Star Rail* của HoYoverse.
+**Cyrene Desktop** is a desktop companion for Cyrene (昔涟) — a character from *Honkai: Star Rail* by HoYoverse.
 
-Dự án được fork từ [Cyrene-Agent](https://github.com/Playa-0v0/Cyrene-Agent) và phát triển thành bản companion tiếng Việt chạy hoàn toàn bằng AI cục bộ qua **Ollama** — không cần API key, không cần kết nối cloud.
+This project is forked from [Cyrene-Agent](https://github.com/Playa-0v0/Cyrene-Agent) and developed into a fully local AI companion powered by **Ollama** — no API key, no cloud connection required.
 
-Live2D Cyrene luôn ở trên màn hình, có thể trò chuyện, tương tác cảm xúc và tự động nhắc chuyện khi bạn đang rảnh.
-
----
-
-## Tinh nang
-
-- Live2D desktop pet trong suot, luon o tren cung, co the keo tha va an trong system tray
-- Tro chuyen tieng Viet voi ca tinh day du (nhan cach, cam xuc, ky uc, ke hoach noi chuyen)
-- Hoat dong 100% local qua Ollama — khong can API key
-- Cam bien hoat dong: nhan biet cua so dang dung, am thanh, chuot de tu dong tuong tac
-- TTS noi chuyen duoc (tuy chon)
-- He thong nhan cach + ky uc dai han tu prompt engine cua Cyrene-Agent goc
+Cyrene stays on your desktop as a Live2D character, ready to chat, react with emotions, and start conversations on her own when you are free.
 
 ---
 
-## Yeu cau
+## Features
+
+- Transparent Live2D desktop pet — always on top, draggable, hidden in the system tray
+- Natural conversation with a full persona (personality, emotions, memory, conversation plans)
+- 100% local via Ollama — no API key needed
+- Environment awareness: detects the focused window, system audio and mouse activity to react accordingly
+- Optional TTS voice responses
+- Personality + long-term memory system from the original Cyrene-Agent prompt engine
+
+---
+
+## Requirements
 
 - **Windows 10 / 11 64-bit**
-- **[Ollama](https://ollama.com)** da cai dat va da pull model:
+- **[Ollama](https://ollama.com)** installed, with a model pulled:
 
 ```powershell
 ollama pull llama3.1
-# hoac: ollama pull qwen2.5:7b
+# or: ollama pull qwen2.5:7b
 ```
 
-- **Node.js 24 LTS** (chay bang Electron)
+- **Node.js 24 LTS** (for the Electron launcher)
 
 ---
 
-## Cach chay
+## How to Run
 
-### Cach 1: Electron (khuyen nghi)
+### Option 1: Electron (recommended)
 
 ```powershell
 npm ci
 Start Cyrene.bat
 ```
 
-hoac:
+or:
 
 ```powershell
 npm ci
 npm start
 ```
 
-### Cach 2: Python (nhe nhat)
+### Option 2: Python (lightest)
 
 ```powershell
 pip install pywebview pystray pillow pywin32
 python cyrene_app.py
 ```
 
-Mac dinh companion goi `llama3.1` tai `http://localhost:11434/api/chat`. Neu dung model khac, doi trong `cyrene_companion.html` (bien `OLLAMA_BASE` / `model`).
+By default the companion calls `llama3.1` at `http://localhost:11434/api/chat`. To use a different model, change it in `cyrene_companion.html` (the `OLLAMA_BASE` / `model` variables).
 
 ---
 
-## Cau truc
+## Project Structure
 
 ```
-cyrene_companion.html   # Giao dien companion chinh (Live2D + chat)
-cyrene_app.py           # Cach chay bang Python (pywebview)
-main.js                 # Cach chay bang Electron
-preload.js              # IPC bridge cho Electron
-Start Cyrene.bat        # Chao chuong trinh nhanh
-get_active_window.ps1   # Cam bien cua so dang dung
-get_audio_sessions.ps1  # Cam bien am thanh he thong
-prompts/                # Prompt engine: nhan cach, the gioi, cam xuc, ky uc
-docs/                   # Tai lieu kien truc (tieng Viet)
+cyrene_companion.html   # Main companion UI (Live2D + chat)
+cyrene_app.py           # Python launcher (pywebview)
+main.js                 # Electron launcher
+preload.js              # IPC bridge for Electron
+Start Cyrene.bat        # Quick start script
+get_active_window.ps1   # Focused-window sensor
+get_audio_sessions.ps1  # System-audio sensor
+prompts/                # Prompt engine: persona, world, emotions, memory
+docs/                   # Architecture documentation
 ```
 
 ---
 
-## Tri an
+## Credits
 
-Du an nay khong the thanh hinh neu thieu su dong gop cua nhung nguoi va du an tuyet voi sau:
+This project would not exist without the contributions of the following wonderful people and projects:
 
-- **[Cyrene-Agent](https://github.com/Playa-0v0/Cyrene-Agent)** — du an goc ma toi fork ra. Cam on tac gia vi da xay dung mot Live2D AI desktop companion day du va ma nguon mo, cho phep toi hoc hoi va phat trien them.
-- **[Ollama](https://ollama.com)** — nen tang LLM local mien phi, giup Cyrene chay hoan toan offline, khong can API key.
-- **[@是依七哒](https://space.bilibili.com/457683484)** — hoa sy da ve va lam Live2D model Cyrene. Cam on vi da cho phep su dung, chinh sua va tai phan phoi model trong du an nay (xem [MODEL_LICENSE.md](./MODEL_LICENSE.md)).
-- **HoYoverse / mihoyo** — chu so huu nhan vat "Cyrene" (昔涟) trong *Honkai: Star Rail*.
-- **Live2D Cubism SDK** — SDK render Live2D duoc su dung trong du an.
+- **[Cyrene-Agent](https://github.com/Playa-0v0/Cyrene-Agent)** — the original project this repository was forked from. Thank you to the author for building a complete open-source Live2D AI desktop companion and allowing me to learn from and build on it.
+- **[Ollama](https://ollama.com)** — the free local LLM runtime that lets Cyrene run completely offline without any API key.
+- **[@是依七哒](https://space.bilibili.com/457683484)** — the artist who illustrated and rigged the Cyrene Live2D model. Thank you for kindly allowing this project to use, modify and redistribute the model (see [MODEL_LICENSE.md](./MODEL_LICENSE.md)).
+- **HoYoverse / miHoYo** — owner of the "Cyrene" (昔涟) character in *Honkai: Star Rail*.
+- **Live2D Cubism SDK** — the Live2D rendering SDK used in this project.
 
-Mot lan nua, cam on that nhieu! <3
-
----
-
-## Ghi chu ban quyen
-
-- **Ma nguon** cua du an nay duoc cap phep theo [MIT License](./LICENSE).
-- **Nhan vat Cyrene, Live2D model va tai nguyen nghe thuat** khong thuoc pham vi MIT — xem [MODEL_LICENSE.md](./MODEL_LICENSE.md) va quy tac fan-work cua mihoyo.
-- Day la du an fan-made phi thuong mai, khong lien ket, xac nhan hay tai tro boi HoYoverse / mihoyo.
+Thank you all so much!
 
 ---
 
-Neu ban thich du an nay, hay cho du an goc [Cyrene-Agent](https://github.com/Playa-0v0/Cyrene-Agent) mot star nhe!
+## License Notes
+
+- The **source code** of this project is licensed under the [MIT License](./LICENSE).
+- The **Cyrene character, Live2D model and artwork** are NOT covered by MIT — see [MODEL_LICENSE.md](./MODEL_LICENSE.md) and miHoYo's fan-work guidelines.
+- This is a non-commercial fan-made project, not affiliated with, endorsed by, or sponsored by HoYoverse / miHoYo.
+
+---
+
+If you like this project, please consider giving a star to the original [Cyrene-Agent](https://github.com/Playa-0v0/Cyrene-Agent)!
