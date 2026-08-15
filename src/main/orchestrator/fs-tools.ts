@@ -375,4 +375,4 @@ toolRegistry.register({
   execute: executeReadImage,
 });
 
-console.log(LOG_PREFIX, "已注册：read_file / list_dir / write_file / read_image");
+console.log(LOG_PREFIX, "Registered: read_file / list_dir / write_file / read_image");

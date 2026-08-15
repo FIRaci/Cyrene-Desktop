@@ -139,11 +139,18 @@ export function startCall(): void {
 
 /** 创建并启动一个 ASR 流。 */
 function startAsrStream(cfg: { appKey: string; accessKeyId: string; accessKeySecret: string; language: string }): void {
-  asrStream = new VolcanoAsrStream(
+  const stream = new VolcanoAsrStream(
     (text) => sendAsrResult(text, undefined),
     (text) => { finalText = text; sendAsrResult(undefined, text); },
   );
-  asrStream.start(cfg.appKey, cfg.accessKeyId, cfg.accessKeySecret, cfg.language);
+  asrStream = stream;
+  void stream.start(cfg.appKey, cfg.accessKeyId, cfg.accessKeySecret, cfg.language).catch((error) => {
+    if (!active || asrStream !== stream) return;
+    console.error(LOG_PREFIX, "ASR failed to start:", error);
+    stream.stop();
+    asrStream = null;
+    sendState("ERROR");
+  });
 }
 
 /** 结束本轮（VAD 静默）：停 ASR → 跑 agent → TTS → 播放。 */

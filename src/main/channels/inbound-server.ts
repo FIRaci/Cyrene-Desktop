@@ -199,13 +199,13 @@ export async function startInboundServer(): Promise<InboundServerHandle> {
       break;
     } catch (err) {
       lastErr = err;
-      console.warn(LOG, `端口 ${port === 0 ? "(random)" : port} 占用, 尝试下一个`);
+      console.warn(LOG, `Port ${port === 0 ? "(random)" : port} in use, trying next`);
       continue;
     }
   }
 
   if (!server || actualPort === 0) {
-    throw lastErr instanceof Error ? lastErr : new Error("inbound-server 启动失败");
+    throw lastErr instanceof Error ? lastErr : new Error("Failed to start inbound-server");
   }
 
   const port = actualPort;
@@ -224,13 +224,13 @@ export async function startInboundServer(): Promise<InboundServerHandle> {
             server = null;
             currentHandle = null;
             resolve();
-          });
+            });
         } else {
           resolve();
         }
       }),
   };
-  console.log(LOG, `启动于 http://127.0.0.1:${port}`);
+  console.log(LOG, `Started on http://127.0.0.1:${port}`);
   return currentHandle;
 }
 

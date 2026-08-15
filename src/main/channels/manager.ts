@@ -24,7 +24,7 @@ export class ChannelManager {
   /** 注册 adapter（必须在 startAll 之前调用） */
   register(adapter: ChannelAdapter): void {
     if (this.adapters.has(adapter.id)) {
-      console.warn(LOG, `渠道 ${adapter.id} 已注册，覆盖旧实例`);
+      console.warn(LOG, `Channel ${adapter.id} already registered, overwriting previous instance`);
     }
     this.adapters.set(adapter.id, adapter);
   }
@@ -48,9 +48,9 @@ export class ChannelManager {
         }
         await adapter.start();
         this.startedAdapters.add(adapter.id);
-        console.log(LOG, `渠道启动: ${adapter.id} (${adapter.displayName})`);
+        console.log(LOG, `Channel started: ${adapter.id} (${adapter.displayName})`);
       } catch (err) {
-        console.error(LOG, `渠道启动失败 [${adapter.id}]:`, err instanceof Error ? err.message : err);
+        console.error(LOG, `Channel failed to start [${adapter.id}]:`, err instanceof Error ? err.message : err);
       }
     }
   }
@@ -63,7 +63,7 @@ export class ChannelManager {
       try {
         await adapter.stop();
       } catch (err) {
-        console.warn(LOG, `渠道停止失败 [${id}]:`, err instanceof Error ? err.message : err);
+        console.warn(LOG, `Channel failed to stop [${id}]:`, err instanceof Error ? err.message : err);
       }
     }
     this.startedAdapters.clear();

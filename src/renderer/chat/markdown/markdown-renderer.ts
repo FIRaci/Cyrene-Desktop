@@ -279,12 +279,9 @@ export function renderMarkdown(raw: string): MarkdownRenderResult {
   }
 
   // ── 缓存查找 ──
-  // 简单 hash（避免 crypto 依赖）
-  let hash = 0;
-  for (let i = 0; i < text.length; i++) {
-    hash = ((hash << 5) - hash + text.charCodeAt(i)) | 0;
-  }
-  const cacheKey = `${RENDER_VERSION}:${hash}:${text.length}`;
+  // The full source is part of the key. A 32-bit hash alone can collide and
+  // display another message's rendered HTML (for example, "Aa" and "BB").
+  const cacheKey = `${RENDER_VERSION}:${text}`;
   const cached = cacheGet(cacheKey);
   if (cached) return cached;
 

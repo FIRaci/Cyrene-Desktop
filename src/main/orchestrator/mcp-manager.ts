@@ -74,11 +74,11 @@ export async function pruneMcpServersByIds(serverIds: string[]): Promise<string[
  * 启动时自动连接所有已保存的 MCP server。
  */
 export async function initMcpManager(): Promise<void> {
-  console.log(LOG_PREFIX, "初始化 MCP Manager...");
+  console.log(LOG_PREFIX, "Initializing MCP Manager...");
   const configs = loadConfigs();
 
   if (configs.length === 0) {
-    console.log(LOG_PREFIX, "没有已配置的 MCP server，跳过");
+    console.log(LOG_PREFIX, "No configured MCP servers, skipping");
     return;
   }
 
@@ -91,11 +91,11 @@ export async function initMcpManager(): Promise<void> {
       connected++;
     } catch (err) {
       failed++;
-      console.error(LOG_PREFIX, "自动连接失败 [" + config.name + "]:", (err as Error).message);
+      console.error(LOG_PREFIX, "Auto-connect failed [" + config.name + "]:", (err as Error).message);
     }
   }
 
-  console.log(LOG_PREFIX, "初始化完成: " + connected + " 个成功, " + failed + " 个失败");
+  console.log(LOG_PREFIX, `MCP Manager initialized: ${connected} connected, ${failed} failed`);
 }
 
 /**
@@ -106,12 +106,12 @@ export async function addMcpServer(config: McpServerConfig): Promise<{
   toolIds?: string[];
   error?: string;
 }> {
-  console.log(LOG_PREFIX, "添加 MCP server:", config.name);
+  console.log(LOG_PREFIX, "Adding MCP server:", config.name);
 
   // 检查是否已存在
   const configs = loadConfigs();
   if (configs.some(c => c.id === config.id)) {
-    return { ok: false, error: "已存在相同 ID 的 MCP server: " + config.id };
+    return { ok: false, error: "MCP server with identical ID already exists: " + config.id };
   }
 
   try {
@@ -129,11 +129,11 @@ export async function addMcpServer(config: McpServerConfig): Promise<{
  * 移除一个 MCP server，断开连接并持久化。
  */
 export async function removeMcpServer(serverId: string): Promise<{ ok: boolean; error?: string }> {
-  console.log(LOG_PREFIX, "移除 MCP server:", serverId);
+  console.log(LOG_PREFIX, "Removing MCP server:", serverId);
 
   const disconnected = await disconnectMcpServer(serverId);
   if (!disconnected) {
-    return { ok: false, error: "未找到 MCP server: " + serverId };
+    return { ok: false, error: "MCP server not found: " + serverId };
   }
 
   const configs = loadConfigs().filter(c => c.id !== serverId);

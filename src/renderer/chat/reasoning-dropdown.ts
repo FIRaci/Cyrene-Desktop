@@ -41,12 +41,12 @@ export interface ReasoningDropdownView {
 }
 
 const EFFORT_LABEL: Record<ReasoningEffort, string> = {
-  minimal: "最低",
-  low: "低",
-  medium: "中",
-  high: "高",
-  xhigh: "极高",
-  max: "最强",
+  minimal: "Minimal",
+  low: "Low",
+  medium: "Medium",
+  high: "High",
+  xhigh: "Very High",
+  max: "Max",
 };
 
 export function computeReasoningDropdown(
@@ -55,69 +55,68 @@ export function computeReasoningDropdown(
   saved: ReasoningPreference | undefined,
 ): ReasoningDropdownView {
   const cap = resolveReasoningCapability(providerId, model);
-  // 用户修正 #2：必须用 resolveEffectiveReasoning，不能 saved ?? auto
   const effective = resolveEffectiveReasoning(saved, cap);
 
-  // ── fixed-on：始终开启，控件整体禁用，单项 disabled ──
+  // ── fixed-on: always on, control disabled, single disabled item ──
   if (cap.control === "fixed-on") {
     return {
       disabled: true,
-      statusText: "始终开启",
+      statusText: "Always On",
       activePreference: effective,
       items: [
         {
-          label: "始终开启",
+          label: "Always On",
           preference: { mode: "on" },
           disabled: true,
-          hint: "该模型始终思考，无法关闭",
+          hint: "This model always thinks and cannot be disabled",
         },
       ],
     };
   }
 
-  // ── dynamic：跟随动态路由，控件整体禁用 ──
+  // ── dynamic: follows dynamic routing, control disabled ──
   if (cap.control === "dynamic") {
     return {
       disabled: true,
-      statusText: "跟随动态路由",
+      statusText: "Dynamic Routing",
       activePreference: effective,
       items: [
         {
-          label: "跟随动态路由",
+          label: "Dynamic Routing",
           preference: { mode: "auto" },
           disabled: true,
-          hint: "由火山动态路由决定",
+          hint: "Determined by dynamic routing",
         },
       ],
     };
   }
 
-  // ── none：未配置推理控制，控件整体禁用 ──
+  // ── none: reasoning control not configured, control disabled ──
   if (cap.control === "none") {
     return {
       disabled: true,
-      statusText: "跟随模型",
+      statusText: "Default",
       activePreference: effective,
       items: [
         {
-          label: "跟随模型",
+          label: "Default",
           preference: { mode: "auto" },
           disabled: true,
-          hint: "当前模型未配置推理控制",
+          hint: "Reasoning control is not configured for current model",
         },
       ],
     };
   }
 
-  // ── toggle（无 supportedEfforts）：跟随 / [关闭] / 开启 ──
+  // ── toggle (no supportedEfforts): Default / [Off] / On ──
   if (cap.control === "toggle") {
     const items: ReasoningDropdownItem[] = [
-      { label: "跟随模型", preference: { mode: "auto" } },
+      { label: "Default", preference: { mode: "auto" } },
     ];
     if (cap.supportsDisable) {
-      items.push({ label: "关闭", preference: { mode: "off" } });
+      items.push({ label: "Off", preference: { mode: "off" } });
     }
-    items.push({ label: "开启", preference: { mode: "on" } });
+    items.push({ label: "On", preference: { mode: "on" } });
     return {
       disabled: false,
       statusText: statusTextFor(effective),
@@ -126,13 +125,13 @@ export function computeReasoningDropdown(
     };
   }
 
-  // ── effort / toggle-effort（带 supportedEfforts） ──
+  // ── effort / toggle-effort (with supportedEfforts) ──
   const efforts = cap.supportedEfforts ?? [];
   const items: ReasoningDropdownItem[] = [
-    { label: "跟随模型", preference: { mode: "auto" } },
+    { label: "Default", preference: { mode: "auto" } },
   ];
   if (cap.supportsDisable) {
-    items.push({ label: "关闭", preference: { mode: "off" } });
+    items.push({ label: "Off", preference: { mode: "off" } });
   }
   for (const e of efforts) {
     items.push({ label: EFFORT_LABEL[e], preference: { mode: "on", effort: e } });
@@ -146,13 +145,13 @@ export function computeReasoningDropdown(
 }
 
 function statusTextFor(effective: ReasoningPreference): string {
-  if (effective.mode === "auto") return "跟随模型";
-  if (effective.mode === "off") return "关闭";
+  if (effective.mode === "auto") return "Default";
+  if (effective.mode === "off") return "Off";
   if (effective.effort) return EFFORT_LABEL[effective.effort];
-  return "开启";
+  return "On";
 }
 
-/** statusText 显示在下拉触发按钮上：前缀 "推理 · " */
+/** statusText displayed on dropdown trigger button: prefix "Reasoning · " */
 export function formatReasoningTriggerLabel(statusText: string): string {
-  return `推理 · ${statusText}`;
+  return `Reasoning · ${statusText}`;
 }

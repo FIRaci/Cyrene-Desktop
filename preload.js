@@ -9,5 +9,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setIgnoreMouseEvents: (ignore) => ipcRenderer.send('set-ignore-mouse', ignore),
   onActiveWindowChanged: (callback) => ipcRenderer.on('active-window-changed', callback),
   onSystemAudioChanged: (callback) => ipcRenderer.on('system-audio-changed', callback),
-  onMousePos: (callback) => ipcRenderer.on('mouse-pos', callback)
+  onMousePos: (callback) => ipcRenderer.on('mouse-pos', callback),
+  onIncomingRemielleMessage: (callback) => ipcRenderer.on('incoming-remielle-message', callback),
+  takeScreenshot: () => ipcRenderer.invoke('take-screenshot')
 });

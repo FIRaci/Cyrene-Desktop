@@ -2,7 +2,7 @@
   "name": "live2d-cyrene",
   "version": "0.9.0",
   "description": "Live2D desktop pet — Cyrene",
-  "main": "main.js",
+  "main": "dist/main/main/index.js",
   "scripts": {
     "build:main": "tsc -p tsconfig.main.json",
     "build:preload": "tsc -p tsconfig.preload.json",
@@ -93,9 +93,6 @@
     "esbuild@0.21.5": true,
     "sharp@0.32.6": true,
     "tree-sitter@0.22.4": true
-  },
-  "directories": {
-    "doc": "docs"
   },
   "repository": {
     "type": "git",

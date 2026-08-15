@@ -202,7 +202,7 @@ async function planTransit(
 
 async function executePlanTrip(args: Record<string, unknown>): Promise<string> {
   if (travelEnabledGetter && !travelEnabledGetter()) {
-    return "[错误] 出行工具未启用，请在设置里开启";
+    return "[Error] Travel tools are disabled. Please enable them in Settings.";
   }
 
   const amapKey = amapKeyGetter?.() ?? "";
@@ -295,5 +295,5 @@ export function registerTravelTools(): void {
     execute: executePlanTrip,
   });
 
-  console.log(LOG_PREFIX, "已注册：plan_trip（🚗出行工具）");
+  console.log(LOG_PREFIX, "Registered: plan_trip (🚗 Travel tool)");
 }

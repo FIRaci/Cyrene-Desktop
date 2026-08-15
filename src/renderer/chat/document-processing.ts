@@ -1,4 +1,4 @@
-export const DOCUMENT_WAIT_MESSAGE = "这份文档有点大呢，我正在仔细读里面的内容……稍等我一下，等我看完重点再认真回答你～";
+export const DOCUMENT_WAIT_MESSAGE = "This document is quite large, I'm reading through it carefully... Please give me a moment to review the key points before answering~";
 
 export interface RetrievedDocumentChunk {
   text: string;
@@ -41,7 +41,7 @@ function formatRetrievedChunks(chunks: RetrievedDocumentChunk[]): string {
   return chunks.map((chunk) => {
     const label = chunk.fileName
       ? `${chunk.fileName}${typeof chunk.chunkIndex === "number" ? ` #${chunk.chunkIndex + 1}` : ""}`
-      : "文档片段";
+      : "Document snippet";
     return `- ${label}: ${chunk.text}`;
   }).join("\n");
 }
@@ -50,16 +50,16 @@ export function buildDocumentContextLines(results: ProcessedDocument[]): string[
   const lines: string[] = [];
   for (const result of results) {
     if (result.kind === "indexed" && !result.reason) {
-      lines.push(`文档 ${result.name} 已建立索引，共 ${result.chunks} 段。`);
+      lines.push(`Document ${result.name} has been indexed (${result.chunks} chunks).`);
       if (result.retrievedChunks?.length) {
-        lines.push(`以下是与本轮问题相关的文档片段：\n${formatRetrievedChunks(result.retrievedChunks)}`);
+        lines.push(`The following document snippets are relevant to this turn's question:\n${formatRetrievedChunks(result.retrievedChunks)}`);
       }
       continue;
     }
 
     if (result.kind === "unsupported" || result.kind === "empty" || result.kind === "error" || result.kind === "indexed") {
-      const reason = result.reason || (result.kind === "empty" ? "文档为空" : "暂不支持或无法读取");
-      lines.push(`用户发送了文档 ${result.name}，但文档处理失败：${reason}。请诚实说明暂时无法分析该文档，不要编造文档内容。`);
+      const reason = result.reason || (result.kind === "empty" ? "Document is empty" : "Unsupported or unreadable");
+      lines.push(`The user attached document ${result.name}, but document processing failed: ${reason}. Please honestly explain that you cannot analyze this document right now, and do not fabricate document content.`);
     }
   }
   return lines;

@@ -11,24 +11,47 @@ import { parseRecipe } from "./script-parser";
 import { runRecipe } from "./engine";
 import type { BotTools } from "./bot-tools";
 import type { GameRecipe } from "./types";
-import { loadGameBotSettings, saveGameBotSettings, type GameBotSettings } from "./settings-store";
+import { isGameBotIdentifier, loadGameBotSettings, saveGameBotSettings, type GameBotSettings } from "./settings-store";
 import { listRefs, readRef, refsDirPath } from "./refs-store";
-import { captureScreen } from "./screenshot";
+import { captureScreen as captureDesktopScreen } from "./screenshot";
+import type { ScreenshotResult } from "./screenshot";
 import * as input from "./input";
 import * as vlm from "./vlm-locator";
 
 const LOG = "[GameBot]";
+let captureScreen: () => Promise<ScreenshotResult | null> = async () => null;
+
+function recipesDirPath(): string {
+  return path.resolve(app.getAppPath(), "game-recipes");
+}
+
+function recipeFilePath(id: string, ext: ".yaml" | ".yml"): string | null {
+  if (!isGameBotIdentifier(id)) return null;
+  const root = recipesDirPath();
+  const candidate = path.resolve(root, id + ext);
+  const relative = path.relative(root, candidate);
+  if (relative === "" || relative.startsWith(".." + path.sep) || relative === ".." || path.isAbsolute(relative)) return null;
+  if (fs.existsSync(root) && fs.existsSync(candidate)) {
+    const canonicalRoot = fs.realpathSync(root);
+    const canonicalCandidate = fs.realpathSync(candidate);
+    const canonicalRelative = path.relative(canonicalRoot, canonicalCandidate);
+    if (canonicalRelative.startsWith(".." + path.sep) || canonicalRelative === ".." || path.isAbsolute(canonicalRelative)) return null;
+  }
+  return candidate;
+}
 
 /** 扫描内置 game-recipes/ 目录，返回脚本元数据列表。 */
 export function listRecipes(): { id: string; name: string }[] {
-  const dir = path.join(app.getAppPath(), "game-recipes");
+  const dir = recipesDirPath();
   const result: { id: string; name: string }[] = [];
   try {
     if (!fs.existsSync(dir)) return result;
     for (const f of fs.readdirSync(dir)) {
       if (!f.endsWith(".yaml") && !f.endsWith(".yml")) continue;
       const id = f.replace(/\.(ya?ml)$/, "");
-      const r = parseRecipe(fs.readFileSync(path.join(dir, f), "utf8"));
+      const recipePath = recipeFilePath(id, f.endsWith(".yaml") ? ".yaml" : ".yml");
+      if (!recipePath) continue;
+      const r = parseRecipe(fs.readFileSync(recipePath, "utf8"));
       result.push({ id, name: r.ok ? r.recipe.name : id });
     }
   } catch (err) {
@@ -39,9 +62,10 @@ export function listRecipes(): { id: string; name: string }[] {
 
 /** 读脚本文件 → GameRecipe。 */
 function loadRecipe(id: string): GameRecipe | null {
-  const dir = path.join(app.getAppPath(), "game-recipes");
+  if (!isGameBotIdentifier(id)) return null;
   for (const ext of [".yaml", ".yml"]) {
-    const p = path.join(dir, id + ext);
+    const p = recipeFilePath(id, ext as ".yaml" | ".yml");
+    if (!p) return null;
     if (fs.existsSync(p)) {
       const r = parseRecipe(fs.readFileSync(p, "utf8"));
       return r.ok ? r.recipe : null;
@@ -146,7 +170,8 @@ export function stopGameBot(): { ok: boolean } {
 }
 
 /** 注册 IPC + game_bot_start 工具。app.whenReady 后调一次。 */
-export function initGameBot(): void {
+export function initGameBot(options: { captureScreen?: () => Promise<ScreenshotResult | null>; isSettingsSender?: (senderId: number) => boolean } = {}): void {
+  captureScreen = options.captureScreen ?? captureDesktopScreen;
   ipcMain.handle(IPC.GAME_BOT_GET_CONFIG, () => loadGameBotSettings());
   ipcMain.handle(IPC.GAME_BOT_SAVE_CONFIG, (_e, patch: unknown) => {
     const saved = saveGameBotSettings(patch as Partial<GameBotSettings>);
@@ -157,28 +182,33 @@ export function initGameBot(): void {
   ipcMain.handle(IPC.GAME_BOT_LIST_RECIPES, () => listRecipes());
   ipcMain.handle(IPC.GAME_BOT_LIST_REFS, (_e, recipeId: string) => listRefs(recipeId));
   ipcMain.handle(IPC.GAME_BOT_REFS_DIR, (_e, recipeId: string) => refsDirPath(recipeId));
-  ipcMain.handle(IPC.GAME_BOT_START, () => startGameBot());
+  ipcMain.handle(IPC.GAME_BOT_START, (event) => {
+    if (options.isSettingsSender && !options.isSettingsSender(event.sender.id)) {
+      return { ok: false, error: "Game automation can only be started from the trusted settings UI." };
+    }
+    return startGameBot();
+  });
   ipcMain.handle(IPC.GAME_BOT_STOP, () => stopGameBot());
 
   // agent 触发工具：用户在聊天里要代肝时调用。enabled 跟随配置开关。
   const initialSettings = loadGameBotSettings();
   toolRegistry.register({
     id: "game_bot_start",
-    name: "游戏代肝",
+    name: "Game Bot Automator",
     description:
-      "启动游戏代肝，按预设脚本自动跑每日任务（如星穹铁道）。\n\n" +
-      "何时用：\n- 用户说“帮我代肝”“跑一下日常”“清体力”“开始代肝”等\n\n" +
-      "不要用于：\n- 用户只是问代肝功能怎么配置（引导去 设置 → 插件 → 游戏代肝）\n\n" +
-      "无需参数。调用后引擎独立运行，进度实时回传。返回启动结果。",
+      "Start game automation to run daily tasks automatically via preset recipes (e.g. Star Rail).\n\n" +
+      "When to use:\n- User asks to automate daily missions / clear stamina / start game bot\n\n" +
+      "When NOT to use:\n- User is asking how to configure game bot (guide to Settings → Plugins → Game Bot)\n\n" +
+      "No parameters required. Engine runs independently in background.",
     enabled: initialSettings.enabled,
     risk: "input-control",
     inputSchema: { type: "object", properties: {}, required: [] },
     execute: async () => {
       const r = await startGameBot();
-      if (r.ok) return "✅ 代肝已启动，正在后台运行，进度会实时更新。";
-      return "[错误·配置] 代肝启动失败: " + (r.error ?? "未知错误");
+      if (r.ok) return "✅ Game bot started, running in background. Progress will be updated in real-time.";
+      return "[Error] Failed to start game bot: " + (r.error ?? "unknown error");
     },
   });
 
-  console.log(LOG, "已初始化：IPC + game_bot_start 工具，可用脚本:", listRecipes().map((r) => r.id).join(", ") || "(无)");
+  console.log(LOG, "Initialized: IPC + game_bot_start tool, available scripts:", listRecipes().map((r) => r.id).join(", ") || "(none)");
 }

@@ -1,59 +1,70 @@
-# Kiến Trúc Hệ Thống (System Architecture)
+# System Architecture
 
-Dự án này sử dụng kiến trúc hai runtime riêng biệt (Two-Runtime Split) để cân bằng giữa bảo mật, khả năng tác vụ nặng và giao diện tương tác Live2D (Companion).
+The project ships a comprehensive TypeScript runtime in `src/**`. The root JavaScript companion files are retained for legacy migration reference and lightweight stand-alone desktop companion use.
 
-## 1. Kiến Trúc Hai Runtime (Two-Runtime Architecture)
+## 1. Shipped Runtime and Legacy References
 
 ### 1.1. TypeScript Agent Runtime (`src/`)
-- **Vai trò:** Lõi xử lý AI, lập kế hoạch tác vụ (Planning), cấp quyền (Permission), gọi công cụ (Function Calling / MCP Tools) và xử lý RAG.
-- **Công nghệ:** TypeScript, Electron backend (`src/main/`), React frontend (`src/renderer/`).
-- **Bảo mật:** Cách ly khỏi các quyền không an toàn. Mọi tool file-system và shell đều bị giới hạn bởi quyền (read-only, scoped, per-action) cấu hình qua `permission.ts`.
+- **Role:** The primary packaged runtime handling AI orchestration, task planning (LangGraph), permission control, application tools, and RAG search.
+- **Technology:** TypeScript, Electron backend (`src/main/`), and React/Vite renderer (`src/renderer/`).
+- **Security Policy:** The companion is restricted to observation and services provided by the application: network access, consented screen vision, opt-in system audio media metadata, and registered app tools. Arbitrary shell commands, uncontrolled filesystem writes, and dynamically injected MCP tools are strictly prohibited. This policy is enforced at the Electron main process layer.
 
 ### 1.2. JavaScript Companion Runtime (`main.js` & `cyrene_companion.html`)
-- **Vai trò:** Giao diện Waifu xuyên thấu (overlay), xử lý biểu cảm Live2D, trò chuyện idle (Idle Thoughts), và nhận thức ngữ cảnh liên tục (Sensory Loop - âm thanh, cửa sổ hiện hành).
-- **Công nghệ:** Vanilla JS, PixiJS, Electron BrowserWindow độc lập.
-- **Polling:** Thực hiện vòng lặp PowerShell để đọc hệ thống mà không cản trở lõi Agent, giao tiếp ngược lại bằng IPC (system-audio-changed, vv.).
-- **Giới hạn:** Companion không có quyền gọi MCP hay thay đổi tệp, chỉ có quyền chat và giao tiếp UI.
+- **Role:** Lightweight desktop pet runtime and legacy reference implementation.
+- **Technology:** Vanilla JS, PixiJS, standalone Electron BrowserWindow.
+- **Polling:** PowerShell polling loop to read Win32 active window and audio session metadata without blocking the UI thread.
+- **Boundaries:** All new capabilities and tool integrations route through the TypeScript runtime's permission policies and app-tool boundaries.
 
-## 2. Tổng Quan Công Nghệ (Tech Stack)
-Dự án Cyrene Companion sử dụng kiến trúc Desktop App chạy nền với các công nghệ sau:
-- **Core:** Electron.js (Giao diện trong suốt, xuyên thấu, không viền).
-- **Backend IPC:** Node.js (Quản lý window, phím tắt toàn cục, tương tác OS).
-- **Đồ họa Live2D:** PixiJS kết hợp với `pixi-live2d-display` (Render mô hình 2D động).
-- **Mô Hình AI (LLM):** Ollama chạy local (Model: `llama3.1`). Tương tác qua REST API `http://localhost:11434/api/chat`.
-- **Giao diện UI/UX:** HTML, CSS, Vanilla JavaScript.
+### 1.3. Companion-Safe Capability Policy
+- **Allowed:** Network access required by configured providers; user-consented screen observation; opt-in system-audio media metadata; and explicitly registered app tools.
+- **Denied:** Filesystem writes, arbitrary shell/PowerShell commands, unrestricted process execution, dynamically installed MCP tools, and any renderer-driven permission escalation.
+- **Consent and Revocation:** Owner-authorized companion sessions permit screen observation through producer-bound, revocable capture leases. Audio awareness is metadata-only, enabled by default for new/unconfigured settings under the owner request, and stops/clears immediately when turned off and saved. Raw system audio is never recorded or transcribed.
+- **Enforcement:** Denials are enforced at the main-process policy level, not via prompt instructions alone. Model responses or renderer requests cannot broaden the capability set.
 
-## 3. Luồng Xử Lý (Workflow & Logic Flow)
+## 2. Technology Stack
+- **Core:** Electron.js (Transparent, borderless, click-through desktop overlay).
+- **Backend IPC:** Node.js (Window management, global shortcuts, OS integration).
+- **Live2D Graphics:** PixiJS + Cubism 4 SDK (`pixi-live2d-display`).
+- **AI Engine (LLM):** Ollama running locally (Model: `llama3.1` / `llama3.2-vision`) via REST API `http://localhost:11434/api/chat`.
+- **UI/UX Interface:** HTML5, CSS3, Vanilla JavaScript / TypeScript.
 
-### 3.1. Vòng lặp nhận thức ngữ cảnh (Sensory Loop)
-- **Audio & Active Window Tracker:** Mỗi 5 giây, `main.js` gọi script PowerShell `get_active_window.ps1` và `get_audio_sessions.ps1` (chạy độc lập với timeout chống treo) để lấy thông tin hệ thống và gửi xuống Renderer qua IPC (`active-window-changed` và `system-audio-changed`). Mọi cập nhật chỉ được gửi khi trạng thái thực sự thay đổi.
-- **Thời gian & Thời tiết:** Renderer liên tục cập nhật giờ địa phương (UTC+7, Việt Nam) và gọi API lấy thời tiết 30 phút/lần.
-- Tất cả thông tin này hợp nhất thành `SensoryContext` mỗi khi gọi AI.
+## 3. Workflow & Processing Logic
 
-### 3.2. Vòng lặp tương tác tự động (Idle Thoughts Loop)
-- Renderer duy trì một biến `lastInteractionTime`.
-- Mỗi 30 giây, hệ thống kiểm tra nếu người dùng không tương tác trong vòng **120 giây**, AI sẽ tự bốc 1 kịch bản từ `IDLE_PROMPT_POOL` và gửi request lên Ollama.
-- Kết quả được in ra bong bóng thoại (Dialogue Bubble) mà không đưa vào lịch sử chat chính để tránh làm tràn Context.
+### 3.1. Sensory Perception Loop
+- **Screen Vision:** Producers (chat/hotkey, vision, debug, game-bot) route through `ScreenConsentController`. Authorizations and capture leases are bound per producer with explicit TTL and abort on revocation.
+- **System Audio Awareness:** TypeScript main process reads media metadata via Windows adapters, capturing active app, playback state, track title, and artist name with a 2-second throttle. Data is treated as untrusted context with a TTL.
+- **Time & Weather:** Renderer updates local time and queries weather data at periodic intervals.
+- All sensory data is unified into `SensoryContext` when initiating LLM turns.
 
-### 3.3. Trí nhớ dài hạn & ngắn hạn (Memory System)
-- **Short-term Memory:** `conversationHistory` giới hạn ở 20 đoạn hội thoại gần nhất. Nó chỉ chứa nội dung Text thuần, không chứa định dạng JSON thô.
-- **Long-term Memory:** Module `MemorySystem` quản lý tối đa 30 Facts (Sự kiện/Thói quen của người dùng). Dữ liệu được serialize vào `localStorage`. Khi đầy, nó xóa cái cũ nhất (FIFO).
-- Khi gọi Ollama, LLM được yêu cầu trích xuất "new_facts_learned" nếu có điều gì mới từ người dùng.
+### 3.2. Idle Thoughts Loop
+- The renderer maintains a `lastInteractionTime` timestamp.
+- Every 30 seconds, if the user has been inactive for $\ge 120$ seconds, the system selects a prompt from `IDLE_PROMPT_POOL` and requests an ambient thought from Ollama.
+- Results are displayed in a floating dialogue bubble without being stored in the primary chat history to preserve context tokens.
 
-## 4. Tối ưu Hiệu Năng (Performance Architecture)
-- **Ignore Mouse Events:** Electron window được cài đặt cơ chế `setIgnoreMouseEvents` linh hoạt. Khi con trỏ không nhắm vào Cyrene hay bảng chat, event chuột xuyên qua cửa sổ tới OS, giúp người dùng không bị vướng khi chơi game.
-- **Tắt Hardware Acceleration:** Được tắt ở `main.js` để đảm bảo độ trong suốt hoạt động mượt trên mọi cấu hình Windows.
-- **Render Loop:** PixiJS được tối ưu để chỉ vẽ mô hình, hạn chế DOM reflow.
+### 3.3. Memory System
+- **Short-term Memory:** `conversationHistory` is bounded to the 20 most recent messages and contains plain text content.
+- **Long-term Memory:** `MemorySystem` manages up to 30 user facts in `localStorage` using a FIFO eviction policy when full.
+- LLM turns extract `new_facts_learned` when new information is shared by the user.
 
-## 5. Giao Tiếp Llama (JSON Prompting)
-Tất cả response từ LLM bắt buộc tuân theo Schema sau:
+## 4. Performance Optimizations
+- **Ignore Mouse Events:** Electron window uses dynamic `setIgnoreMouseEvents`. When the cursor is outside the character bounding box, clicks pass directly through to underlying Windows applications.
+- **Hardware Acceleration:** Disabled in `main.js` to ensure reliable transparent background rendering across all Windows graphics hardware.
+- **Render Loop:** PixiJS is optimized to minimize DOM reflows during animation playback.
+
+## 5. JSON Response Contract
+Structured responses from Ollama adhere to the following schema:
 ```json
 {
-  "text": "Câu trả lời tiếng Việt",
-  "expression": "Tên biểu cảm",
+  "text": "English response text",
+  "expression": "ExpressionName",
   "motion": "GroupName:Index",
   "emote": "Kaomoji",
   "new_facts_learned": []
 }
 ```
-Nếu LLM trả về JSON lỗi, hàm `parseLlamaResponse()` sử dụng regex fallback để cứu vãn dữ liệu, tránh gây crash.
+
+## 6. ASR Language Contract
+Aliyun SpeechTranscriber binds recognition language and models to the configured AppKey. Cyrene sends the AppKey without attaching unsupported `language` or `language_hints` fields to the WebSocket payload.
+
+## 7. Windows Packaging
+`npm run package:win:dir` builds the Rust native screenshot helper before `electron-builder` packages the application. A Rust toolchain with `cargo` on `PATH` is required.

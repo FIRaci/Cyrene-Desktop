@@ -76,7 +76,7 @@ export function scanSkills(dir: string, source: "builtin" | "user"): SkillEntry[
     const skillDir = path.join(dir, id);
     const mdPath = path.join(skillDir, "SKILL.md");
     if (!fs.existsSync(mdPath)) {
-      console.warn("[Skills] 跳过无 SKILL.md 的目录:", skillDir);
+      console.warn("[Skills] Skipping directory without SKILL.md:", skillDir);
       continue;
     }
     let content: string;
@@ -87,11 +87,11 @@ export function scanSkills(dir: string, source: "builtin" | "user"): SkillEntry[
     }
     const parsed = parseSkillFrontmatter(content);
     if (!parsed) {
-      console.warn("[Skills] 跳过不合规 SKILL.md（缺 name/description 或 frontmatter 解析失败）:", mdPath);
+      console.warn("[Skills] Skipping invalid SKILL.md (missing name/description or frontmatter parse error):", mdPath);
       continue;
     }
     if (parsed.name !== id) {
-      console.warn(`[Skills] name(${parsed.name}) ≠ 目录名(${id})，id 用目录名`);
+      console.warn(`[Skills] name(${parsed.name}) ≠ directory name(${id}), using directory name as id`);
     }
     // 列 references 文件名清单（不含内容）
     let references: string[] = [];

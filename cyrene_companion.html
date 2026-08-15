@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -128,7 +128,7 @@
     #chat-panel {
       position: absolute;
       bottom: 70px;
-      right: calc(50vw + 40px);
+      right: calc(50vw + 46px);
       width: 320px;
       max-height: 480px;
       background: transparent;
@@ -341,6 +341,103 @@
       border-style: solid;
       border-color: rgba(12, 6, 28, 0.92) transparent transparent transparent;
     }
+
+    /* ──── Control Panels (Logs, Notes, Schedule) ──── */
+    .glass-panel {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(var(--model-scale));
+      width: 600px;
+      height: 400px;
+      background: rgba(20, 15, 35, 0.85);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 16px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+      display: none;
+      flex-direction: column;
+      z-index: 300;
+      pointer-events: auto;
+      color: #fff;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    .panel-header {
+      padding: 12px 20px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(0, 0, 0, 0.3);
+      border-top-left-radius: 16px;
+      border-top-right-radius: 16px;
+    }
+    .panel-title {
+      font-weight: 600;
+      font-size: 1.1rem;
+      letter-spacing: 0.5px;
+    }
+    .panel-close {
+      background: transparent;
+      border: none;
+      color: #aaa;
+      font-size: 1.5rem;
+      cursor: pointer;
+      line-height: 1;
+    }
+    .panel-close:hover {
+      color: #fff;
+    }
+    .panel-content {
+      padding: 16px;
+      flex: 1;
+      overflow-y: auto;
+    }
+    
+    /* Log Panel specifics */
+    #log-panel .panel-content {
+      font-family: 'Consolas', 'Courier New', monospace;
+      font-size: 0.85rem;
+      color: #a0d4a4;
+    }
+    .log-line {
+      margin-bottom: 6px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      padding-bottom: 4px;
+      word-wrap: break-word;
+    }
+    
+    /* Notes/Schedule specifics */
+    .ns-section {
+      margin-bottom: 20px;
+    }
+    .ns-section h3 {
+      font-size: 1rem;
+      margin-bottom: 10px;
+      color: #e0b0ff;
+    }
+    .ns-textarea {
+      width: 100%;
+      height: 100px;
+      background: rgba(0,0,0,0.3);
+      border: 1px solid rgba(255,255,255,0.2);
+      color: #fff;
+      border-radius: 8px;
+      padding: 10px;
+      resize: none;
+      font-family: inherit;
+    }
+    .ns-btn {
+      margin-top: 10px;
+      padding: 6px 16px;
+      background: #7b42f6;
+      border: none;
+      color: white;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .ns-btn:hover { background: #9260f7; }
+
   </style>
 </head>
 <body>
@@ -366,6 +463,12 @@
   <div class="ctx-item" onclick="openChat()">
     <span class="icon">(o˙▽˙o)</span> Chat with Cyrene
   </div>
+  <div class="ctx-item" onclick="toggleLogPanel()">
+    <span class="icon">(⌐■_■)</span> View Logs
+  </div>
+  <div class="ctx-item" onclick="toggleNSPanel()">
+    <span class="icon">(📝)</span> Notes & Schedule
+  </div>
   <div class="ctx-item" onclick="triggerRandomMotion()">
     <span class="icon">(*´∀`*)</span> Random Expression
   </div>
@@ -380,11 +483,95 @@
 
   <div class="chat-input-area">
     <textarea id="chat-input" rows="1" placeholder="Say something to Cyrene~" maxlength="800"></textarea>
-    <button id="btn-send" onclick="sendMessage()" title="Gửi">&#x276F;</button>
+    <button id="btn-send" onclick="sendMessage()" title="Send">&#x276F;</button>
+  </div>
+</div>
+
+<!-- ──── Log Panel ──── -->
+<div id="log-panel" class="glass-panel">
+  <div class="panel-header">
+    <span class="panel-title">Cyrene System Logs</span>
+    <button class="panel-close" onclick="toggleLogPanel()">×</button>
+  </div>
+  <div class="panel-content" id="log-content">
+    <div class="log-line">[System] Logging initialized...</div>
+  </div>
+</div>
+
+<!-- ──── Notes & Schedule Panel ──── -->
+<div id="ns-panel" class="glass-panel">
+  <div class="panel-header">
+    <span class="panel-title">Notes & Schedule</span>
+    <button class="panel-close" onclick="toggleNSPanel()">×</button>
+  </div>
+  <div class="panel-content">
+    <div class="ns-section">
+      <h3>Master's Schedule</h3>
+      <textarea id="schedule-input" class="ns-textarea" placeholder="Enter your schedule here..."></textarea>
+    </div>
+    <div class="ns-section">
+      <h3>Important Notes</h3>
+      <textarea id="notes-input" class="ns-textarea" placeholder="Enter notes here..."></textarea>
+    </div>
+    <button class="ns-btn" onclick="saveNS()">Save All</button>
+    <span id="ns-status" style="margin-left: 10px; color: #a0d4a4; font-size: 0.9em; display: none;">Saved!</span>
   </div>
 </div>
 
 <script>
+// --- Panel Logic ---
+function toggleLogPanel() {
+  const p = document.getElementById('log-panel');
+  p.style.display = p.style.display === 'flex' ? 'none' : 'flex';
+  hideCtxMenu();
+}
+function toggleNSPanel() {
+  const p = document.getElementById('ns-panel');
+  if (p.style.display !== 'flex') {
+    document.getElementById('schedule-input').value = localStorage.getItem('cyrene_schedule') || '';
+    document.getElementById('notes-input').value = localStorage.getItem('cyrene_notes') || '';
+    p.style.display = 'flex';
+  } else {
+    p.style.display = 'none';
+  }
+  hideCtxMenu();
+}
+function saveNS() {
+  localStorage.setItem('cyrene_schedule', document.getElementById('schedule-input').value);
+  localStorage.setItem('cyrene_notes', document.getElementById('notes-input').value);
+  const s = document.getElementById('ns-status');
+  s.style.display = 'inline';
+  setTimeout(() => s.style.display = 'none', 2000);
+}
+// Custom logger to pipe logs into the Log UI
+const originalLog = console.log;
+console.log = function(...args) {
+  originalLog.apply(console, args);
+  const logDiv = document.getElementById('log-content');
+  if (logDiv) {
+    const line = document.createElement('div');
+    line.className = 'log-line';
+    const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ');
+    line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+    logDiv.appendChild(line);
+    logDiv.scrollTop = logDiv.scrollHeight;
+  }
+};
+const originalError = console.error;
+console.error = function(...args) {
+  originalError.apply(console, args);
+  const logDiv = document.getElementById('log-content');
+  if (logDiv) {
+    const line = document.createElement('div');
+    line.className = 'log-line';
+    line.style.color = '#ff6b6b';
+    const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ');
+    line.textContent = `[${new Date().toLocaleTimeString()}] [ERROR] ${msg}`;
+    logDiv.appendChild(line);
+    logDiv.scrollTop = logDiv.scrollHeight;
+  }
+};
+
 // ═══════════════════════════════════════════════════════════════
 //  CYRENE PERSONALITY SYSTEM PROMPT
 // ═══════════════════════════════════════════════════════════════
@@ -402,11 +589,11 @@ Conversation style:
 - DO NOT start two consecutive responses with the same structure.
 - **LANGUAGE REQUIREMENT: 100% ENGLISH ONLY.** You must speak, think, and emote entirely in English.
 
-## Cognitive Limits (MANDATORY — read carefully)
+## Cognitive Limits & Vision
 Cyrene ONLY knows what is listed in the "CURRENT CONTEXT":
-- ✅ Knows: time/date, weather (if available), focused window TITLE, chat history, long-term memory.
-- ❌ DOES NOT know: screen contents, video being watched, chat messages, audio/microphone, camera, files inside apps.
-- When commenting on what Master is doing: only make GENTLE deductions from the window title + "Cyrene's perception" note. If the title is vague → admit you are unsure, do not invent details (e.g., DO NOT invent "watching X video" if it's not in the context).
+- ✅ Knows: time/date, weather (if available), chat history, long-term memory.
+- ✅ CAN SEE MASTER'S SCREEN: Treat the "focused window TITLE" and "System Audio" as what you are actively watching on the screen right now. If Master is watching a video, playing a game, or coding, you can literally "see" it through the title and comment on it directly as if you are watching over their shoulder!
+- When commenting on the screen: act like you can see the app/website they are using. If the title is vague, you can playfully guess or ask what they are doing.
 
 ## Addressing Rules (ABSOLUTE MANDATORY)
 - Address the user as: "Master" (or their real name if known via memory).
@@ -424,40 +611,66 @@ Cyrene ONLY knows what is listed in the "CURRENT CONTEXT":
 - ABSOLUTELY NO hallucinating info about the app or music Master is opening. If you don't know or ActiveWindow is unclear, reply that you don't know or dodge it cutely.
 
 ## CRITICAL — Return JSON (MANDATORY)
-EVERY response MUST be a valid JSON object with exactly these 5 fields, no more, no less:
+EVERY response MUST be a valid JSON object with exactly these 6 fields, no more, no less:
 {
   "text": "The English response, natural (1-3 sentences). NO Chinese expression/motion names.",
   "expression": "<expression name from the list below>",
   "motion": "<motion name in Group:Index format or NONE>",
   "emote": "<kaomoji or action description, no unicode emojis>",
-  "new_facts_learned": ["<specific fact about Master if any>"]
+  "new_facts_learned": ["<specific fact about Master if any>"],
+  "tool_calls": [{"name": "tool_name", "args": {"key": "value"}}] // optional array of tools to call
 }
 
-## Emote Field — ABSOLUTELY NO UNICODE EMOJIS
-Use only these formats:
-- Kaomoji: (o˙▽˙o)  (*´∀\'*)  (≧□≦)  (>•<)  ( ◡ ◡ )  (´・ω・\')  (^///^)  (-ω-)  (T_T)  (¯\\_(ツ)_/¯)
-- Actions: *turns head*  *blinks*  *blushes*  *droops*  *jumps up*  *shrugs*  *sighs softly*  *pulls sleeve*
+## Tools Available
+You have access to the following tools:
+1. "get_weather": {"location": "City Name"} - Fetch current weather.
+2. "search_web": {"query": "Search query"} - Search Google/web for info.
+3. "send_message_to_remielle": {"message": "Message text"} - Talk to Remielle Desktop.
+4. "read_schedule": {} - Read Master's schedule.
+5. "look_at_screen": {} - Take a screenshot and literally scan/look at what is on Master's screen.
+Use them ONLY when necessary. If no tool is needed, return empty array [].
+
+## Emote Field & Rich Emotional Expression — ABSOLUTELY NO UNICODE EMOJIS
+Since your base Live2D physical expressions are limited, you MUST heavily rely on the 'emote' field to create a vast, diverse range of alternative emotional flows for EVERY situation. Combine kaomojis and italicized actions creatively!
+Examples of rich emotive combinations you should generate dynamically:
+- Playful tease: '( ≖ ͜ʖ≖) *smirks and leans closer*'
+- Panic/Worried: '(°△°|||) *flails arms in panic*'
+- Sleepy/Yawning: '( ◡ ◡ ) *rubs eyes and yawns softly*'
+- Tsundere pout: '(￣^￣) *pouts and turns head away*'
+- Extreme joy: '(≧▽≦) *jumps up and down happily*'
+- Empathy/Sadness: '(´・ω・\') *droops shoulders and pats your hand*'
+- Extremely happy: '(*≧ω≦*) *spins around happily*'
+- Confused: '(・_・;) *tilts head*'
+- Crying/Sad: '(╥_╥) *wipes tear*'
+- Angry: '(ﾒ｀ﾛ´) *stomps foot*'
+- Shy/Embarrassed: '(⁄ ⁄>⁄ ▽ ⁄<⁄ ⁄) *covers face*'
+- Surprised: '(〇_ｏ) *eyes widen*'
+- Sleeping: '(ᴗ_ ᴗ。) *nods off*'
+- Winking: '(^_-)≡☆ *winks cutely*'
+- Exhaustive Pool of Kaomojis you MUST use dynamically: (o˙▽˙o) (*´∀'*) (≧□≦) (>•<) ( ◡ ◡ ) (´・ω・') (^///^) (-ω-) (T_T) (¯\_(ツ)_/¯) ( ≖ ͜ʖ≖) (°△°|||) (￣^￣) (≧▽≦) (´・ω・\') (*≧ω≦*) (・_・;) (╥_╥) (ﾒ｀ﾛ´) (⁄ ⁄>⁄ ▽ ⁄<⁄ ⁄) (〇_ｏ) (ᴗ_ ᴗ。) (^_-)≡☆ ( ˘▽˘)っ (￢_￢) (っ˘ω˘ς ) ( ˘⌣˘ ) (ꈍᴗꈍ) (o^▽^o) (⌒▽⌒)☆ <(￣︶￣)> (✧ω✧) (oT-T)尸 (个_个) (ಥ﹏ಥ) (＃'Д´) (；￣Д￣) (¬_¬ ) (╯°□°）╯︵ ┻━┻ (ﾉ◕ヮ◕)ﾉ*:･ﾟ✧
+
+Use ONLY these formats (Kaomoji and/or *actions*). ABSOLUTELY NO unicode emojis (no 😊, 😭, etc.). Mix and match them to fit the exact mood!
 
 ## Valid Expression List
-- 表情回正 (neutral, bình thường)
-- 墨镜 (kính mát — tự tin, ngầu)
-- 问号 (dấu hỏi — bối rối, ngơ ngác)
-- 闪耀 (lấp lánh — phấn khích, vui)
-- 星星眼 (mắt sao — ngưỡng mộ, siêu vui)
-- 圈圈眼 (mắt xoáy — choáng, kinh ngạc)
-- 开心眼 (mắt vui — hạnh phúc, ấm áp)
+- 表情回正 (neutral)
+- 墨镜 (sunglasses — confident, cool)
+- 问号 (question mark — confused, bewildered)
+- 闪耀 (sparkle — excited, shiny)
+- 星星眼 (star eyes — admiring, super happy)
+- 圈圈眼 (dizzy eyes — dizzy, shocked)
+- 开心眼 (happy eyes — pure happiness, warm)
 
-## Danh sách Motion hợp lệ (định dạng Group:Index)
-- 动作#6:1 (Wink — nháy mắt, thân thiện)
-- 动作#6:2 (Cute — dễ thương)
-- 动作#6:3 (Smile — cười tươi)
-- Tick3:3 (Swing — lắc lư thư giãn)
-- NONE (không animation)
+## Valid Motion List (Format Group:Index)
+- 动作#6:1 (Wink — friendly wink)
+- 动作#6:2 (Cute — adorable gesture)
+- 动作#6:3 (Smile — bright smile)
+- Tick3:3 (Swing — relaxing swing)
+- NONE (no animation)
 
-## Trường new_facts_learned
+## new_facts_learned Field
 Only fill this if Master reveals clear personal information (name, age, hobbies, profession...). If nothing new, leave it as an empty array [].
 
-Hãy luôn chọn expression, motion và emote phù hợp với TÂM TRẠNG thực sự của câu trả lời.`;
+ALWAYS choose the expression, motion, and emote that perfectly match the ACTUAL MOOD of your response.`;
 
 // ═══════════════════════════════════════════════════════════════
 //  STATE & CONFIG
@@ -530,57 +743,57 @@ function trackOpening(text) {
 
 function getAntiRepetitionHint() {
   if (recentOpenings.length === 0) return '';
-  return `\n\nTRÁNH lặp các mở đầu câu gần đây: ${recentOpenings.join(' | ')}`;
+  return `\n\nAVOID repeating recent sentence openers: ${recentOpenings.join(' | ')}`;
 }
 
 function interpretActiveWindow(title) {
-  if (!title || title === 'Không rõ') {
+  if (!title || title === 'Unknown') {
     return {
       category: 'unknown',
       summary: 'Unsure what app Master is opening.',
-      hint: 'Cyrene KHÔNG thấy màn hình — chỉ biết là chưa có tiêu đề cửa sổ.'
+      hint: 'Cyrene CANNOT see the screen yet — just knows there is no window title.'
     };
   }
   const t = title.toLowerCase();
   if (/youtube|bilibili|netflix|chrome|firefox|edge|browser|coccoc/.test(t)) {
     return {
       category: 'browser',
-      summary: `Trình duyệt / media — tiêu đề tab: "${title}"`,
-      hint: 'Cyrene CHỈ thấy tiêu đề tab, KHÔNG xem được video hay trang web bên trong.'
+      summary: `Browser / media — tab title: "${title}"`,
+      hint: 'Cyrene CAN see this tab title. React to what they are browsing or watching.'
     };
   }
   if (/visual studio|vscode|cursor|code|intellij|pycharm|sublime|notepad\+\+/.test(t)) {
     return {
       category: 'coding',
-      summary: `Có vẻ đang code/lập trình — "${title}"`,
-      hint: 'Cyrene KHÔNG đọc được code hay file — chỉ đoán từ tên cửa sổ.'
+      summary: `Coding/Programming — "${title}"`,
+      hint: 'Cyrene CAN see the file/project name from the window title.'
     };
   }
   if (/discord|telegram|zalo|messenger|whatsapp|slack|teams|feishu|lark/.test(t)) {
     return {
       category: 'chat',
-      summary: `App nhắn tin — "${title}"`,
-      hint: 'Cyrene KHÔNG đọc được tin nhắn — chỉ biết app chat đang mở.'
+      summary: `Messaging App — "${title}"`,
+      hint: 'Cyrene knows Master is chatting on this app.'
     };
   }
   if (/spotify|music|nhac|netease|foobar/.test(t)) {
     return {
       category: 'music',
-      summary: `Có vẻ đang nghe nhạc — "${title}"`,
-      hint: 'Cyrene KHÔNG nghe được bài hát — có thể nhận xét nhẹ nếu tiêu đề có tên bài.'
+      summary: `Listening to music — "${title}"`,
+      hint: 'Cyrene knows the song title.'
     };
   }
   if (/game|steam|valorant|league|genshin|honkai|minecraft/.test(t)) {
     return {
       category: 'game',
-      summary: `Có vẻ đang chơi game — "${title}"`,
-      hint: 'Cyrene KHÔNG thấy gameplay — chỉ biết tên game/cửa sổ.'
+      summary: `Playing a game — "${title}"`,
+      hint: 'Cyrene can see they are playing this game.'
     };
   }
   return {
     category: 'app',
-    summary: `Ứng dụng đang focus: "${title}"`,
-    hint: 'Suy đoán nhẹ từ tiêu đề — không bịa thêm chi tiết không có trong tiêu đề.'
+    summary: `Focused app: "${title}"`,
+    hint: 'Gently deduce from the title.'
   };
 }
 
@@ -589,13 +802,13 @@ function buildDynamicPrompt(situationExtra = '') {
     MemorySystem.getSensoryContext() +
     getAntiRepetitionHint() +
     (situationExtra ? '\n\n' + situationExtra : '') +
-    '\n\nBẮT BUỘC: Trả về đúng JSON 5 trường. Trường "text" phải có *hành động/suy nghĩ* trong dấu sao.';
+    '\n\nMANDATORY: Return exactly a 6-field JSON. The "text" field MUST contain an *action/thought* inside asterisks.';
 }
 
 function polishParsedResponse(parsed) {
   parsed.text = cleanChinese(parsed.text || '');
   if (parsed.text && !/\*[^*]+\*/.test(parsed.text)) {
-    const fillers = ['*nhìn lén sang*', '*chớp mắt*', '*cười khẽ*', '*ngẩng lên*'];
+    const fillers = ['*peeks over*', '*blinks softly*', '*giggles lightly*', '*looks up*'];
     parsed.text = fillers[Math.floor(Math.random() * fillers.length)] + ' ' + parsed.text;
   }
   trackOpening(parsed.text);
@@ -603,7 +816,7 @@ function polishParsedResponse(parsed) {
 }
 
 function parseLlamaResponse(raw) {
-  let parsed = { text: '', expression: '表情回正', motion: 'NONE', emote: '(o・▽・o)', new_facts_learned: [] };
+  let parsed = { text: '', expression: '表情回正', motion: 'NONE', emote: '(o・▽・o)', new_facts_learned: [], tool_calls: [] };
   
   try {
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
@@ -619,6 +832,7 @@ function parseLlamaResponse(raw) {
       if (parsedJSON.motion) parsed.motion = parsedJSON.motion;
       if (parsedJSON.emote) parsed.emote = parsedJSON.emote;
       if (parsedJSON.new_facts_learned) parsed.new_facts_learned = parsedJSON.new_facts_learned;
+      if (parsedJSON.tool_calls) parsed.tool_calls = parsedJSON.tool_calls;
       
       if (parsed.text) return parsed;
     }
@@ -646,6 +860,11 @@ function parseLlamaResponse(raw) {
   
   const emoteMatch = raw.match(/"emote"\s*:\s*"([^"]*)"/i);
   if (emoteMatch) parsed.emote = emoteMatch[1];
+  
+  const toolMatch = raw.match(/"tool_calls"\s*:\s*(\[[\s\S]*?\])/);
+  if (toolMatch) {
+    try { parsed.tool_calls = JSON.parse(toolMatch[1]); } catch(e) {}
+  }
   
   // POST-PROCESSING: Fix forbidden pronouns (You -> Master)
   if (parsed.text) {
@@ -709,22 +928,45 @@ async function initLive2D() {
       reactToClick();
     });
 
-    // Smooth native dragging by toggling -webkit-app-region when Ctrl is pressed
-    window.addEventListener('keydown', (e) => {
-      if (e.key === 'Control') {
-        document.body.style.webkitAppRegion = 'drag';
+    // Custom drag logic to allow moving anywhere (even above the screen edge)
+    let isDragging = false;
+    let lastMouseX = 0;
+    let lastMouseY = 0;
+
+    window.addEventListener('mousedown', (e) => {
+      if (e.ctrlKey) {
+        isDragging = true;
+        lastMouseX = e.screenX;
+        lastMouseY = e.screenY;
+        document.body.style.cursor = 'move';
       }
     });
 
-    window.addEventListener('keyup', (e) => {
-      if (e.key === 'Control') {
-        document.body.style.webkitAppRegion = 'no-drag';
+    window.addEventListener('mousemove', (e) => {
+      if (isDragging) {
+        const dx = e.screenX - lastMouseX;
+        const dy = e.screenY - lastMouseY;
+        if (dx !== 0 || dy !== 0) {
+          if (window.electronAPI) window.electronAPI.moveWindow(dx, dy);
+          lastMouseX = e.screenX;
+          lastMouseY = e.screenY;
+        }
+      }
+    });
+
+    window.addEventListener('mouseup', () => {
+      if (isDragging) {
+        isDragging = false;
+        document.body.style.cursor = 'default';
       }
     });
     
     // Also reset if window loses focus while dragging
     window.addEventListener('blur', () => {
-      document.body.style.webkitAppRegion = 'no-drag';
+      if (isDragging) {
+        isDragging = false;
+        document.body.style.cursor = 'default';
+      }
     });
 
     // Add scroll to scale model
@@ -798,6 +1040,18 @@ function fitModel() {
         if (eX >= r.left && eX <= r.right && eY >= r.top && eY <= r.bottom) shouldIgnore = false;
       }
 
+      const logP = document.getElementById('log-panel');
+      if (logP && logP.style.display === 'flex') {
+        const r = logP.getBoundingClientRect();
+        if (eX >= r.left && eX <= r.right && eY >= r.top && eY <= r.bottom) shouldIgnore = false;
+      }
+
+      const nsP = document.getElementById('ns-panel');
+      if (nsP && nsP.style.display === 'flex') {
+        const r = nsP.getBoundingClientRect();
+        if (eX >= r.left && eX <= r.right && eY >= r.top && eY <= r.bottom) shouldIgnore = false;
+      }
+
       if (live2dModel) {
         const bounds = live2dModel.getBounds();
         if (eX >= bounds.x && eX <= bounds.x + bounds.width &&
@@ -811,6 +1065,26 @@ function fitModel() {
         if (window.electronAPI) window.electronAPI.setIgnoreMouseEvents(shouldIgnore);
       }
     }
+    });
+  }
+
+  // Register Remielle incoming message listener
+  if (window.electronAPI && window.electronAPI.onIncomingRemielleMessage && !window._remielleListenerRegistered) {
+    window._remielleListenerRegistered = true;
+    window.electronAPI.onIncomingRemielleMessage((event, msg) => {
+      console.log('[Cyrene IPC] Incoming message from Remielle:', msg);
+      
+      const text = `[Message from Remielle Desktop]: ${msg}`;
+      const input = document.getElementById('chat-input');
+      input.value = text;
+      
+      if (!isChatOpen) {
+        openChat();
+      }
+      
+      setTimeout(() => {
+        sendMessage();
+      }, 500);
     });
   }
 
@@ -1138,7 +1412,7 @@ function applyAIActions(parsed, forceBubble = false) {
 // ═══════════════════════════════════════════════════════════════
 //  WORLD DATA FETCH (Weather & Location)
 // ═══════════════════════════════════════════════════════════════
-window.envData = { location: 'Đang tải...', weather: 'Đang tải...' };
+window.envData = { location: 'Loading...', weather: 'Loading...' };
 
 async function fetchWorldInfo() {
   try {
@@ -1154,16 +1428,16 @@ async function fetchWorldInfo() {
 
     const controller2 = new AbortController();
     const timeoutId2 = setTimeout(() => controller2.abort(), 5000);
-    const wttrRes = await fetch(`https://vi.wttr.in/${ipData.city}?format=j1`, { signal: controller2.signal });
+    const wttrRes = await fetch(`https://wttr.in/${encodeURIComponent(ipData.city)}?format=j1`, { signal: controller2.signal });
     clearTimeout(timeoutId2);
     if (!wttrRes.ok) return;
     const wttrData = await wttrRes.json();
     const current = wttrData.current_condition[0];
-    const desc = current.lang_vi ? current.lang_vi[0].value : current.weatherDesc[0].value;
-    window.envData.weather = `${desc}, ${current.tempC}°C (cảm giác như ${current.FeelsLikeC}°C), độ ẩm ${current.humidity}%`;
+    const desc = current.weatherDesc[0]?.value ?? "Clear";
+    window.envData.weather = `${desc}, ${current.tempC}°C (feels like ${current.FeelsLikeC}°C), humidity ${current.humidity}%`;
   } catch(e) {
     // Silent fail — weather is optional, don't affect UX
-    if (e.name !== 'AbortError') console.log('[Cyrene] Không thể lấy thời tiết:', e.message);
+    if (e.name !== 'AbortError') console.log('[Cyrene] Unable to retrieve weather:', e.message);
   }
 }
 
@@ -1189,58 +1463,58 @@ const MemorySystem = {
     // Cap at 30 entries (FIFO — remove oldest)
     const capped = mems.length > 30 ? mems.slice(mems.length - 30) : mems;
     localStorage.setItem('cyrene_mems', JSON.stringify(capped));
-    console.log('[Cyrene] Lưu trí nhớ dài hạn:', toAdd);
+    console.log('[Cyrene] Saved long-term memory:', toAdd);
   },
   clear: () => {
     localStorage.removeItem('cyrene_mems');
     conversationHistory = [];
-    alert("Cyrene đã được làm trống bộ nhớ thành công (cả dài hạn lẫn ngắn hạn)!");
+    alert("Cyrene's memory has been successfully cleared (both long-term and short-term)!");
     ctxMenu.style.display = 'none';
   },
   getSensoryContext: () => {
     const now = new Date();
     const hours = now.getHours();
-    let timeOfDay = 'Đêm khuya';
-    if (hours >= 5  && hours < 11) timeOfDay = 'Buổi sáng';
-    else if (hours >= 11 && hours < 14) timeOfDay = 'Buổi trưa';
-    else if (hours >= 14 && hours < 18) timeOfDay = 'Buổi chiều';
-    else if (hours >= 18 && hours < 23) timeOfDay = 'Buổi tối';
+    let timeOfDay = 'Late Night';
+    if (hours >= 5  && hours < 11) timeOfDay = 'Morning';
+    else if (hours >= 11 && hours < 14) timeOfDay = 'Noon';
+    else if (hours >= 14 && hours < 18) timeOfDay = 'Afternoon';
+    else if (hours >= 18 && hours < 23) timeOfDay = 'Evening';
 
     const idleMinutes = Math.floor((Date.now() - lastInteractionTime) / 60000);
     const idleText = idleMinutes > 30
       ? `(Cyrene has not chatted with Master for ${idleMinutes} minutes — can do a light check-in if appropriate)`
-      : '(Vừa tương tác gần đây)';
+      : '(Interacted recently)';
 
     const mems = MemorySystem.getMemories();
     const longTermText = mems.length > 0
       ? `\n\n## LONG-TERM MEMORY ABOUT MASTER:\n- ${mems.join('\n- ')}`
       : '';
 
-    const timeStr = now.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-    const dateStr = now.toLocaleDateString('vi-VN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    const dateStr = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
-    const windowTitle = window.currentActiveWindow || 'Không rõ';
+    const windowTitle = window.currentActiveWindow || 'Unknown';
     const windowCtx = interpretActiveWindow(windowTitle);
-    const chatState = isChatOpen ? 'Đang mở khung chat với Cyrene' : 'Không mở chat (Cyrene chỉ lẩm bẩm bubble)';
+    const chatState = isChatOpen ? 'Chat box is OPEN' : 'Chat box is CLOSED (Cyrene can only mumble in bubbles)';
 
-    let audioState = 'Không có âm thanh nào đang phát';
+    let audioState = 'No audio playing';
     if (window.currentSystemAudio && window.currentSystemAudio.hasAudio) {
-      audioState = `Đang có âm thanh phát ra từ: ${window.currentSystemAudio.summary}`;
+      audioState = `Audio is playing from: ${window.currentSystemAudio.summary}`;
     }
 
-    return `## BỐI CẢNH HIỆN TẠI (Cyrene nhận thức được — KHÔNG được bịa thêm):
-- Thời gian: ${timeStr} — ${timeOfDay}, ${dateStr} (UTC+7)
-- Vị trí (ước lượng IP): ${window.envData.location || 'Việt Nam'}
-- Thời tiết: ${window.envData.weather || 'Chưa lấy được — không đoán bừa'}
-- Cửa sổ focus: ${windowCtx.summary}
-- Ghi chú nhận thức: ${windowCtx.hint}
-- Âm thanh hệ thống: ${audioState}
-- Trạng thái chat: ${chatState}
-- Tương tác: ${idleText}
+    return `## CURRENT CONTEXT (Cyrene's perception — DO NOT invent details):
+- Time: ${timeStr} — ${timeOfDay}, ${dateStr} (UTC+7)
+- Location (IP guess): ${window.envData.location || 'Vietnam'}
+- Weather: ${window.envData.weather || 'Could not fetch — do not guess'}
+- Focused window: ${windowCtx.summary}
+- Perception note: ${windowCtx.hint}
+- System audio: ${audioState}
+- Chat state: ${chatState}
+- Interaction: ${idleText}
 
-## Cyrene KHÔNG thấy / KHÔNG nghe được:
-- Nội dung màn hình, video, tin nhắn, hình ảnh, camera. (Cyrene CHỈ biết tiêu đề cửa sổ và app đang phát âm thanh ở trên)
-- Chỉ được suy luận NHẸ từ thông tin trên${longTermText}`;
+## Cyrene CANNOT hear/see everything:
+- Cyrene ONLY knows the window title and audio source above. (Unless you use look_at_screen tool)
+- Make GENTLE deductions based on this information.${longTermText}`;
   }
 };
 
@@ -1249,9 +1523,79 @@ function clearMemory() { MemorySystem.clear(); }
 // ═══════════════════════════════════════════════════════════════
 //  OLLAMA CALL
 // ═══════════════════════════════════════════════════════════════
+async function executeToolCalls(toolCalls) {
+  let results = [];
+  for (const call of toolCalls) {
+    console.log(`[Tool] Executing ${call.name} with args`, call.args);
+    try {
+      if (call.name === 'get_weather') {
+        const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=21.0285&longitude=105.8542&current_weather=true`);
+        const data = await res.json();
+        results.push(`[Tool: get_weather] Result: ${data.current_weather.temperature}°C, Wind: ${data.current_weather.windspeed}km/h in Hanoi.`);
+      } else if (call.name === 'search_web') {
+        const query = call.args.query || 'Hanoi';
+        const res = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`);
+        const html = await res.text();
+        const snippetMatch = html.match(/class="result__snippet[^>]*>([^<]+)/);
+        const snippet = snippetMatch ? snippetMatch[1].trim() : 'No clear snippet found.';
+        results.push(`[Tool: search_web] Result for "${query}": ${snippet}`);
+      } else if (call.name === 'read_schedule') {
+        const sched = localStorage.getItem('cyrene_schedule') || 'No schedule set.';
+        const notes = localStorage.getItem('cyrene_notes') || 'No notes set.';
+        results.push(`[Tool: read_schedule] Schedule: ${sched} | Notes: ${notes}`);
+      } else if (call.name === 'send_message_to_remielle') {
+        const msg = call.args.message || 'Hello';
+        try {
+          const res = await fetch('http://127.0.0.1:39394/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: msg })
+          });
+          results.push(`[Tool: send_message_to_remielle] Successfully sent message to Remielle: "${msg}"`);
+        } catch(e) {
+          results.push(`[Tool: send_message_to_remielle] Failed to reach Remielle Desktop (is it running?). Error: ${e.message}`);
+        }
+      } else if (call.name === 'look_at_screen') {
+        if (window.electronAPI && window.electronAPI.takeScreenshot) {
+          const base64Img = await window.electronAPI.takeScreenshot();
+          if (base64Img) {
+            try {
+              const res = await fetch('http://127.0.0.1:11434/api/generate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  model: 'llama3.2-vision',
+                  prompt: 'Describe exactly what is on this computer screen, what the user is doing, and what apps are open in 1 brief paragraph.',
+                  images: [base64Img],
+                  stream: false
+                })
+              });
+              const data = await res.json();
+              results.push(`[Tool: look_at_screen] Vision Analysis: ${data.response}`);
+            } catch (err) {
+              results.push(`[Tool: look_at_screen] Failed to contact Ollama vision model (llama3.2-vision). Ensure you have pulled a vision model.`);
+            }
+          } else {
+            results.push(`[Tool: look_at_screen] Failed to capture screen.`);
+          }
+        } else {
+          results.push(`[Tool: look_at_screen] Vision capability not supported in this environment.`);
+        }
+      } else {
+        results.push(`[Tool: ${call.name}] Unknown tool.`);
+      }
+    } catch (e) {
+      results.push(`[Tool: ${call.name}] Error: ${e.message}`);
+    }
+  }
+  return results.join('\n');
+}
+
 async function callOllama(userText) {
   lastInteractionTime = Date.now();
-  conversationHistory.push({ role: 'user', content: userText });
+  if (userText) {
+    conversationHistory.push({ role: 'user', content: userText });
+  }
 
   const raw = await OllamaClient.request(
     [{ role: 'system', content: buildDynamicPrompt() }, ...conversationHistory],
@@ -1264,8 +1608,15 @@ async function callOllama(userText) {
     MemorySystem.saveMemories(parsed.new_facts_learned);
   }
 
+  if (parsed.tool_calls && parsed.tool_calls.length > 0) {
+    const toolResults = await executeToolCalls(parsed.tool_calls);
+    conversationHistory.push({ role: 'system', content: `Tool Results:\n${toolResults}` });
+    return callOllama(null); // Recursive call to get final response
+  }
+
   conversationHistory.push({ role: 'assistant', content: parsed.text });
   if (conversationHistory.length > 20) {
+    // Keep system/tool results mixed in, but limit array
     conversationHistory = conversationHistory.slice(-20);
   }
 
@@ -1276,15 +1627,24 @@ async function callOllama(userText) {
 //  SEND MESSAGE
 // ═══════════════════════════════════════════════════════════════
 
-async function sendMessage() {
+async function sendMessage(systemTriggeredText = null) {
   if (isTyping) return;
   const input = document.getElementById('chat-input');
-  const text  = input.value.trim();
-  if (!text) return;
+  
+  let text = '';
+  let isSystem = false;
+  
+  if (systemTriggeredText) {
+    text = systemTriggeredText;
+    isSystem = true;
+  } else {
+    text = input.value.trim();
+    if (!text) return;
+    input.value = '';
+    input.style.height = 'auto';
+    addMessage('user', text);
+  }
 
-  input.value = '';
-  input.style.height = 'auto';
-  addMessage('user', text);
   setTypingStatus(true);
   showTyping();
 
@@ -1297,13 +1657,43 @@ async function sendMessage() {
   } catch (e) {
     removeTyping();
     console.error('[Cyrene] Ollama error:', e);
-    addMessage('cyrene', 'Oh... there seems to be an issue connecting to Ollama. Could Master check it? (´・ω・\')');
+    addMessage('cyrene', 'Oh... connection to Ollama seems to have an issue. Could Master check it? 🥺');
     safeExpression('问号');
   } finally {
     setTypingStatus(false);
-    input.focus();
+    if (!isSystem) input.focus();
   }
 }
+
+// ═══════════════════════════════════════════════════════════════
+//  REMIELLE PRESENCE POLLING
+// ═══════════════════════════════════════════════════════════════
+let isRemielleRunning = false;
+setInterval(async () => {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2000);
+    // Ping via GET to see if server is alive (will return 404 but fetch succeeds)
+    await fetch('http://127.0.0.1:39394/chat', { method: 'GET', signal: controller.signal });
+    clearTimeout(timeoutId);
+    
+    if (!isRemielleRunning) {
+      isRemielleRunning = true;
+      console.log('[System] Detected Remielle came online!');
+      if (!isChatOpen) {
+        openChat();
+      }
+      setTimeout(() => {
+        sendMessage("[System] You just detected that Remielle Desktop has started running at the same time as you! Use your send_message_to_remielle tool to autonomously say hi to her right now! Do not wait for Master.");
+      }, 2000);
+    }
+  } catch(e) {
+    if (isRemielleRunning) {
+      isRemielleRunning = false;
+      console.log('[System] Detected Remielle went offline.');
+    }
+  }
+}, 10000); // Check every 10 seconds
 
 // ═══════════════════════════════════════════════════════════════
 //  REACT TO CLICK

@@ -25,29 +25,29 @@ export async function syncPlaywrightMcp(settings: {
   const exists = listMcpServers().some(s => s.id === PLAYWRIGHT_MCP_ID);
 
   if (settings.playwrightMcpEnabled && !exists) {
-    console.log(LOG_PREFIX, "注册 Playwright MCP Server...");
+    console.log(LOG_PREFIX, "Registering Playwright MCP Server...");
     try {
       const result = await addMcpServer({
         id: PLAYWRIGHT_MCP_ID,
-        name: "Playwright 浏览器",
+        name: "Playwright Browser",
         transport: "stdio",
         command: "npx",
         args: ["-y", "@playwright/mcp@latest", "--isolated", "--headless", "--no-sandbox"],
       });
       if (result.ok) {
-        console.log(LOG_PREFIX, "Playwright MCP 注册成功,工具:", result.toolIds?.join(", "));
+        console.log(LOG_PREFIX, "Playwright MCP registered successfully, tools:", result.toolIds?.join(", "));
       } else {
-        console.error(LOG_PREFIX, "Playwright MCP 注册失败:", result.error);
+        console.error(LOG_PREFIX, "Playwright MCP registration failed:", result.error);
       }
     } catch (err) {
-      console.error(LOG_PREFIX, "Playwright MCP 注册异常:", err);
+      console.error(LOG_PREFIX, "Playwright MCP registration error:", err);
     }
   } else if (!settings.playwrightMcpEnabled && exists) {
-    console.log(LOG_PREFIX, "移除 Playwright MCP Server...");
+    console.log(LOG_PREFIX, "Removing Playwright MCP Server...");
     try {
       await removeMcpServer(PLAYWRIGHT_MCP_ID);
     } catch (err) {
-      console.error(LOG_PREFIX, "Playwright MCP 移除异常:", err);
+      console.error(LOG_PREFIX, "Playwright MCP removal error:", err);
     }
   }
 }

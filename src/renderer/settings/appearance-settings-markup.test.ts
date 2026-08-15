@@ -11,18 +11,18 @@ function form(id: string): string {
 }
 
 describe("appearance settings markup", () => {
-	  it("adds appearance navigation and renames general settings", () => {
-	    expect(html).toContain('data-section="appearance"');
-	    expect(html).toContain('data-section="general"><span><svg class="nav-item__icon"');
-	    expect(html).toContain('通用设置</button>');
-	  });
+  it("adds appearance navigation and renames general settings", () => {
+    expect(html).toContain('data-section="appearance"');
+    expect(html).toContain('data-section="general"><span><svg class="nav-item__icon"');
+    expect(html).toContain('General Settings</button>');
+  });
 
-	  it("contains the four appearance groups and disabled future options", () => {
+  it("contains the four appearance groups and disabled future options", () => {
     const panel = form("appearance-form");
-    for (const heading of ["布局", "外观主题", "个性化", "昔涟桌宠"]) {
+    for (const heading of ["Layout", "Appearance Theme", "Personalization", "Cyrene Desktop Pet"]) {
       expect(panel).toContain(heading);
     }
-    for (const label of ["单窗口", "聊天背景"]) {
+    for (const label of ["Single Window", "Chat Background"]) {
       expect(panel).toMatch(new RegExp(`<button[^>]+disabled[^>]*>[\\s\\S]*?${label}[\\s\\S]*?SOON`));
     }
   });
@@ -50,7 +50,7 @@ describe("appearance settings markup", () => {
 
   it("offers chat social context as an existing capsule switch", () => {
     const panel = form("preferences-form");
-    expect(panel).toContain("聊天上下文增强");
+    expect(panel).toContain("Chat Context Enhancement");
     expect(panel).toMatch(
       /class="switch"[\s\S]*?id="chat-social-context-enabled"[\s\S]*?class="switch__track"[\s\S]*?class="switch__thumb"/,
     );

@@ -68,13 +68,13 @@ function _initModalOverlay(): void {
     '<div class="cy-modal" role="alertdialog" aria-modal="true">',
     '  <div class="cy-modal__head">',
     '    <span class="cy-modal__icon" id="cy-modal-icon">📌</span>',
-    '    <h3 class="cy-modal__title" id="cy-modal-title">提示</h3>',
+    '    <h3 class="cy-modal__title" id="cy-modal-title">Notice</h3>',
     '  </div>',
     '  <hr class="cy-modal__divider">',
-    '  <p class="cy-modal__body" id="cy-modal-message">确认执行此操作吗？</p>',
+    '  <p class="cy-modal__body" id="cy-modal-message">Are you sure you want to proceed?</p>',
     '  <div class="cy-modal__actions">',
-    '    <button type="button" class="ghost-btn" id="cy-modal-cancel">取消</button>',
-    '    <button type="button" class="btn-primary" id="cy-modal-confirm">确定</button>',
+    '    <button type="button" class="ghost-btn" id="cy-modal-cancel">Cancel</button>',
+    '    <button type="button" class="btn-primary" id="cy-modal-confirm">Confirm</button>',
     '  </div>',
     '</div>',
   ].join("\n");
@@ -92,8 +92,8 @@ function showModal (options: { title: string; message: string; icon?: string; co
   iconEl.innerHTML = options.icon || "📌";
   titleEl.textContent = options.title;
   msgEl.textContent = options.message;
-  cancelBtn.textContent = options.cancelText || "取消";
-  confirmBtn.textContent = options.confirmText || "确定";
+  cancelBtn.textContent = options.cancelText || "Cancel";
+  confirmBtn.textContent = options.confirmText || "Confirm";
   _cyModalOverlay.classList.remove("is-hidden");
   return new Promise(function (resolve) {
     var cleanup = function (result: boolean) {
@@ -110,9 +110,7 @@ function showModal (options: { title: string; message: string; icon?: string; co
 }
 
 /**
- * 富文本模态框（基于 cy-modal 样式但使用独立 overlay，避免与 showModal 冲突）。
- * 用于"音色快速复刻"这种需要展示多组说明（规格 / 费用 / 过期规则）的场景。
- * 调用方负责传入安全的 HTML（项目内固定字符串）；若内容来自用户/网络必须先 escapeHtml。
+ * Rich HTML modal.
  */
 let _cyHtmlModalOverlay: HTMLElement | null = null;
 function _initHtmlModalOverlay(): void {
@@ -124,12 +122,12 @@ function _initHtmlModalOverlay(): void {
     '<div class="cy-modal cy-html-modal" role="dialog" aria-modal="true">',
     '  <div class="cy-modal__head">',
     '    <span class="cy-modal__icon" id="cy-html-modal-icon">📌</span>',
-    '    <h3 class="cy-modal__title" id="cy-html-modal-title">说明</h3>',
+    '    <h3 class="cy-modal__title" id="cy-html-modal-title">Instructions</h3>',
     '  </div>',
     '  <hr class="cy-modal__divider">',
     '  <div class="cy-html-modal__body" id="cy-html-modal-body"></div>',
     '  <div class="cy-modal__actions">',
-    '    <button type="button" class="btn-primary" id="cy-html-modal-confirm">知道了</button>',
+    '    <button type="button" class="btn-primary" id="cy-html-modal-confirm">Got it</button>',
     '  </div>',
     '</div>',
   ].join("\n");
@@ -146,7 +144,7 @@ function showHtmlModal(options: { title: string; htmlBody: string; icon?: string
   iconEl.innerHTML = options.icon || "📌";
   titleEl.textContent = options.title;
   bodyEl.innerHTML = options.htmlBody;
-  confirmBtn.textContent = options.confirmText || "知道了";
+  confirmBtn.textContent = options.confirmText || "Got it";
   _cyHtmlModalOverlay.classList.remove("is-hidden");
   return new Promise((resolve) => {
     const cleanup = () => {
@@ -159,9 +157,9 @@ function showHtmlModal(options: { title: string; htmlBody: string; icon?: string
   });
 }
 
-// escapeHtml() 已定义在文件下方（settings.ts:3738），此处复用即可。
+// escapeHtml() is defined below.
 
-// Inline input modal (Electron 禁用了 window.prompt，所以自己实现)
+// Inline input modal (custom prompt implementation for Electron)
 let _cyInputOverlay: HTMLElement | null = null;
 function _initInputOverlay(): void {
   if (_cyInputOverlay) return;
@@ -172,15 +170,15 @@ function _initInputOverlay(): void {
     '<div class="cy-modal" role="dialog" aria-modal="true" style="width:min(420px,90vw);">',
     '  <div class="cy-modal__head">',
     '    <span class="cy-modal__icon" id="cy-input-icon"><svg width="24" height="24" viewBox="0 0 48 48" fill="none" aria-hidden="true" style="display:inline;vertical-align:-2px"><path d="M5.32497 43.4996L13.81 43.4998L44.9227 12.3871L36.4374 3.90186L5.32471 35.0146L5.32497 43.4996Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M27.9521 12.3872L36.4374 20.8725" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>',
-    '    <h3 class="cy-modal__title" id="cy-input-title">请输入</h3>',
+    '    <h3 class="cy-modal__title" id="cy-input-title">Please enter</h3>',
     '  </div>',
     '  <hr class="cy-modal__divider">',
     '  <p class="cy-modal__body" id="cy-input-message"></p>',
     '  <input type="text" id="cy-input-field" autocomplete="off" spellcheck="false"',
     '    style="width:100%;box-sizing:border-box;padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.18);background:rgba(0,0,0,0.32);color:var(--rb-text-strong,#fff);font-family:inherit;font-size:13px;outline:none;margin-bottom:12px;" />',
     '  <div class="cy-modal__actions">',
-    '    <button type="button" class="ghost-btn" id="cy-input-cancel">取消</button>',
-    '    <button type="button" class="btn-primary" id="cy-input-confirm">确定</button>',
+    '    <button type="button" class="ghost-btn" id="cy-input-cancel">Cancel</button>',
+    '    <button type="button" class="btn-primary" id="cy-input-confirm">Confirm</button>',
     '  </div>',
     '</div>',
   ].join("\n");
@@ -204,13 +202,13 @@ function showInputModal(options: {
   const inputEl = _cyInputOverlay.querySelector("#cy-input-field") as HTMLInputElement;
   const cancelBtn = _cyInputOverlay.querySelector("#cy-input-cancel") as HTMLButtonElement;
   const confirmBtn = _cyInputOverlay.querySelector("#cy-input-confirm") as HTMLButtonElement;
-  iconEl.textContent = options.icon || `<svg width="22" height="22" viewBox="0 0 48 48" fill="none" aria-hidden="true" style="display:inline;vertical-align:-2px"><path d="M5.32497 43.4996L13.81 43.4998L44.9227 12.3871L36.4374 3.90186L5.32471 35.0146L5.32497 43.4996Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M27.9521 12.3872L36.4374 20.8725" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  iconEl.textContent = options.icon || "";
   titleEl.textContent = options.title;
   msgEl.textContent = options.message;
   inputEl.value = options.defaultValue || "";
   inputEl.placeholder = options.placeholder || "";
-  cancelBtn.textContent = options.cancelText || "取消";
-  confirmBtn.textContent = options.confirmText || "确定";
+  cancelBtn.textContent = options.cancelText || "Cancel";
+  confirmBtn.textContent = options.confirmText || "Confirm";
   _cyInputOverlay.classList.remove("is-hidden");
   setTimeout(() => inputEl.focus(), 30);
   return new Promise((resolve) => {

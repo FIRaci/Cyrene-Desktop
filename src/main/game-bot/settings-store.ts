@@ -24,6 +24,14 @@ const DEFAULTS: GameBotSettings = {
   vlm: { baseUrl: "", apiKey: "", model: "" },
 };
 
+// IDs are filenames without an extension. Keeping this deliberately narrow makes
+// them safe to use below both the bundled recipe root and the per-user refs root.
+const GAME_BOT_IDENTIFIER = /^[A-Za-z0-9](?:[A-Za-z0-9_-]{0,63})$/;
+
+export function isGameBotIdentifier(value: unknown): value is string {
+  return typeof value === "string" && GAME_BOT_IDENTIFIER.test(value);
+}
+
 function filePath(): string {
   return path.join(app.getPath("userData"), "game-bot-settings.json");
 }
@@ -33,7 +41,7 @@ function normalize(input: Partial<GameBotSettings> | null | undefined): GameBotS
   return {
     enabled: Boolean(input?.enabled),
     exePath: typeof input?.exePath === "string" ? input.exePath : "",
-    activeRecipe: typeof input?.activeRecipe === "string" && input.activeRecipe
+    activeRecipe: isGameBotIdentifier(input?.activeRecipe)
       ? input.activeRecipe : DEFAULTS.activeRecipe,
     vlm: {
       baseUrl: typeof v.baseUrl === "string" ? v.baseUrl.trim() : "",

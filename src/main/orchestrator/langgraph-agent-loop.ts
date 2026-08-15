@@ -521,8 +521,8 @@ export async function runLangGraphAgentLoop(options: LangGraphAgentLoopOptions):
           firstStep.executionId = generateExecutionId();
           firstStep.status = "running";
         }
-        flowLog(`2.6 创建计划：${plan.steps.length} 步`);
-        flowLog(`   目标：${plan.goal}`);
+        flowLog(`2.6 Create plan: ${plan.steps.length} steps`);
+        flowLog(`   Goal: ${plan.goal}`);
         plan.steps.forEach((s, i) => flowLog(`   ${i + 1}. ${s.objective}`));
         return plan;
       },
@@ -540,9 +540,9 @@ export async function runLangGraphAgentLoop(options: LangGraphAgentLoopOptions):
         const stepIndex = state.taskPlan.steps.indexOf(step) + 1;
         const totalSteps = state.taskPlan.steps.length;
         if (result.status === "completed") {
-          flowLog(`6.5 步骤验证：完成（${stepIndex}/${totalSteps}）`);
+          flowLog(`6.5 Step verification: completed (${stepIndex}/${totalSteps})`);
         } else if (result.status === "failed") {
-          flowLog(`6.5 步骤验证：失败（${result.failureReason ?? "未知"}）`);
+          flowLog(`6.5 Step verification: failed (${result.failureReason ?? "unknown"})`);
         }
         return result;
       },
@@ -572,7 +572,7 @@ export async function runLangGraphAgentLoop(options: LangGraphAgentLoopOptions):
           model: options.settings.model,
           plan: state.taskPlan,
           failedStep: step,
-          errorMessage: step.failure?.message ?? "未知错误",
+          errorMessage: step.failure?.message ?? "unknown error",
           messages: state.messages,
           availableCapabilities: capabilitiesWithEvidence,
           profile,
@@ -581,8 +581,8 @@ export async function runLangGraphAgentLoop(options: LangGraphAgentLoopOptions):
           ),
           signal: options.signal,
         });
-        flowLog(`6.6 重规划：替换 ${replacementSteps.length} 步`);
-        replacementSteps.forEach((s, i) => flowLog(`   新步骤 ${i + 1}. ${s.objective}`));
+        flowLog(`6.6 Re-planning: replace ${replacementSteps.length} steps`);
+        replacementSteps.forEach((s, i) => flowLog(`   New step ${i + 1}. ${s.objective}`));
         return replacementSteps;
       },
       onPlanUpdate: (plan, replanCount) => {
@@ -604,7 +604,7 @@ export async function runLangGraphAgentLoop(options: LangGraphAgentLoopOptions):
               ? "decide(non-terminal)"
               : afterSuccess === "replan" ? "decide(replan)" : "soul(respond)";
         debugLog(`${LOG_PREFIX} node=routeAfterTool status=${lastResult?.status} terminal=${lastResult?.terminal} retryable=${lastResult?.retryable} afterSuccess=${afterSuccess} -> ${route}`);
-        flowLog(`   路由：${route}`);
+        flowLog(`   Route: ${route}`);
       }
     },
     decide: async (state) => {
@@ -650,7 +650,7 @@ export async function runLangGraphAgentLoop(options: LangGraphAgentLoopOptions):
       options.onEvent?.({ type: "step_started", stepName: "agent-graph-action-gate" });
       try {
         if (state.lastGateFailure) {
-          flowLog(`3. 重新决策（上次失败：${state.lastGateFailure.code}）`);
+          flowLog(`3. Re-decision (last failed: ${state.lastGateFailure.code})`);
         }
         const profile = resolveStructuredOutputProfile({
           provider: options.adapter.id,
@@ -721,8 +721,8 @@ export async function runLangGraphAgentLoop(options: LangGraphAgentLoopOptions):
           debugWarn(
             `${LOG_PREFIX} node=action-gate failure=${gate.failure.code} disposition=${gate.failure.disposition} toolExecuted=false`,
           );
-          flowLog(`3. 动作校验失败：${gate.failure.code}`);
-          flowLog("   工具未执行；转入失败回复");
+          flowLog(`3. Action validation failed: ${gate.failure.code}`);
+          flowLog("   Tool not executed; entering failure response");
           return {
             decision: "failure",
             reason: "action_gate_failed",
@@ -744,18 +744,18 @@ export async function runLangGraphAgentLoop(options: LangGraphAgentLoopOptions):
             if (step) {
               const stepIndex = state.taskPlan.steps.indexOf(step) + 1;
               const totalSteps = state.taskPlan.steps.length;
-              flowLog(`3. 执行步骤 ${stepIndex}/${totalSteps}：${step.objective}`);
+              flowLog(`3. Execute step ${stepIndex}/${totalSteps}: ${step.objective}`);
             }
-            flowLog(`   选择动作：调用 ${toolId}`);
+            flowLog(`   Select action: call ${toolId}`);
           } else {
-            flowLog(`3. 选择动作：调用 ${toolId}`);
+            flowLog(`3. Select action: call ${toolId}`);
           }
-          flowLog(`   目标：${summarizeObjective(decision.objective)}`);
-          flowLog(`   成功后：${decision.afterSuccess ?? "respond(默认)"}`);
+          flowLog(`   Objective: ${summarizeObjective(decision.objective)}`);
+          flowLog(`   After success: ${decision.afterSuccess ?? "respond(default)"}`);
         } else if (decision.decision === "ask_user") {
-          flowLog("3. 选择动作：向用户确认信息");
+          flowLog("3. Select action: ask user clarification");
         } else {
-          flowLog("3. 选择动作：直接回复");
+          flowLog("3. Select action: direct reply");
         }
         return decision;
       } finally {
@@ -885,8 +885,8 @@ export async function runLangGraphAgentLoop(options: LangGraphAgentLoopOptions):
           }
         }
         if (!args || !toolCall) {
-          flowLog(`4. 工具参数生成失败：${errorCodeOf(lastError)}`);
-          flowLog("   工具未执行；转入失败回复");
+          flowLog(`4. Tool argument generation failed: ${errorCodeOf(lastError)}`);
+          flowLog("   Tool not executed; entering failure response");
           return [{
             toolId: selectedTool.id,
             args: {},
@@ -898,8 +898,8 @@ export async function runLangGraphAgentLoop(options: LangGraphAgentLoopOptions):
             toolExecuted: false,
           }];
         }
-        flowLog(`4. 生成工具参数：完成（${summarizeArgumentKeys(args)}）`);
-        flowLog(`5. 执行工具：${selectedTool.id}`);
+        flowLog(`4. Generate tool arguments: completed (${summarizeArgumentKeys(args)})`);
+        flowLog(`5. Execute tool: ${selectedTool.id}`);
 
         const toolCallId = toolCall.id;
         options.onEvent?.({ type: "tool_call_start", toolCallId, toolCallName: selectedTool.name });
@@ -957,8 +957,8 @@ export async function runLangGraphAgentLoop(options: LangGraphAgentLoopOptions):
         debugLog(`${LOG_PREFIX} node=tool-result tool=${selectedTool.id} status=${outcome.status} cached=${execution.cached} deduplicated=${deduplicated}${outcome.errorCode ? ` errorCode=${outcome.errorCode}` : ""}`);
         flowLog(
           outcome.status === "succeeded"
-            ? `6. 工具结果：成功${execution.cached ? "（使用已有结果）" : ""}`
-            : `6. 工具结果：失败${outcome.errorCode ? `（${outcome.errorCode}）` : ""}`,
+            ? `6. Tool result: success${execution.cached ? " (cached result)" : ""}`
+            : `6. Tool result: failed${outcome.errorCode ? ` (${outcome.errorCode})` : ""}`,
         );
         const messageId = `tool-result-${Date.now()}`;
         options.onEvent?.({ type: "tool_call_result", toolCallId, messageId, content: outcome.output });
@@ -1013,7 +1013,7 @@ export async function runLangGraphAgentLoop(options: LangGraphAgentLoopOptions):
       ensureBudget();
       options.onEvent?.({ type: "step_started", stepName: "agent-graph-soul" });
       try {
-        flowLog("7. 生成最终回复");
+        flowLog("7. Generate final response");
         const localNonExecutionFact = state.toolResults
           .slice()
           .reverse()
@@ -1064,7 +1064,7 @@ export async function runLangGraphAgentLoop(options: LangGraphAgentLoopOptions):
         ));
         trackUsage(response.usage);
         const reply = stripLeakedChatTimeContext(stripToolProtocol(response.text))
-          || "刚才没有生成正常回复，请再试一次。";
+          || "No response generated. Please try again.";
         emitText(options.onEvent, reply);
         return reply;
       } finally {
@@ -1086,7 +1086,7 @@ export async function runLangGraphAgentLoop(options: LangGraphAgentLoopOptions):
     const isUserCancel = error instanceof Error && error.message === "E_AGENT_GRAPH_CANCELLED";
     if (snapshot.phase === "soul" && snapshot.successfulTools.length > 0 && !isUserCancel) {
       const partialReply = buildPartialSuccessReply(snapshot);
-      flowLog("7. Soul 失败，降级返回部分成功结果");
+      flowLog("7. Soul failed, falling back to partial success result");
       return {
         reply: partialReply,
         toolResults: [],  // 部分成功时不返回完整工具结果（已在 snapshot 中）

@@ -1004,6 +1004,19 @@ body {
   border-color: rgba(255, 182, 220, 0.34);
 }
 
+.switch input:focus-visible + .switch__track {
+  outline: 3px solid rgba(255, 255, 255, 0.92);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 5px rgba(236, 72, 153, 0.35);
+}
+
+.setting-consent-status {
+  display: block;
+  margin-top: 6px;
+  color: var(--rb-text-muted);
+  font-size: 12px;
+}
+
 
 .disclaimer-content {
   display: grid;
@@ -4388,7 +4401,6 @@ body {
 .music-profile__avatar { width:42px; height:42px; border-radius:50%; object-fit:cover; }
 .music-search-card { margin-top:14px; }
 @media (max-width:600px) { .music-qr { grid-template-columns:1fr; } .music-qr__img { width:200px; height:200px; } }
- */
 .music-platform-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

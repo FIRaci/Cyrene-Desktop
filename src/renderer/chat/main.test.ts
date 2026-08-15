@@ -56,7 +56,7 @@ describe("document send flow", () => {
     ]);
     const context = [...documentLines, "- flow.png：图片里是一张流程图。"].join("\n\n");
 
-    expect(context).toContain("文档 large.md 已建立索引，共 12 段。");
+    expect(context).toContain("Document large.md has been indexed (12 chunks).");
     expect(context).toContain("deadline is Friday");
     expect(context).toContain("图片里是一张流程图。");
   });

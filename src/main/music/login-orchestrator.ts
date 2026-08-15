@@ -37,6 +37,7 @@ export class LoginOrchestrator {
   private accountState: MusicAccountState = "unknown";
   private currentSessionId: string | null = null;
   private persistedRevisions = new Set<number>();
+  private lastTerminalResult: CheckResult | null = null;
   private pendingPersist = false;
   private inFlightCheck = false;
   private readonly interval: number;
@@ -61,18 +62,12 @@ export class LoginOrchestrator {
   async pollOnce(): Promise<CheckResult> {
     if (!this.currentSessionId) return { status: "failed", errorCode: "E_NO_SESSION" };
     if (this.flowState === "authorized" || this.flowState === "expired" || this.flowState === "cancelled" || this.flowState === "failed") {
-      switch (this.flowState) {
-        case "authorized":
-          return { status: "authorized", credentialsPersisted: true, credentialRevision: 0, profile: { userId: "", nickname: "" } };
-        case "expired":
-          return { status: "expired" };
-        case "cancelled":
-          return { status: "cancelled" };
-        case "failed":
-          return { status: "failed" };
-        default:
-          return { status: "failed" };
+      if (this.lastTerminalResult?.status === "authorized"
+          && !this.persistedRevisions.has(this.lastTerminalResult.credentialRevision)
+          && !this.pendingPersist) {
+        this.startPersistence(this.lastTerminalResult.credentialRevision);
       }
+      return this.lastTerminalResult ?? { status: this.flowState } as CheckResult;
     }
     if (this.inFlightCheck) {
       return { status: "failed", errorCode: "E_CHECK_IN_FLIGHT" };
@@ -94,6 +89,7 @@ export class LoginOrchestrator {
       await this.deps.client.callAuthTool("cyrene_music_login_cancel", { session_id: this.currentSessionId });
     } catch { /* ignore */ }
     this.flowState = "cancelled";
+    this.lastTerminalResult = { status: "cancelled" };
   }
 
   async shutdown(): Promise<void> {
@@ -114,23 +110,31 @@ export class LoginOrchestrator {
         return;
       case "expired":
         this.flowState = "expired";
+        this.lastTerminalResult = r;
         return;
       case "cancelled":
         this.flowState = "cancelled";
+        this.lastTerminalResult = r;
         return;
       case "failed":
         this.flowState = "failed";
+        this.lastTerminalResult = r;
         return;
       case "authorized":
         this.flowState = "authorized";
+        this.lastTerminalResult = r;
         if (r.credentialsPersisted && !this.persistedRevisions.has(r.credentialRevision)) {
-          this.persistedRevisions.add(r.credentialRevision);
-          this.pendingPersist = true;
-          void this.persistFromRuntime(r.credentialRevision);
+          this.startPersistence(r.credentialRevision);
         }
         this.accountState = "signed_in";
         return;
     }
+  }
+
+  private startPersistence(revision: number): void {
+    if (this.pendingPersist || this.persistedRevisions.has(revision)) return;
+    this.pendingPersist = true;
+    void this.persistFromRuntime(revision);
   }
 
   private async persistFromRuntime(revision: number): Promise<void> {
@@ -148,6 +152,7 @@ export class LoginOrchestrator {
     try {
       const json = JSON.parse(raw.toString("utf8")) as Record<string, string>;
       await this.deps.vault.persist({ cookies: json, revision });
+      this.persistedRevisions.add(revision);
     } catch {
       /* fire-and-forget; caller must not rely on persistence success */
     } finally {

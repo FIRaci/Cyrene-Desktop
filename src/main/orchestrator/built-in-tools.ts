@@ -373,7 +373,7 @@ toolRegistry.register({
   execute: executeInstallMcp,
 });
 
-console.log(LOG_PREFIX, "已注册：fetch_url / run_shell / install_mcp_server");
+console.log(LOG_PREFIX, "Registered: fetch_url / run_shell / install_mcp_server");
 
 // ── 工具 4：weather（天气查询）─────────────────────────────
 // 查指定城市的实时天气。城市参数可选——没传就读用户信息的默认城市。
@@ -759,7 +759,7 @@ async function amapFetchWeather(city: string, key: string): Promise<string> {
 
 async function executeWeather(args: Record<string, unknown>): Promise<string> {
   if (weatherEnabledGetter && !weatherEnabledGetter()) {
-    return "[错误] 天气查询功能未启用，请在设置里开启";
+    return "[Error] Weather feature is disabled. Please enable it in Settings.";
   }
 
   const source = weatherSourceGetter?.() ?? "open-meteo";
@@ -1209,7 +1209,7 @@ toolRegistry.register({
   },
 });
 
-console.log(LOG_PREFIX, "已注册：fetch_url / run_shell / install_mcp_server / weather / web_search / ask_user_choice / delegate_task");
+console.log(LOG_PREFIX, "Registered: fetch_url / run_shell / install_mcp_server / weather / web_search / ask_user_choice / delegate_task");
 
 // ── 工具：ask_user_choice（歧义消解器）─────────────────────
 toolRegistry.register({

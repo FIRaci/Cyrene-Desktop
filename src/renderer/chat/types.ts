@@ -21,16 +21,16 @@ export type DocumentIndexProgress = {
 };
 
 const labelByStatus: Record<DocumentIndexCardStatus, string> = {
-  pending: "待处理",
-  queued: "等待处理",
-  reading: "正在读取",
-  chunking: "正在切分",
-  embedding: "正在分析",
-  cached: "已从缓存读取",
-  done: "已处理",
-  failed: "处理失败",
-  error: "处理失败",
-  cancelled: "已取消",
+  pending: "Pending",
+  queued: "Queued",
+  reading: "Reading",
+  chunking: "Chunking",
+  embedding: "Analyzing",
+  cached: "Loaded from cache",
+  done: "Processed",
+  failed: "Failed",
+  error: "Failed",
+  cancelled: "Cancelled",
 };
 
 export function getDocumentIndexStatusLabel(status: DocumentIndexCardStatus): string {

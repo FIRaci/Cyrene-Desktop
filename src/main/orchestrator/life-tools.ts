@@ -331,5 +331,5 @@ export function registerLifeTools(): void {
   registerExchangeRateTool();
   registerTranslateTool();
   registerApplyPatchTool();
-  console.log(LOG_PREFIX, "已注册：record_expense / query_expense / exchange_rate / translate / apply_patch");
+  console.log(LOG_PREFIX, "Registered: record_expense / query_expense / exchange_rate / translate / apply_patch");
 }

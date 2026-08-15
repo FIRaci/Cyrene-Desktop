@@ -13,6 +13,7 @@ files:
   - game-recipes/**/*
   - vendor/**/*
   - models/**/*
+  - get_audio_sessions.ps1
 extraResources:
   - from: resources/bin/cyrene-screenshot.exe
     to: bin/cyrene-screenshot.exe

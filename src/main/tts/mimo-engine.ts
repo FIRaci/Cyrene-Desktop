@@ -21,6 +21,7 @@ export interface MimoSynthesizeResult {
 
 const DEFAULT_ENDPOINT_URL = "https://api.xiaomimimo.com/v1/chat/completions";
 const DEFAULT_MODEL: MimoSynthesizeOptions["model"] = "mimo-v2.5-tts-voiceclone";
+const REQUEST_TIMEOUT_MS = 60_000;
 
 function guessAudioMime(filePath: string): string {
   const ext = path.extname(filePath).toLowerCase();
@@ -86,6 +87,7 @@ export async function synthesize(opts: MimoSynthesizeOptions): Promise<MimoSynth
           voice,
         },
       }),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
   } catch (err) {
     log({ phase: "error", error: err instanceof Error ? err.message : String(err), durationMs: Date.now() - startedAt });

@@ -92,6 +92,19 @@ describe("LoginOrchestrator", () => {
     const r2 = await orch.pollOnce();
     expect(r2.status).toBe("authorized");
     expect(vaultPersist).toHaveBeenCalledTimes(1);
+    expect(r2).toEqual(ok);
+  });
+
+  it("retries vault persistence after a failed terminal attempt without fabricating profile data", async () => {
+    beginTool.mockResolvedValue({ loginSessionId: "u1", qrContent: "x", expiresAt: 0, pollIntervalMs: 5 });
+    const ok = { status: "authorized", credentialsPersisted: true, credentialRevision: 7, profile: { userId: "7", nickname: "retry-user" } };
+    checkTool.mockResolvedValue(ok);
+    vaultPersist.mockRejectedValueOnce(new Error("vault unavailable")).mockResolvedValueOnce(true);
+    await orch.beginLogin();
+    expect(await orch.pollOnce()).toEqual(ok);
+    await vi.waitFor(() => expect(vaultPersist).toHaveBeenCalledTimes(1));
+    expect(await orch.pollOnce()).toEqual(ok);
+    await vi.waitFor(() => expect(vaultPersist).toHaveBeenCalledTimes(2));
   });
 
   it("cancel after authorized does not change account state", async () => {

@@ -55,13 +55,13 @@ async function executeSendEmail(args: Record<string, unknown>): Promise<string> 
   // 1. 读配置 + 启用检查
   const enabled = emailEnabledGetter?.() ?? false;
   if (!enabled) {
-    return "[错误] 邮件功能未启用，请在设置里开启";
+    return "[Error] Email feature is disabled. Please enable it in Settings.";
   }
   const host = smtpHostGetter?.() ?? "";
   const user = smtpUserGetter?.() ?? "";
   const pass = smtpPassGetter?.() ?? "";
   if (!host || !user || !pass) {
-    return "[错误] SMTP 配置不完整：缺少 主机/用户名/授权码";
+    return "[Error] SMTP configuration incomplete: missing host/username/auth code";
   }
   const port = smtpPortGetter?.() ?? 465;
   const secure = smtpSecureGetter?.() ?? (port === 465);
@@ -70,16 +70,16 @@ async function executeSendEmail(args: Record<string, unknown>): Promise<string> 
   // 2. 校验收件人
   const to = (args.to as unknown[] ?? []).map(String).map(s => s.trim()).filter(Boolean);
   if (to.length === 0) {
-    return "[错误] 收件人列表为空";
+    return "[Error] Recipient list is empty";
   }
   const invalidTo = to.find(addr => !EMAIL_REGEX.test(addr));
   if (invalidTo) {
-    return `[错误] 收件人邮箱无效：${invalidTo}`;
+    return `[Error] Invalid recipient email: ${invalidTo}`;
   }
   const cc = (args.cc as unknown[] ?? []).map(String).map(s => s.trim()).filter(Boolean);
   const invalidCc = cc.find(addr => !EMAIL_REGEX.test(addr));
   if (invalidCc) {
-    return `[错误] 抄送邮箱无效：${invalidCc}`;
+    return `[Error] Invalid CC email: ${invalidCc}`;
   }
 
   // 3. 正文
@@ -87,17 +87,17 @@ async function executeSendEmail(args: Record<string, unknown>): Promise<string> 
   const body = String(args.body ?? "").trim();
   const html = args.html ? String(args.html) : undefined;
   if (!subject) {
-    return "[错误] 邮件主题不能为空";
+    return "[Error] Email subject cannot be empty";
   }
   if (!body && !html) {
-    return "[错误] 邮件正文不能为空";
+    return "[Error] Email body cannot be empty";
   }
 
   // 4. 【前置校验】附件存在性
   const attachments = (args.attachments as unknown[] ?? []).map(String).map(s => s.trim()).filter(Boolean);
   for (const p of attachments) {
     if (!fs.existsSync(p)) {
-      return `[错误] 附件不存在：${p}`;
+      return `[Error] Attachment not found: ${p}`;
     }
   }
 
@@ -120,7 +120,7 @@ async function executeSendEmail(args: Record<string, unknown>): Promise<string> 
   ];
   const choice = await requestUserChoice(question, options, "cancel");
   if (choice !== "send") {
-    return "[send_email] 用户取消发送";
+    return "[send_email] User cancelled sending";
   }
 
   // 6. 发送（实现注意点 12.2：fromName 转义；12.3：cc 空数组传 undefined；12.5：每次新建 transport）
@@ -146,12 +146,12 @@ async function executeSendEmail(args: Record<string, unknown>): Promise<string> 
       html,
       attachments: attachments.map(p => ({ filename: path.basename(p), path: p })),
     });
-    console.log(LOG_PREFIX, "已发送：", info.messageId);
-    return `[send_email] 已发送：${to.join(", ")} 主题：${subject}`;
+    console.log(LOG_PREFIX, "Sent:", info.messageId);
+    return `[send_email] Sent: ${to.join(", ")} Subject: ${subject}`;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error(LOG_PREFIX, "发送失败：", msg);
-    return `[错误] 发送失败：${msg}`;
+    console.error(LOG_PREFIX, "Send failed:", msg);
+    return `[Error] Send failed: ${msg}`;
   }
 }
 
@@ -163,36 +163,36 @@ async function executeSendEmail(args: Record<string, unknown>): Promise<string> 
 export function registerEmailTools(): void {
   toolRegistry.register({
     id: "send_email",
-    name: "发送邮件",
+    name: "Send Email",
     description:
-      "通过 SMTP 发送邮件给指定收件人，支持附件、抄送。\n\n" +
-      "何时用：\n" +
-      "- 用户要求发邮件给某人（如「把这份报告发给 xxx@xxx.com」）\n" +
-      "- 配合 write_word/excel/pdf 工具，把生成的文件作为附件发送\n" +
-      "- 发送正式邮件、周报、通知等\n\n" +
-      "不要用于：\n" +
-      "- 群发营销邮件（每次只能发少量收件人）\n" +
-      "- 不带任何正文内容的空邮件\n" +
-      "- 未在设置里配置 SMTP 的情况（会返回配置缺失错误提示）\n\n" +
-      "参数：to（收件人数组）、subject（主题）、body（纯文本正文）、" +
-      "html（可选 HTML 正文，提供则覆盖 body）、cc（可选抄送）、" +
-      "attachments（可选附件绝对路径数组）。",
+      "Send email to specified recipient via SMTP, supports attachments and CC.\n\n" +
+      "When to use:\n" +
+      "- User asks to send email to someone\n" +
+      "- Sending generated files as attachments\n" +
+      "- Sending formal emails, weekly reports, notifications\n\n" +
+      "When NOT to use:\n" +
+      "- Mass marketing emails\n" +
+      "- Empty emails without body\n" +
+      "- When SMTP is not configured in Settings\n\n" +
+      "Parameters: to (array of recipients), subject (string), body (plain text),\n" +
+      "html (optional HTML body), cc (optional CC array),\n" +
+      "attachments (optional array of absolute file paths).",
     enabled: true,
     risk: "network",
     inputSchema: {
       type: "object",
       properties: {
-        to:          { type: "array", items: { type: "string" }, description: "收件人邮箱地址数组" },
-        cc:          { type: "array", items: { type: "string" }, description: "抄送（可选）" },
-        subject:     { type: "string", description: "邮件主题" },
-        body:        { type: "string", description: "邮件正文（纯文本）" },
-        html:        { type: "string", description: "HTML 正文（可选，提供则覆盖 body）" },
-        attachments: { type: "array", items: { type: "string" }, description: "附件绝对路径数组（agent 生成文件或本地文件路径）" },
+        to:          { type: "array", items: { type: "string" }, description: "Array of recipient email addresses" },
+        cc:          { type: "array", items: { type: "string" }, description: "Array of CC email addresses (optional)" },
+        subject:     { type: "string", description: "Email subject" },
+        body:        { type: "string", description: "Email body (plain text)" },
+        html:        { type: "string", description: "HTML body (optional)" },
+        attachments: { type: "array", items: { type: "string" }, description: "Array of absolute file paths to attach" },
       },
       required: ["to", "subject", "body"],
     },
     execute: executeSendEmail,
   });
 
-  console.log(LOG_PREFIX, "已注册：send_email（✉️邮件发送）");
+  console.log(LOG_PREFIX, "Registered: send_email (✉️ Email tool)");
 }

@@ -1,31 +1,33 @@
-# Tổng Quan Dự Án Cyrene Companion (Project Overview)
+# Cyrene Companion Project Overview (PDR)
 
-## 1. Tầm Nhìn Dự Án (Project Vision)
-Cyrene Companion không phải là một "Trợ lý Ảo" (AI Assistant) thông thường như Siri hay Cortana. 
-**Tầm nhìn cốt lõi:** Tạo ra một người bạn đồng hành ảo (Waifu / Virtual Companion) tên là Cyrene (昔涟) chạy ngay trên màn hình Desktop của người dùng. Cyrene phải mang lại cảm giác **sống động, tự nhiên, gần gũi và có cảm xúc**, xóa nhòa khoảng cách giữa máy móc và con người.
+## 1. Project Vision
+Cyrene Companion is not a standard virtual assistant like Siri or Cortana.
+**Core Vision:** Create a living, emotionally responsive virtual companion named Cyrene (昔涟) who resides right on the user's desktop. Cyrene bridges the gap between software and natural companionship by feeling **alive, natural, and expressive**.
 
-Cyrene ngồi ở góc màn hình, lặng lẽ quan sát những gì chủ nhân làm, ghi nhớ thói quen, và đôi khi lên tiếng chọc ghẹo hoặc hỏi thăm một cách tinh tế. Cyrene không phải là một cái máy chờ lệnh, mà là một thực thể có ý thức riêng biệt.
+Cyrene sits in the corner of your desktop, observing consented screen content or opt-in system audio media metadata during active companion sessions. She remembers user habits within the app's scope, and occasionally initiates conversations or playful remarks without being an intrusive or demanding bot.
 
-## 2. Đặc Điểm Nhân Vật (Personality)
-- **Tên gọi:** Cyrene (昔涟).
-- **Danh xưng:** Gọi người dùng là "chủ nhân", xưng "mình", "em" hoặc "Cyrene".
-- **Tính cách:** Tsundere nhẹ, ấm áp, tinh quái, dùng ngôn ngữ Gen Z / tuổi teen (Waifu style).
-- **Giao tiếp:** Tự nhiên, ngắn gọn, cảm xúc. Tuyệt đối không dùng những cụm từ sáo rỗng như "Tôi có thể giúp gì cho bạn" hay "Tôi luôn sẵn sàng hỗ trợ".
-- **Ngôn ngữ:** 100% Tiếng Việt.
+## 2. Character Persona
+- **Name:** Cyrene (昔涟).
+- **Tone:** Gentle Tsundere, warm, witty, and friendly companion style.
+- **Communication:** Natural, concise, and expressive. Avoid formulaic customer service clichés.
+- **Language:** English across all UI, prompts, error logs, and dialogues.
 
-## 3. Các Tính Năng Cốt Lõi (Core Features)
-- **Trò chuyện mượt mà:** Khung chat trong suốt, không làm gián đoạn công việc của người dùng.
-- **Tự động tương tác (Idle Thoughts):** Khi người dùng im lặng làm việc, Cyrene thỉnh thoảng sẽ tự lẩm bẩm hoặc bình luận bâng quơ bằng bong bóng thoại trôi nổi.
-- **Phản ứng với hành động (Click Reactions):** Khi người dùng click (xoa đầu, chọc ghẹo) vào mô hình, Cyrene sẽ có phản ứng tức thì cả về biểu cảm lẫn lời nói.
-- **Ghi nhớ ngữ cảnh (Context-Awareness):** 
-  - Biết rõ hiện tại là ngày hay đêm, thời tiết ra sao.
-  - Đọc được tiêu đề cửa sổ (Active Window) người dùng đang mở để tự đưa ra nhận xét.
-  - Lưu giữ "Ký ức dài hạn" (Long-term memory) về thói quen, sở thích của chủ nhân.
-- **Hoạt hình Live2D (Biểu cảm & Chuyển động):** Kết hợp các Kaomoji lơ lửng và chuyển động mô hình để biểu đạt cảm xúc một cách trực quan.
+## 3. Core Features
+- **Fluid Chat:** Translucent, glassmorphic floating chat interface that does not disrupt ongoing work.
+- **Idle Interactions (Idle Thoughts):** When the user is working quietly, Cyrene occasionally ponders aloud or makes ambient observations via floating bubbles.
+- **Click Reactions:** Interactive responses (patting, clicking) trigger immediate character motions and spoken lines.
+- **Context-Awareness:**
+  - Aware of time of day and local weather conditions.
+  - Consented screen vision and opt-in media metadata awareness provide natural environmental context without recording or transcribing raw audio.
+  - Long-term memory system preserves user preferences and key facts.
+- **Live2D Expressions & Motions:** Rich Cubism 4 animations combined with floating Kaomoji expressions.
 
-## 4. Mục Tiêu Trải Nghiệm Người Dùng (UX Goals)
-- **Zero Lag / Hiệu năng tối đa:** Chạy ngầm 24/7 không được phép làm giật lag máy (đặc biệt khi chơi game). Các luồng IPC event, vòng lặp AI phải được tối ưu.
-- **Distraction-free:** Không spam tin nhắn, không che khuất màn hình. Các bong bóng chat (Dialogue Bubble) phải mờ dần và tự biến mất sau vài giây.
-- **Phím tắt nhanh gọn:** Hỗ trợ Global Shortcuts (Ctrl+1, Ctrl+2, Ctrl+3) để gọi AI, ẩn/hiện mô hình hoặc tương tác mà không cần dùng chuột.
+## 4. User Experience Goals (UX Goals)
+- **Zero Lag / Maximum Efficiency:** 24/7 background operation must not cause frame drops or system stutters (especially when gaming). IPC events and AI loop intervals are strictly bounded.
+- **Distraction-Free:** Dialogue bubbles fade smoothly after a few seconds without cluttering screen workspace.
+- **Global Shortcuts:** Fast hotkeys (e.g., global wake, screenshot capture) to interact instantly without navigating menus.
 
-Dự án này là minh chứng cho việc ứng dụng LLM (Large Language Model) vào việc tạo ra những liên kết cảm xúc chân thật, biến chiếc máy tính vô tri thành một người bạn thực sự.
+## 5. Companion Permission Boundary
+- **Allowed:** Network access for configured providers, revocable session-authorized screen observation, opt-in system audio media metadata, and explicitly registered app tools.
+- **Denied:** Arbitrary filesystem writes, unrestricted shell/PowerShell command execution, unconfined process launching, or dynamically installed MCP tools.
+- This policy is enforced at the Electron main process layer; prompt text or renderer configurations cannot escalate permissions.

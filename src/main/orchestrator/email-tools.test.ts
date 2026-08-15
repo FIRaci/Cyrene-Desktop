@@ -64,54 +64,54 @@ describe("send_email", () => {
     injectConfig();
   });
 
-  it("功能未启用 → 返回错误", async () => {
+  it("feature disabled → returns error", async () => {
     injectConfig({ enabled: false });
-    const res = await exec({ to: ["a@b.com"], subject: "标题", body: "正文" });
-    expect(res).toBe("[错误] 邮件功能未启用，请在设置里开启");
+    const res = await exec({ to: ["a@b.com"], subject: "Title", body: "Body" });
+    expect(res).toBe("[Error] Email feature is disabled. Please enable it in Settings.");
     expect(sendMailMock).not.toHaveBeenCalled();
   });
 
-  it("SMTP 配置不完整 → 返回错误", async () => {
+  it("SMTP config incomplete → returns error", async () => {
     injectConfig({ host: "" });
-    const res = await exec({ to: ["a@b.com"], subject: "标题", body: "正文" });
-    expect(res).toBe("[错误] SMTP 配置不完整：缺少 主机/用户名/授权码");
+    const res = await exec({ to: ["a@b.com"], subject: "Title", body: "Body" });
+    expect(res).toBe("[Error] SMTP configuration incomplete: missing host/username/auth code");
     expect(sendMailMock).not.toHaveBeenCalled();
   });
 
-  it("收件人邮箱格式无效 → 返回错误", async () => {
-    const res = await exec({ to: ["not-an-email"], subject: "标题", body: "正文" });
-    expect(res).toBe("[错误] 收件人邮箱无效：not-an-email");
+  it("recipient email invalid → returns error", async () => {
+    const res = await exec({ to: ["not-an-email"], subject: "Title", body: "Body" });
+    expect(res).toBe("[Error] Invalid recipient email: not-an-email");
     expect(sendMailMock).not.toHaveBeenCalled();
   });
 
-  it("附件不存在 → 返回错误（前置校验，不进确认）", async () => {
+  it("attachment does not exist → returns error", async () => {
     existsSyncMock.mockReturnValue(false);
     const res = await exec({
       to: ["a@b.com"],
-      subject: "标题",
-      body: "正文",
+      subject: "Title",
+      body: "Body",
       attachments: ["C:/nope.txt"],
     });
-    expect(res).toBe("[错误] 附件不存在：C:/nope.txt");
+    expect(res).toBe("[Error] Attachment not found: C:/nope.txt");
     expect(requestUserChoiceMock).not.toHaveBeenCalled();
     expect(sendMailMock).not.toHaveBeenCalled();
   });
 
-  it("用户取消 → 返回取消，不调用 sendMail", async () => {
+  it("user cancels → returns cancel, does not call sendMail", async () => {
     requestUserChoiceMock.mockResolvedValue("cancel");
-    const res = await exec({ to: ["a@b.com"], subject: "标题", body: "正文" });
-    expect(res).toBe("[send_email] 用户取消发送");
+    const res = await exec({ to: ["a@b.com"], subject: "Title", body: "Body" });
+    expect(res).toBe("[send_email] User cancelled sending");
     expect(sendMailMock).not.toHaveBeenCalled();
   });
 
-  it("用户确认 → 调 sendMail，参数正确（from 含 fromName 转义、cc undefined、attachments 映射）", async () => {
+  it("user confirms → calls sendMail with correct parameters", async () => {
     const res = await exec({
       to: ["a@b.com", "c@d.com"],
-      subject: "周报",
-      body: "本周内容",
+      subject: "Weekly Report",
+      body: "Content",
       attachments: ["C:/report.docx"],
     });
-    expect(res).toBe("[send_email] 已发送：a@b.com, c@d.com 主题：周报");
+    expect(res).toBe("[send_email] Sent: a@b.com, c@d.com Subject: Weekly Report");
     expect(createTransportMock).toHaveBeenCalledWith({
       host: "smtp.qq.com",
       port: 465,
@@ -123,27 +123,27 @@ describe("send_email", () => {
     expect(mailOpts.from).toBe('"昔涟" <sender@qq.com>');
     expect(mailOpts.to).toBe("a@b.com, c@d.com");
     expect(mailOpts.cc).toBeUndefined();
-    expect(mailOpts.subject).toBe("周报");
-    expect(mailOpts.text).toBe("本周内容");
+    expect(mailOpts.subject).toBe("Weekly Report");
+    expect(mailOpts.text).toBe("Content");
     expect(mailOpts.attachments).toEqual([{ filename: "report.docx", path: "C:/report.docx" }]);
   });
 
-  it("fromName 含双引号 → 转义后传入 from", async () => {
-    injectConfig({ fromName: '她说"你好"' });
-    await exec({ to: ["a@b.com"], subject: "标题", body: "正文" });
+  it("fromName with quotes → escapes before passing to from", async () => {
+    injectConfig({ fromName: 'She said "hello"' });
+    await exec({ to: ["a@b.com"], subject: "Title", body: "Body" });
     const mailOpts = sendMailMock.mock.calls[0][0];
-    expect(mailOpts.from).toBe('"她说\\"你好\\"" <sender@qq.com>');
+    expect(mailOpts.from).toBe('"She said \\"hello\\"" <sender@qq.com>');
   });
 
-  it("cc 非空 → 传入 join 后的 cc", async () => {
-    await exec({ to: ["a@b.com"], cc: ["x@y.com", "z@w.com"], subject: "标题", body: "正文" });
+  it("cc not empty → passes joined cc", async () => {
+    await exec({ to: ["a@b.com"], cc: ["x@y.com", "z@w.com"], subject: "Title", body: "Body" });
     const mailOpts = sendMailMock.mock.calls[0][0];
     expect(mailOpts.cc).toBe("x@y.com, z@w.com");
   });
 
-  it("sendMail 抛错 → 捕获返回错误字符串", async () => {
+  it("sendMail throws error → catches and returns error string", async () => {
     sendMailMock.mockRejectedValue(new Error("connect ECONNREFUSED"));
-    const res = await exec({ to: ["a@b.com"], subject: "标题", body: "正文" });
-    expect(res).toBe("[错误] 发送失败：connect ECONNREFUSED");
+    const res = await exec({ to: ["a@b.com"], subject: "Title", body: "Body" });
+    expect(res).toBe("[Error] Send failed: connect ECONNREFUSED");
   });
 });

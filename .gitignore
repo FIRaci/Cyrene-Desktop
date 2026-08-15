@@ -71,6 +71,7 @@ Thumbs.db
 *.key
 *.pem
 *.log
+agent-permission.json
 
 # Local env files (keep .env.example tracked)
 .env

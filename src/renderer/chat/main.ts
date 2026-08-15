@@ -207,13 +207,13 @@ class AgentRenderError extends Error {
   }
 }
 
-/** 根据结构化错误码把 Agent 运行时错误翻译成面向用户的文案。 */
+/** Translate Agent runtime errors to user-facing messages based on structured error codes. */
 function classifyAgentError(code: string | undefined, message: string): string {
-  if (code === "E_AGENT_NO_PROGRESS") return "任务执行未能继续，请重试";
-  if (code === "E_AGENT_GRAPH_ITERATION_LIMIT") return "Agent 执行达到循环上限";
-  if (code === "E_MODEL_REQUEST_FAILED") return "连接模型失败：" + message;
-  if (code === "E_ACTION_GATE_PROTOCOL") return "决策协议解析失败，请重试";
-  return message; // 兜底：原样显示
+  if (code === "E_AGENT_NO_PROGRESS") return "Task execution could not proceed. Please try again.";
+  if (code === "E_AGENT_GRAPH_ITERATION_LIMIT") return "Agent execution reached the iteration limit.";
+  if (code === "E_MODEL_REQUEST_FAILED") return "Failed to connect to model: " + message;
+  if (code === "E_ACTION_GATE_PROTOCOL") return "Decision protocol parsing failed. Please try again.";
+  return message;
 }
 
 /** 文件摄入结果（与 main 侧 file-ingest.ts 的 Attachment 对齐）。 */
@@ -1155,13 +1155,13 @@ function buildChoiceCardEl(data: {
   const customInput = document.createElement("input");
   customInput.type = "text";
   customInput.className = "choice-card__custom-input";
-  customInput.placeholder = "或输入自定义要求...";
+  customInput.placeholder = "Or enter custom request...";
   customWrap.appendChild(customInput);
 
   const customBtn = document.createElement("button");
   customBtn.type = "button";
   customBtn.className = "choice-card__custom-btn";
-  customBtn.textContent = "确认";
+  customBtn.textContent = "Confirm";
   customBtn.addEventListener("click", () => {
     const val = customInput.value.trim();
     if (!val) return;
@@ -1282,7 +1282,7 @@ function buildAskClarificationCardEl(
         input.type = "text";
         input.hidden = true;
         input.className = "choice-card__custom-input choice-card__custom-input--standalone";
-        input.placeholder = question.freeTextPlaceholder || "填写其他选择";
+        input.placeholder = question.freeTextPlaceholder || "Enter other option";
         state.customInput = input;
         section.appendChild(input);
       }
@@ -1294,7 +1294,7 @@ function buildAskClarificationCardEl(
   const submit = document.createElement("button");
   submit.type = "button";
   submit.className = "choice-card__custom-btn choice-card__submit";
-  submit.textContent = "确认并继续";
+  submit.textContent = "Confirm and continue";
   submit.addEventListener("click", () => {
     const answers: AskUserAnswer["answers"] = [];
     let firstInvalid: HTMLElement | undefined;
@@ -1390,7 +1390,7 @@ function buildApprovalCardEl(req: {
     if (argsEntries.length > 5) {
       const more = document.createElement("div");
       more.className = "approval-card__args-more";
-      more.textContent = `…还有 ${argsEntries.length - 5} 个参数`;
+      more.textContent = `...and ${argsEntries.length - 5} more parameters`;
       argsBlock.appendChild(more);
     }
     card.appendChild(argsBlock);
@@ -1402,11 +1402,11 @@ function buildApprovalCardEl(req: {
   const denyBtn = document.createElement("button");
   denyBtn.type = "button";
   denyBtn.className = "approval-card__btn approval-card__btn--deny";
-  denyBtn.textContent = "拒绝";
+  denyBtn.textContent = "Deny";
   const allowBtn = document.createElement("button");
   allowBtn.type = "button";
   allowBtn.className = "approval-card__btn approval-card__btn--allow";
-  allowBtn.textContent = "允许";
+  allowBtn.textContent = "Allow";
   actions.appendChild(denyBtn);
   actions.appendChild(allowBtn);
   card.appendChild(actions);
@@ -1414,7 +1414,7 @@ function buildApprovalCardEl(req: {
   // 提示行（60 秒超时）
   const note = document.createElement("div");
   note.className = "approval-card__note";
-  note.textContent = "60 秒未操作自动拒绝";
+  note.textContent = "Auto-denies in 60s if not acted on";
   card.appendChild(note);
 
   // 倒计时更新（每秒刷新）
@@ -1422,11 +1422,11 @@ function buildApprovalCardEl(req: {
   const tick = setInterval(() => {
     remaining -= 1;
     if (remaining <= 0) {
-      note.textContent = "已超时，自动拒绝";
+      note.textContent = "Timed out, automatically denied";
       clearInterval(tick);
       return;
     }
-    note.textContent = `${remaining} 秒后自动拒绝`;
+    note.textContent = `Auto-denies in ${remaining}s`;
   }, 1000);
 
   const resolve = (allowed: boolean) => {
@@ -1435,7 +1435,7 @@ function buildApprovalCardEl(req: {
     card.classList.add(allowed ? "approval-card--allowed" : "approval-card--denied");
     denyBtn.disabled = true;
     allowBtn.disabled = true;
-    note.textContent = allowed ? "已允许" : "已拒绝";
+    note.textContent = allowed ? "Allowed" : "Denied";
     void window.settings?.resolvePermissionApproval?.(req.id, allowed);
   };
 
@@ -1497,19 +1497,19 @@ function buildWeatherCardEl(data: Record<string, unknown>): HTMLElement {
   // 高级区：只展示有数据的字段
   const advItems: string[] = [];
   if (pressure != null && pressure > 0) {
-    advItems.push(`<div class="adv-item"><div class="adv-icon">${W_SVG.pressure}</div><div class="adv-text"><span class="adv-label">气压</span><span class="adv-value">${Math.round(pressure)} hPa</span></div></div>`);
+    advItems.push(`<div class="adv-item"><div class="adv-icon">${W_SVG.pressure}</div><div class="adv-text"><span class="adv-label">Pressure</span><span class="adv-value">${Math.round(pressure)} hPa</span></div></div>`);
   }
   if (feelsLike != null) {
-    advItems.push(`<div class="adv-item"><div class="adv-icon">${W_SVG.feels}</div><div class="adv-text"><span class="adv-label">体感温度</span><span class="adv-value">${feelsLike}°C</span></div></div>`);
+    advItems.push(`<div class="adv-item"><div class="adv-icon">${W_SVG.feels}</div><div class="adv-text"><span class="adv-label">Feels Like</span><span class="adv-value">${feelsLike}°C</span></div></div>`);
   }
   if (uv != null) {
-    advItems.push(`<div class="adv-item"><div class="adv-icon">${W_SVG.humidity}</div><div class="adv-text"><span class="adv-label">紫外线</span><span class="adv-value">${uv}</span></div></div>`);
+    advItems.push(`<div class="adv-item"><div class="adv-icon">${W_SVG.humidity}</div><div class="adv-text"><span class="adv-label">UV Index</span><span class="adv-value">${uv}</span></div></div>`);
   }
   if (visibility != null) {
-    advItems.push(`<div class="adv-item"><div class="adv-icon">${W_SVG.humidity}</div><div class="adv-text"><span class="adv-label">能见度</span><span class="adv-value">${visibility} km</span></div></div>`);
+    advItems.push(`<div class="adv-item"><div class="adv-icon">${W_SVG.humidity}</div><div class="adv-text"><span class="adv-label">Visibility</span><span class="adv-value">${visibility} km</span></div></div>`);
   }
   if (aqi != null) {
-    advItems.push(`<div class="adv-item"><div class="adv-icon">${W_SVG.humidity}</div><div class="adv-text"><span class="adv-label">空气质量</span><span class="adv-value">${aqi} ${aqiText} ${kaomoji}</span></div></div>`);
+    advItems.push(`<div class="adv-item"><div class="adv-icon">${W_SVG.humidity}</div><div class="adv-text"><span class="adv-label">Air Quality</span><span class="adv-value">${aqi} ${aqiText} ${kaomoji}</span></div></div>`);
   }
   const hasAdv = advItems.length > 0;
 
@@ -1538,7 +1538,7 @@ function buildWeatherCardEl(data: Record<string, unknown>): HTMLElement {
     <header class="card-header">
       <div class="date-block">
         <span class="date-text">${dateStr}</span>
-        <span class="update-text"><span class="update-dot"></span><span>${timeStr} 更新</span></span>
+        <span class="update-text"><span class="update-dot"></span><span>Updated ${timeStr}</span></span>
       </div>
       <div class="location">
         <div class="location-row">
@@ -1569,7 +1569,7 @@ function buildWeatherCardEl(data: Record<string, unknown>): HTMLElement {
           <span class="temp-unit">°C</span>
         </div>
         <div class="weather-desc">${desc}</div>
-        ${feelsLike != null ? `<span class="feels-like">体感 ${feelsLike}°C</span>` : ""}
+        ${feelsLike != null ? `<span class="feels-like">Feels like ${feelsLike}°C</span>` : ""}
       </div>
     </section>
 
@@ -1577,14 +1577,14 @@ function buildWeatherCardEl(data: Record<string, unknown>): HTMLElement {
       <div class="detail-item">
         <div class="detail-icon">${W_SVG.humidity}</div>
         <div class="detail-text">
-          <span class="detail-label">湿度</span>
+          <span class="detail-label">Humidity</span>
           <span class="detail-value">${humidity}%</span>
         </div>
       </div>
       <div class="detail-item">
         <div class="detail-icon">${W_SVG.windDir}</div>
         <div class="detail-text">
-          <span class="detail-label">风向</span>
+          <span class="detail-label">Wind Dir</span>
           <span class="detail-value">${windDir}</span>
         </div>
       </div>
@@ -1592,14 +1592,14 @@ function buildWeatherCardEl(data: Record<string, unknown>): HTMLElement {
       <div class="detail-item">
         <div class="detail-icon">${W_SVG.wind}</div>
         <div class="detail-text">
-          <span class="detail-label">风速</span>
+          <span class="detail-label">Wind Speed</span>
           <span class="detail-value">${windScale}</span>
         </div>
       </div>
       <div class="detail-item">
         <div class="detail-icon">${W_SVG.precip}</div>
         <div class="detail-text">
-          <span class="detail-label">降水量</span>
+          <span class="detail-label">Precipitation</span>
           <span class="detail-value">${precip != null ? precip.toFixed(1) : "0"} mm</span>
         </div>
       </div>
@@ -1607,7 +1607,7 @@ function buildWeatherCardEl(data: Record<string, unknown>): HTMLElement {
       <div class="detail-item">
         <div class="detail-icon">${W_SVG.wind}</div>
         <div class="detail-text">
-          <span class="detail-label">风力</span>
+          <span class="detail-label">Wind Scale</span>
           <span class="detail-value">${windScale}</span>
         </div>
       </div>
@@ -1620,7 +1620,7 @@ function buildWeatherCardEl(data: Record<string, unknown>): HTMLElement {
            stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
         <path d="M6 9l6 6 6-6"/>
       </svg>
-      <span class="toggle-label">展开高级数据</span>
+      <span class="toggle-label">Advanced Details</span>
     </button>
     <div class="advanced-panel">
       <div class="advanced-panel-inner">
@@ -1637,7 +1637,7 @@ function buildWeatherCardEl(data: Record<string, unknown>): HTMLElement {
            stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
         <path d="M6 9l6 6 6-6"/>
       </svg>
-      <span class="fc-toggle-label">未来预报</span>
+      <span class="fc-toggle-label">Forecast</span>
     </button>
     <div class="forecast-panel">
       <div class="forecast-panel-inner">
@@ -1648,7 +1648,7 @@ function buildWeatherCardEl(data: Record<string, unknown>): HTMLElement {
     </div>
     ` : ""}
 
-    <footer class="card-footer">${source} · ${timeStr} 更新</footer>
+    <footer class="card-footer">${source} · Updated ${timeStr}</footer>
   `;
 
   // 折叠切换绑定
@@ -1664,8 +1664,8 @@ function buildWeatherCardEl(data: Record<string, unknown>): HTMLElement {
       });
     }
   };
-  bindToggle(".advanced-toggle", "advanced-open", ".toggle-label", "展开高级数据", "收起高级数据");
-  bindToggle(".forecast-toggle", "forecast-open", ".fc-toggle-label", "未来预报", "收起预报");
+  bindToggle(".advanced-toggle", "advanced-open", ".toggle-label", "Advanced Details", "Collapse Details");
+  bindToggle(".forecast-toggle", "forecast-open", ".fc-toggle-label", "Forecast", "Collapse Forecast");
 
   return card;
 }
@@ -1677,9 +1677,9 @@ function buildMusicCardEl(data: MusicCardData): HTMLElement {
   const header = document.createElement("div");
   header.className = "music-agui-card__header";
   const title = document.createElement("strong");
-  title.textContent = data.source === "daily_recommendation" ? "今日推荐" : "歌曲候选";
+  title.textContent = data.source === "daily_recommendation" ? "Daily Recommendation" : "Track Candidates";
   const badge = document.createElement("span");
-  badge.textContent = "网易云音乐";
+  badge.textContent = "NetEase Cloud Music";
   header.append(title, badge);
   card.appendChild(header);
 
@@ -1701,18 +1701,18 @@ function buildMusicCardEl(data: MusicCardData): HTMLElement {
     const play = document.createElement("button");
     play.type = "button";
     play.className = "music-agui-card__play";
-    play.textContent = "播放";
-    play.setAttribute("aria-label", `播放 ${track.name}`);
+    play.textContent = "Play";
+    play.setAttribute("aria-label", `Play ${track.name}`);
     play.addEventListener("click", async () => {
       if (!window.music) return;
       play.disabled = true;
       const original = play.textContent;
       try {
         const feedback = await requestTrackPlayback(window.music, track);
-        play.textContent = feedback.kind === "ok" ? "已发送" : "不可用";
+        play.textContent = feedback.kind === "ok" ? "Sent" : "Unavailable";
         play.title = feedback.message;
       } catch (err) {
-        play.textContent = "失败";
+        play.textContent = "Failed";
         play.title = err instanceof Error ? err.message : String(err);
       } finally {
         window.setTimeout(() => {
@@ -1841,12 +1841,12 @@ function renderMessageAttachments(body: HTMLElement, attachments: MessageAttachm
         });
         img.addEventListener("error", () => {
           preview.classList.add("is-error");
-          preview.textContent = "图片无法预览";
+          preview.textContent = "Image preview unavailable";
         });
         preview.appendChild(img);
       } else {
         preview.classList.add("is-error");
-        preview.textContent = "图片无法预览";
+        preview.textContent = "Image preview unavailable";
       }
       const name = document.createElement("div");
       name.className = "msg__image-name";
@@ -1868,7 +1868,7 @@ function renderMessageAttachments(body: HTMLElement, attachments: MessageAttachm
       const status = document.createElement("div");
       status.className = "msg__document-status";
       status.textContent = att.status === "done"
-        ? (att.processedKind === "indexed" ? `已索引 ${att.chunks ?? 0} 段` : "已处理")
+        ? (att.processedKind === "indexed" ? `Indexed ${att.chunks ?? 0} chunks` : "Processed")
         : getDocumentIndexStatusLabel(att.status);
       meta.appendChild(name);
       meta.appendChild(status);
@@ -1879,8 +1879,8 @@ function renderMessageAttachments(body: HTMLElement, attachments: MessageAttachm
         cancel.type = "button";
         cancel.className = "msg__document-cancel";
         cancel.textContent = "×";
-        cancel.title = "取消处理";
-        cancel.setAttribute("aria-label", "取消处理");
+        cancel.title = "Cancel processing";
+        cancel.setAttribute("aria-label", "Cancel processing");
         cancel.addEventListener("click", () => {
           void window.chat?.cancelDocumentIndex(att.jobId!);
         });
@@ -1962,7 +1962,7 @@ function render(preserveScroll = false): void {
     const loadEarlier = document.createElement("button");
     loadEarlier.type = "button";
     loadEarlier.className = "chat__load-earlier";
-    loadEarlier.textContent = "加载更早消息";
+    loadEarlier.textContent = "Load earlier messages";
     loadEarlier.addEventListener("click", () => void loadEarlierMessages());
     messagesEl.appendChild(loadEarlier);
   }
@@ -2035,7 +2035,7 @@ function render(preserveScroll = false): void {
         const sticker = document.createElement("img");
         sticker.className = "msg__sticker";
         sticker.src = stickerSrc;
-        sticker.alt = m.role === "user" ? "用户表情" : "昔涟表情";
+        sticker.alt = m.role === "user" ? "User sticker" : "Cyrene sticker";
         sticker.draggable = false;
         // <img> 高度异步加载，render() 末尾的滚动会在图片撑开前就执行，
         // 导致 sticker 底部被输入框挡住。加载完成后再补一次滚到底。
@@ -2061,13 +2061,13 @@ function render(preserveScroll = false): void {
       const speakBtn = document.createElement("button");
       speakBtn.type = "button";
       speakBtn.className = "msg__speak";
-      speakBtn.title = "朗读";
-      speakBtn.setAttribute("aria-label", "朗读这条消息");
+      speakBtn.title = "Read aloud";
+      speakBtn.setAttribute("aria-label", "Read this message aloud");
       // 用 SVG 而不是 emoji，颜色随主题走，播放时切到波形版
       speakBtn.innerHTML = SPEAK_ICON_IDLE;
       // 点击逻辑：正在播放则停止，否则开始朗读（避免重叠）
       speakBtn.addEventListener("click", () => {
-        console.log("[TTS] 喇叭点击, currentTtsAudio=", currentTtsAudio ? "有" : "无");
+        console.log("[TTS] Speaker clicked, currentTtsAudio=", currentTtsAudio ? "yes" : "no");
         if (currentSpeakingMsgId === m.id) {
           // 当前消息正在播放 → 停止并复位 UI
           stopCurrentTts();
@@ -2086,8 +2086,8 @@ function render(preserveScroll = false): void {
       const copyBtn = document.createElement("button");
       copyBtn.type = "button";
       copyBtn.className = "msg__copy";
-      copyBtn.title = "复制";
-      copyBtn.setAttribute("aria-label", "复制这条消息");
+      copyBtn.title = "Copy";
+      copyBtn.setAttribute("aria-label", "Copy this message");
       copyBtn.innerHTML = COPY_ICON_IDLE;
       copyBtn.addEventListener("click", () => {
         const text = m.role === "user"
@@ -2101,7 +2101,7 @@ function render(preserveScroll = false): void {
           copyBtn.innerHTML = COPY_ICON_DONE;
           const label = document.createElement("span");
           label.className = "msg__copy-label";
-          label.textContent = "已复制";
+          label.textContent = "Copied";
           copyBtn.appendChild(label);
           window.setTimeout(() => {
             copyBtn.classList.remove("is-copied");
@@ -2168,7 +2168,7 @@ function installSchedulerEventListener(): void {
     const msg = messages.find(m => m.id === state.msgId);
     if (!msg) return;
     msg.thinking = false;
-    msg.content = state.content || state.toolLines.join("\n") || "定时任务运行中…";
+    msg.content = state.content || state.toolLines.join("\n") || "Scheduled task running…";
     render();
   };
 
@@ -2181,7 +2181,7 @@ function installSchedulerEventListener(): void {
       messages.push({
         id: `scheduler-system-${runKey}`,
         role: "model",
-        content: `⏰ 定时任务「${value?.title ?? "未命名任务"}」已触发`,
+        content: `⏰ Scheduled task "${value?.title ?? "Untitled task"}" triggered`,
         at: Date.now(),
       });
       const msgId = `scheduler-model-${runKey}`;
@@ -2199,14 +2199,14 @@ function installSchedulerEventListener(): void {
     if (!msg) return;
 
     if (event.type === "TOOL_CALL_START") {
-      state.toolLines.push(`🔧 调用中：${event.toolCallName ?? "工具"}`);
+      state.toolLines.push(`🔧 Calling: ${event.toolCallName ?? "tool"}`);
       renderState(state);
     } else if (event.type === "TOOL_CALL_RESULT") {
       const preview = (event.content ?? "").slice(0, 240);
-      state.toolLines.push(`✅ 工具结果：${preview || "完成"}`);
+      state.toolLines.push(`✅ Tool result: ${preview || "Completed"}`);
       renderState(state);
     } else if (event.type === "TOOL_CALL_END") {
-      state.toolLines.push("✅ 工具调用完成");
+      state.toolLines.push("✅ Tool execution completed");
       renderState(state);
     } else if (event.type === "TEXT_MESSAGE_START") {
       msg.thinking = false;
@@ -2222,8 +2222,8 @@ function installSchedulerEventListener(): void {
     } else if (event.type === "RUN_ERROR") {
       msg.thinking = false;
       // 优先读 upstream 规范的 `message` 字段，兜底兼容旧的 `error`/`content`
-      const rawMessage = event.message ?? event.error ?? event.content ?? "未知错误";
-      msg.content = "定时任务执行失败：" + classifyAgentError(event.code, rawMessage);
+      const rawMessage = event.message ?? event.error ?? event.content ?? "Unknown error";
+      msg.content = "Scheduled task execution failed: " + classifyAgentError(event.code, rawMessage);
       render();
       void saveSession();
       streams.delete(runKey);
@@ -2517,7 +2517,7 @@ function playTtsBase64(
     try {
       await audio.play();
     } catch (err) {
-      console.warn("[TTS] 播放失败:", err);
+      console.warn("[TTS] Playback failed:", err);
       releaseCurrentTtsAudio(audio);
       if (speechToken === token) stopLive2dMouth();
       if (msgId === undefined || currentSpeakingMsgId === msgId) {
@@ -2664,7 +2664,7 @@ async function streamAndPlayCached(
       }
       const bytes = Uint8Array.from(atob(payload.base64), (c) => c.charCodeAt(0));
       if (queuedAudioBytes + bytes.byteLength > maxQueuedAudioBytes) {
-        console.warn("[TTS-Stream] 音频队列超过 12MB，停止本轮流式播放");
+        console.warn("[TTS-Stream] Audio queue exceeded 12MB, stopping streaming playback");
         cleanup();
         if (audioEl) releaseCurrentTtsAudio(audioEl);
         finishStream(null);
@@ -2725,7 +2725,7 @@ async function streamAndPlayCached(
       startPolling(resolve);
     });
   } catch (err) {
-    console.warn("[TTS] 流式启动失败:", err);
+    console.warn("[TTS] Streaming startup failed:", err);
     cleanup();
     return null;  // 调用方 fallback 到完整合成
   }
@@ -2762,7 +2762,7 @@ async function synthesizeAndPlayCached(
           expectedCacheKey: existing.ttsCacheKey,
         });
         if (result.cached) {
-          console.log("[TTS] gptsovits 缓存命中，直接播放");
+          console.log("[TTS] gptsovits cache hit, playing directly");
           playTtsBase64(result.base64, result.format, msgId);
           return { cacheKey: result.cacheKey };
         }
@@ -2779,7 +2779,7 @@ async function synthesizeAndPlayCached(
           expectedCacheKey: existing.ttsCacheKey,
         });
         if (result.cached) {
-          console.log("[TTS] custom-cloud 缓存命中，直接播放");
+          console.log("[TTS] custom-cloud cache hit, playing directly");
           playTtsBase64(result.base64, result.format, msgId);
           return { cacheKey: result.cacheKey };
         }
@@ -2792,7 +2792,7 @@ async function synthesizeAndPlayCached(
           expectedCacheKey: existing.ttsCacheKey,
         });
         if (result.cached) {
-          console.log("[TTS] mimo 缓存命中，直接播放");
+          console.log("[TTS] mimo cache hit, playing directly");
           playTtsBase64(result.base64, result.format, msgId);
           return { cacheKey: result.cacheKey };
         }
@@ -2806,7 +2806,7 @@ async function synthesizeAndPlayCached(
           expectedCacheKey: existing.ttsCacheKey,
         });
         if (result.cached) {
-          console.log("[TTS] mossland 缓存命中，直接播放");
+          console.log("[TTS] mossland cache hit, playing directly");
           playTtsBase64(result.base64, result.format, msgId);
           return { cacheKey: result.cacheKey };
         }
@@ -2822,7 +2822,7 @@ async function synthesizeAndPlayCached(
           expectedCacheKey: existing.ttsCacheKey,
         });
         if (result.cached) {
-          console.log("[TTS] minimax 缓存命中，直接播放");
+          console.log("[TTS] minimax cache hit, playing directly");
           playTtsBase64(result.base64, result.format, msgId);
           return { cacheKey: result.cacheKey };
         }
@@ -2835,14 +2835,14 @@ async function synthesizeAndPlayCached(
   // 需要合成新音频 → 按 engine 分发
   if (settings.ttsEngine === "minimax") {
     if (!settings.ttsMinimaxKey || !settings.ttsMinimaxVoiceId) {
-      console.warn("[TTS] 缺少 apiKey 或 voiceId，无法合成新音频");
+      console.warn("[TTS] Missing apiKey or voiceId, cannot synthesize new audio");
       return null;
     }
     // 流式优先（默认开）：边合成边播，首字延迟低；失败 fallback 完整合成
     if (settings.ttsStreaming) {
       const stream = await streamAndPlayCached(settings, text, existing);
       if (stream) return stream;
-      console.warn("[TTS] 流式失败，fallback 完整合成");
+      console.warn("[TTS] Streaming failed, falling back to full synthesis");
     }
     try {
       const result = await window.tts.synthesizeCached({
@@ -2857,14 +2857,14 @@ async function synthesizeAndPlayCached(
       playTtsBase64(result.base64, result.format, msgId);
       return { cacheKey: result.cacheKey };
     } catch (err) {
-      console.warn("[TTS] 合成失败:", err);
+      console.warn("[TTS] Synthesis failed:", err);
       return null;
     }
   }
 
   if (settings.ttsEngine === "gptsovits") {
     if (!settings.ttsGptsovitsBaseUrl || !settings.ttsGptsovitsRefAudioPath || !settings.ttsGptsovitsPromptText) {
-      console.warn("[TTS] 缺少 GPT-SoVITS 配置（baseUrl/refAudioPath/promptText）");
+      console.warn("[TTS] Missing GPT-SoVITS configuration (baseUrl/refAudioPath/promptText)");
       return null;
     }
     try {
@@ -2880,14 +2880,14 @@ async function synthesizeAndPlayCached(
       playTtsBase64(result.base64, result.format, msgId);
       return { cacheKey: result.cacheKey };
     } catch (err) {
-      console.warn("[TTS] GPT-SoVITS 合成失败:", err);
+      console.warn("[TTS] GPT-SoVITS synthesis failed:", err);
       return null;
     }
   }
 
   if (settings.ttsEngine === "custom-cloud") {
     if (!settings.ttsCustomCloudEndpointUrl) {
-      console.warn("[TTS] 缺少自定义云端 Endpoint URL");
+      console.warn("[TTS] Missing custom cloud Endpoint URL");
       return null;
     }
     try {
@@ -2905,14 +2905,14 @@ async function synthesizeAndPlayCached(
       playTtsBase64(result.base64, result.format, msgId);
       return { cacheKey: result.cacheKey };
     } catch (err) {
-      console.warn("[TTS] 自定义云端合成失败:", err);
+      console.warn("[TTS] Custom cloud synthesis failed:", err);
       return null;
     }
   }
 
   if (settings.ttsEngine === "mimo") {
     if (!settings.ttsMimoKey || !settings.ttsMimoVoiceAudioPath) {
-      console.warn("[TTS] 缺少小米 MiMo API Key 或昔涟克隆音频");
+      console.warn("[TTS] Missing Xiaomi MiMo API Key or Cyrene clone audio");
       return null;
     }
     try {
@@ -2926,14 +2926,14 @@ async function synthesizeAndPlayCached(
       playTtsBase64(result.base64, result.format, msgId);
       return { cacheKey: result.cacheKey };
     } catch (err) {
-      console.warn("[TTS] 小米 MiMo 合成失败:", err);
+      console.warn("[TTS] Xiaomi MiMo synthesis failed:", err);
       return null;
     }
   }
 
   if (settings.ttsEngine === "mossland") {
     if (!settings.ttsMosslandKey || !settings.ttsMosslandVoiceId) {
-      console.warn("[TTS] 缺少 Mossland API Key 或 voice_id");
+      console.warn("[TTS] Missing Mossland API Key or voice_id");
       return null;
     }
     try {
@@ -2950,7 +2950,7 @@ async function synthesizeAndPlayCached(
       playTtsBase64(result.base64, result.format, msgId);
       return { cacheKey: result.cacheKey };
     } catch (err) {
-      console.warn("[TTS] Mossland 合成失败:", err);
+      console.warn("[TTS] Mossland synthesis failed:", err);
       return null;
     }
   }
@@ -2972,11 +2972,11 @@ async function speakMessage(message: Message): Promise<void> {
       void saveSession();
     } else if (currentSpeakingMsgId === message.id) {
       // 合成失败（引擎关 / 配置缺失 / 网络报错）→ 复位 UI
-      console.warn("[TTS] 合成失败，复位喇叭按钮");
+      console.warn("[TTS] Synthesis failed, resetting speaker button");
       setSpeakingMsgId(null);
     }
   } catch (err) {
-    console.warn("[TTS] speakMessage 异常:", err);
+    console.warn("[TTS] speakMessage exception:", err);
     if (currentSpeakingMsgId === message.id) setSpeakingMsgId(null);
   }
 }
@@ -3089,7 +3089,7 @@ function renderStickerPicker(): void {
   if (enabledStickers.length === 0) {
     const empty = document.createElement("div");
     empty.className = "sticker-picker__empty";
-    empty.textContent = "没有可用的表情包";
+    empty.textContent = "No stickers available";
     stickerPickerGrid.appendChild(empty);
     return;
   }
@@ -3159,7 +3159,7 @@ function buildModelMessages(): Array<{ role: "user" | "model"; content: string; 
       at: Number.isFinite(message.at) ? message.at : undefined,
       content: (message.content + (message.modelContext ? "\n\n" + message.modelContext : "")).replace(/\[sticker:([^\]]+)\]/g, (_match, id) => {
         const desc = getStickerDescription(id);
-        return `（用户发送表情包：${desc}）`;
+        return `(User sent sticker: ${desc})`;
       }),
     }));
 }
@@ -3229,11 +3229,11 @@ interface QuickPreset {
 }
 
 const QUICK_PRESETS: QuickPreset[] = [
-  { id: "chat",     label: "和昔涟聊天", icon: `<svg width="18" height="18" viewBox="0 0 48 48" fill="none" aria-hidden="true"><path d="M33 38H22V30H36V22H44V38H39L36 41L33 38Z" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 6H36V30H17L13 34L9 30H4V6Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M19 18H20" stroke="currentColor" stroke-width="4" stroke-linecap="round"/><path d="M26 18H27" stroke="currentColor" stroke-width="4" stroke-linecap="round"/><path d="M12 18H13" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></svg>`,  mode: "chat" },
-  { id: "schedule", label: "设置定时任务", icon: `<svg width="18" height="18" viewBox="0 0 48 48" fill="none" aria-hidden="true"><path d="M23.9998 44.3332C34.1251 44.3332 42.3332 36.1251 42.3332 25.9999C42.3332 15.8747 34.1251 7.66656 23.9998 7.66656C13.8746 7.66656 5.6665 15.8747 5.6665 25.9999C5.6665 36.1251 13.8746 44.3332 23.9998 44.3332Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M23.7594 15.3536L23.7582 26.3624L31.5305 34.1347" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 9.00001L11 4.00001" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M44 9.00001L37 4.00001" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>`, mode: "fill", prompt: "帮我设置一个定时任务：" },
-  { id: "weather",  label: "查看天气",   icon: `<svg width="18" height="18" viewBox="0 0 48 48" fill="none" aria-hidden="true"><path d="M30.7826 24.5652C34.5285 24.5652 37.5652 21.5285 37.5652 17.7826C37.5652 14.0367 34.5285 11 30.7826 11C27.4338 11 24.6518 13.427 24.0996 16.618" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M33 7C34.1046 7 35 6.10457 35 5C35 3.89543 34.1046 3 33 3C31.8954 3 31 3.89543 31 5C31 6.10457 31.8954 7 33 7Z" fill="currentColor"/><path d="M42 12C43.1046 12 44 11.1046 44 10C44 8.89543 43.1046 8 42 8C40.8954 8 40 8.89543 40 10C40 11.1046 40.8954 12 42 12Z" fill="currentColor"/><path d="M44 21C45.1046 21 46 20.1046 46 19C46 17.8954 45.1046 17 44 17C42.8954 17 42 17.8954 42 19C42 20.1046 42.8954 21 44 21Z" fill="currentColor"/><path d="M22 10C23.1046 10 24 9.10457 24 8C24 6.89543 23.1046 6 22 6C20.8954 6 20 6.89543 20 8C20 9.10457 20.8954 10 22 10Z" fill="currentColor"/><path d="M9.45455 39.9942C6.14242 37.461 4 33.4278 4 28.8851C4 21.2166 10.1052 15 17.6364 15C23.9334 15 29.2336 19.3462 30.8015 25.2533C32.0353 24.6159 33.431 24.2567 34.9091 24.2567C39.9299 24.2567 44 28.4011 44 33.5135C44 37.3094 41.7562 40.5716 38.5455 42" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M22.2426 24.7574C21.1569 23.6716 19.6569 23 18 23C14.6863 23 12 25.6863 12 29C12 30.6569 12.6716 32.1569 13.7574 33.2426" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>`, mode: "fill", prompt: "帮我查一下今天的天气" },
-  { id: "document", label: "生成文档",   icon: `<svg width="18" height="18" viewBox="0 0 48 48" fill="none" aria-hidden="true"><rect x="6" y="6" width="36" height="36" rx="3" fill="none" stroke="currentColor" stroke-width="4"/><path d="M14 16L18 32L24 19L30 32L34 16" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>`, mode: "fill", prompt: "帮我生成一份文档：" },
-  { id: "email",    label: "发送邮件",   icon: `<svg width="18" height="18" viewBox="0 0 48 48" fill="none" aria-hidden="true"><path d="M36 15H44V28V41H4V28V15H12" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M24 19V5" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M30 11L24 5L18 11" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 15L24 30L44 15" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>`, mode: "fill", prompt: "帮我发一封邮件：" },
+  { id: "chat",     label: "Chat with Cyrene", icon: `<svg width="18" height="18" viewBox="0 0 48 48" fill="none" aria-hidden="true"><path d="M33 38H22V30H36V22H44V38H39L36 41L33 38Z" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 6H36V30H17L13 34L9 30H4V6Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M19 18H20" stroke="currentColor" stroke-width="4" stroke-linecap="round"/><path d="M26 18H27" stroke="currentColor" stroke-width="4" stroke-linecap="round"/><path d="M12 18H13" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></svg>`,  mode: "chat" },
+  { id: "schedule", label: "Set Scheduled Task", icon: `<svg width="18" height="18" viewBox="0 0 48 48" fill="none" aria-hidden="true"><path d="M23.9998 44.3332C34.1251 44.3332 42.3332 36.1251 42.3332 25.9999C42.3332 15.8747 34.1251 7.66656 23.9998 7.66656C13.8746 7.66656 5.6665 15.8747 5.6665 25.9999C5.6665 36.1251 13.8746 44.3332 23.9998 44.3332Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M23.7594 15.3536L23.7582 26.3624L31.5305 34.1347" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 9.00001L11 4.00001" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M44 9.00001L37 4.00001" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>`, mode: "fill", prompt: "Help me set a scheduled task: " },
+  { id: "weather",  label: "Check Weather",   icon: `<svg width="18" height="18" viewBox="0 0 48 48" fill="none" aria-hidden="true"><path d="M30.7826 24.5652C34.5285 24.5652 37.5652 21.5285 37.5652 17.7826C37.5652 14.0367 34.5285 11 30.7826 11C27.4338 11 24.6518 13.427 24.0996 16.618" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M33 7C34.1046 7 35 6.10457 35 5C35 3.89543 34.1046 3 33 3C31.8954 3 31 3.89543 31 5C31 6.10457 31.8954 7 33 7Z" fill="currentColor"/><path d="M42 12C43.1046 12 44 11.1046 44 10C44 8.89543 43.1046 8 42 8C40.8954 8 40 8.89543 40 10C40 11.1046 40.8954 12 42 12Z" fill="currentColor"/><path d="M44 21C45.1046 21 46 20.1046 46 19C46 17.8954 45.1046 17 44 17C42.8954 17 42 17.8954 42 19C42 20.1046 42.8954 21 44 21Z" fill="currentColor"/><path d="M22 10C23.1046 10 24 9.10457 24 8C24 6.89543 23.1046 6 22 6C20.8954 6 20 6.89543 20 8C20 9.10457 20.8954 10 22 10Z" fill="currentColor"/><path d="M9.45455 39.9942C6.14242 37.461 4 33.4278 4 28.8851C4 21.2166 10.1052 15 17.6364 15C23.9334 15 29.2336 19.3462 30.8015 25.2533C32.0353 24.6159 33.431 24.2567 34.9091 24.2567C39.9299 24.2567 44 28.4011 44 33.5135C44 37.3094 41.7562 40.5716 38.5455 42" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M22.2426 24.7574C21.1569 23.6716 19.6569 23 18 23C14.6863 23 12 25.6863 12 29C12 30.6569 12.6716 32.1569 13.7574 33.2426" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>`, mode: "fill", prompt: "Check today's weather for me" },
+  { id: "document", label: "Create Document",   icon: `<svg width="18" height="18" viewBox="0 0 48 48" fill="none" aria-hidden="true"><rect x="6" y="6" width="36" height="36" rx="3" fill="none" stroke="currentColor" stroke-width="4"/><path d="M14 16L18 32L24 19L30 32L34 16" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>`, mode: "fill", prompt: "Help me create a document: " },
+  { id: "email",    label: "Send Email",   icon: `<svg width="18" height="18" viewBox="0 0 48 48" fill="none" aria-hidden="true"><path d="M36 15H44V28V41H4V28V15H12" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M24 19V5" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M30 11L24 5L18 11" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 15L24 30L44 15" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>`, mode: "fill", prompt: "Help me send an email: " },
 ];
 
 /** 动态生成胶囊 DOM 并绑定点击。bootstrap 末尾调一次。 */
@@ -3286,7 +3286,7 @@ async function triggerCyreneGreeting(): Promise<void> {
   sending = true;
   sendBtn.disabled = true;
   await refreshModelConfig();
-  chatHintEl.textContent = currentModelConfig?.connected ? `${currentModelConfig.model} 思考中…` : "模型未连接";
+  chatHintEl.textContent = currentModelConfig?.connected ? `${currentModelConfig.model} thinking…` : "Model disconnected";
 
   let streamMsgId = "";
   try {
@@ -3377,7 +3377,7 @@ async function triggerCyreneGreeting(): Promise<void> {
               icon.textContent = "🔧";
               const text = document.createElement("span");
               text.className = "msg__tool-text";
-              text.textContent = "调用中：" + (event.toolCallName ?? "工具");
+              text.textContent = "Calling: " + (event.toolCallName ?? "tool");
               tip.appendChild(icon);
               tip.appendChild(text);
               bubble.appendChild(tip);
@@ -3390,7 +3390,7 @@ async function triggerCyreneGreeting(): Promise<void> {
               const tip = bubble.querySelector(".msg__tool-tip");
               if (tip) {
                 const textEl = tip.querySelector(".msg__tool-text");
-                if (textEl) textEl.textContent = "已完成";
+                if (textEl) textEl.textContent = "Completed";
                 tip.classList.add("msg__tool-tip--done");
               }
             }
@@ -3449,26 +3449,26 @@ async function triggerCyreneGreeting(): Promise<void> {
             tryFinish();
             break;
           case "RUN_ERROR":
-            failRun(new AgentRenderError(event.code, event.message ?? "模型请求失败"));
+            failRun(new AgentRenderError(event.code, event.message ?? "Model request failed"));
             break;
           default:
             break;
         }
       } catch (err) {
-        console.error("[Chat] onEvent回调抛错:", err);
+        console.error("[Chat] onEvent callback threw error:", err);
       }
     });
 
     // 种子消息：不推入 messages 数组、不渲染，只作为 agent 输入触发昔涟主动开口
     const ack = await window.agui!.run({
-      messages: [{ role: "user", content: "[internal] 用户点击了「和昔涟聊天」，请你主动开口聊几句，像朋友打招呼一样自然开场。" }],
+      messages: [{ role: "user", content: "[internal] The user clicked 'Chat with Cyrene'. Please initiate a friendly greeting to start the conversation naturally." }],
       styleId: getCurrentStyleId(),
       executionMode: isChatMode() ? "chat" : "work",
       sessionId: currentSessionId || undefined,
     });
     if (!ack.success) {
       offEvent();
-      throw new Error(ack.error || "模型请求发起失败");
+      throw new Error(ack.error || "Failed to initiate model request");
     }
 
     await runDone;
@@ -3509,7 +3509,7 @@ async function triggerCyreneGreeting(): Promise<void> {
       pendingWeatherCard = null;
     }
   } catch (err) {
-    const message = err instanceof Error ? err.message : "模型请求失败";
+    const message = err instanceof Error ? err.message : "Model request failed";
     const code = err instanceof AgentRenderError ? err.code : undefined;
     const userMessage = classifyAgentError(code, message);
     const msg = messages.find(m => m.id === streamMsgId);
@@ -3543,14 +3543,14 @@ async function send(): Promise<void> {
   // bootstrap 极快但理论上仍有竞态：currentSessionId 为 null 时消息无处可存，
   // 直接拦截避免丢失。正常情况下 bootstrap 会在用户首次按键前完成。
   if (!currentSessionId) {
-    console.warn("[Cyrene Chat] 会话尚未初始化完成，已忽略此次发送");
+    console.warn("[Cyrene Chat] Session not yet initialized, send ignored");
     return;
   }
 
   sending = true;
   sendBtn.disabled = true;
   await refreshModelConfig();
-  chatHintEl.textContent = currentModelConfig?.connected ? `${currentModelConfig.model} 思考中…` : "模型未连接";
+  chatHintEl.textContent = currentModelConfig?.connected ? `${currentModelConfig.model} thinking…` : "Model disconnected";
 
   const filesForThisTurn = [...attachedFiles];
   const attachmentsForMsg: MessageAttachment[] = filesForThisTurn
@@ -3604,7 +3604,7 @@ async function send(): Promise<void> {
   const appendDocumentContext = (lines: string[]) => {
     if (lines.length === 0) return;
     if (!hasDocumentContext) {
-      modelContextParts.push(`【文档内容】\n${lines.join("\n\n")}`);
+      modelContextParts.push(`[Document Content]\n${lines.join("\n\n")}`);
       hasDocumentContext = true;
       return;
     }
@@ -3612,7 +3612,7 @@ async function send(): Promise<void> {
   };
   const appendImageCaptionContext = (line: string) => {
     if (!hasImageCaptionContext) {
-      modelContextParts.push("【图片视觉信息】\n以下内容是视觉模型对用户本轮图片的观察结果，请将其视为你已经看到的图片内容；如果某张图分析失败，请不要编造。\n" + line);
+      modelContextParts.push("[Image Visual Information]\nThe following is the vision model's observation of the user's images in this turn. Treat it as content you have seen; if analysis failed for an image, do not fabricate.\n" + line);
       hasImageCaptionContext = true;
       return;
     }
@@ -3620,7 +3620,7 @@ async function send(): Promise<void> {
   };
   const appendDirectImageContext = (line: string) => {
     if (!hasDirectImageContext) {
-      modelContextParts.push("【图片附件】\n以下图片已随本轮消息直接发送给主模型，请直接结合图片内容回答。\n" + line);
+      modelContextParts.push("[Image Attachment]\nThe following images were sent directly to the main model with this message. Please answer directly using the image contents.\n" + line);
       hasDirectImageContext = true;
       return;
     }
@@ -3629,7 +3629,7 @@ async function send(): Promise<void> {
   const appendUserAnnotationContext = () => {
     if (hasUserAnnotationContext) return;
     const notice = userAnnotationNotice(true);
-    if (notice) modelContextParts.push(`【用户截图标注】\n${notice}`);
+    if (notice) modelContextParts.push(`[User Screenshot Annotation]\n${notice}`);
     hasUserAnnotationContext = true;
   };
   const directImageAttachments: { name: string; filePath: string; mime?: string }[] = [];
@@ -3639,7 +3639,7 @@ async function send(): Promise<void> {
   const imageFilesForThisTurn = filesForThisTurn.filter((f) => f.kind === "image");
 
   if (documentFilesForThisTurn.length > 0) {
-    showTransientStatus("正在分析文档...");
+    showTransientStatus("Analyzing document...");
     try {
       let waitMessage: Message | null = null;
       const processedDocs = await processDocumentsWithWait({
@@ -3672,7 +3672,7 @@ async function send(): Promise<void> {
             name: f.name,
             kind: "unsupported" as const,
             filePath: f.filePath,
-            reason: "文档处理未返回结果",
+            reason: "Document processing returned no result",
           };
         const msgAtt = userMsg.attachments?.find((att): att is DocumentMessageAttachment =>
           att.kind === "document" && att.filePath === f.filePath
@@ -3693,36 +3693,36 @@ async function send(): Promise<void> {
           const remaining = BUDGET_CHARS - budgetUsed;
           if (remaining <= 0) {
             budgetExceeded.push(result.name);
-            hintsByKind.push(`📝 ${result.name}（附件，内容因一轮预算限制未注入）`);
+            hintsByKind.push(`📝 ${result.name} (Attachment, content clipped due to turn budget limit)`);
           } else if (docText.length > remaining) {
             const clipped = docText.slice(0, remaining);
-            appendDocumentContext([`文档 ${result.name} 内容节选：\n${clipped}`]);
+            appendDocumentContext([`Document ${result.name} excerpt:\n${clipped}`]);
             budgetExceeded.push(result.name);
             budgetUsed = BUDGET_CHARS;
-            hintsByKind.push(`📝 ${result.name}（附件，内容已按预算节选注入本轮上下文）`);
+            hintsByKind.push(`📝 ${result.name} (Attachment, content clipped and injected into turn context)`);
           } else {
-            appendDocumentContext([`文档 ${result.name} 内容：\n${docText}`]);
+            appendDocumentContext([`Document ${result.name} content:\n${docText}`]);
             budgetUsed += docText.length;
-            hintsByKind.push(`📝 ${result.name}（附件，内容已注入本轮上下文）`);
+            hintsByKind.push(`📝 ${result.name} (Attachment, content injected into turn context)`);
           }
         } else if (result.kind === "indexed") {
           if (result.reason && (result.chunks ?? 0) <= 0) {
             if (msgAtt) msgAtt.status = "error";
-            hintsByKind.push(`⚠️ ${result.name}（文档处理失败）`);
+            hintsByKind.push(`⚠️ ${result.name} (Document processing failed)`);
             appendDocumentContext(buildDocumentContextLines([result]));
           } else {
             if (msgAtt) msgAtt.status = "done";
-            hintsByKind.push(`📚 ${result.name}（已索引 ${result.chunks ?? 0} 段）`);
+            hintsByKind.push(`📚 ${result.name} (Indexed ${result.chunks ?? 0} chunks)`);
             appendDocumentContext(buildDocumentContextLines([result]));
           }
         } else if (result.kind === "empty") {
           if (msgAtt) msgAtt.status = "done";
-          hintsByKind.push(`📄 ${result.name}（为空）`);
+          hintsByKind.push(`📄 ${result.name} (Empty)`);
           appendDocumentContext(buildDocumentContextLines([result]));
         } else {
-          const reason = result.reason || "暂不支持或无法读取";
+          const reason = result.reason || "Unsupported or unreadable";
           if (msgAtt) msgAtt.status = reason === "cancelled" ? "cancelled" : "error";
-          hintsByKind.push(`⚠️ ${result.name}（暂不支持或处理失败）`);
+          hintsByKind.push(`⚠️ ${result.name} (Unsupported or failed to process)`);
           appendDocumentContext(buildDocumentContextLines([{ ...result, reason }]));
         }
       }
@@ -3737,7 +3737,7 @@ async function send(): Promise<void> {
           msgAtt.processedKind = "unsupported";
           msgAtt.reason = reason;
         }
-        hintsByKind.push(`⚠️ ${f.name}（文档处理失败）`);
+        hintsByKind.push(`⚠️ ${f.name} (Document processing failed)`);
         appendDocumentContext(buildDocumentContextLines([{ kind: "error", name: f.name, reason }]));
       }
     } finally {
@@ -3752,11 +3752,11 @@ async function send(): Promise<void> {
     try {
       imageSendStrategy = await window.chat.getImageSendStrategy();
     } catch (err) {
-      console.warn("[Cyrene Chat] 获取图片发送策略失败，回退 caption:", err);
+      console.warn("[Cyrene Chat] Failed to get image send policy, falling back to caption:", err);
     }
   }
   const shouldCaptionImages = imageFilesForThisTurn.length > 0 && imageSendStrategy.mode !== "direct";
-  if (shouldCaptionImages) showTransientStatus("正在分析图片...");
+  if (shouldCaptionImages) showTransientStatus("Analyzing image...");
   try {
     for (const f of filesForThisTurn) {
       switch (f.kind) {
@@ -3767,16 +3767,16 @@ async function send(): Promise<void> {
           if (f.hasAnnotations) appendUserAnnotationContext();
           if (!f.filePath) {
             f.status = "error";
-            f.reason = "缺少图片路径";
+            f.reason = "Missing image path";
             if (msgAtt) msgAtt.status = "error";
-            appendImageCaptionContext(`- ${f.name}：图片分析失败：缺少图片路径。请诚实说明暂时无法看清这张图。`);
+            appendImageCaptionContext(`- ${f.name}: Image analysis failed: missing image path. Please honestly explain that you cannot see this image clearly right now.`);
             break;
           }
           if (imageSendStrategy.mode === "direct") {
             f.status = "done";
             if (msgAtt) msgAtt.status = "done";
             directImageAttachments.push({ name: f.name, filePath: f.filePath, mime: f.mime });
-            appendDirectImageContext(`- ${f.name}：图片已随本轮消息直接发送给主模型。`);
+            appendDirectImageContext(`- ${f.name}: Image sent directly to main model with this message.`);
             break;
           }
           const result = await window.chat?.captionImage(f.filePath, f.hasAnnotations === true);
@@ -3790,14 +3790,14 @@ async function send(): Promise<void> {
             appendImageCaptionContext(`- ${f.name}：${result.caption}`);
           } else {
             f.status = "error";
-            f.reason = result?.error || "图片分析失败";
+            f.reason = result?.error || "Image analysis failed";
             if (msgAtt) msgAtt.status = "error";
-            appendImageCaptionContext(`- ${f.name}：图片分析失败：${f.reason}。请诚实说明暂时无法看清这张图。`);
+            appendImageCaptionContext(`- ${f.name}: Image analysis failed: ${f.reason}. Please honestly explain that you cannot see this image clearly right now.`);
           }
           break;
         }
         case "unsupported":
-          hintsByKind.push(`⚠️ ${f.name}（暂不支持：${f.reason || ""}）`);
+          hintsByKind.push(`⚠️ ${f.name} (Unsupported: ${f.reason || ""})`);
           break;
       }
     }
@@ -3805,10 +3805,10 @@ async function send(): Promise<void> {
     if (shouldCaptionImages) hideTransientStatus();
   }
   if (budgetExceeded.length > 0) {
-    hintsByKind.push(`⚠️ ${budgetExceeded.join("、")} 已省略部分内容（超一轮预算）`);
+    hintsByKind.push(`⚠️ ${budgetExceeded.join(", ")} omitted part of content (exceeded turn budget)`);
   }
   if (hintsByKind.length > 0) {
-    modelContextParts.unshift("【本轮文件】\n" + hintsByKind.join("\n"));
+    modelContextParts.unshift("[Files this turn]\n" + hintsByKind.join("\n"));
   }
   userMsg.modelContext = modelContextParts.join("\n\n");
   void saveSession();
@@ -3913,7 +3913,7 @@ async function send(): Promise<void> {
               icon.textContent = "🔧";
               const text = document.createElement("span");
               text.className = "msg__tool-text";
-              text.textContent = "调用中：" + (event.toolCallName ?? "工具");
+              text.textContent = "Calling: " + (event.toolCallName ?? "tool");
               tip.appendChild(icon);
               tip.appendChild(text);
               bubble.appendChild(tip);
@@ -3927,7 +3927,7 @@ async function send(): Promise<void> {
               const tip = bubble.querySelector(".msg__tool-tip");
               if (tip) {
                 const textEl = tip.querySelector(".msg__tool-text");
-                if (textEl) textEl.textContent = "已完成";
+                if (textEl) textEl.textContent = "Completed";
                 tip.classList.add("msg__tool-tip--done");
               }
             }
@@ -3968,7 +3968,7 @@ async function send(): Promise<void> {
               sticker = (event.value as StickerId | null) ?? null;
             } else if (event.name === "cyrene.weather") {
               // 暂存天气数据，等 runDone 后 render 再插入（避免 render 的 replaceChildren 清掉卡片）
-              console.log("[Chat] 收到天气卡片数据:", JSON.stringify(event.value)?.slice(0, 100));
+              console.log("[Chat] Received weather card data:", JSON.stringify(event.value)?.slice(0, 100));
               pendingWeatherCard = event.value as Record<string, unknown>;
             } else if (event.name === "cyrene.music") {
               pendingMusicCard = normalizeMusicCardData(event.value);
@@ -3997,14 +3997,14 @@ async function send(): Promise<void> {
             tryFinish();
             break;
           case "RUN_ERROR":
-            failRun(new AgentRenderError(event.code, event.message ?? "模型请求失败"));
+            failRun(new AgentRenderError(event.code, event.message ?? "Model request failed"));
             break;
           default:
             // TOOL_CALL_* / STEP_* 暂不在 UI 处理（骨架阶段）
             break;
         }
       } catch (err) {
-        console.error("[Chat] onEvent回调抛错:", err);
+        console.error("[Chat] onEvent callback threw error:", err);
       }
     });
 
@@ -4022,7 +4022,7 @@ async function send(): Promise<void> {
     });
     if (!ack.success) {
       offEvent();
-      throw new Error(ack.error || "模型请求发起失败");
+      throw new Error(ack.error || "Failed to initiate model request");
     }
     if (clearModelContexts()) void saveSession();
 
@@ -4060,7 +4060,7 @@ async function send(): Promise<void> {
 
     // 天气卡片追加到末尾（模型回复之后）
     if (pendingWeatherCard) {
-      console.log("[Chat] 插入天气卡片");
+      console.log("[Chat] Inserted weather card");
       const card = buildWeatherCardEl(pendingWeatherCard);
       messagesEl.appendChild(card);
       messagesEl.scrollTop = messagesEl.scrollHeight;
@@ -4068,7 +4068,7 @@ async function send(): Promise<void> {
     }
     // TTS 已在 TEXT_MESSAGE_END 时触发，这里不再重复朗读
   } catch (err) {
-    const message = err instanceof Error ? err.message : "模型请求失败";
+    const message = err instanceof Error ? err.message : "Model request failed";
     const code = err instanceof AgentRenderError ? err.code : undefined;
     const userMessage = classifyAgentError(code, message);
     const msg = messages.find(m => m.id === streamMsgId);
@@ -4098,7 +4098,7 @@ async function send(): Promise<void> {
 function clearChat(): void {
   if (sending) return;
   if (messages.length === 0) return;
-  const ok = window.confirm("清空当前对话？");
+  const ok = window.confirm("Clear current conversation?");
   if (!ok) return;
   messages.length = 0;
   void saveSession();
@@ -4147,7 +4147,7 @@ async function ingestDroppedFiles(files: File[]): Promise<void> {
     if (results && results.length > 0) attachedFiles = [...attachedFiles, ...results];
     updateFileTags();
   } catch (err: unknown) {
-    window.alert("文件摄入失败：" + ((err as Error)?.message || String(err)));
+    window.alert("File ingestion failed: " + ((err as Error)?.message || String(err)));
   } finally {
     attachBtn!.disabled = false;
     fileInput!.value = "";
@@ -4220,7 +4220,7 @@ async function insertImageAttachment(input: {
 
   attachedFiles.push({
     kind: "image",
-    name: input.name ?? `截图_${Date.now()}.png`,
+    name: input.name ?? `Screenshot_${Date.now()}.png`,
     filePath,
     mime: input.mime,
     previewUrl: input.base64
@@ -4232,9 +4232,33 @@ async function insertImageAttachment(input: {
   updateFileTags();
 }
 
-// 截图按钮 -> 触发主进程截图流程（按钮模式：选区后直接插入，不需要粘贴）
-screenshotBtn?.addEventListener("click", () => {
-  void window.chat?.startScreenshot();
+const screenshotStatus = document.getElementById("screenshot-status");
+
+function announceScreenshotStatus(message: string): void {
+  if (screenshotStatus) screenshotStatus.textContent = message;
+}
+
+// Screenshot button -> native region selection, then direct attachment insertion.
+screenshotBtn?.addEventListener("click", async () => {
+  if (!window.chat || screenshotBtn.disabled) return;
+  screenshotBtn.disabled = true;
+  screenshotBtn.setAttribute("aria-busy", "true");
+  announceScreenshotStatus("Screen region capture opened. Select a region, or press Escape to cancel.");
+  try {
+    const result = await window.chat.startScreenshot();
+    if (!result?.ok) {
+      const cancelled = result?.reason?.toLowerCase().includes("cancel");
+      announceScreenshotStatus(cancelled
+        ? "Screen capture cancelled."
+        : "Screen capture failed. Please try again.");
+    }
+  } catch {
+    announceScreenshotStatus("Screen capture failed. Please try again.");
+  } finally {
+    screenshotBtn.disabled = false;
+    screenshotBtn.removeAttribute("aria-busy");
+    screenshotBtn.focus();
+  }
 });
 
 // 按钮模式回调：主进程裁剪完直接发图片过来
@@ -4244,8 +4268,10 @@ window.chat?.onScreenshotInsert?.((data) => {
     filePath: data.filePath,
     previewUrl: data.previewUrl,
     hasAnnotations: data.hasAnnotations,
-    name: `截图_${Date.now()}.png`,
+    name: `Screenshot_${Date.now()}.png`,
   });
+  announceScreenshotStatus("Screenshot attached and ready to send.");
+  screenshotBtn?.focus();
 });
 
 // 粘贴监听：检测剪贴板图片 -> 插入附件（热键模式：Alt+Shift+S 截图后 Ctrl+V）
@@ -4265,7 +4291,7 @@ document.addEventListener("paste", async (e) => {
         try {
           await insertImageAttachment({ base64, mime: blob.type || "image/png" });
         } catch (err) {
-          console.error("[Chat] 粘贴图片失败:", err);
+          console.error("[Chat] Failed to paste image:", err);
         }
       };
       reader.readAsDataURL(blob);
@@ -4490,14 +4516,14 @@ clearBtn.addEventListener("click", clearChat);
         if (title) menu.appendChild(title);
         const opt = document.createElement("div");
         opt.className = "dm-opt is-disabled";
-        opt.textContent = "跟随模型";
+        opt.textContent = "Default";
         opt.style.opacity = "0.4";
         opt.style.pointerEvents = "none";
-        opt.title = "推理控制暂时不可用";
+        opt.title = "Reasoning control is temporarily unavailable";
         menu.appendChild(opt);
       }
       const val = values["reasoning-dropdown"];
-      if (val) val.textContent = "推理 · 跟随模型";
+      if (val) val.textContent = "Reasoning · Default";
     }
   }
 

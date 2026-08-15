@@ -281,13 +281,13 @@ export class CyreneAgent extends AbstractAgent {
           const enabledToolCount = executionMode === "chat"
             ? 0
             : (options.tools ?? toolRegistry.getEnabledTools()).filter((tool) => tool.enabled).length;
-          flowLog("── 新请求 ─────────────────────────");
-          flowLog(`1. 准备上下文：${executionMode === "chat" ? "Chat" : "Work"} 模式，模型 ${options.settings.model}，${enabledToolCount} 个工具可用`);
-          flowLog(`2. 理解用户请求：${executionMode === "chat" ? "Chat 模式无需工具上下文" : `完成，可信引用 ${(options.trustedRefs ?? []).length} 个`}`);
+          flowLog("── New Request ─────────────────────────");
+          flowLog(`1. Prepare context: ${executionMode === "chat" ? "Chat" : "Work"} mode, model ${options.settings.model}, ${enabledToolCount} tools available`);
+          flowLog(`2. Understand user request: ${executionMode === "chat" ? "Chat mode does not require tool context" : `completed, ${(options.trustedRefs ?? []).length} trusted refs`}`);
 
           let result: TwoPhaseFcResult;
           if (executionMode === "chat") {
-            flowLog("3. Chat 模式：生成回复");
+            flowLog("3. Chat mode: generate response");
             result = await perf.track("chat_loop", () => runChatLoop({
               settings: options.settings,
               adapter,
@@ -356,7 +356,7 @@ export class CyreneAgent extends AbstractAgent {
             executionMode,
             socialContext: options.socialContext,
           };
-          flowLog("── 本轮完成 ────────────────────────");
+          flowLog("── Turn Completed ────────────────────────");
 
           if (cancelled) return;
           subscriber.next({

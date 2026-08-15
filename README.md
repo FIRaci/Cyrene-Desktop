@@ -31,6 +31,14 @@ ollama pull llama3.1
 
 - **Node.js 24 LTS** (for the Electron launcher)
 
+To build the Windows unpacked package, install the Rust toolchain and ensure `cargo` is on `PATH`. The native screenshot helper is built and verified before electron-builder runs:
+
+```powershell
+npm run package:win:dir
+```
+
+A successful source build does not replace the unpacked launch smoke test.
+
 ---
 
 ## How to Run

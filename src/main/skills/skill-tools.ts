@@ -141,5 +141,5 @@ export function registerSkillTools(): void {
     },
   });
 
-  console.log(LOG_PREFIX, "已注册：invoke_skill / read_skill_reference");
+  console.log(LOG_PREFIX, "Registered: invoke_skill / read_skill_reference");
 }

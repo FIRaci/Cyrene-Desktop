@@ -101,6 +101,13 @@ import {
   validateScreenshotInsert,
   type ScreenshotService,
 } from "./screenshot/screenshot-service";
+import {
+  ScreenConsentController,
+  SystemAudioAwarenessService,
+  WindowsMediaSessionMetadataAdapter,
+  formatSystemAudioContext,
+  type ScreenCaptureProducer,
+} from "./sensory";
 import { enqueueLLMTask } from "./llm-queue";
 import { compileSocialContextBlock } from "./social-context/context";
 import {
@@ -226,6 +233,13 @@ let stickerManagerWindow: BrowserWindow | null = null;
 let callWindow: BrowserWindow | null = null;
 let schedulerEngine: SchedulerEngine | null = null;
 let screenshotService: ScreenshotService | null = null;
+// The owner selected persistent screen observation for this trusted local app.
+// This grants capture only to the fixed producers below; it does not grant file writes or shell access.
+const screenConsent = new ScreenConsentController({ mode: "session", sessionGranted: true });
+let systemAudioAwareness: SystemAudioAwarenessService | null = null;
+let systemAudioRefreshTimer: NodeJS.Timeout | null = null;
+let systemAudioDesiredEnabled = false;
+let systemAudioTransition: Promise<void> = Promise.resolve();
 let proactiveChatService: ProactiveChatService | null = null;
 let normalConversationBusyCount = 0;
 let proactiveScreenLocked = false;
@@ -240,6 +254,53 @@ const petWindowMoveController = new PetWindowMoveController(
 );
 
 const MAX_SCREENSHOT_BYTES = 20 * 1024 * 1024;
+
+async function runExplicitScreenCapture<T>(producer: ScreenCaptureProducer, operation: (signal: AbortSignal) => Promise<T> | T): Promise<T> {
+  const authorization = screenConsent.request(producer);
+  if (authorization.status !== "authorized") throw new Error("SCREEN_CAPTURE_NOT_AUTHORIZED");
+  const lease = screenConsent.beginCapture(authorization.authorization, producer);
+  if (!lease) throw new Error("SCREEN_CAPTURE_AUTHORIZATION_EXPIRED");
+  try {
+    if (lease.signal.aborted) throw new Error("SCREEN_CAPTURE_REVOKED");
+    return await operation(lease.signal);
+  } finally {
+    lease.release();
+  }
+}
+
+function sensoryContextBlock(): string {
+  return formatSystemAudioContext(systemAudioAwareness?.snapshot() ?? []);
+}
+
+function setSystemAudioAwarenessEnabled(enabled: boolean): Promise<void> {
+  systemAudioDesiredEnabled = enabled;
+  systemAudioTransition = systemAudioTransition.then(async () => {
+    const service = systemAudioAwareness;
+    if (!service) return;
+    if (!systemAudioDesiredEnabled) {
+      if (systemAudioRefreshTimer) clearInterval(systemAudioRefreshTimer);
+      systemAudioRefreshTimer = null;
+      await service.revoke();
+      return;
+    }
+    await service.enable();
+    if (!systemAudioDesiredEnabled) {
+      await service.revoke();
+      return;
+    }
+    await service.refresh();
+    if (!systemAudioRefreshTimer) {
+      systemAudioRefreshTimer = setInterval(() => void service.refresh(), 2_000);
+    }
+  }).catch((error) => console.warn("[SystemAudio] lifecycle transition failed:", error));
+  return systemAudioTransition;
+}
+
+async function buildAlwaysOnContextWithSensory(userText: string, messages: Array<{ role: string; content: string }>): Promise<string> {
+  const base = await buildAlwaysOnContext(userText, messages as any);
+  const sensory = sensoryContextBlock();
+  return sensory ? `${base}\n\n${sensory}` : base;
+}
 
 function getScreenshotDirectory(): string {
   return path.join(app.getPath("userData"), "screenshots");
@@ -283,7 +344,10 @@ function initializeScreenshotService(initialHotkey: string): ScreenshotService {
   const service = createScreenshotService({
     client,
     registerShortcut: (accelerator, callback) =>
-      globalShortcut.register(accelerator, callback),
+      globalShortcut.register(accelerator, () => {
+        void runExplicitScreenCapture("hotkey", callback).catch((error) =>
+          console.warn("[Screenshot] Hotkey capture denied or failed:", error));
+      }),
     unregisterShortcut: (accelerator) => globalShortcut.unregister(accelerator),
     sendInsert: (data) => {
       const validated = validateScreenshotInsert(
@@ -300,14 +364,21 @@ function initializeScreenshotService(initialHotkey: string): ScreenshotService {
     },
   });
 
-  ipcMain.handle(IPC.SCREENSHOT_START, () => service.startFromChatButton());
-  ipcMain.handle(IPC.SCREENSHOT_SAVE_TEMP, (_event, base64: string, mime: string) =>
-    saveScreenshotPasteTemp(base64, mime));
-  ipcMain.handle(IPC.SCREENSHOT_HOTKEY_CAPTURE_START, () => {
+  ipcMain.handle(IPC.SCREENSHOT_START, (event) => {
+    if (chatWindow?.webContents.id !== event.sender.id) throw new Error("UNTRUSTED_SCREEN_CAPTURE_SENDER");
+    return runExplicitScreenCapture("vision", () => service.startFromChatButton());
+  });
+  ipcMain.handle(IPC.SCREENSHOT_SAVE_TEMP, (event, base64: string, mime: string) => {
+    if (chatWindow?.webContents.id !== event.sender.id) throw new Error("UNTRUSTED_SCREEN_CAPTURE_SENDER");
+    return saveScreenshotPasteTemp(base64, mime);
+  });
+  ipcMain.handle(IPC.SCREENSHOT_HOTKEY_CAPTURE_START, (event) => {
+    if (chatWindow?.webContents.id !== event.sender.id) throw new Error("UNTRUSTED_SCREEN_CAPTURE_SENDER");
     service.suspendHotkey();
     return true;
   });
-  ipcMain.handle(IPC.SCREENSHOT_HOTKEY_CAPTURE_END, () => {
+  ipcMain.handle(IPC.SCREENSHOT_HOTKEY_CAPTURE_END, (event) => {
+    if (chatWindow?.webContents.id !== event.sender.id) throw new Error("UNTRUSTED_SCREEN_CAPTURE_SENDER");
     service.resumeHotkey();
     return true;
   });
@@ -728,6 +799,7 @@ interface GeneralSettings {
   asrShowTranscript: boolean;
   /** 截图全局热键（Electron Accelerator 格式，如 "Alt+Shift+S"） */
   screenshotHotkey: string;
+  systemAudioAwarenessEnabled: boolean;
 }
 
 
@@ -934,6 +1006,7 @@ const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   asrVadThreshold: 0.01,
   asrShowTranscript: false,
   screenshotHotkey: "Alt+Shift+S",
+  systemAudioAwarenessEnabled: true,
 };
 
 function getSettingsPath(): string {
@@ -1391,6 +1464,9 @@ function normalizeGeneralSettings(input: Partial<GeneralSettings> | null | undef
     asrShowTranscript: Boolean(input?.asrShowTranscript),
     screenshotHotkey: typeof input?.screenshotHotkey === "string" && input.screenshotHotkey.trim()
       ? input.screenshotHotkey.trim() : DEFAULT_GENERAL_SETTINGS.screenshotHotkey,
+    systemAudioAwarenessEnabled: typeof input?.systemAudioAwarenessEnabled === "boolean"
+      ? input.systemAudioAwarenessEnabled
+      : DEFAULT_GENERAL_SETTINGS.systemAudioAwarenessEnabled,
     ttsGptsovitsBaseUrl: typeof input?.ttsGptsovitsBaseUrl === "string" ? input.ttsGptsovitsBaseUrl : DEFAULT_GENERAL_SETTINGS.ttsGptsovitsBaseUrl,
     ttsGptsovitsRefAudioPath: typeof input?.ttsGptsovitsRefAudioPath === "string" ? input.ttsGptsovitsRefAudioPath : "",
     ttsGptsovitsPromptText: typeof input?.ttsGptsovitsPromptText === "string" ? input.ttsGptsovitsPromptText : "",
@@ -1444,6 +1520,9 @@ function saveGeneralSettings(settings: Partial<GeneralSettings>): GeneralSetting
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, JSON.stringify(normalized, null, 2), "utf8");
   applyGeneralSettings(normalized);
+  if (systemAudioAwareness && before.systemAudioAwarenessEnabled !== normalized.systemAudioAwarenessEnabled) {
+    void setSystemAudioAwarenessEnabled(normalized.systemAudioAwarenessEnabled);
+  }
   syncBuiltInToolToggles(normalized);
   if (before.uiTheme !== normalized.uiTheme) {
     broadcastUiThemeChanged(normalized.uiTheme);
@@ -2311,7 +2390,7 @@ async function buildProactiveAgentMessages(candidate: ProactiveCandidate) {
   const recentTopic = histories.ordinary.slice(-4).map((turn) => turn.content).join("\n");
   const retrievalQuery = `${candidate.sceneId}\n${recentTopic}`.trim();
   const [profileContext, memoryContext] = await Promise.all([
-    buildAlwaysOnContext(retrievalQuery, histories.ordinary.map((turn) => ({ role: turn.role, content: turn.content }))).catch(() => ""),
+    buildAlwaysOnContextWithSensory(retrievalQuery, histories.ordinary.map((turn) => ({ role: turn.role, content: turn.content }))).catch(() => ""),
     buildMemoryInjection(retrievalQuery).catch(() => ""),
   ]);
   const state = loadProactiveState();
@@ -2681,13 +2760,23 @@ function openExternalUrl(url: string): boolean {
 
 function attachExternalLinkHandler(win: BrowserWindow): void {
   win.webContents.setWindowOpenHandler(({ url }) => {
-    return openExternalUrl(url) ? { action: "deny" } : { action: "allow" };
+    openExternalUrl(url);
+    return { action: "deny" };
   });
 
   win.webContents.on("will-navigate", (event, url) => {
-    if (openExternalUrl(url)) {
-      event.preventDefault();
-    }
+    const current = win.webContents.getURL();
+    let sameTrustedDocument = false;
+    try {
+      const currentUrl = new URL(current);
+      const nextUrl = new URL(url);
+      sameTrustedDocument = currentUrl.protocol === nextUrl.protocol
+        && currentUrl.origin === nextUrl.origin
+        && (currentUrl.protocol !== "file:" || currentUrl.pathname === nextUrl.pathname);
+    } catch { /* deny malformed navigation */ }
+    if (sameTrustedDocument) return;
+    event.preventDefault();
+    openExternalUrl(url);
   });
 }
 function createWindow(): void {
@@ -2744,6 +2833,7 @@ function createWindow(): void {
       sandbox: false,
     },
   });
+  attachExternalLinkHandler(mainWindow);
   live2dWindowLifecycle.attach(mainWindow);
 
   if (isDev) {
@@ -2864,7 +2954,7 @@ function createWindow(): void {
 
       // ② 常驻上下文（世界书 + L0/L1 画像）
       let alwaysOnContext = "";
-      try { alwaysOnContext = await buildAlwaysOnContext(userText, messages); } catch { /* ignore */ }
+      try { alwaysOnContext = await buildAlwaysOnContextWithSensory(userText, messages); } catch { /* ignore */ }
 
       // ③ 记忆注入
       let memoryInjection = "";
@@ -2969,6 +3059,8 @@ function createChatWindow(sessionId?: string): void {
     },
   });
 
+  attachExternalLinkHandler(chatWindow);
+
   // 通过 URL query 把目标 sessionId 带给渲染进程（首次加载用），
   // 后续切换走 CHATS_SWITCH_SESSION 事件，避免重新加载页面。
   const queryString = sessionId ? "?sessionId=" + encodeURIComponent(sessionId) : "";
@@ -3028,6 +3120,8 @@ function createSidebarWindow(): void {
     },
   });
 
+  attachExternalLinkHandler(sidebarWindow);
+
   if (isDev) {
     sidebarWindow.loadURL("http://localhost:5173/sidebar/");
   } else {
@@ -3074,6 +3168,8 @@ function createTasksWindow(): void {
       sandbox: false,
     },
   });
+
+  attachExternalLinkHandler(tasksWindow);
 
   if (isDev) {
     tasksWindow.loadURL("http://localhost:5173/tasks/");
@@ -3186,6 +3282,8 @@ async function createStickerManagerWindow(): Promise<{ ok: boolean; error?: stri
     },
   });
 
+  attachExternalLinkHandler(stickerManagerWindow);
+
   stickerManagerWindow.webContents.on("did-fail-load", (_event, errorCode, errorDescription, validatedURL) => {
     console.error("[stickers] did-fail-load", { errorCode, errorDescription, validatedURL });
   });
@@ -3255,6 +3353,8 @@ function createCallWindow(): void {
       sandbox: false,
     },
   });
+
+  attachExternalLinkHandler(callWindow);
 
   if (isDev) {
     callWindow.loadURL("http://localhost:5173/call/");
@@ -3398,13 +3498,15 @@ ipcMain.handle(IPC.LIVE2D_GET_MAIN_DIAGNOSTICS, () => ({
   window: live2dWindowLifecycle.getDiagnostics(),
 }));
 
-ipcMain.handle("debug:screenshot", async () => {
-  if (!mainWindow) return null;
-  const image = await mainWindow.webContents.capturePage();
-  const png = image.toPNG();
-  const outPath = path.join(app.getPath("temp"), "cyrene-screenshot.png");
-  fs.writeFileSync(outPath, png);
-  return outPath;
+ipcMain.handle("debug:screenshot", async (event) => {
+  if (!isDev || !mainWindow || mainWindow.webContents.id !== event.sender.id) return null;
+  return runExplicitScreenCapture("debug", async () => {
+    const image = await mainWindow!.webContents.capturePage();
+    const png = image.toPNG();
+    const outPath = path.join(app.getPath("temp"), "cyrene-screenshot.png");
+    await fs.promises.writeFile(outPath, png);
+    return outPath;
+  });
 });
 
 ipcMain.on(IPC.WINDOW_MINIMIZE, () => {
@@ -3953,27 +4055,37 @@ ipcMain.handle(IPC.USER_UPLOAD_AVATAR, async () => {
   return { avatarPath, profile };
 });
 
-ipcMain.handle(IPC.MCP_ADD_SERVER, async (_event, config: unknown) => {
-  console.log('[MCP IPC] add-server:', JSON.stringify(config).slice(0, 200));
+function requireSettingsSender(senderId: number): void {
+  if (!settingsWindow || settingsWindow.isDestroyed() || settingsWindow.webContents.id !== senderId) {
+    throw new Error("UNTRUSTED_SETTINGS_SENDER");
+  }
+}
+
+ipcMain.handle(IPC.MCP_ADD_SERVER, async (event, config: unknown) => {
+  requireSettingsSender(event.sender.id);
+  console.log('[MCP IPC] add-server request received');
   const result = await addMcpServer(config as Parameters<typeof addMcpServer>[0]);
-  console.log('[MCP IPC] add-server result:', JSON.stringify(result));
+  console.log('[MCP IPC] add-server result:', result.ok ? 'ok' : 'failed');
   return result;
 });
 
-ipcMain.handle(IPC.MCP_REMOVE_SERVER, async (_event, serverId: string) => {
+ipcMain.handle(IPC.MCP_REMOVE_SERVER, async (event, serverId: string) => {
+  requireSettingsSender(event.sender.id);
   console.log('[MCP IPC] remove-server:', serverId);
   const result = await removeMcpServer(serverId);
   console.log('[MCP IPC] remove-server result:', JSON.stringify(result));
   return result;
 });
 
-ipcMain.handle(IPC.MCP_LIST_SERVERS, () => {
+ipcMain.handle(IPC.MCP_LIST_SERVERS, (event) => {
+  requireSettingsSender(event.sender.id);
   const servers = listMcpServers();
   console.log('[MCP IPC] list-servers:', servers.length + ' servers');
   return servers;
 });
 
-ipcMain.handle(IPC.TOOL_SET_ENABLED, (_event, payload: unknown) => {
+ipcMain.handle(IPC.TOOL_SET_ENABLED, (event, payload: unknown) => {
+  requireSettingsSender(event.sender.id);
   const p = payload as { id?: string; enabled?: boolean };
   if (!p.id) return { ok: false, error: 'missing tool id' };
   toolRegistry.setEnabled(p.id, p.enabled !== false);
@@ -3981,7 +4093,8 @@ ipcMain.handle(IPC.TOOL_SET_ENABLED, (_event, payload: unknown) => {
   return { ok: true };
 });
 
-ipcMain.handle(IPC.TOOL_GET_ENABLED, () => {
+ipcMain.handle(IPC.TOOL_GET_ENABLED, (event) => {
+  requireSettingsSender(event.sender.id);
   const tools = toolRegistry.getAllTools();
   const result: Record<string, boolean> = {};
   for (const t of tools) {
@@ -4022,11 +4135,11 @@ protocol.registerSchemesAsPrivileged([
 ]);
 
 app.whenReady().then(async () => {
-  log.info("App is ready, initializing...");
+  console.info("[Cyrene] App is ready, initializing...");
   
   // Register global shortcut
   globalShortcut.register('Alt+C', () => {
-      const win = getMainWindow();
+      const win = mainWindow;
       if (win) {
         if (win.isVisible()) {
           win.hide();
@@ -4696,6 +4809,12 @@ app.whenReady().then(async () => {
   // 内置 MCP 自动连接：Playwright (默认关闭,选项控制)
   const initialSettings = loadGeneralSettings();
 
+  systemAudioAwareness = new SystemAudioAwarenessService(
+    new WindowsMediaSessionMetadataAdapter(path.join(app.getAppPath(), "get_audio_sessions.ps1")),
+    { excludedApplications: [app.name, "cyrene"] },
+  );
+  await setSystemAudioAwarenessEnabled(initialSettings.systemAudioAwarenessEnabled);
+
   // 一次性清理已下架的内置 MCP（Firecrawl hosted 等）
   const removed = await pruneMcpServersByIds([...REMOVED_BUILTIN_MCP_IDS]);
   if (removed.length > 0) {
@@ -4749,7 +4868,13 @@ app.whenReady().then(async () => {
   }
 
   // 游戏代肝：IPC + game_bot_start 工具
-  initGameBot();
+  initGameBot({
+    captureScreen: () => runExplicitScreenCapture("game-bot", async () => {
+      const { captureScreen } = await import("./game-bot/screenshot");
+      return captureScreen();
+    }),
+    isSettingsSender: (senderId) => settingsWindow?.webContents.id === senderId,
+  });
 
   // 多渠道（微信/飞书/...）：先注入 dispatcher 的 buildAndRunAgent + TTS + 镜像广播 + 最近历史读取，
   // 让 channels 模块拿到真 agent + 出站增强能力 + 对话上下文。
@@ -4958,7 +5083,7 @@ app.whenReady().then(async () => {
       const messages = [{ role: "user" as const, content: task.prompt }];
       let alwaysOnContext = "";
       try {
-        alwaysOnContext = await buildAlwaysOnContext(task.prompt, messages);
+        alwaysOnContext = await buildAlwaysOnContextWithSensory(task.prompt, messages);
       } catch (err) {
         console.warn("[Scheduler] always-on context build failed:", err);
       }
@@ -5101,7 +5226,7 @@ app.whenReady().then(async () => {
     sceneEmbeddingIndex: sceneEmbeddingIndex as unknown,
     getSceneEmbeddingProvider: () => getSceneEmbeddingProvider() as unknown,
     buildAlwaysOnContext: (async (userText, messages) =>
-      buildAlwaysOnContext(userText, messages as any)) as BuildOptionsDeps["buildAlwaysOnContext"],
+      buildAlwaysOnContextWithSensory(userText, messages as any)) as BuildOptionsDeps["buildAlwaysOnContext"],
     buildRelationshipContext,
     buildSystemPrompt,
     buildToolSystemPrompt: (enabledTools) => buildToolSystemPrompt(enabledTools as ToolDefinition[]),
@@ -5214,7 +5339,10 @@ app.whenReady().then(async () => {
   createTray();
   // 权限模块初始化：必须在 createWindow 之后但任意工具调用之前
   initPermissionFromDisk();
-  registerPermissionIpc();
+  registerPermissionIpc({
+    canSetLevel: (event) => settingsWindow?.webContents.id === event.sender.id,
+    isApprovalUi: (webContents) => chatWindow?.webContents.id === webContents.id,
+  });
   registerChoiceIpc();
   registerCallIpc();
   console.log("[Cyrene] 当前 agent 权限档位:", getCurrentLevel());
@@ -5242,7 +5370,11 @@ app.whenReady().then(async () => {
 
 app.on("will-quit", () => {
   globalShortcut.unregisterAll();
-  log.info("App will quit, unregistering global shortcuts");
+  if (systemAudioRefreshTimer) clearInterval(systemAudioRefreshTimer);
+  systemAudioRefreshTimer = null;
+  void systemAudioAwareness?.revoke();
+  screenConsent.revoke();
+  console.info("[Cyrene] App will quit, unregistering global shortcuts");
 });
 
 app.on("window-all-closed", () => {});

@@ -94,7 +94,7 @@ export class ToolRegistry {
   }
 
   getEnabledTools(): ToolDefinition[] {
-    return Array.from(this.tools.values()).filter(t => t.enabled);
+    return Array.from(this.tools.values()).filter(t => t.enabled && isCompanionSafeTool(t));
   }
 
   getAllTools(): ToolDefinition[] {
@@ -104,6 +104,15 @@ export class ToolRegistry {
   getById(id: string): ToolDefinition | undefined {
     return this.tools.get(id);
   }
+}
+
+/** The model only sees capabilities the application can enforce without arbitrary mutation/process escape. */
+export function isCompanionSafeTool(tool: Pick<ToolDefinition, "risk" | "id">): boolean {
+  if (tool.id === "install_mcp_server") return false;
+  // Fail closed: every model-visible tool must explicitly declare its capability risk.
+  const risk = tool.risk;
+  if (!risk) return false;
+  return risk === "safe" || risk === "fs-read" || risk === "network" || risk === "input-control";
 }
 
 // 全局单例
@@ -135,6 +144,7 @@ toolRegistry.register({
     '- 联网信息（那是 web_search）\n\n' +
     '参数：query (必填，搜索关键词)，topK (可选，返回条数，默认5)。',
   enabled: true,
+  risk: 'safe',
   inputSchema: {
     type: 'object',
     properties: {
@@ -164,6 +174,7 @@ toolRegistry.register({
     '- 用户从没提过的信息（查不到就老实说不知道）\n\n' +
     '参数：query (必填，搜索关键词)，topK (可选，返回条数，默认5)。',
   enabled: true,
+  risk: 'safe',
   inputSchema: {
     type: 'object',
     properties: {

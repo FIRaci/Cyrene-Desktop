@@ -206,11 +206,11 @@ describe("runLangGraphAgentLoop native Function Calling runtime", () => {
     });
     expect(result.reply).toBe("已向网易云发送播放请求。");
     const lines = log.mock.calls.map((call) => call.join(" ")).join("\n");
-    expect(lines).toContain("[AgentFlow] 3. 选择动作：调用 music_play_track");
-    expect(lines).toContain("[AgentFlow] 4. 生成工具参数：完成（candidateRef）");
-    expect(lines).toContain("[AgentFlow] 5. 执行工具：music_play_track");
-    expect(lines).toContain("[AgentFlow] 6. 工具结果：成功");
-    expect(lines).toContain("[AgentFlow] 7. 生成最终回复");
+    expect(lines).toContain("[AgentFlow] 3. Select action: call music_play_track");
+    expect(lines).toContain("[AgentFlow] 4. Generate tool arguments: completed (candidateRef)");
+    expect(lines).toContain("[AgentFlow] 5. Execute tool: music_play_track");
+    expect(lines).toContain("[AgentFlow] 6. Tool result: success");
+    expect(lines).toContain("[AgentFlow] 7. Generate final response");
     expect(lines).not.toContain("[AgentGraph/Trace]");
     expect(lines).not.toContain("[StructuredOutput]");
   });
@@ -243,8 +243,8 @@ describe("runLangGraphAgentLoop native Function Calling runtime", () => {
 
     expect(executeTool).not.toHaveBeenCalled();
     const lines = log.mock.calls.map((call) => call.join(" ")).join("\n");
-    expect(lines).toContain("[AgentFlow] 3. 动作校验失败：TARGET_REF_INVALID");
-    expect(lines).toContain("[AgentFlow]    工具未执行；转入失败回复");
+    expect(lines).toContain("[AgentFlow] 3. Action validation failed: TARGET_REF_INVALID");
+    expect(lines).toContain("[AgentFlow]    Tool not executed; entering failure response");
   });
 
   it("recovers from a stale target ref via refresh re-decision", async () => {
@@ -269,8 +269,8 @@ describe("runLangGraphAgentLoop native Function Calling runtime", () => {
 
     expect(executeTool).not.toHaveBeenCalled();
     const lines = log.mock.calls.map((call) => call.join(" ")).join("\n");
-    expect(lines).toContain("[AgentFlow] 3. 重新决策（上次失败：TARGET_REF_INVALID）");
-    expect(lines).toContain("[AgentFlow] 3. 选择动作：直接回复");
+    expect(lines).toContain("[AgentFlow] 3. Re-decision (last failed: TARGET_REF_INVALID)");
+    expect(lines).toContain("[AgentFlow] 3. Select action: direct reply");
   });
 
   it("uses the choice-card answer to continue from ask_user to tool execution", async () => {

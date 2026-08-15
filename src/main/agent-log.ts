@@ -18,7 +18,7 @@ export function flowLog(message: string): void {
 
 export function summarizeArgumentKeys(args: Record<string, unknown>): string {
   const keys = Object.keys(args).sort();
-  return keys.length > 0 ? keys.join(", ") : "无参数";
+  return keys.length > 0 ? keys.join(", ") : "no arguments";
 }
 
 export function summarizeObjective(value: string, maxLength = 80): string {

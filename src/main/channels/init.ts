@@ -55,9 +55,9 @@ export async function initChannels(): Promise<void> {
   // 启动 inbound-server
   try {
     const handle = await startInboundServer();
-    console.log(LOG, `入站 server 监听 http://127.0.0.1:${handle.port}`);
+    console.log(LOG, `Inbound server listening on http://127.0.0.1:${handle.port}`);
   } catch (err) {
-    console.error(LOG, "入站 server 启动失败:", err);
+    console.error(LOG, "Failed to start inbound server:", err);
   }
 
   // 注册 adapter
@@ -72,7 +72,7 @@ export async function initChannels(): Promise<void> {
   // 启动所有已注册 adapter
   await channelManager.startAll();
 
-  console.log(LOG, "channels 模块就绪");
+  console.log(LOG, "Channels module ready");
   broadcastChannelsStatus();
 }
 

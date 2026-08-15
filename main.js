@@ -1,6 +1,7 @@
-const { app, BrowserWindow, ipcMain, Tray, Menu, screen, globalShortcut } = require('electron');
+const { app, BrowserWindow, ipcMain, Tray, Menu, screen, globalShortcut, desktopCapturer } = require('electron');
 const path = require('path');
 const { exec } = require('child_process');
+const http = require('http');
 
 let mainWindow;
 let tray = null;
@@ -18,7 +19,7 @@ function pollAndSendActiveWindow() {
     isPollingWindow = false;
     if (err) return;
     const title = stdout.trim();
-    // Always push current title so renderer knows what chủ nhân is doing (not only on change)
+    // Always push current title so renderer knows what Master is doing (not only on change)
     if (title && !title.includes('Cyrene')) {
       lastActiveWindow = title;
       if (mainWindow && !mainWindow.isDestroyed()) {
@@ -70,7 +71,6 @@ function createWindow() {
     frame: false,            // No window frame
     transparent: true,       // Native transparency
     alwaysOnTop: true,
-    type: 'toolbar',         // Helps stay on top of some games
     resizable: false,
     skipTaskbar: true,       // Hide from taskbar
     hasShadow: false,
@@ -82,17 +82,19 @@ function createWindow() {
     }
   });
 
+  mainWindow.setAlwaysOnTop(true, 'screen-saver'); // Prevent Alt-Tab flicker by forcing highest z-index
+
   mainWindow.loadFile('cyrene_companion.html');
 
   // DevTools: uncomment below to debug in UI
-  // mainWindow.webContents.openDevTools({ mode: 'detach' });
+  mainWindow.webContents.openDevTools({ mode: 'detach' });
 
   // Make sure it clicks through transparent areas correctly (optional, but good for widgets)
   // We won't do ignoreMouseEvents because we need to interact with the UI.
 
   // Forward renderer console logs to terminal
   mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
-    console.log(`[Renderer] ${message}`);
+    console.log(`[Renderer] ${message} (line: ${line}, source: ${sourceId})`);
   });
 }
 
@@ -210,10 +212,31 @@ app.whenReady().then(() => {
     if (mainWindow) mainWindow.hide();
   });
 
-  ipcMain.on('window-move', (event, dx, dy) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      const [x, y] = mainWindow.getPosition();
-      mainWindow.setPosition(x + dx, y + dy);
+  ipcMain.on('window-move', (e, dx, dy) => {
+    const win = BrowserWindow.fromWebContents(e.sender);
+    if (!win) return;
+    const [x, y] = win.getPosition();
+    win.setPosition(x + dx, y + dy);
+  });
+
+  // ----------------------------------------------------
+  // Screen Vision Tool
+  // ----------------------------------------------------
+  ipcMain.handle('take-screenshot', async () => {
+    try {
+      const sources = await desktopCapturer.getSources({ 
+        types: ['screen'], 
+        thumbnailSize: { width: 1280, height: 720 } 
+      });
+      if (sources.length > 0) {
+        // Return the first screen as a base64 image (removing the data:image/png;base64, prefix for Ollama)
+        const dataUrl = sources[0].thumbnail.toDataURL();
+        return dataUrl.replace(/^data:image\/\w+;base64,/, '');
+      }
+      return null;
+    } catch (err) {
+      console.error('[Vision] Error capturing screen:', err);
+      return null;
     }
   });
 
@@ -225,6 +248,37 @@ app.whenReady().then(() => {
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  });
+
+  // Start IPC Server for Remielle
+  const ipcServer = http.createServer((req, res) => {
+    if (req.method === 'POST' && req.url === '/chat') {
+      let body = '';
+      req.on('data', chunk => body += chunk.toString());
+      req.on('end', () => {
+        try {
+          const data = JSON.parse(body);
+          if (data && data.message) {
+            console.log(`[IPC Cyrene] Received from Remielle: ${data.message}`);
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('incoming-remielle-message', data.message);
+            }
+          }
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ status: 'ok' }));
+        } catch(e) {
+          res.writeHead(400);
+          res.end('Bad Request');
+        }
+      });
+    } else {
+      res.writeHead(404);
+      res.end('Not Found');
+    }
+  });
+
+  ipcServer.listen(39393, () => {
+    console.log('[IPC Cyrene] Listening on port 39393 for Remielle messages.');
   });
 });
 

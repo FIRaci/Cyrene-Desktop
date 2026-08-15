@@ -1,7 +1,7 @@
 // Function Calling —— 厂商无关的 function calling 循环
 // 调度层只依赖 vendors adapter 的统一返回结构（buildRequest / parseResponse / appendToolResults），
 // 绝不出现 if (provider === "xxx")。新厂商扩展只需在 capabilities.ts + 对应 transport adapter 里加一条。
-import { toolRegistry, ToolDefinition } from "./tool-registry";
+import { isCompanionSafeTool, toolRegistry, ToolDefinition } from "./tool-registry";
 import { ToolCallResult } from "./types";
 import { checkPermission, ToolRiskLevel } from "../permission";
 import {
@@ -208,7 +208,7 @@ export async function runFunctionCallingLoop(
         let output: string;
         let status: ToolCallResult["status"] = "failed";
         let errorCode: string | undefined;
-        if (!tool || !tool.enabled) {
+        if (!tool || !tool.enabled || !isCompanionSafeTool(tool)) {
           output = "[错误] 工具不可用: " + tc.name;
           errorCode = "E_TOOL_UNAVAILABLE";
           console.warn(LOG_PREFIX, output);

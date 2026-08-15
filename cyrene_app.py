@@ -167,9 +167,9 @@ def _run_tray(window):
             window.destroy()
 
         menu = pystray.Menu(
-            pystray.MenuItem("Hien/An Cyrene", on_toggle, default=True),
+            pystray.MenuItem("Show/Hide Cyrene", on_toggle, default=True),
             pystray.Menu.SEPARATOR,
-            pystray.MenuItem("Thoat", on_quit),
+            pystray.MenuItem("Quit", on_quit),
         )
         icon = pystray.Icon("cyrene", img, "Cyrene - AI Companion", menu)
         icon.run()

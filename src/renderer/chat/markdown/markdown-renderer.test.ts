@@ -22,6 +22,17 @@ vi.mock("dompurify", () => ({
 
 import { renderMarkdown } from "./markdown-renderer";
 
+describe("renderMarkdown cache identity", () => {
+  test("does not reuse cached HTML for equal-length 32-bit hash collisions", () => {
+    // Java String-style hash collision: both strings hash to 2112 and have length 2.
+    const first = renderMarkdown("Aa");
+    const second = renderMarkdown("BB");
+    expect(first.content).toContain("Aa");
+    expect(second.content).toContain("BB");
+    expect(second.content).not.toBe(first.content);
+  });
+});
+
 describe("renderMarkdown", () => {
   test("returns html mode for normal markdown", () => {
     const result = renderMarkdown("# Hello World");

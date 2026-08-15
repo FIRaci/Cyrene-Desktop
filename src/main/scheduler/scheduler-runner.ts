@@ -28,7 +28,8 @@ export function createSchedulerRunner(deps: RunnerDeps) {
   async function runScheduledTask(task: ScheduledTask, _scheduledFireAt: Date, manual: boolean): Promise<ScheduledRunResult> {
     const historyId = deps.id();
     const startedAt = deps.now();
-    const allTools = toolRegistry.getAllTools();
+    // Scheduled agents receive the same companion-safe catalog as interactive chat.
+    const allTools = toolRegistry.getEnabledTools();
     const effectiveTools = filterToolsForTask(task, allTools);
     const effectiveToolIds = effectiveTools.map(t => t.id);
 

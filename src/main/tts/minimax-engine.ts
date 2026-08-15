@@ -14,6 +14,8 @@ import { WebSocket } from "ws";
 
 const BASE_URL = "https://api.minimaxi.com";
 const WS_URL = "wss://api.minimaxi.com/ws/v1/t2a_v2";
+const HTTP_TIMEOUT_MS = 60_000;
+const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
 
 // ── 上传音频文件 ──────────────────────────────────────────────
 
@@ -35,7 +37,10 @@ export async function uploadFile(
   purpose: "voice_clone" | "prompt_audio",
 ): Promise<UploadedFile> {
   const fileName = path.basename(filePath);
-  const fileBuffer = fs.readFileSync(filePath);
+  const stat = await fs.promises.stat(filePath);
+  if (!stat.isFile()) throw new Error("The selected audio path is not a file.");
+  if (stat.size > MAX_UPLOAD_BYTES) throw new Error("The selected audio file exceeds the 20 MB limit.");
+  const fileBuffer = await fs.promises.readFile(filePath);
 
   // 构造 multipart/form-data
   const boundary = "----CyreneTTS" + Math.random().toString(36).slice(2);
@@ -66,6 +71,7 @@ export async function uploadFile(
       "Content-Type": `multipart/form-data; boundary=${boundary}`,
     },
     body,
+    signal: AbortSignal.timeout(HTTP_TIMEOUT_MS),
   });
 
   const data = (await response.json()) as {
@@ -129,6 +135,7 @@ export async function cloneVoice(opts: CloneVoiceOptions): Promise<CloneVoiceRes
       "Content-Type": "application/json",
     },
     body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(HTTP_TIMEOUT_MS),
   });
 
   const data = (await response.json()) as {
