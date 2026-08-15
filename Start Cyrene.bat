@@ -1,15 +1,16 @@
 @echo off
 cd /d "%~dp0"
 :: ─────────────────────────────────────────────────────────────────
-::  Cyrene Desktop Launcher
+::  Cyrene Desktop Launcher — Layer A (Live2D Companion)
 :: ─────────────────────────────────────────────────────────────────
-:: Optional: start TTS voice server first (requires Python + setup)
-:: Run "python cyrene_tts.py" in a separate window before launching.
-:: Cyrene will speak via GPT-SoVITS voice if the TTS server is running.
+:: NOTE: package.json "main" points to Layer B (TypeScript agent).
+::       We must pass main.js explicitly to run the companion UI.
 ::
-:: For DevTools (debug mode), run:
-::   set CYRENE_DEVTOOLS=1
-::   .\node_modules\electron\dist\electron.exe .
+:: Optional: start TTS voice server first (requires Python + setup)
+::   python cyrene_tts.py   (in a separate terminal window)
+::
+:: For DevTools (debug mode):
+::   set CYRENE_DEVTOOLS=1 && .\node_modules\electron\dist\electron.exe main.js
 :: ─────────────────────────────────────────────────────────────────
-.\node_modules\electron\dist\electron.exe .
+.\node_modules\electron\dist\electron.exe main.js
 pause

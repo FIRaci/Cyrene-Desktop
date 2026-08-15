@@ -25,13 +25,19 @@ The codebase contains two parallel architectural layers — **DO NOT CONFUSE THE
 ┌───────────────────────────────────────┐               ┌───────────────────────────────────────┐
 │  LAYER A: Root Companion (Active)     │               │  LAYER B: Autonomous Agent Core (src/)│
 ├───────────────────────────────────────┤               ├───────────────────────────────────────┤
-│ • Entry: main.js → cyrene_companion   │               │ • Entry: src/main/index.ts            │
+│ • Entry: main.js → cyrene_companion   │               │ • Entry: dist/main/main/index.js      │
 │ • Stack: Vanilla JS, PixiJS, Electron │               │ • Stack: TypeScript, LangGraph, RAG   │
-│ • LLM: Ollama REST direct             │               │ • LLM: Multi-provider + Native FC Tools│
+│ • LLM: Ollama REST direct             │               │ • LLM: Multi-provider + Native FC     │
 │ • Memory: localStorage (FIFO 30)      │               │ • Memory: EntityGraph, L0/L1/L2, RAG  │
+│ • Launch: electron main.js            │               │ • Launch: electron . (uses pkg.main)  │
 │ • Purpose: Lightweight Desktop Pet    │               │ • Purpose: Autonomous Agent Framework │
 └───────────────────────────────────────┘               └───────────────────────────────────────┘
 ```
+
+> [!IMPORTANT]
+> `package.json "main"` = `dist/main/main/index.js` (Layer B). Running `electron .` or `npm start`
+> without specifying `main.js` launches **Layer B**, not the companion.
+> **Always use `electron main.js` or `Start Cyrene.bat` to launch the companion.**
 
 1. **Layer A — Root Companion Runtime (Lightweight & Active):**
    - **Entry point:** [main.js](file:///d:/Cyrene%20Test/main.js) opens [cyrene_companion.html](file:///d:/Cyrene%20Test/cyrene_companion.html) via bridge [preload.js](file:///d:/Cyrene%20Test/preload.js).
@@ -151,24 +157,26 @@ d:\Cyrene Test/
 ## 7. Cheatsheet Commands
 
 ```powershell
-# Run Companion application (Layer A)
-Start Cyrene.bat
-# or: npm start
+# ── Layer A: Run Companion (Live2D Cyrene) ──
+Start Cyrene.bat           # double-click or run this
+# or:
+npm start                  # = electron main.js
+# or:
+.\node_modules\electron\dist\electron.exe main.js
 
-# Run Voice TTS Server (optional — enables Cyrene's voice)
-python cyrene_tts.py
+# ── Layer B: Run Autonomous Agent ──
+npm run start:agent        # = electron . (uses dist/main/main/index.js)
 
-# Debug mode (with DevTools inspector)
-$env:CYRENE_DEVTOOLS=1; .\node_modules\electron\dist\electron.exe .
+# ── Voice TTS (optional — enables Cyrene's voice) ──
+python cyrene_tts.py       # in a separate terminal, before launching
 
-# Run complete Test Suite (Vitest)
-npm test -- --run
+# ── Debug mode (with DevTools inspector) ──
+$env:CYRENE_DEVTOOLS=1; .\node_modules\electron\dist\electron.exe main.js
 
-# Build all TypeScript modules (Main + Skills + Preload + Renderer)
-npm run build
-
-# Run DMAE interaction simulation
-npm run sim:mix
+# ── Tests & Build ──
+npm test -- --run          # run Vitest suite (1652 tests)
+npm run build              # TypeScript build (Main + Skills + Preload + Renderer)
+npm run sim:mix            # DMAE interaction simulation
 ```
 
 ## 8. Keyboard Shortcuts
