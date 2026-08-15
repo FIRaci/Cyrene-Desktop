@@ -1,7 +1,8 @@
-const { app, BrowserWindow, ipcMain, Tray, Menu, screen, globalShortcut, desktopCapturer } = require('electron');
+const { app, BrowserWindow, ipcMain, Tray, Menu, screen, globalShortcut, desktopCapturer, shell } = require('electron');
 const path = require('path');
 const { exec } = require('child_process');
 const http = require('http');
+const fs = require('fs');
 
 let mainWindow;
 let tray = null;
@@ -86,8 +87,10 @@ function createWindow() {
 
   mainWindow.loadFile('cyrene_companion.html');
 
-  // DevTools: uncomment below to debug in UI
-  mainWindow.webContents.openDevTools({ mode: 'detach' });
+  // DevTools: launch with CYRENE_DEVTOOLS=1 env var to open inspector
+  if (process.env.CYRENE_DEVTOOLS === '1') {
+    mainWindow.webContents.openDevTools({ mode: 'detach' });
+  }
 
   // Make sure it clicks through transparent areas correctly (optional, but good for widgets)
   // We won't do ignoreMouseEvents because we need to interact with the UI.
@@ -158,19 +161,26 @@ app.whenReady().then(() => {
     }
   }, 33);
 
-  // Register Global Shortcuts
+  // ── Register Global Shortcuts ──────────────────────────────
+  // Helper: show window and bring to front
+  function bringToFront() {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    mainWindow.show();
+    mainWindow.setAlwaysOnTop(true, 'screen-saver');
+    mainWindow.setAlwaysOnTop(true, 'pop-up-menu');
+  }
+  function sendToRenderer(channel) {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel);
+  }
+
+  // ── Legacy Ctrl shortcuts (kept for backwards compat) ──
   // Ctrl+1: Toggle Hide/Show
   globalShortcut.register('CommandOrControl+1', () => {
     if (mainWindow && !mainWindow.isDestroyed()) {
-      // If it's visible AND focused, we hide. Otherwise, we force show.
-      // Games might push the window back, so if it's visible but not focused, showing brings it to front.
       if (mainWindow.isVisible() && mainWindow.isFocused()) {
         mainWindow.hide();
       } else {
-        mainWindow.show();
-        // Give it always on top temporarily to pierce fullscreen apps
-        mainWindow.setAlwaysOnTop(true, 'screen-saver');
-        mainWindow.setAlwaysOnTop(true, 'pop-up-menu');
+        bringToFront();
       }
     }
   });
@@ -183,25 +193,54 @@ app.whenReady().then(() => {
   // Ctrl+2: Open Chat
   globalShortcut.register('CommandOrControl+2', () => {
     if (mainWindow && !mainWindow.isDestroyed()) {
-      if (!mainWindow.isVisible() || !mainWindow.isFocused()) {
-        mainWindow.show();
-        mainWindow.setAlwaysOnTop(true, 'screen-saver');
-        mainWindow.setAlwaysOnTop(true, 'pop-up-menu');
-      }
-      mainWindow.webContents.send('trigger-chat');
+      if (!mainWindow.isVisible() || !mainWindow.isFocused()) bringToFront();
+      sendToRenderer('trigger-chat');
     }
   });
 
   // Ctrl+3: Toggle Emote Context Menu
   globalShortcut.register('CommandOrControl+3', () => {
     if (mainWindow && !mainWindow.isDestroyed()) {
-      if (!mainWindow.isVisible() || !mainWindow.isFocused()) {
-        mainWindow.show();
-        mainWindow.setAlwaysOnTop(true, 'screen-saver');
-        mainWindow.setAlwaysOnTop(true, 'pop-up-menu');
-      }
-      mainWindow.webContents.send('trigger-emote-menu');
+      if (!mainWindow.isVisible() || !mainWindow.isFocused()) bringToFront();
+      sendToRenderer('trigger-emote-menu');
     }
+  });
+
+  // ── New Alt shortcuts ────────────────────────────────────
+  // Alt+1: Quit
+  globalShortcut.register('Alt+1', () => {
+    app.quit();
+  });
+
+  // Alt+2: Toggle Show / Hide Cyrene
+  globalShortcut.register('Alt+2', () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    if (mainWindow.isVisible()) {
+      mainWindow.hide();
+    } else {
+      bringToFront();
+    }
+  });
+
+  // Alt+3: Toggle Chat Panel
+  globalShortcut.register('Alt+3', () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    if (!mainWindow.isVisible()) bringToFront();
+    sendToRenderer('trigger-chat');
+  });
+
+  // Alt+4: Toggle Log Panel
+  globalShortcut.register('Alt+4', () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    if (!mainWindow.isVisible()) bringToFront();
+    sendToRenderer('trigger-log-panel');
+  });
+
+  // Alt+5: Toggle Notes & Schedule Panel
+  globalShortcut.register('Alt+5', () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    if (!mainWindow.isVisible()) bringToFront();
+    sendToRenderer('trigger-ns-panel');
   });
 
   ipcMain.on('window-minimize', () => {
@@ -248,6 +287,77 @@ app.whenReady().then(() => {
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  });
+
+  // ----------------------------------------------------
+  // Phase 4 — Task Automation IPC Handlers
+  // ----------------------------------------------------
+  const { dialog } = require('electron');
+
+  // Open URL in default browser
+  ipcMain.handle('task-open-url', async (event, url) => {
+    try {
+      await shell.openExternal(url);
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  // List files in a directory (returns array of names)
+  ipcMain.handle('task-list-dir', async (event, dirPath) => {
+    try {
+      const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+      return {
+        ok: true,
+        items: entries.map(e => ({ name: e.name, isDir: e.isDirectory() }))
+      };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  // Create a text file at the given path
+  ipcMain.handle('task-create-file', async (event, filePath, content) => {
+    try {
+      fs.writeFileSync(filePath, content, 'utf8');
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  // Rename a file or folder (requires confirmation for safety)
+  ipcMain.handle('task-rename', async (event, oldPath, newPath) => {
+    const result = await dialog.showMessageBox(mainWindow, {
+      type: 'question',
+      buttons: ['Rename', 'Cancel'],
+      defaultId: 0,
+      cancelId: 1,
+      title: 'Cyrene — Confirm Rename',
+      message: `Rename:\n"${oldPath}"\n→ "${newPath}"?`
+    });
+    if (result.response !== 0) return { ok: false, error: 'User cancelled' };
+    try {
+      fs.renameSync(oldPath, newPath);
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  // Run an allowlisted PowerShell command
+  const CMD_ALLOWLIST = /^(dir|ls|echo|ping|whoami|hostname|date|time|type)\b/i;
+  ipcMain.handle('task-run-cmd', async (event, command) => {
+    if (!CMD_ALLOWLIST.test(command.trim())) {
+      return { ok: false, error: 'Command not on allowlist for safety.' };
+    }
+    return new Promise(resolve => {
+      exec(`powershell -NoProfile -Command "${command.replace(/"/g, '\\"')}"`, { timeout: 8000 }, (err, stdout, stderr) => {
+        if (err) resolve({ ok: false, error: stderr || err.message });
+        else resolve({ ok: true, output: stdout.trim() });
+      });
+    });
   });
 
   // Start IPC Server for Remielle

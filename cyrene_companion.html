@@ -458,6 +458,24 @@
   <span id="dialogue-text"></span>
 </div>
 
+<!-- ──── TTS Mute Toggle ──── -->
+<button id="tts-mute-btn" onclick="TTSClient.toggleMute()" title="Toggle Cyrene's voice" style="
+  position: fixed;
+  bottom: 12px;
+  left: 12px;
+  background: rgba(18, 9, 36, 0.7);
+  border: 1px solid rgba(199, 125, 222, 0.25);
+  color: #c77dde;
+  border-radius: 10px;
+  padding: 5px 10px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  z-index: 200;
+  font-family: 'Noto Sans JP', sans-serif;
+  backdrop-filter: blur(8px);
+  transition: all 0.2s;
+">(-ω-)♪</button>
+
 <!-- ──── Context Menu ──── -->
 <div id="ctx-menu">
   <div class="ctx-item" onclick="openChat()">
@@ -628,6 +646,11 @@ You have access to the following tools:
 3. "send_message_to_remielle": {"message": "Message text"} - Talk to Remielle Desktop.
 4. "read_schedule": {} - Read Master's schedule.
 5. "look_at_screen": {} - Take a screenshot and literally scan/look at what is on Master's screen.
+6. "open_url": {"url": "https://..."} - Open a URL in Master's browser. Use when Master asks to open a website.
+7. "list_directory": {"path": "C:\\Users\\..."}  - List files/folders in a directory.
+8. "create_file": {"path": "C:\\...\\ filename.txt", "content": "..."} - Create a text file.
+9. "rename_item": {"old_path": "...", "new_path": "..."} - Rename a file or folder (will ask Master to confirm).
+10. "run_command": {"command": "dir C:\\"} - Run a safe read-only command (dir, ls, echo, ping, whoami, hostname).
 Use them ONLY when necessary. If no tool is needed, return empty array [].
 
 ## Emote Field & Rich Emotional Expression — ABSOLUTELY NO UNICODE EMOJIS
@@ -969,22 +992,15 @@ async function initLive2D() {
       }
     });
 
-    // Add scroll to scale model
-    canvas.addEventListener('wheel', (e) => {
-      if (!e.ctrlKey) return; // Must hold Ctrl to scale
+    // Ctrl+Scroll anywhere on the window to scale model (not just canvas)
+    document.addEventListener('wheel', (e) => {
+      if (!e.ctrlKey) return;
       e.preventDefault();
-      // Adjust scale (scroll up = zoom in, scroll down = zoom out)
       const scaleSpeed = 0.05;
-      if (e.deltaY < 0) {
-        currentModelScale += scaleSpeed;
-      } else {
-        currentModelScale -= scaleSpeed;
-      }
-      
-      // Limit scale bounds
+      currentModelScale += e.deltaY < 0 ? scaleSpeed : -scaleSpeed;
       currentModelScale = Math.max(0.4, Math.min(currentModelScale, 3.0));
       updateModelTransform();
-    });
+    }, { passive: false });
 
     // Initial idle motion
     setTimeout(() => safeMotion('动作#6', 0), 800);
@@ -1521,6 +1537,60 @@ const MemorySystem = {
 function clearMemory() { MemorySystem.clear(); }
 
 // ═══════════════════════════════════════════════════════════════
+//  TTS CLIENT (GPT-SoVITS local server)
+// ═══════════════════════════════════════════════════════════════
+const TTSClient = {
+  TTS_URL: 'http://localhost:9872/tts',
+  muted: false,
+  currentAudio: null,
+
+  async speak(text) {
+    if (this.muted || !text || text.trim() === '') return;
+    // Strip asterisk actions and kaomoji — speak only natural text
+    const cleanText = text
+      .replace(/\*[^*]+\*/g, '') // Remove *actions*
+      .replace(/[\u4e00-\u9fa5]/g, '') // Remove stray Chinese chars
+      .replace(/\([^)]+\)/g, '') // Remove kaomoji in parens
+      .replace(/[()\[\]]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (!cleanText) return;
+
+    try {
+      const res = await fetch(this.TTS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: cleanText, text_language: 'en' }),
+        signal: AbortSignal.timeout(15000)
+      });
+      if (!res.ok) return; // TTS server not running — silent fail
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      if (this.currentAudio) {
+        this.currentAudio.pause();
+        URL.revokeObjectURL(this.currentAudio.src);
+      }
+      this.currentAudio = new Audio(url);
+      this.currentAudio.onended = () => URL.revokeObjectURL(url);
+      await this.currentAudio.play();
+    } catch (e) {
+      // TTS server offline — just skip silently, don't break the UI
+      if (e.name !== 'AbortError' && e.name !== 'TypeError') {
+        console.log('[TTS] Server not available:', e.message);
+      }
+    }
+  },
+
+  toggleMute() {
+    this.muted = !this.muted;
+    if (this.muted && this.currentAudio) this.currentAudio.pause();
+    const btn = document.getElementById('tts-mute-btn');
+    if (btn) btn.textContent = this.muted ? '(-ω-)' : '(-ω-)♪';
+    console.log('[TTS] Muted:', this.muted);
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════
 //  OLLAMA CALL
 // ═══════════════════════════════════════════════════════════════
 async function executeToolCalls(toolCalls) {
@@ -1580,6 +1650,47 @@ async function executeToolCalls(toolCalls) {
           }
         } else {
           results.push(`[Tool: look_at_screen] Vision capability not supported in this environment.`);
+        }
+      // ── Phase 4 Task Automation Tools ─────────────────────
+      } else if (call.name === 'open_url') {
+        const url = call.args.url || '';
+        if (window.electronAPI && window.electronAPI.taskOpenUrl) {
+          const r = await window.electronAPI.taskOpenUrl(url);
+          results.push(r.ok ? `[Tool: open_url] Opened: ${url}` : `[Tool: open_url] Failed: ${r.error}`);
+        } else {
+          window.open(url, '_blank');
+          results.push(`[Tool: open_url] Opened: ${url}`);
+        }
+      } else if (call.name === 'list_directory') {
+        const dirPath = call.args.path || call.args.directory || 'C:\\';
+        if (window.electronAPI && window.electronAPI.taskListDir) {
+          const r = await window.electronAPI.taskListDir(dirPath);
+          if (r.ok) {
+            const summary = r.items.slice(0, 20).map(i => (i.isDir ? '[DIR] ' : '') + i.name).join(', ');
+            results.push(`[Tool: list_directory] ${dirPath}: ${summary}${r.items.length > 20 ? ` ... (${r.items.length} total)` : ''}`);
+          } else {
+            results.push(`[Tool: list_directory] Error: ${r.error}`);
+          }
+        }
+      } else if (call.name === 'create_file') {
+        const filePath = call.args.path || '';
+        const content = call.args.content || '';
+        if (window.electronAPI && window.electronAPI.taskCreateFile) {
+          const r = await window.electronAPI.taskCreateFile(filePath, content);
+          results.push(r.ok ? `[Tool: create_file] Created: ${filePath}` : `[Tool: create_file] Failed: ${r.error}`);
+        }
+      } else if (call.name === 'rename_item') {
+        const oldPath = call.args.old_path || '';
+        const newPath = call.args.new_path || '';
+        if (window.electronAPI && window.electronAPI.taskRename) {
+          const r = await window.electronAPI.taskRename(oldPath, newPath);
+          results.push(r.ok ? `[Tool: rename_item] Renamed successfully.` : `[Tool: rename_item] ${r.error}`);
+        }
+      } else if (call.name === 'run_command') {
+        const command = call.args.command || '';
+        if (window.electronAPI && window.electronAPI.taskRunCmd) {
+          const r = await window.electronAPI.taskRunCmd(command);
+          results.push(r.ok ? `[Tool: run_command] Output: ${r.output}` : `[Tool: run_command] Error: ${r.error}`);
         }
       } else {
         results.push(`[Tool: ${call.name}] Unknown tool.`);
@@ -1654,10 +1765,12 @@ async function sendMessage(systemTriggeredText = null) {
     console.log('[Cyrene Chat]:', parsed.text);
     addMessage('cyrene', parsed.text || '...');
     applyAIActions(parsed);
+    // Speak response via TTS (non-blocking — fires and forgets)
+    TTSClient.speak(parsed.text);
   } catch (e) {
     removeTyping();
     console.error('[Cyrene] Ollama error:', e);
-    addMessage('cyrene', 'Oh... connection to Ollama seems to have an issue. Could Master check it? 🥺');
+    addMessage('cyrene', 'Oh... connection to Ollama seems to have an issue. Could Master check it?');
     safeExpression('问号');
   } finally {
     setTypingStatus(false);
@@ -1788,6 +1901,14 @@ document.addEventListener('DOMContentLoaded', () => {
         window.currentSystemAudio = data;
       });
     }
+    // Alt+4: Toggle Log Panel from keyboard
+    if (window.electronAPI.onToggleLogPanel) {
+      window.electronAPI.onToggleLogPanel(() => toggleLogPanel());
+    }
+    // Alt+5: Toggle Notes & Schedule Panel from keyboard
+    if (window.electronAPI.onToggleNsPanel) {
+      window.electronAPI.onToggleNsPanel(() => toggleNSPanel());
+    }
   }
 
   // Initial Welcome Dialogue
@@ -1821,7 +1942,7 @@ function winClose() {
   } catch (_) {}
 }
 
-// Lắng nghe sự kiện từ Global Shortcuts (Main process)
+// Listen to Global Shortcuts from Main process
 if (window.electronAPI) {
   window.electronAPI.onOpenChat(() => {
     if (!isChatOpen) {

@@ -68,7 +68,10 @@ The codebase contains two parallel architectural layers — **DO NOT CONFUSE THE
 ### 4.1. Completed (DONE) ✅
 - [x] **Live2D Renderer:** Integrated PixiJS v7 + Cubism 4, handled character expressions and motion mapping.
 - [x] **Desktop Transparency & Click-through:** Intelligent `setIgnoreMouseEvents` based on bounding box hit-test; disabled Hardware Acceleration to prevent transparent background glitches.
-- [x] **Eye Tracking & Window Dragging:** Cursor tracking at 30 FPS (`mouse-pos`), `Ctrl + Drag` to reposition window, `Ctrl + Wheel` to scale model size.
+- [x] **Eye Tracking & Window Dragging:** Cursor tracking at 30 FPS (`mouse-pos`), `Ctrl + Drag` to reposition window.
+- [x] **Ctrl+Scroll Model Resize:** Now works anywhere on the window (not just canvas).
+- [x] **Expanded Keyboard Shortcuts:** `Alt+1` (Quit), `Alt+2` (Toggle show/hide), `Alt+3` (Toggle chat), `Alt+4` (Toggle logs), `Alt+5` (Toggle Notes & Schedule). Legacy `Ctrl+1/2/3` still work.
+- [x] **Minimalist Startup:** DevTools no longer auto-opens on launch. Set `CYRENE_DEVTOOLS=1` to re-enable.
 - [x] **Ollama Single-Flight Engine:** Sequential queuing in [OllamaClient](file:///d:/Cyrene%20Test/cyrene_companion.html#L696-L732) to prevent concurrent request timeouts; 6-field JSON schema contract.
 - [x] **Sensory Perception:** Win32 Active Window & System Audio metadata polling via PowerShell every 5s; IP-based weather lookup; screen vision via `llama3.2-vision`.
 - [x] **Persona & Emotion Loop:** Idle thoughts trigger (30s poll, 120s idle threshold), click reactions (head pat, poke), floating Kaomoji popups.
@@ -76,6 +79,8 @@ The codebase contains two parallel architectural layers — **DO NOT CONFUSE THE
 - [x] **A2A Inter-Agent IPC:** Bi-directional communication with Remielle Desktop over ports 39393 / 39394.
 - [x] **TypeScript Agent Foundation:** All 1652 core agent tests passing.
 - [x] **Full English Translation:** Complete English migration of backend logs, orchestrator, tools, channels, system prompts, settings UI, companion UI, and chat renderer.
+- [x] **GPT-SoVITS Voice Integration:** `cyrene_tts.py` auto-downloads HSR Cyrene voice model and starts inference server on port 9872. `TTSClient` in companion auto-plays speech after every response. Mute toggle button (`(-ω-)♪`) visible on screen.
+- [x] **Task Automation Framework (Phase 4):** Cyrene can now execute tasks via Ollama tool calls: `open_url` (open browser), `list_directory`, `create_file`, `rename_item` (with dialog confirmation), `run_command` (allowlisted PS commands).
 
 ---
 
@@ -116,21 +121,22 @@ d:\Cyrene Test/
 ├── README.md                      # Quick overview & installation guide
 ├── package.json                   # Dependencies, build scripts, Vitest config
 ├── Start Cyrene.bat               # Companion launcher script
-├── main.js                        # Electron main process (Layer A)
-├── preload.js                     # Secure IPC bridge for renderer
-├── cyrene_companion.html          # Transparent UI + Live2D + Ollama Brain (Layer A)
+├── cyrene_tts.py                  # GPT-SoVITS TTS server launcher (voice synthesis)
+├── main.js                        # Electron main process (Layer A) — shortcuts, IPC, task handlers
+├── preload.js                     # Secure IPC bridge (exposes task automation APIs)
+├── cyrene_companion.html          # Transparent UI + Live2D + Ollama Brain + TTSClient (Layer A)
 ├── cyrene_app.py                  # Python launcher alternative (PyWebView)
 ├── get_active_window.ps1          # Win32 active window title sensor
 ├── get_audio_sessions.ps1         # System audio media metadata sensor
 ├── plan.md                        # Master hardening & reliability plan
-├── phase-01-security-boundaries.md# Phase 1 tasks
-├── phase-02-runtime-reliability.md# Phase 2 tasks
-├── phase-03-documentation-verification.md # Phase 3 tasks
 ├── docs/
 │   ├── project-overview-pdr.md    # Product vision, persona & UX guidelines
 │   ├── system-architecture.md     # System architecture & sensory loop
 │   ├── code-standards.md          # Coding standards & FPS optimization rules
 │   └── review-and-fix-plan.md     # Comprehensive review plan & fix history
+├── vendor/
+│   ├── gpt-sovits/                # GPT-SoVITS inference engine (cloned on first run)
+│   └── cyrene-voice/              # HSR Cyrene voice model weights (downloaded from HuggingFace)
 ├── src/                           # Full Layer B source code (TypeScript)
 │   ├── main/                      # Electron backend, Orchestrator, Memory, RAG, TTS
 │   ├── renderer/                  # Settings and Chat renderers
@@ -149,6 +155,12 @@ d:\Cyrene Test/
 Start Cyrene.bat
 # or: npm start
 
+# Run Voice TTS Server (optional — enables Cyrene's voice)
+python cyrene_tts.py
+
+# Debug mode (with DevTools inspector)
+$env:CYRENE_DEVTOOLS=1; .\node_modules\electron\dist\electron.exe .
+
 # Run complete Test Suite (Vitest)
 npm test -- --run
 
@@ -157,7 +169,21 @@ npm run build
 
 # Run DMAE interaction simulation
 npm run sim:mix
-
-# Run Python launcher
-python cyrene_app.py
 ```
+
+## 8. Keyboard Shortcuts
+
+| Shortcut | Action |
+|---|---|
+| `Alt+1` | Quit app |
+| `Alt+2` | Toggle show / hide Cyrene |
+| `Alt+3` | Toggle chat panel |
+| `Alt+4` | Toggle system log panel |
+| `Alt+5` | Toggle Notes & Schedule panel |
+| `Ctrl+1` | Toggle show/hide (legacy) |
+| `Ctrl+2` | Open chat (legacy) |
+| `Ctrl+3` | Toggle context menu (legacy) |
+| `Ctrl+`` ` | Quit (legacy) |
+| `Ctrl+Scroll` | Resize Live2D model (anywhere on window) |
+| `Ctrl+Drag` | Move companion window |
+| Right-click | Open context menu |
