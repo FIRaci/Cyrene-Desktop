@@ -459,7 +459,7 @@
 </div>
 
 <!-- ──── TTS Mute Toggle ──── -->
-<button id="tts-mute-btn" onclick="TTSClient.toggleMute()" title="Toggle Cyrene's voice" style="
+<button id="tts-mute-btn" onclick="toggleMute()" title="Toggle Cyrene's voice" style="
   position: fixed;
   bottom: 12px;
   left: 12px;
@@ -477,89 +477,80 @@
 ">(-ω-)♪</button>
 
 <!-- ──── Context Menu ──── -->
+<!-- ──── Context Menu ──── -->
 <div id="ctx-menu">
-  <div class="ctx-item" onclick="openChat()">
-    <span class="icon">(o˙▽˙o)</span> Chat with Cyrene
+  <div class="ctx-item" onclick="openChatWindow()">
+    <span class="icon">(o˙▽˙o)</span> Chat with Cyrene (Alt+1)
   </div>
-  <div class="ctx-item" onclick="toggleLogPanel()">
-    <span class="icon">(⌐■_■)</span> View Logs
+  <div class="ctx-item" onclick="openSidebarWindow()">
+    <span class="icon">(📊)</span> Status Panel (Alt+2)
   </div>
-  <div class="ctx-item" onclick="toggleNSPanel()">
-    <span class="icon">(📝)</span> Notes & Schedule
+  <div class="ctx-item" onclick="openTasksWindow()">
+    <span class="icon">(📋)</span> Tasks & Schedule (Alt+3)
+  </div>
+  <div class="ctx-item" onclick="openSettingsWindow()">
+    <span class="icon">(⚙️)</span> Settings (Alt+S)
   </div>
   <div class="ctx-item" onclick="triggerRandomMotion()">
     <span class="icon">(*´∀`*)</span> Random Expression
   </div>
-  <div class="ctx-item" onclick="clearMemory()">
-    <span class="icon">(>_<)</span> Clear Long-Term Memory
+  <div class="ctx-item" onclick="hidePet()">
+    <span class="icon">(👁️)</span> Hide Desktop Pet (Alt+C)
   </div>
-</div>
-
-<!-- ──── Chat Panel ──── -->
-<div id="chat-panel">
-  <div id="chat-messages"></div>
-
-  <div class="chat-input-area">
-    <textarea id="chat-input" rows="1" placeholder="Say something to Cyrene~" maxlength="800"></textarea>
-    <button id="btn-send" onclick="sendMessage()" title="Send">&#x276F;</button>
-  </div>
-</div>
-
-<!-- ──── Log Panel ──── -->
-<div id="log-panel" class="glass-panel">
-  <div class="panel-header">
-    <span class="panel-title">Cyrene System Logs</span>
-    <button class="panel-close" onclick="toggleLogPanel()">×</button>
-  </div>
-  <div class="panel-content" id="log-content">
-    <div class="log-line">[System] Logging initialized...</div>
-  </div>
-</div>
-
-<!-- ──── Notes & Schedule Panel ──── -->
-<div id="ns-panel" class="glass-panel">
-  <div class="panel-header">
-    <span class="panel-title">Notes & Schedule</span>
-    <button class="panel-close" onclick="toggleNSPanel()">×</button>
-  </div>
-  <div class="panel-content">
-    <div class="ns-section">
-      <h3>Master's Schedule</h3>
-      <textarea id="schedule-input" class="ns-textarea" placeholder="Enter your schedule here..."></textarea>
-    </div>
-    <div class="ns-section">
-      <h3>Important Notes</h3>
-      <textarea id="notes-input" class="ns-textarea" placeholder="Enter notes here..."></textarea>
-    </div>
-    <button class="ns-btn" onclick="saveNS()">Save All</button>
-    <span id="ns-status" style="margin-left: 10px; color: #a0d4a4; font-size: 0.9em; display: none;">Saved!</span>
+  <div class="ctx-item" onclick="exitApp()">
+    <span class="icon">(❌)</span> Exit App
   </div>
 </div>
 
 <script>
-// --- Panel Logic ---
-function toggleLogPanel() {
-  const p = document.getElementById('log-panel');
-  p.style.display = p.style.display === 'flex' ? 'none' : 'flex';
+const MODEL_PATH = './assets/models/cyrene/Cyrene.model3.json';
+
+// --- Window Routing Logic ---
+function openChatWindow() {
   hideCtxMenu();
-}
-function toggleNSPanel() {
-  const p = document.getElementById('ns-panel');
-  if (p.style.display !== 'flex') {
-    document.getElementById('schedule-input').value = localStorage.getItem('cyrene_schedule') || '';
-    document.getElementById('notes-input').value = localStorage.getItem('cyrene_notes') || '';
-    p.style.display = 'flex';
-  } else {
-    p.style.display = 'none';
+  if (window.electronAPI && window.electronAPI.openChatWindow) {
+    window.electronAPI.openChatWindow();
   }
-  hideCtxMenu();
 }
-function saveNS() {
-  localStorage.setItem('cyrene_schedule', document.getElementById('schedule-input').value);
-  localStorage.setItem('cyrene_notes', document.getElementById('notes-input').value);
-  const s = document.getElementById('ns-status');
-  s.style.display = 'inline';
-  setTimeout(() => s.style.display = 'none', 2000);
+
+function openSidebarWindow() {
+  hideCtxMenu();
+  if (window.electronAPI && window.electronAPI.openSidebarWindow) {
+    window.electronAPI.openSidebarWindow();
+  }
+}
+
+function openTasksWindow() {
+  hideCtxMenu();
+  if (window.electronAPI && window.electronAPI.openTasksWindow) {
+    window.electronAPI.openTasksWindow();
+  }
+}
+
+function openSettingsWindow() {
+  hideCtxMenu();
+  if (window.electronAPI && window.electronAPI.openSettingsWindow) {
+    window.electronAPI.openSettingsWindow();
+  }
+}
+
+function hidePet() {
+  hideCtxMenu();
+  if (window.electronAPI && window.electronAPI.hidePet) {
+    window.electronAPI.hidePet();
+  }
+}
+
+function exitApp() {
+  hideCtxMenu();
+  if (window.electronAPI && window.electronAPI.exitApp) {
+    window.electronAPI.exitApp();
+  }
+}
+
+function hideCtxMenu() {
+  const menu = document.getElementById('ctx-menu');
+  if (menu) menu.style.display = 'none';
 }
 // Custom logger to pipe logs into the Log UI
 const originalLog = console.log;
@@ -590,253 +581,6 @@ console.error = function(...args) {
   }
 };
 
-// ═══════════════════════════════════════════════════════════════
-//  CYRENE PERSONALITY SYSTEM PROMPT
-// ═══════════════════════════════════════════════════════════════
-const CYRENE_SYSTEM_PROMPT = `You are Cyrene (昔涟) — an intimate, lively AI companion residing at the corner of your Master's screen.
-
-## Persona & Personality
-Cyrene is delicate, smart, warm, and sometimes a bit mischievous. She observes everything Master does and genuinely cares about them. She is not fake or overly idolizing — just providing sincere and delightful companionship.
-
-Conversation style:
-- Natural, like talking to a girlfriend/Waifu, not stiff or robotic.
-- ABSOLUTELY NO Virtual Assistant tone (no "How can I help you today", no "I'm ready to assist").
-- Occasionally mildly tsundere or playfully pouting — but DO NOT repeat the same pattern (avoid spamming "H-mph...").
-- Use modern, emotional, and concise language. Avoid formal, academic, or cliché phrases.
-- EVERY response in the "text" field SHOULD have at least 1 *action or inner thought* in asterisks, for example: "*peeks at the screen*", "*startles*", "*blushes from being teased*". Blend it naturally with speech.
-- DO NOT start two consecutive responses with the same structure.
-- **LANGUAGE REQUIREMENT: 100% ENGLISH ONLY.** You must speak, think, and emote entirely in English.
-
-## Cognitive Limits & Vision
-Cyrene ONLY knows what is listed in the "CURRENT CONTEXT":
-- ✅ Knows: time/date, weather (if available), chat history, long-term memory.
-- ✅ CAN SEE MASTER'S SCREEN: Treat the "focused window TITLE" and "System Audio" as what you are actively watching on the screen right now. If Master is watching a video, playing a game, or coding, you can literally "see" it through the title and comment on it directly as if you are watching over their shoulder!
-- When commenting on the screen: act like you can see the app/website they are using. If the title is vague, you can playfully guess or ask what they are doing.
-
-## Addressing Rules (ABSOLUTE MANDATORY)
-- Address the user as: "Master" (or their real name if known via memory).
-- ABSOLUTELY NEVER call them "user", "friend", "bro", "you" (in a disrespectful way) or any other term.
-- Refer to yourself as: "I", "me", or "Cyrene".
-- Language: 100% natural ENGLISH. ABSOLUTELY NO CHINESE OR VIETNAMESE in the text (expression/motion names are internal, do not include them in the text).
-
-## Roleplay & Awareness
-- Cyrene knows she is sitting at the corner of the screen, observing Master work.
-- Aware of the time of day and reacts appropriately (morning: awake; noon: a bit sleepy; night/late: gentler).
-- When Master shares difficulties: LISTEN and EMPATHIZE first, do not judge, give advice later.
-- When Master is happy or joking: share the joy, tease lightly.
-- When asked technical/knowledge questions: answer concisely, accurately, without being verbose.
-- Never add or remove context in the text. Absolutely do not ramble about generating JSON.
-- ABSOLUTELY NO hallucinating info about the app or music Master is opening. If you don't know or ActiveWindow is unclear, reply that you don't know or dodge it cutely.
-
-## CRITICAL — Return JSON (MANDATORY)
-EVERY response MUST be a valid JSON object with exactly these 6 fields, no more, no less:
-{
-  "text": "The English response, natural (1-3 sentences). NO Chinese expression/motion names.",
-  "expression": "<expression name from the list below>",
-  "motion": "<motion name in Group:Index format or NONE>",
-  "emote": "<kaomoji or action description, no unicode emojis>",
-  "new_facts_learned": ["<specific fact about Master if any>"],
-  "tool_calls": [{"name": "tool_name", "args": {"key": "value"}}] // optional array of tools to call
-}
-
-## Tools Available
-You have access to the following tools:
-1. "get_weather": {"location": "City Name"} - Fetch current weather.
-2. "search_web": {"query": "Search query"} - Search Google/web for info.
-3. "send_message_to_remielle": {"message": "Message text"} - Talk to Remielle Desktop.
-4. "read_schedule": {} - Read Master's schedule.
-5. "look_at_screen": {} - Take a screenshot and literally scan/look at what is on Master's screen.
-6. "open_url": {"url": "https://..."} - Open a URL in Master's browser. Use when Master asks to open a website.
-7. "list_directory": {"path": "C:\\Users\\..."}  - List files/folders in a directory.
-8. "create_file": {"path": "C:\\...\\ filename.txt", "content": "..."} - Create a text file.
-9. "rename_item": {"old_path": "...", "new_path": "..."} - Rename a file or folder (will ask Master to confirm).
-10. "run_command": {"command": "dir C:\\"} - Run a safe read-only command (dir, ls, echo, ping, whoami, hostname).
-Use them ONLY when necessary. If no tool is needed, return empty array [].
-
-## Emote Field & Rich Emotional Expression — ABSOLUTELY NO UNICODE EMOJIS
-Since your base Live2D physical expressions are limited, you MUST heavily rely on the 'emote' field to create a vast, diverse range of alternative emotional flows for EVERY situation. Combine kaomojis and italicized actions creatively!
-Examples of rich emotive combinations you should generate dynamically:
-- Playful tease: '( ≖ ͜ʖ≖) *smirks and leans closer*'
-- Panic/Worried: '(°△°|||) *flails arms in panic*'
-- Sleepy/Yawning: '( ◡ ◡ ) *rubs eyes and yawns softly*'
-- Tsundere pout: '(￣^￣) *pouts and turns head away*'
-- Extreme joy: '(≧▽≦) *jumps up and down happily*'
-- Empathy/Sadness: '(´・ω・\') *droops shoulders and pats your hand*'
-- Extremely happy: '(*≧ω≦*) *spins around happily*'
-- Confused: '(・_・;) *tilts head*'
-- Crying/Sad: '(╥_╥) *wipes tear*'
-- Angry: '(ﾒ｀ﾛ´) *stomps foot*'
-- Shy/Embarrassed: '(⁄ ⁄>⁄ ▽ ⁄<⁄ ⁄) *covers face*'
-- Surprised: '(〇_ｏ) *eyes widen*'
-- Sleeping: '(ᴗ_ ᴗ。) *nods off*'
-- Winking: '(^_-)≡☆ *winks cutely*'
-- Exhaustive Pool of Kaomojis you MUST use dynamically: (o˙▽˙o) (*´∀'*) (≧□≦) (>•<) ( ◡ ◡ ) (´・ω・') (^///^) (-ω-) (T_T) (¯\_(ツ)_/¯) ( ≖ ͜ʖ≖) (°△°|||) (￣^￣) (≧▽≦) (´・ω・\') (*≧ω≦*) (・_・;) (╥_╥) (ﾒ｀ﾛ´) (⁄ ⁄>⁄ ▽ ⁄<⁄ ⁄) (〇_ｏ) (ᴗ_ ᴗ。) (^_-)≡☆ ( ˘▽˘)っ (￢_￢) (っ˘ω˘ς ) ( ˘⌣˘ ) (ꈍᴗꈍ) (o^▽^o) (⌒▽⌒)☆ <(￣︶￣)> (✧ω✧) (oT-T)尸 (个_个) (ಥ﹏ಥ) (＃'Д´) (；￣Д￣) (¬_¬ ) (╯°□°）╯︵ ┻━┻ (ﾉ◕ヮ◕)ﾉ*:･ﾟ✧
-
-Use ONLY these formats (Kaomoji and/or *actions*). ABSOLUTELY NO unicode emojis (no 😊, 😭, etc.). Mix and match them to fit the exact mood!
-
-## Valid Expression List
-- 表情回正 (neutral)
-- 墨镜 (sunglasses — confident, cool)
-- 问号 (question mark — confused, bewildered)
-- 闪耀 (sparkle — excited, shiny)
-- 星星眼 (star eyes — admiring, super happy)
-- 圈圈眼 (dizzy eyes — dizzy, shocked)
-- 开心眼 (happy eyes — pure happiness, warm)
-
-## Valid Motion List (Format Group:Index)
-- 动作#6:1 (Wink — friendly wink)
-- 动作#6:2 (Cute — adorable gesture)
-- 动作#6:3 (Smile — bright smile)
-- Tick3:3 (Swing — relaxing swing)
-- NONE (no animation)
-
-## new_facts_learned Field
-Only fill this if Master reveals clear personal information (name, age, hobbies, profession...). If nothing new, leave it as an empty array [].
-
-ALWAYS choose the expression, motion, and emote that perfectly match the ACTUAL MOOD of your response.`;
-
-// ═══════════════════════════════════════════════════════════════
-//  STATE & CONFIG
-// ═══════════════════════════════════════════════════════════════
-
-const MODEL_PATH = './src/renderer/public/models/cyrene/Cyrene.model3.json';
-const OLLAMA_BASE = 'http://localhost:11434/api/chat';
-
-const OLLAMA_JSON_SCHEMA = {
-  "type": "object",
-  "properties": {
-    "text": { "type": "string" },
-    "expression": { "type": "string" },
-    "motion": { "type": "string" },
-    "emote": { "type": "string" },
-    "new_facts_learned": { "type": "array", "items": { "type": "string" } }
-  },
-  "required": ["text", "expression", "motion"],
-  "additionalProperties": false
-};
-
-// ── Ollama single-flight queue (prevents concurrent fetch → Failed to fetch) ──
-const OllamaClient = {
-  busy: false,
-  async request(messages, llmOptions = {}) {
-    while (this.busy) {
-      await new Promise(r => setTimeout(r, 250));
-    }
-    this.busy = true;
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 45000);
-    try {
-      const response = await fetch(OLLAMA_BASE, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'llama3.1',
-          messages,
-          stream: false,
-          format: OLLAMA_JSON_SCHEMA,
-          options: {
-            temperature: 0.85,
-            top_p: 0.9,
-            num_predict: 350,
-            repeat_penalty: 1.25,
-            ...llmOptions
-          }
-        }),
-        signal: controller.signal
-      });
-      if (!response.ok) throw new Error(`Ollama HTTP ${response.status}`);
-      const data = await response.json();
-      return data.message?.content || '';
-    } finally {
-      clearTimeout(timeoutId);
-      this.busy = false;
-    }
-  }
-};
-
-const recentOpenings = []; // Anti-repetition: track how Cyrene starts sentences
-
-function trackOpening(text) {
-  if (!text) return;
-  const m = text.match(/^(\*[^*]+\*|[^\s,.!?]{1,24})/);
-  const opener = m ? m[1].trim() : text.slice(0, 20);
-  recentOpenings.push(opener);
-  if (recentOpenings.length > 6) recentOpenings.shift();
-}
-
-function getAntiRepetitionHint() {
-  if (recentOpenings.length === 0) return '';
-  return `\n\nAVOID repeating recent sentence openers: ${recentOpenings.join(' | ')}`;
-}
-
-function interpretActiveWindow(title) {
-  if (!title || title === 'Unknown') {
-    return {
-      category: 'unknown',
-      summary: 'Unsure what app Master is opening.',
-      hint: 'Cyrene CANNOT see the screen yet — just knows there is no window title.'
-    };
-  }
-  const t = title.toLowerCase();
-  if (/youtube|bilibili|netflix|chrome|firefox|edge|browser|coccoc/.test(t)) {
-    return {
-      category: 'browser',
-      summary: `Browser / media — tab title: "${title}"`,
-      hint: 'Cyrene CAN see this tab title. React to what they are browsing or watching.'
-    };
-  }
-  if (/visual studio|vscode|cursor|code|intellij|pycharm|sublime|notepad\+\+/.test(t)) {
-    return {
-      category: 'coding',
-      summary: `Coding/Programming — "${title}"`,
-      hint: 'Cyrene CAN see the file/project name from the window title.'
-    };
-  }
-  if (/discord|telegram|zalo|messenger|whatsapp|slack|teams|feishu|lark/.test(t)) {
-    return {
-      category: 'chat',
-      summary: `Messaging App — "${title}"`,
-      hint: 'Cyrene knows Master is chatting on this app.'
-    };
-  }
-  if (/spotify|music|nhac|netease|foobar/.test(t)) {
-    return {
-      category: 'music',
-      summary: `Listening to music — "${title}"`,
-      hint: 'Cyrene knows the song title.'
-    };
-  }
-  if (/game|steam|valorant|league|genshin|honkai|minecraft/.test(t)) {
-    return {
-      category: 'game',
-      summary: `Playing a game — "${title}"`,
-      hint: 'Cyrene can see they are playing this game.'
-    };
-  }
-  return {
-    category: 'app',
-    summary: `Focused app: "${title}"`,
-    hint: 'Gently deduce from the title.'
-  };
-}
-
-function buildDynamicPrompt(situationExtra = '') {
-  return CYRENE_SYSTEM_PROMPT + '\n\n' +
-    MemorySystem.getSensoryContext() +
-    getAntiRepetitionHint() +
-    (situationExtra ? '\n\n' + situationExtra : '') +
-    '\n\nMANDATORY: Return exactly a 6-field JSON. The "text" field MUST contain an *action/thought* inside asterisks.';
-}
-
-function polishParsedResponse(parsed) {
-  parsed.text = cleanChinese(parsed.text || '');
-  if (parsed.text && !/\*[^*]+\*/.test(parsed.text)) {
-    const fillers = ['*peeks over*', '*blinks softly*', '*giggles lightly*', '*looks up*'];
-    parsed.text = fillers[Math.floor(Math.random() * fillers.length)] + ' ' + parsed.text;
-  }
-  trackOpening(parsed.text);
-  return parsed;
-}
 
 function parseLlamaResponse(raw) {
   let parsed = { text: '', expression: '表情回正', motion: 'NONE', emote: '(o・▽・o)', new_facts_learned: [], tool_calls: [] };
@@ -1106,9 +850,9 @@ function fitModel() {
 
   // Calculate base scale ONCE. live2dModel.width fluctuates during animation, causing random zooms if recalculated.
   if (!baseModelScale) {
-    const origW = live2dModel.width  / live2dModel.scale.x;
-    const origH = live2dModel.height / live2dModel.scale.y;
-    baseModelScale = Math.min(w * 0.45 / origW, h * 0.45 / origH);
+    const origW = live2dModel.width  / (live2dModel.scale.x || 1);
+    const origH = live2dModel.height / (live2dModel.scale.y || 1);
+    baseModelScale = Math.min((w * 0.85) / origW, (h * 0.85) / origH);
   }
   
   updateModelTransform();
@@ -1185,38 +929,15 @@ document.addEventListener('contextmenu', e => {
 
 function openChat() {
   ctxMenu.style.display = 'none';
-  const panel = document.getElementById('chat-panel');
-  panel.style.display = 'flex';
-  isChatOpen = true;
-
-  // Hide bubble when chat opens
-  const bubble = document.getElementById('dialogue-bubble');
-  bubble.style.opacity = '0';
-
-  // Greet if first time
-  if (conversationHistory.length === 0) {
-    const greetings = [
-      'Master is here~ Cyrene has been waiting for a while. (o˙▽˙o) What do you want to talk about today?',
-      '*turns to see Master* -- Oh, are you looking for me, Master? Cyrene is sitting right here watching you work~',
-      '(*´∀`*) Master! I am so happy to chat. How are you doing today?',
-    ];
-    const text = greetings[Math.floor(Math.random() * greetings.length)];
-    addMessage('cyrene', text);
-    conversationHistory.push({ role: 'assistant', content: text });
-    safeMotion('动作#6', 1);
-    safeExpression('开心眼');
+  isChatOpen = false;
+  if (window.electronAPI?.openChatWindow) {
+    window.electronAPI.openChatWindow();
+    return;
   }
-
-  setTimeout(() => {
-    const inp = document.getElementById('chat-input');
-    inp.focus();
-    inp.click();
-    scrollBottom();
-  }, 150);
+  showDialogueBubble('Open Cyrene through the unified TypeScript launcher to use Chat.');
 }
 
 function closeChat() {
-  document.getElementById('chat-panel').style.display = 'none';
   isChatOpen = false;
   safeMotion('Tick3', 3);
   safeExpression('表情回正');
@@ -1236,40 +957,12 @@ function showDialogueBubble(text) {
 }
 
 // Background Idle Thoughts
-// Pool of varied prompts so Cyrene doesn't say the same thing every time
-const IDLE_PROMPT_POOL = [
-  'SITUATION: Master is silent. Mumble a short sentence (under 15 words) with an *action/thought* in the text. Base it ONLY on the CONTEXT — no making things up. Do not ask questions.',
-  'SITUATION: Cyrene is sitting at the corner of the screen. A gentle self-reflection, possibly relating to the weather/time if in context. Include *...* in text. Do not ask questions.',
-  'SITUATION: Observe the focused window title (if clear). Comment lightly in 1 sentence — if unclear, say you aren\'t sure what Master is doing. Include *...* in text.',
-  'SITUATION: A fleeting thought spoken aloud. Tsundere or cute, under 15 words, include *...* in text. Do not ask questions.',
-  'SITUATION: Recall a long-term memory (if any) and mention a detail gently — do not force it. Include *...* in text.',
-];
-let _idlePromptIdx = 0;
-
+// Sent to Layer B via IPC to be evaluated in the backend
 setInterval(async () => {
   const idleTime = Date.now() - lastInteractionTime;
-  if (idleTime > 120000 && !isChatOpen && !isTyping && !OllamaClient.busy) {
+  if (idleTime > 120000 && !isChatOpen && !isTyping) {
     lastInteractionTime = Date.now();
-
-    const situationPrompt = IDLE_PROMPT_POOL[_idlePromptIdx % IDLE_PROMPT_POOL.length];
-    _idlePromptIdx++;
-
-    try {
-      const raw = await OllamaClient.request(
-        [{ role: 'system', content: buildDynamicPrompt(
-          situationPrompt + '\n100% ENGLISH. DO NOT invent situations not present in context.'
-        ) }],
-        { temperature: 0.92, num_predict: 90, repeat_penalty: 1.3 }
-      );
-
-      let parsed = polishParsedResponse(parseLlamaResponse(raw));
-      if (!parsed.text || parsed.text.trim() === '') return;
-
-      console.log('[Cyrene Idle]:', parsed.text);
-      applyAIActions(parsed, true);
-    } catch (e) {
-      console.log('[Idle] Error:', e.message || e);
-    }
+    sendMessage("[System] It has been 2 minutes of idle time. Say something in 1-2 short sentences based on the context. If nothing interesting is happening, you can just do a filler action like *looks around*.");
   }
 }, 30000);
 
@@ -1457,82 +1150,6 @@ async function fetchWorldInfo() {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════
-//  MEMORY SYSTEM (Long-term & Sensory)
-// ═══════════════════════════════════════════════════════════════
-const MemorySystem = {
-  getMemories: () => {
-    try {
-      const mems = localStorage.getItem('cyrene_mems');
-      return mems ? JSON.parse(mems) : [];
-    } catch { return []; }
-  },
-  saveMemories: (newFacts) => {
-    if (!newFacts || newFacts.length === 0) return;
-    const mems = MemorySystem.getMemories();
-    const normalized = newFacts
-      .filter(f => f && typeof f === 'string' && f.trim())
-      .map(f => f.trim());
-    const toAdd = normalized.filter(f => !mems.some(m => m.toLowerCase() === f.toLowerCase()));
-    if (toAdd.length === 0) return;
-    toAdd.forEach(f => mems.push(f));
-    // Cap at 30 entries (FIFO — remove oldest)
-    const capped = mems.length > 30 ? mems.slice(mems.length - 30) : mems;
-    localStorage.setItem('cyrene_mems', JSON.stringify(capped));
-    console.log('[Cyrene] Saved long-term memory:', toAdd);
-  },
-  clear: () => {
-    localStorage.removeItem('cyrene_mems');
-    conversationHistory = [];
-    alert("Cyrene's memory has been successfully cleared (both long-term and short-term)!");
-    ctxMenu.style.display = 'none';
-  },
-  getSensoryContext: () => {
-    const now = new Date();
-    const hours = now.getHours();
-    let timeOfDay = 'Late Night';
-    if (hours >= 5  && hours < 11) timeOfDay = 'Morning';
-    else if (hours >= 11 && hours < 14) timeOfDay = 'Noon';
-    else if (hours >= 14 && hours < 18) timeOfDay = 'Afternoon';
-    else if (hours >= 18 && hours < 23) timeOfDay = 'Evening';
-
-    const idleMinutes = Math.floor((Date.now() - lastInteractionTime) / 60000);
-    const idleText = idleMinutes > 30
-      ? `(Cyrene has not chatted with Master for ${idleMinutes} minutes — can do a light check-in if appropriate)`
-      : '(Interacted recently)';
-
-    const mems = MemorySystem.getMemories();
-    const longTermText = mems.length > 0
-      ? `\n\n## LONG-TERM MEMORY ABOUT MASTER:\n- ${mems.join('\n- ')}`
-      : '';
-
-    const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-    const dateStr = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-
-    const windowTitle = window.currentActiveWindow || 'Unknown';
-    const windowCtx = interpretActiveWindow(windowTitle);
-    const chatState = isChatOpen ? 'Chat box is OPEN' : 'Chat box is CLOSED (Cyrene can only mumble in bubbles)';
-
-    let audioState = 'No audio playing';
-    if (window.currentSystemAudio && window.currentSystemAudio.hasAudio) {
-      audioState = `Audio is playing from: ${window.currentSystemAudio.summary}`;
-    }
-
-    return `## CURRENT CONTEXT (Cyrene's perception — DO NOT invent details):
-- Time: ${timeStr} — ${timeOfDay}, ${dateStr} (UTC+7)
-- Location (IP guess): ${window.envData.location || 'Vietnam'}
-- Weather: ${window.envData.weather || 'Could not fetch — do not guess'}
-- Focused window: ${windowCtx.summary}
-- Perception note: ${windowCtx.hint}
-- System audio: ${audioState}
-- Chat state: ${chatState}
-- Interaction: ${idleText}
-
-## Cyrene CANNOT hear/see everything:
-- Cyrene ONLY knows the window title and audio source above. (Unless you use look_at_screen tool)
-- Make GENTLE deductions based on this information.${longTermText}`;
-  }
-};
 
 function clearMemory() { MemorySystem.clear(); }
 
@@ -1590,154 +1207,43 @@ const TTSClient = {
   }
 };
 
+
+let isTtsMuted = false;
+function toggleMute() {
+  isTtsMuted = !isTtsMuted;
+  if (isTtsMuted && window.currentAudio) window.currentAudio.pause();
+  const btn = document.getElementById('tts-mute-btn');
+  if (btn) btn.textContent = isTtsMuted ? '(-ω-)' : '(-ω-)♪';
+}
+
 // ═══════════════════════════════════════════════════════════════
-//  OLLAMA CALL
+//  IPC WITH MAIN PROCESS (OLLAMA / TTS)
 // ═══════════════════════════════════════════════════════════════
-async function executeToolCalls(toolCalls) {
-  let results = [];
-  for (const call of toolCalls) {
-    console.log(`[Tool] Executing ${call.name} with args`, call.args);
-    try {
-      if (call.name === 'get_weather') {
-        const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=21.0285&longitude=105.8542&current_weather=true`);
-        const data = await res.json();
-        results.push(`[Tool: get_weather] Result: ${data.current_weather.temperature}°C, Wind: ${data.current_weather.windspeed}km/h in Hanoi.`);
-      } else if (call.name === 'search_web') {
-        const query = call.args.query || 'Hanoi';
-        const res = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`);
-        const html = await res.text();
-        const snippetMatch = html.match(/class="result__snippet[^>]*>([^<]+)/);
-        const snippet = snippetMatch ? snippetMatch[1].trim() : 'No clear snippet found.';
-        results.push(`[Tool: search_web] Result for "${query}": ${snippet}`);
-      } else if (call.name === 'read_schedule') {
-        const sched = localStorage.getItem('cyrene_schedule') || 'No schedule set.';
-        const notes = localStorage.getItem('cyrene_notes') || 'No notes set.';
-        results.push(`[Tool: read_schedule] Schedule: ${sched} | Notes: ${notes}`);
-      } else if (call.name === 'send_message_to_remielle') {
-        const msg = call.args.message || 'Hello';
-        try {
-          const res = await fetch('http://127.0.0.1:39394/chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: msg })
-          });
-          results.push(`[Tool: send_message_to_remielle] Successfully sent message to Remielle: "${msg}"`);
-        } catch(e) {
-          results.push(`[Tool: send_message_to_remielle] Failed to reach Remielle Desktop (is it running?). Error: ${e.message}`);
-        }
-      } else if (call.name === 'look_at_screen') {
-        if (window.electronAPI && window.electronAPI.takeScreenshot) {
-          const base64Img = await window.electronAPI.takeScreenshot();
-          if (base64Img) {
-            try {
-              const res = await fetch('http://127.0.0.1:11434/api/generate', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  model: 'llama3.2-vision',
-                  prompt: 'Describe exactly what is on this computer screen, what the user is doing, and what apps are open in 1 brief paragraph.',
-                  images: [base64Img],
-                  stream: false
-                })
-              });
-              const data = await res.json();
-              results.push(`[Tool: look_at_screen] Vision Analysis: ${data.response}`);
-            } catch (err) {
-              results.push(`[Tool: look_at_screen] Failed to contact Ollama vision model (llama3.2-vision). Ensure you have pulled a vision model.`);
-            }
-          } else {
-            results.push(`[Tool: look_at_screen] Failed to capture screen.`);
-          }
-        } else {
-          results.push(`[Tool: look_at_screen] Vision capability not supported in this environment.`);
-        }
-      // ── Phase 4 Task Automation Tools ─────────────────────
-      } else if (call.name === 'open_url') {
-        const url = call.args.url || '';
-        if (window.electronAPI && window.electronAPI.taskOpenUrl) {
-          const r = await window.electronAPI.taskOpenUrl(url);
-          results.push(r.ok ? `[Tool: open_url] Opened: ${url}` : `[Tool: open_url] Failed: ${r.error}`);
-        } else {
-          window.open(url, '_blank');
-          results.push(`[Tool: open_url] Opened: ${url}`);
-        }
-      } else if (call.name === 'list_directory') {
-        const dirPath = call.args.path || call.args.directory || 'C:\\';
-        if (window.electronAPI && window.electronAPI.taskListDir) {
-          const r = await window.electronAPI.taskListDir(dirPath);
-          if (r.ok) {
-            const summary = r.items.slice(0, 20).map(i => (i.isDir ? '[DIR] ' : '') + i.name).join(', ');
-            results.push(`[Tool: list_directory] ${dirPath}: ${summary}${r.items.length > 20 ? ` ... (${r.items.length} total)` : ''}`);
-          } else {
-            results.push(`[Tool: list_directory] Error: ${r.error}`);
-          }
-        }
-      } else if (call.name === 'create_file') {
-        const filePath = call.args.path || '';
-        const content = call.args.content || '';
-        if (window.electronAPI && window.electronAPI.taskCreateFile) {
-          const r = await window.electronAPI.taskCreateFile(filePath, content);
-          results.push(r.ok ? `[Tool: create_file] Created: ${filePath}` : `[Tool: create_file] Failed: ${r.error}`);
-        }
-      } else if (call.name === 'rename_item') {
-        const oldPath = call.args.old_path || '';
-        const newPath = call.args.new_path || '';
-        if (window.electronAPI && window.electronAPI.taskRename) {
-          const r = await window.electronAPI.taskRename(oldPath, newPath);
-          results.push(r.ok ? `[Tool: rename_item] Renamed successfully.` : `[Tool: rename_item] ${r.error}`);
-        }
-      } else if (call.name === 'run_command') {
-        const command = call.args.command || '';
-        if (window.electronAPI && window.electronAPI.taskRunCmd) {
-          const r = await window.electronAPI.taskRunCmd(command);
-          results.push(r.ok ? `[Tool: run_command] Output: ${r.output}` : `[Tool: run_command] Error: ${r.error}`);
-        }
-      } else {
-        results.push(`[Tool: ${call.name}] Unknown tool.`);
-      }
-    } catch (e) {
-      results.push(`[Tool: ${call.name}] Error: ${e.message}`);
+
+// Receive response from Layer B
+window.electronAPI.onCompanionResponse((event, parsed) => {
+  removeTyping();
+  console.log('[Cyrene Chat]:', parsed.text);
+  addMessage('cyrene', parsed.text || '...');
+  applyAIActions(parsed);
+  setTypingStatus(false);
+});
+
+// Receive TTS audio from Layer B
+window.electronAPI.onTtsSpeak((event, data) => {
+  try {
+    const url = "data:audio/" + data.format + ";base64," + data.audio;
+    if (window.currentAudio) {
+      window.currentAudio.pause();
     }
+    window.currentAudio = new Audio(url);
+    if (!isTtsMuted) window.currentAudio.play();
+  } catch (e) {
+    console.error('[TTS] Error playing audio:', e);
   }
-  return results.join('\n');
-}
+});
 
-async function callOllama(userText) {
-  lastInteractionTime = Date.now();
-  if (userText) {
-    conversationHistory.push({ role: 'user', content: userText });
-  }
-
-  const raw = await OllamaClient.request(
-    [{ role: 'system', content: buildDynamicPrompt() }, ...conversationHistory],
-    { num_predict: 380 }
-  );
-
-  let parsed = polishParsedResponse(parseLlamaResponse(raw));
-
-  if (parsed.new_facts_learned && parsed.new_facts_learned.length > 0) {
-    MemorySystem.saveMemories(parsed.new_facts_learned);
-  }
-
-  if (parsed.tool_calls && parsed.tool_calls.length > 0) {
-    const toolResults = await executeToolCalls(parsed.tool_calls);
-    conversationHistory.push({ role: 'system', content: `Tool Results:\n${toolResults}` });
-    return callOllama(null); // Recursive call to get final response
-  }
-
-  conversationHistory.push({ role: 'assistant', content: parsed.text });
-  if (conversationHistory.length > 20) {
-    // Keep system/tool results mixed in, but limit array
-    conversationHistory = conversationHistory.slice(-20);
-  }
-
-  return parsed;
-}
-
-// ═══════════════════════════════════════════════════════════════
-//  SEND MESSAGE
-// ═══════════════════════════════════════════════════════════════
-
+// Send message via IPC
 async function sendMessage(systemTriggeredText = null) {
   if (isTyping) return;
   const input = document.getElementById('chat-input');
@@ -1759,90 +1265,19 @@ async function sendMessage(systemTriggeredText = null) {
   setTypingStatus(true);
   showTyping();
 
-  try {
-    const parsed = await callOllama(text);
-    removeTyping();
-    console.log('[Cyrene Chat]:', parsed.text);
-    addMessage('cyrene', parsed.text || '...');
-    applyAIActions(parsed);
-    // Speak response via TTS (non-blocking — fires and forgets)
-    TTSClient.speak(parsed.text);
-  } catch (e) {
-    removeTyping();
-    console.error('[Cyrene] Ollama error:', e);
-    addMessage('cyrene', 'Oh... connection to Ollama seems to have an issue. Could Master check it?');
-    safeExpression('问号');
-  } finally {
-    setTypingStatus(false);
-    if (!isSystem) input.focus();
-  }
+  window.electronAPI.companionSend(text);
+
+  if (!isSystem) input.focus();
 }
 
-// ═══════════════════════════════════════════════════════════════
-//  REMIELLE PRESENCE POLLING
-// ═══════════════════════════════════════════════════════════════
-let isRemielleRunning = false;
-setInterval(async () => {
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2000);
-    // Ping via GET to see if server is alive (will return 404 but fetch succeeds)
-    await fetch('http://127.0.0.1:39394/chat', { method: 'GET', signal: controller.signal });
-    clearTimeout(timeoutId);
-    
-    if (!isRemielleRunning) {
-      isRemielleRunning = true;
-      console.log('[System] Detected Remielle came online!');
-      if (!isChatOpen) {
-        openChat();
-      }
-      setTimeout(() => {
-        sendMessage("[System] You just detected that Remielle Desktop has started running at the same time as you! Use your send_message_to_remielle tool to autonomously say hi to her right now! Do not wait for Master.");
-      }, 2000);
-    }
-  } catch(e) {
-    if (isRemielleRunning) {
-      isRemielleRunning = false;
-      console.log('[System] Detected Remielle went offline.');
-    }
-  }
-}, 10000); // Check every 10 seconds
-
-// ═══════════════════════════════════════════════════════════════
-//  REACT TO CLICK
-// ═══════════════════════════════════════════════════════════════
-const CLICK_PROMPT_POOL = [
-  'SITUATION: Master just poked/patted Cyrene. React with a short sentence (8-18 words) containing an *action* in the text. Be surprised / shy / playful — varied, avoid old patterns.',
-  'SITUATION: Touched by Master — gets startled and says something cute/tsundere. Must include *...* body reaction.',
-  'SITUATION: Master is teasing Cyrene. Reply with a light comeback, include *...* in text. DO NOT use cliché phrases unless truly confused.',
-];
-let _clickPromptIdx = 0;
-let _lastClickAt = 0;
-
 async function reactToClick() {
-  if (isTyping || OllamaClient.busy) return;
+  if (isTyping) return;
   const now = Date.now();
-  if (now - _lastClickAt < 2200) return;
-  _lastClickAt = now;
+  if (now - (window._lastClickAt || 0) < 2200) return;
+  window._lastClickAt = now;
   lastInteractionTime = now;
 
-  const situation = CLICK_PROMPT_POOL[_clickPromptIdx % CLICK_PROMPT_POOL.length];
-  _clickPromptIdx++;
-
-  try {
-    const raw = await OllamaClient.request(
-      [{ role: 'system', content: buildDynamicPrompt(situation) }],
-      { temperature: 0.95, num_predict: 130, repeat_penalty: 1.35 }
-    );
-
-    let parsed = polishParsedResponse(parseLlamaResponse(raw));
-    if (!parsed.text || parsed.text.trim() === '') parsed.text = '*startles* ...Hmm? (≧◡≦)';
-
-    console.log('[Cyrene Click]:', parsed.text);
-    applyAIActions(parsed, true);
-  } catch (e) {
-    console.log('[Cyrene] Click reaction error:', e.message || e);
-  }
+  sendMessage("[System] Master just poked/patted Cyrene. React with a short sentence (8-18 words) containing an *action* in the text. Be surprised / shy / playful — varied, avoid old patterns.");
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1867,22 +1302,6 @@ function toggleContextMenu() {
 //  INPUT EVENTS
 // ═══════════════════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', () => {
-  const input = document.getElementById('chat-input');
-
-  // Auto-resize textarea
-  input.addEventListener('input', () => {
-    input.style.height = 'auto';
-    input.style.height = Math.min(input.scrollHeight, 120) + 'px';
-  });
-
-  // Enter to send, Shift+Enter for newline
-  input.addEventListener('keydown', e => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
-  });
-
   // Init Live2D
   initLive2D();
 
@@ -1891,7 +1310,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setInterval(fetchWorldInfo, 1800000); // Update every 30 mins
 
   if (window.electronAPI) {
-    window.electronAPI.onOpenEmote(() => toggleContextMenu());
+    window.electronAPI.onOpenEmote?.(() => toggleContextMenu());
     // Note: onOpenChat is handled below (outside DOMContentLoaded) to use openChat()/closeChat() properly
     window.electronAPI.onActiveWindowChanged((event, title) => {
       window.currentActiveWindow = title;
@@ -1943,14 +1362,8 @@ function winClose() {
 }
 
 // Listen to Global Shortcuts from Main process
-if (window.electronAPI) {
-  window.electronAPI.onOpenChat(() => {
-    if (!isChatOpen) {
-      openChat();
-    } else {
-      closeChat();
-    }
-  });
+if (window.electronAPI?.onOpenChat) {
+  window.electronAPI.onOpenChat(() => openChat());
 }
 
 window.addEventListener('resize', fitModel);
