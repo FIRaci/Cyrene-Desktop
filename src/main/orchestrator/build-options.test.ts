@@ -48,6 +48,41 @@ function createBuildDeps(): BuildOptionsDeps {
 }
 
 describe("build-options", () => {
+  it("allows the primary orchestrator to use local Ollama without an API key", async () => {
+    const deps = createBuildDeps()
+    deps.loadModelSettings = () => ({
+      provider: "Custom Endpoint (Local)",
+      baseUrl: "http://127.0.0.1:11434/v1",
+      model: "llama3.1:latest",
+      apiKey: "",
+    })
+
+    const result = await buildAgentRunOptions({
+      messages: [{ role: "user", content: "Hello" }],
+    }, deps)
+
+    expect(result.options.settings).toMatchObject({
+      provider: "Custom Endpoint (Local)",
+      baseUrl: "http://127.0.0.1:11434/v1",
+      model: "llama3.1:latest",
+      apiKey: "",
+    })
+  })
+
+  it("still requires an API key for an explicitly selected cloud provider", async () => {
+    const deps = createBuildDeps()
+    deps.loadModelSettings = () => ({
+      provider: "MiniMax（稀宇科技）",
+      baseUrl: "https://api.minimaxi.com/v1",
+      model: "MiniMax-M3",
+      apiKey: "",
+    })
+
+    await expect(buildAgentRunOptions({
+      messages: [{ role: "user", content: "Hello" }],
+    }, deps)).rejects.toThrow("No API key is configured for the selected cloud provider")
+  })
+
   it("builds the lightweight Ask Soul prompt in the approved order with trusted identity only", async () => {
     const deps = createBuildDeps()
     deps.loadUserProfile = () => ({
@@ -111,7 +146,7 @@ describe("build-options", () => {
       channel: "wechat",
     }, createBuildDeps())
 
-    expect(result.options.soulSystemBaseContent).toContain("你正在通过微信回复用户")
+    expect(result.options.soulSystemBaseContent).toContain("You are replying to the user through WeChat")
     expect(result.options.soulSystemBaseContent).toContain("SOUL_SYSTEM_BASE")
     expect(result.options.soulSystemBaseContent).toContain("RELATIONSHIP")
     expect(result.options.toolSystemContent).toBe("TOOL_SYSTEM")
@@ -123,8 +158,8 @@ describe("build-options", () => {
       style: "01_default.md",
     }, createBuildDeps())
 
-    expect(result.options.soulSystemBaseContent).not.toContain("你正在通过微信回复用户")
-    expect(result.options.soulSystemBaseContent).not.toContain("你正在通过飞书回复用户")
+    expect(result.options.soulSystemBaseContent).not.toContain("You are replying to the user through WeChat")
+    expect(result.options.soulSystemBaseContent).not.toContain("You are replying to the user through Feishu")
   })
 
   it("messages 不含 system，FC 循环按阶段动态注入", async () => {
@@ -152,10 +187,10 @@ describe("build-options", () => {
 
     expect(result.options.messages[0].content).toBe("[2026-07-12 20:00, Asia/Taipei]\n今天有点累")
     expect(result.options.messages[2].content).toBe("[2026-07-13 11:00, Asia/Taipei]\n我回来啦")
-    expect(result.options.soulSystemBaseContent).toContain("[对话时间信息]")
-    expect(result.options.soulSystemBaseContent).toContain("距离上一条有效聊天消息：约 14 小时 58 分钟")
-    expect(result.options.soulSystemBaseContent.match(/距离上一条有效聊天消息/g)).toHaveLength(1)
-    expect(result.options.toolSystemContent).not.toContain("[对话时间信息]")
+    expect(result.options.soulSystemBaseContent).toContain("[CONVERSATION_TIME_CONTEXT]")
+    expect(result.options.soulSystemBaseContent).toContain("Time since the previous valid chat message: about 14 hours 58 minutes")
+    expect(result.options.soulSystemBaseContent.match(/Time since the previous valid chat message/g)).toHaveLength(1)
+    expect(result.options.toolSystemContent).not.toContain("[CONVERSATION_TIME_CONTEXT]")
   })
 
   it("toolSystemContent / soulSystemBaseContent 是分开的两套字符串", async () => {
@@ -481,13 +516,13 @@ describe("build-options", () => {
     const fallbackMessages = await result.options.imageCaptionFallback?.()
     const userMessage = fallbackMessages?.at(-1)
     expect(userMessage?.content).toContain("这图哪里不对？")
-    expect(userMessage?.content).toContain("setup.png：画面里有一张安装截图")
+    expect(userMessage?.content).toContain("setup.png: 画面里有一张安装截图")
     expect(userMessage?.content).not.toContain("image_url")
   })
 
   it("has distinct system text for Feishu work chat", () => {
-    expect(buildChannelSystem("feishu")).toContain("你正在通过飞书回复用户")
-    expect(buildChannelSystem("feishu")).toContain("工作上下文")
+    expect(buildChannelSystem("feishu")).toContain("You are replying to the user through Feishu")
+    expect(buildChannelSystem("feishu")).toContain("work context")
   })
 
   it("records relationship turn after agent run finishes", async () => {

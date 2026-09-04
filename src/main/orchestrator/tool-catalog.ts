@@ -25,12 +25,12 @@ function extractHint(tool: ToolDefinition): string {
  * 空工具列表返回提示占位。
  */
 export function buildToolCatalog(tools: ReadonlyArray<ToolDefinition>): string {
-  if (tools.length === 0) return "（当前没有可用工具）";
+  if (tools.length === 0) return "(No tools are currently available.)";
   return tools
     .map((tool) => {
       const hint = extractHint(tool);
       const risk = tool.risk ?? "safe";
-      return `- ${tool.id}\n  用途：${hint}\n  风险：${risk}`;
+      return `- ${tool.id}\n  Purpose: ${hint}\n  Risk: ${risk}`;
     })
     .join("\n");
 }

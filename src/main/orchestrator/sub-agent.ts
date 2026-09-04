@@ -59,7 +59,7 @@ export async function runSubAgent(task: string): Promise<SubAgentResult> {
       status: "error",
       error_type: "tool_error",
       recoverable: false,
-      summary: "子代理未配置 LLM 设置",
+      summary: "The sub-agent has no LLM configuration",
     };
   }
 
@@ -82,9 +82,9 @@ export async function runSubAgent(task: string): Promise<SubAgentResult> {
       {
         role: "system" as const,
         content:
-          "你是一个子代理，负责执行主代理分配的具体任务。\n" +
-          "高效执行，不要列任务清单，不要询问用户。\n" +
-          "完成后用一句话总结结果。如果失败，说明原因。",
+          "You are a sub-agent responsible for a specific task delegated by the primary agent.\n" +
+          "Work efficiently. Do not create a task list or ask the user questions.\n" +
+          "When finished, summarize the result in one sentence. If you fail, state why.",
       },
       { role: "user" as const, content: task },
     ];
@@ -95,7 +95,7 @@ export async function runSubAgent(task: string): Promise<SubAgentResult> {
       SUB_AGENT_TIMEOUT_MS,
     );
 
-    const reply = result.reply || "(无回复)";
+    const reply = result.reply || "(no response)";
     const toolCount = result.toolResults.length;
 
     // 收集产出文件（从工具结果里提取路径）
@@ -134,7 +134,7 @@ export async function runSubAgent(task: string): Promise<SubAgentResult> {
       status: "error",
       error_type: isTimeout ? "timeout" : "tool_error",
       recoverable: isTimeout,
-      summary: "子代理执行失败：" + errMsg.slice(0, 200),
+      summary: "Sub-agent execution failed: " + errMsg.slice(0, 200),
     };
   } finally {
     // 恢复被隐藏的工具

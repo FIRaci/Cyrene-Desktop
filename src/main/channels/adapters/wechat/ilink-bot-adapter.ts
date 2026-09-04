@@ -81,7 +81,7 @@ const CAPABILITY: ChannelCapability = {
 
 export class ILinkBotAdapter implements ChannelAdapter {
   readonly id: ChannelId = "wechat";
-  readonly displayName = "微信";
+  readonly displayName = "WeChat";
   readonly capability = CAPABILITY;
 
   /** 由 ChannelManager.setDispatcher 注入 */
@@ -119,7 +119,7 @@ export class ILinkBotAdapter implements ChannelAdapter {
       this.status = {
         enabled: true,
         phase: "config_missing",
-        message: "未登录，请先扫码",
+        message: "Not signed in; scan the QR code first",
       };
       console.log(LOG_PREFIX, "No credentials, please run /wechat login");
       return;
@@ -133,7 +133,7 @@ export class ILinkBotAdapter implements ChannelAdapter {
     this.pollAbort = new AbortController();
     this.pollLoopPromise = this.#pollLoop();
 
-    this.status = { enabled: true, phase: "running", message: "微信已连接" };
+    this.status = { enabled: true, phase: "running", message: "WeChat connected" };
     console.log(LOG_PREFIX, `Connected as botId=${creds.ilinkBotId}`);
   }
 
@@ -153,9 +153,9 @@ export class ILinkBotAdapter implements ChannelAdapter {
   }
 
   async send(msg: OutgoingMessage): Promise<{ ok: boolean; error?: string }> {
-    if (!this.client) return { ok: false, error: "微信未连接" };
+    if (!this.client) return { ok: false, error: "WeChat is not connected." };
     const contextToken = this.replyContextByTarget.get(msg.targetId);
-    if (!contextToken) return { ok: false, error: "缺少微信 context_token，无法回复" };
+    if (!contextToken) return { ok: false, error: "The WeChat context_token is missing, so a reply cannot be sent." };
 
     let anyOk = false;
     let lastErr: string | undefined;
@@ -168,37 +168,37 @@ export class ILinkBotAdapter implements ChannelAdapter {
         if (textResult.ok) {
           anyOk = true;
         } else {
-          lastErr = textResult.error ?? "微信文本发送失败";
-          console.warn(LOG_PREFIX, "text_item 发送失败:", lastErr);
+        lastErr = textResult.error ?? "Failed to send WeChat text";
+        console.warn(LOG_PREFIX, "Failed to send text_item:", lastErr);
         }
       } else if (part.kind === "image") {
-        if (!part.filePath) return { ok: false, error: "微信图片发送需要本地 filePath" };
+        if (!part.filePath) return { ok: false, error: "Sending a WeChat image requires a local filePath." };
         const media = await this.uploadMedia(this.client, msg.targetId, part.filePath, MediaType.IMAGE);
         const result = await this.client.sendMessage(msg.targetId, [buildImageItem(media)], contextToken);
         if (result.ok) anyOk = true;
         else {
-          lastErr = result.error ?? "微信图片发送失败";
-          console.warn(LOG_PREFIX, "image_item 发送失败:", lastErr);
+        lastErr = result.error ?? "Failed to send WeChat image";
+        console.warn(LOG_PREFIX, "Failed to send image_item:", lastErr);
         }
       } else if (part.kind === "sticker") {
         const media = await this.uploadMedia(this.client, msg.targetId, part.imagePath, MediaType.IMAGE);
         const result = await this.client.sendMessage(msg.targetId, [buildImageItem(media)], contextToken);
         if (result.ok) anyOk = true;
         else {
-          lastErr = result.error ?? "微信表情发送失败";
-          console.warn(LOG_PREFIX, "sticker image_item 发送失败:", lastErr);
+        lastErr = result.error ?? "Failed to send WeChat sticker";
+        console.warn(LOG_PREFIX, "Failed to send sticker image_item:", lastErr);
         }
       } else if (part.kind === "audio") {
         const voice = await this.buildVoiceItem(msg.targetId, part.filePath).catch((err) => {
-          console.warn(LOG_PREFIX, "voice_item 构造失败（跳过语音）:", err instanceof Error ? err.message : err);
+        console.warn(LOG_PREFIX, "Failed to build voice_item; skipping voice:", err instanceof Error ? err.message : err);
           return null;
         });
         if (voice) {
           const result = await this.client.sendMessage(msg.targetId, [voice], contextToken);
           if (result.ok) anyOk = true;
           else {
-            lastErr = result.error ?? "微信语音发送失败";
-            console.warn(LOG_PREFIX, "voice_item 发送失败:", lastErr);
+        lastErr = result.error ?? "Failed to send WeChat voice message";
+        console.warn(LOG_PREFIX, "Failed to send voice_item:", lastErr);
           }
         }
       } else if (part.kind === "file") {
@@ -206,16 +206,16 @@ export class ILinkBotAdapter implements ChannelAdapter {
         const result = await this.client.sendMessage(msg.targetId, [buildFileItem(media, path.basename(part.name ?? part.filePath))], contextToken);
         if (result.ok) anyOk = true;
         else {
-          lastErr = result.error ?? "微信文件发送失败";
-          console.warn(LOG_PREFIX, "file_item 发送失败:", lastErr);
+        lastErr = result.error ?? "Failed to send WeChat file";
+        console.warn(LOG_PREFIX, "Failed to send file_item:", lastErr);
         }
       } else if (part.kind === "video") {
         const media = await this.uploadMedia(this.client, msg.targetId, part.filePath, MediaType.VIDEO);
         const result = await this.client.sendMessage(msg.targetId, [buildVideoItem(media)], contextToken);
         if (result.ok) anyOk = true;
         else {
-          lastErr = result.error ?? "微信视频发送失败";
-          console.warn(LOG_PREFIX, "video_item 发送失败:", lastErr);
+        lastErr = result.error ?? "Failed to send WeChat video";
+        console.warn(LOG_PREFIX, "Failed to send video_item:", lastErr);
         }
       }
     }
@@ -224,7 +224,7 @@ export class ILinkBotAdapter implements ChannelAdapter {
   }
 
   private async buildVoiceItem(targetId: string, filePath: string): Promise<SendMessageItem> {
-    if (!this.client) throw new Error("微信未连接");
+    if (!this.client) throw new Error("WeChat is not connected.");
     const source = await fs.readFile(filePath);
     const encoded = await this.encodeVoice(source, { format: "wav" });
     const media = await this.uploadMediaData(this.client, targetId, encoded.data, MediaType.VOICE);
@@ -271,7 +271,7 @@ export class ILinkBotAdapter implements ChannelAdapter {
         return creds;
       }
       if (status.status === "expired") {
-        throw new Error("二维码已过期，请重新扫码");
+        throw new Error("The QR code expired. Scan a new one.");
       }
       // pending/scanning — 继续轮询
     }
@@ -283,7 +283,7 @@ export class ILinkBotAdapter implements ChannelAdapter {
     await deleteCredentials();
     this.currentCredentials = null;
     this.isLoggedIn = false;
-    this.status = { enabled: false, phase: "offline", message: "已登出" };
+    this.status = { enabled: false, phase: "offline", message: "Signed out" };
   }
 
   // ── Internal: poll loop ──────────────────────────────────────────────────
@@ -307,7 +307,7 @@ export class ILinkBotAdapter implements ChannelAdapter {
           this.status = {
             enabled: true,
             phase: "error",
-            message: "会话已过期，请重新扫码登录",
+          message: "The session expired. Scan a new QR code to sign in again.",
           };
           break;
         }
@@ -320,7 +320,7 @@ export class ILinkBotAdapter implements ChannelAdapter {
 
   private async dispatchInbound(msg: WeixinMessage): Promise<void> {
     if (!this.onMessage) {
-      console.warn(LOG_PREFIX, "onMessage 未注入，跳过消息");
+      console.warn(LOG_PREFIX, "onMessage is not configured; skipping message");
       return;
     }
     console.log(LOG_PREFIX, `inbound from=${msg.fromUserId} text=${(msg.content ?? "").slice(0, 80)}`);
@@ -427,8 +427,8 @@ export class ILinkBotAdapter implements ChannelAdapter {
       return buildWechatSaveSuccessPrompt(username, filePath);
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
-      console.warn(LOG_PREFIX, "入站媒体保存失败:", reason);
-      return `${username}，这个文件保存失败啦：${reason}`;
+      console.warn(LOG_PREFIX, "Failed to save inbound media:", reason);
+      return `${username}, the file could not be saved: ${reason}`;
     }
   }
 
@@ -445,13 +445,13 @@ export class ILinkBotAdapter implements ChannelAdapter {
     try {
       const transcript = (await this.transcribeVoice(voice, msg.msgId || String(Date.now()))).trim();
       if (!transcript) {
-        await this.#sendInterceptText(msg.fromUserId, msg.contextToken, buildWechatAsrFailedPrompt(username, "没有识别到文字"));
+        await this.#sendInterceptText(msg.fromUserId, msg.contextToken, buildWechatAsrFailedPrompt(username, "no speech was recognized"));
         return null;
       }
       return transcript;
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
-      console.warn(LOG_PREFIX, "入站语音识别失败:", reason);
+      console.warn(LOG_PREFIX, "Inbound voice recognition failed:", reason);
       await this.#sendInterceptText(msg.fromUserId, msg.contextToken, buildWechatAsrFailedPrompt(username, reason));
       return null;
     }
@@ -462,7 +462,7 @@ export class ILinkBotAdapter implements ChannelAdapter {
     for (const item of media) {
       if (item.kind !== "image" && !(item.kind === "file" && item.analyzable)) continue;
       if (!item.media) {
-        await this.#sendInterceptText(msg.fromUserId, msg.contextToken, `${loadWechatPreferredName()}，这个微信附件缺少下载信息，可以再发一次试试看哦~~`);
+      await this.#sendInterceptText(msg.fromUserId, msg.contextToken, `${loadWechatPreferredName()}, this WeChat attachment has no download information. Please send it again.`);
         return null;
       }
       try {
@@ -475,8 +475,8 @@ export class ILinkBotAdapter implements ChannelAdapter {
         });
       } catch (err) {
         const reason = err instanceof Error ? err.message : String(err);
-        console.warn(LOG_PREFIX, "入站媒体下载失败:", reason);
-        await this.#sendInterceptText(msg.fromUserId, msg.contextToken, `${loadWechatPreferredName()}，这个微信附件下载失败啦：${reason}。可以再发一次试试看哦~~`);
+      console.warn(LOG_PREFIX, "Failed to download inbound media:", reason);
+      await this.#sendInterceptText(msg.fromUserId, msg.contextToken, `${loadWechatPreferredName()}, this WeChat attachment could not be downloaded: ${reason}. Please send it again.`);
         return null;
       }
     }
@@ -498,7 +498,7 @@ export class ILinkBotAdapter implements ChannelAdapter {
     if (!this.client) return;
     const result = await this.client.sendText(toUserId, text, contextToken);
     if (!result.ok) {
-      console.warn(LOG_PREFIX, "入站媒体拦截回复发送失败:", result.error);
+      console.warn(LOG_PREFIX, "Failed to send inbound-media intercept reply:", result.error);
     }
   }
 }
@@ -556,7 +556,7 @@ async function downloadInboundWechatMedia(
   item: InboundMediaDescriptor,
   messageId: string,
 ): Promise<DownloadedInboundMedia> {
-  if (!item.media) throw new Error("缺少媒体下载参数");
+    if (!item.media) throw new Error("Media download parameters are missing.");
   const data = await downloadWechatMedia(item.media);
   const ext = pickInboundExtension(item, data);
   const cacheDir = path.join(app.getPath("userData"), "channels", "cache");
@@ -570,7 +570,7 @@ async function saveInboundWechatMedia(
   item: InboundMediaDescriptor,
   messageId: string,
 ): Promise<string> {
-  if (!item.media) throw new Error("缺少媒体下载参数");
+    if (!item.media) throw new Error("Media download parameters are missing.");
   const data = await downloadWechatMedia(item.media);
   const ext = pickInboundExtension(item, data);
   const inboxDir = path.join(app.getPath("desktop"), "Cyrene 收件箱");
@@ -584,16 +584,16 @@ async function transcribeInboundWechatVoice(
   item: InboundMediaDescriptor,
   _messageId: string,
 ): Promise<string> {
-  if (!item.media) throw new Error("缺少语音下载参数");
+    if (!item.media) throw new Error("Voice download parameters are missing.");
   const cfg = getAsrConfig();
   if (!cfg || cfg.engine !== "aliyun" || !cfg.appKey || !cfg.accessKeyId || !cfg.accessKeySecret) {
-    throw new Error("ASR 未配置");
+      throw new Error("ASR is not configured.");
   }
 
   const source = await downloadWechatMedia(item.media);
   const sampleRate = item.sampleRate ?? 16000;
   if (sampleRate !== 16000) {
-    throw new Error(`暂不支持 ${sampleRate}Hz 微信语音识别`);
+      throw new Error(`${sampleRate} Hz WeChat voice recognition is not supported.`);
   }
 
   let pcm = source;
@@ -632,7 +632,7 @@ function transcribePcmWithAliyun(
         clearTimeout(timeout);
         const result = finals.join("").trim();
         if (result) resolve(result);
-        else reject(new Error("没有识别到文字"));
+        else reject(new Error("No speech was recognized."));
       })
       .catch((err) => {
         clearTimeout(timeout);
@@ -732,7 +732,7 @@ function loadWechatPreferredName(): string {
     const profile = JSON.parse(raw) as { callPreference?: unknown };
     return getWechatDisplayName(profile.callPreference);
   } catch {
-    return "伙伴";
+  return "friend";
   }
 }
 

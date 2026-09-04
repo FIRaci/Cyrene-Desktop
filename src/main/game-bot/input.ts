@@ -43,7 +43,7 @@ export async function keyPress(combo: string): Promise<void> {
   const parts = combo.split("+").map(s => s.trim());
   const keys = parts.map(resolveKey).filter((k): k is Key => k !== null);
   if (keys.length === 0) {
-    console.warn("[GameBot] 未知键组合，跳过:", combo);
+    console.warn("[GameBot] Unknown key combination; skipping:", combo);
     return;
   }
   await keyboard.pressKey(...keys);

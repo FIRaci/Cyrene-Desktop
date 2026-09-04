@@ -569,7 +569,7 @@ describe("runTwoPhaseFcLoop", () => {
       }),
     });
 
-    expect(result.reply).toContain("没有生成正常回复")
+    expect(result.reply).toContain("did not produce a valid response")
     expect(result.reply).not.toContain("tool_call")
   });
 

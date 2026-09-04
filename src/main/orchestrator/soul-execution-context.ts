@@ -179,7 +179,7 @@ export interface SoulExecutionContext {
 // ── 通用错误消息 ──────────────────────────────────────────
 
 const COMMON_ERROR_MESSAGES: Record<string, string> = {
-  E_PERMISSION_DENIED: "权限不足，需要用户授权",
+  E_PERMISSION_DENIED: "Permission denied; user authorization is required",
 };
 
 function resolveUserSafeMessage(
@@ -190,7 +190,7 @@ function resolveUserSafeMessage(
   return (
     tool?.soulErrorMessages?.[errorCode] ??
     COMMON_ERROR_MESSAGES[errorCode] ??
-    "执行失败"
+    "Execution failed"
   );
 }
 

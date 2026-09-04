@@ -31,18 +31,19 @@ describe("wechat inbound media classification", () => {
 
   it("recognizes save intent phrases", () => {
     expect(isWechatSaveIntent("保存到桌面")).toBe(true);
+    expect(isWechatSaveIntent("save to desktop")).toBe(true);
     expect(isWechatSaveIntent("帮我代收一下")).toBe(true);
     expect(isWechatSaveIntent("你好呀")).toBe(false);
   });
 
   it("uses partner when preferred name is blank", () => {
-    expect(getWechatDisplayName("  ")).toBe("伙伴");
+    expect(getWechatDisplayName("  ")).toBe("friend");
     expect(getWechatDisplayName("小王")).toBe("小王");
   });
 
   it("formats Cyrene-style prompts", () => {
-    expect(buildUnsupportedWechatFilePrompt("伙伴")).toBe("伙伴，这个文件人家还分析不了呢。如果伙伴你是想让我帮你代收一下，请在 5 分钟内回复“保存到桌面”哦~~");
-    expect(buildWechatVideoPrompt("小王")).toBe("小王，视频人家现在还看不了呢。如果小王你只是想让我帮你代收，请在 5 分钟内回复“保存到桌面”哦~~");
-    expect(buildWechatSaveIntentPrompt("伙伴")).toBe("好呀，伙伴，尽管把文件发过来吧。我会帮你放到桌面的“Cyrene 收件箱”里哦~~");
+    expect(buildUnsupportedWechatFilePrompt("friend")).toBe("friend, I cannot analyze this file yet. If you want me to keep it for you, reply “save to desktop” within five minutes.");
+    expect(buildWechatVideoPrompt("Xiao Wang")).toBe("Xiao Wang, I cannot view this video yet. If you only want me to keep it for you, reply “save to desktop” within five minutes.");
+    expect(buildWechatSaveIntentPrompt("friend")).toBe("Of course, friend. Send the file and I will place it in the “Cyrene Inbox” folder on your desktop.");
   });
 });

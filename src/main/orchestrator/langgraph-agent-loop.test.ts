@@ -503,7 +503,7 @@ describe("runLangGraphAgentLoop native Function Calling runtime", () => {
 
     // Soul 失败但工具成功 → 部分成功 fallback（不抛错）
     const firstResult = await runLangGraphAgentLoop({ ...options(first, executeTool), executionLedger: ledger });
-    expect(firstResult.reply).toContain("部分操作已经完成");
+    expect(firstResult.reply).toContain("Some operations completed");
     expect(firstResult.soulPhaseReason).toBe("tool_error");
 
     const retry = new FakeAdapter();
@@ -623,7 +623,7 @@ describe("runLangGraphAgentLoop native Function Calling runtime", () => {
     });
 
     // 应返回部分成功回复，不抛错
-    expect(result.reply).toContain("部分操作已经完成");
+    expect(result.reply).toContain("Some operations completed");
     expect(result.reply).toContain("查询天气");
     expect(result.soulPhaseReason).toBe("tool_error");
   });
@@ -657,7 +657,7 @@ describe("runLangGraphAgentLoop native Function Calling runtime", () => {
       tools: [writeWordTool],
     });
 
-    expect(result.reply).toContain("部分操作已经完成");
+    expect(result.reply).toContain("Some operations completed");
     expect(result.reply).toContain("test.docx");
   });
 

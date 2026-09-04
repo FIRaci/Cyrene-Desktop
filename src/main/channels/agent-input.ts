@@ -26,19 +26,19 @@ export async function buildChannelAttachmentInputs(
       } else {
         const result = options.captionImage
           ? await options.captionImage(item.filePath)
-          : { ok: false, error: "未配置视觉模型，无法分析图片" };
+      : { ok: false, error: "No vision model is configured, so the image cannot be analyzed." };
         const text = result.ok && result.caption
           ? result.caption
-          : `图片分析失败：${result.error || "图片分析失败"}。请诚实说明暂时无法看清这张图。`;
+      : `Image analysis failed: ${result.error || "unknown vision error"}. State clearly that the image cannot be inspected right now.`;
         attachments.push({
           name,
-          text: `【图片视觉信息】\n用户通过${channelName(msg.channel)}发送了图片：${name}\n${text}`,
+      text: `[Image context]\nThe user sent an image through ${channelName(msg.channel)}: ${name}\n${text}`,
         });
       }
     } else if (item.kind === "file") {
       attachments.push({
         name,
-        text: `用户通过${channelName(msg.channel)}发送了文件：${item.filePath}`,
+      text: `The user sent a file through ${channelName(msg.channel)}: ${item.filePath}`,
       });
     }
   }
@@ -51,8 +51,8 @@ export async function buildChannelAttachmentInputs(
 
 function channelName(channel: IncomingMessage["channel"]): string {
   switch (channel) {
-    case "wechat": return "微信";
-    case "feishu": return "飞书";
+    case "wechat": return "WeChat";
+    case "feishu": return "Feishu";
     default: return channel;
   }
 }

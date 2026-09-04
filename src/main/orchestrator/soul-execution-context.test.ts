@@ -101,7 +101,7 @@ describe("buildSoulExecutionContext", () => {
         [musicPlayTool],
       );
       expect(ctx.actions[0].executionStatus).toBe("denied");
-      expect(ctx.actions[0].userSafeMessage).toBe("权限不足，需要用户授权");
+      expect(ctx.actions[0].userSafeMessage).toBe("Permission denied; user authorization is required");
     });
 
     it("maps other errors to executionStatus=failed with tool-specific userSafeMessage", () => {
@@ -118,7 +118,7 @@ describe("buildSoulExecutionContext", () => {
         [failed("music_play_track", "E_UNKNOWN_ERROR")],
         [musicPlayTool],
       );
-      expect(ctx.actions[0].userSafeMessage).toBe("执行失败");
+      expect(ctx.actions[0].userSafeMessage).toBe("Execution failed");
     });
 
     it("does not output actionLabel when soulActionLabel is not configured", () => {
@@ -610,9 +610,9 @@ describe("projection missing safety fallback", () => {
   });
 
   it("SOUL_PHASE_RULES contains fallback rule text", () => {
-    expect(SOUL_NO_TOOL_DIRECTIVE).toContain("投影缺失兜底");
-    expect(SOUL_NO_TOOL_DIRECTIVE).toContain("只能说明操作已执行");
-    expect(SOUL_NO_TOOL_DIRECTIVE).toContain("不能编造具体业务数据");
+    expect(SOUL_NO_TOOL_DIRECTIVE).toContain("If projection data is missing");
+    expect(SOUL_NO_TOOL_DIRECTIVE).toContain("state only that the operation ran");
+    expect(SOUL_NO_TOOL_DIRECTIVE).toContain("do not invent business results");
   });
 });
 

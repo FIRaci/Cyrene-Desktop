@@ -32,7 +32,7 @@ export async function initRAG(
   const dataDir = getDataDir();
   provider = getEmbeddingProvider(ragMode, cloudBaseUrl, cloudApiKey, embeddingModel);
   store = new JsonVectorStore(dataDir);
-  // 只有 provider 存在时才创建 retriever（向量检索依赖 embedding）
+  // Create the retriever only when an embedding provider is available.
   if (provider) {
     retriever = new HybridRetriever(store, provider);
   }
@@ -42,8 +42,7 @@ export async function initRAG(
   );
   await worldbook.loadFromDirectory();
 
-  // 把实体图谱中的已有实体名灌入 jieba 自定义词典
-  // 防止 "昔涟"、"小鹿" 等 AI 伴侣核心名词被错误切分
+  // Add known entity names to the tokenizer dictionary to preserve proper nouns.
   await feedEntityNamesToJieba();
 
   console.log(
@@ -62,7 +61,7 @@ export async function switchEmbeddingModel(modelKey: string): Promise<{ ok: bool
     switchModel(modelKey);
     const newProvider = getEmbeddingProvider("auto", undefined, undefined, modelKey);
 
-    // 模型不存在时无法切换 — 输出详细诊断帮助排查"放到 models/ 却检测不到"
+    // Report actionable diagnostics when the requested model is unavailable.
     if (!newProvider) {
       try {
         // require to avoid circular import at module load
@@ -220,9 +219,8 @@ async function recordUserMemoryRecalls(results: Array<{ entry: MemoryEntry }>): 
   }
 }
 
-// ── History search with metadata（供 recall_history 工具用）──
-// 跟 searchMemory 的区别：返回完整 entry（含 createdAt / metadata），
-// 让召回工具能按时间排序、展示时间戳。
+// History search with metadata for the recall_history tool.
+// Unlike searchMemory, this returns complete entries for sorting and timestamps.
 export async function searchHistoryEntries(
   query: string,
   topK = 5
@@ -237,25 +235,24 @@ export async function searchHistoryEntries(
   }));
 }
 
-// ── Worldbook DMAE：每轮打分（本轮用户输入 + 上轮模型回复）──
+// Score Worldbook DMAE entries for the current turn.
 export function updateWorldbookActivation(userText: string, modelText: string): void {
   if (!worldbook) return;
   worldbook.updateActivation(userText, modelText);
 }
 
-// ── Worldbook DMAE：取 Active 条目内容（阈值门控 + 注入）──
+// Return active Worldbook DMAE entries after threshold gating.
 export function getActiveWorldbookEntries(): string[] {
   if (!worldbook) return [];
   return worldbook.getActiveEntries();
 }
 
-// ── Worldbook One-Shot：取本轮 cascade 触发的条目（不入 DMAE 状态表）──
-// 返回带条目标题的完整内容（与 getActiveWorldbookEntries 一致格式，便于合并注入）
+// Return one-shot cascade entries without adding them to DMAE state.
 export function getCascadeWorldbookEntries(): string[] {
   if (!worldbook) return [];
   return worldbook.getCascadeEntries().map(e => {
     const title = e.id.replace(/^wb_[^_]+_/, "").replace(/_/g, " ");
-    return `【${title}】\n${e.content}`;
+    return `[${title}]\n${e.content}`;
   });
 }
 
@@ -356,28 +353,27 @@ export async function searchImportedDocumentChunksForImportIds(
 }
 
 // ── Build memory context (legacy, kept for compatibility) ──
-// 注意：单参签名无 modelText，故 model 奖励不触发（降级行为）。
-// 主流程已改用 orchestrator 的 buildAlwaysOnContext（会传上轮模型回复）。
+// Legacy single-argument wrapper: model-response scoring is intentionally unavailable.
 export async function buildMemoryContext(userInput: string): Promise<string> {
   const parts: string[] = [];
 
-  // 1. Worldbook（DMAE：打分 + 取 Active）
+  // 1. Score and collect active Worldbook entries.
   updateWorldbookActivation(userInput, "");
   const wbResults = getActiveWorldbookEntries();
   if (wbResults.length > 0) {
-    parts.push("\u3010\u76f8\u5173\u80cc\u666f\u3011\n" + wbResults.join("\n\n"));
+    parts.push("[RELEVANT_BACKGROUND]\n" + wbResults.join("\n\n"));
   }
 
   // 2. Imported docs
   const docResults = await searchMemory(userInput, "imported_doc", 5);
   if (docResults.length > 0) {
-    parts.push("\u3010\u76f8\u5173\u6587\u4ef6\u7247\u6bb5\u3011\n" + docResults.map((m) => "- " + m).join("\n"));
+    parts.push("[RELEVANT_DOCUMENT_EXCERPTS]\n" + docResults.map((m) => "- " + m).join("\n"));
   }
 
   // 3. User memory
   const memResults = await searchMemory(userInput, "user_memory", 3);
   if (memResults.length > 0) {
-    parts.push("\u3010\u5173\u4e8e\u7528\u6237\u7684\u8bb0\u5fc6\u3011\n" + memResults.map((m) => "- " + m).join("\n"));
+    parts.push("[USER_MEMORIES]\n" + memResults.map((m) => "- " + m).join("\n"));
   }
 
   return parts.join("\n\n");
@@ -401,8 +397,7 @@ export function isUserMemoryVectorStoreReady(): boolean {
 }
 
 /**
- * 获取指定 source 的所有向量条目（含 embedding），用于记忆压缩 / 聚类。
- * 返回浅拷贝，调用方不应修改返回的 embedding。
+ * Return shallow copies of vector entries for memory compression and clustering.
  */
 export function getEntriesBySource(source: string): Array<{ id: string; text: string; embedding: number[]; createdAt: number; weight: number; metadata?: Record<string, unknown> }> {
   if (!store) return [];

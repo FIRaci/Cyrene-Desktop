@@ -110,10 +110,10 @@ async function downloadLarkResource(
       fs.writeFileSync(localPath, Buffer.concat(chunks));
     }
     const stat = fs.statSync(localPath);
-    console.log(LOG, `已下载飞书资源 → ${localPath} (${stat.size} bytes, kind=${kind})`);
+    console.log(LOG, `Downloaded Feishu resource -> ${localPath} (${stat.size} bytes, kind=${kind})`);
     return localPath;
   } catch (err) {
-    console.warn(LOG, `下载飞书资源失败: messageId=${messageId} fileKey=${fileKey} err=`, err instanceof Error ? err.message : err);
+    console.warn(LOG, `Failed to download Feishu resource: messageId=${messageId} fileKey=${fileKey} err=`, err instanceof Error ? err.message : err);
     return null;
   }
 }
@@ -149,7 +149,7 @@ async function normalizeLarkMessage(
         });
         if (!text) text = `[${rawType}]`;
         // 把"附件路径"嵌进 text，让 LLM 一眼看到
-        text = (text ? text + "\n" : "") + `[附件: ${localPath}]`;
+        text = (text ? text + "\n" : "") + `[Attachment: ${localPath}]`;
       }
     }
     if (attachments.length === 0) text = `[${rawType}]`;
@@ -187,7 +187,7 @@ async function sendLark(channel: LarkChannel, targetId: string, part: OutgoingPa
           image: { source: part.filePath },
         } as SendInput)) ?? null;
       } else if (part.url) {
-        throw new Error("image URL 需要先下载到本地 filePath");
+        throw new Error("An image URL must be downloaded to a local filePath before sending.");
       } else {
         throw new Error("image part needs filePath or url");
       }
@@ -201,7 +201,7 @@ async function sendLark(channel: LarkChannel, targetId: string, part: OutgoingPa
       const duration = await getAudioDurationMs(part.filePath);
       console.log("[Feishu audio] send file:", part.filePath, "duration:", duration, "mime:", part.mime);
       if (!duration) {
-        throw new Error(`无法解析音频时长: ${part.filePath}`);
+        throw new Error(`Could not determine audio duration: ${part.filePath}`);
       }
       result = (await channel.send(targetId, {
         audio: {
@@ -244,7 +244,7 @@ async function sendLark(channel: LarkChannel, targetId: string, part: OutgoingPa
 
 export class FeishuAdapter implements ChannelAdapter {
   readonly id = "feishu" as const;
-  readonly displayName = "飞书";
+  readonly displayName = "Feishu";
   readonly capability = FEISHU_CAPABILITY;
   onMessage: MessageHandler | null = null;
 
@@ -259,14 +259,14 @@ export class FeishuAdapter implements ChannelAdapter {
   private async rebuildChannel(): Promise<LarkChannel | null> {
     const settings = loadChannelsSettings().feishu;
     if (!settings.enabled) {
-      this.status = { enabled: false, phase: "offline", message: "未启用" };
+      this.status = { enabled: false, phase: "offline", message: "Disabled" };
       return null;
     }
     if (!settings.appId || !settings.appSecret) {
       this.status = {
         enabled: true,
         phase: "config_missing",
-        message: "App ID / App Secret 缺失",
+        message: "App ID / App Secret is missing",
       };
       return null;
     }
@@ -283,7 +283,7 @@ export class FeishuAdapter implements ChannelAdapter {
     ch.on("message" as EventName, async (msg: NormalizedMessage) => {
       // 私聊 only（方案决策）
       if (msg.chatType !== "p2p") {
-        console.log(LOG, `忽略 ${msg.chatType} 消息 (私聊优先)`);
+        console.log(LOG, `Ignoring ${msg.chatType} message (direct messages only)`);
         return;
       }
       try {
@@ -292,7 +292,7 @@ export class FeishuAdapter implements ChannelAdapter {
           await this.onMessage(inMsg);
         }
       } catch (err) {
-        console.error(LOG, "处理入站消息失败:", err);
+        console.error(LOG, "Failed to process inbound message:", err);
       }
     });
 
@@ -304,11 +304,11 @@ export class FeishuAdapter implements ChannelAdapter {
     });
     ch.on("reconnecting" as EventName, () => {
       console.log(LOG, "reconnecting…");
-      this.status = { enabled: true, phase: "starting", message: "重新连接中" };
+      this.status = { enabled: true, phase: "starting", message: "Reconnecting" };
     });
     ch.on("reconnected" as EventName, () => {
       console.log(LOG, "reconnected");
-      this.status = { enabled: true, phase: "running", message: "已连接" };
+      this.status = { enabled: true, phase: "running", message: "Connected" };
     });
 
     this.channel = ch;
@@ -321,8 +321,8 @@ export class FeishuAdapter implements ChannelAdapter {
 
     try {
       await ch.connect();
-      this.status = { enabled: true, phase: "running", message: "长连接已建立" };
-      console.log(LOG, "WS 长连接就绪");
+      this.status = { enabled: true, phase: "running", message: "Persistent connection established" };
+      console.log(LOG, "WebSocket persistent connection is ready");
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(LOG, "connect() failed:", msg);
@@ -335,31 +335,31 @@ export class FeishuAdapter implements ChannelAdapter {
       try {
         await this.channel.disconnect();
       } catch (err) {
-        console.warn(LOG, "disconnect 失败:", err);
+        console.warn(LOG, "Disconnect failed:", err);
       }
       this.channel = null;
     }
-    this.status = { enabled: false, phase: "offline", message: "已停止" };
+    this.status = { enabled: false, phase: "offline", message: "Stopped" };
   }
 
   getStatus(): ChannelStatus {
     const settings = loadChannelsSettings().feishu;
     if (!settings.enabled) {
-      return { enabled: false, phase: "offline", message: "未启用" };
+      return { enabled: false, phase: "offline", message: "Disabled" };
     }
     if (!settings.appId || !settings.appSecret) {
-      return { enabled: true, phase: "config_missing", message: "App ID/Secret 缺失" };
+      return { enabled: true, phase: "config_missing", message: "App ID / App Secret is missing" };
     }
     return this.status;
   }
 
   async send(msg: OutgoingMessage): Promise<{ ok: boolean; error?: string }> {
     if (!this.channel) {
-      console.warn(LOG, "send 失败: 长连接未建立");
-      return { ok: false, error: "飞书长连接未建立" };
+      console.warn(LOG, "Send failed: persistent connection is not established");
+      return { ok: false, error: "The Feishu persistent connection is not established." };
     }
     if (!msg.parts || msg.parts.length === 0) {
-      return { ok: false, error: "没有可发送的内容" };
+      return { ok: false, error: "There is no content to send." };
     }
     console.log(LOG, `send: targetId=${msg.targetId} parts=${msg.parts.length}`);
     let lastErr: string | undefined;

@@ -5,6 +5,7 @@ import type { VendorConfig, ChatMessage } from "../orchestrator/vendors"
 import { app } from "electron"
 import { MemoryCandidate, L0_FIELD_DESCRIPTIONS, MemoryJudgeTurn } from "./memory-types"
 import { recordUsage } from "../token-usage-store"
+import { isModelEndpointUsable, DEFAULT_OLLAMA_BASE_URL, DEFAULT_OLLAMA_MODEL, LOCAL_MODEL_PROVIDER } from "../../shared/model-endpoint"
 
 interface ModelSettings {
   provider: string
@@ -15,9 +16,9 @@ interface ModelSettings {
 }
 
 const DEFAULT_MODEL_SETTINGS: ModelSettings = {
-  provider: "DeepSeek（深度求索）",
-  baseUrl: "https://api.deepseek.com",
-  model: "deepseek-v4-pro",
+  provider: LOCAL_MODEL_PROVIDER,
+  baseUrl: DEFAULT_OLLAMA_BASE_URL,
+  model: DEFAULT_OLLAMA_MODEL,
   apiKey: "",
 };
 
@@ -263,8 +264,8 @@ export class MemoryJudge {
 
     try {
       const settings = loadModelSettings()
-      if (!settings.apiKey) {
-        console.error("[MemoryJudge] LLM 调用失败: missing api key")
+      if (!isModelEndpointUsable(settings)) {
+        console.error("[MemoryJudge] Model call skipped: no usable model configuration")
         console.log("[MemoryJudge] 本轮无值得记录的信息")
         return []
       }

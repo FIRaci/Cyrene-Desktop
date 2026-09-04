@@ -18,6 +18,10 @@ const baseCap: ProviderCapability = {
 };
 
 describe("authHeaderFor", () => {
+  test("omits authentication for a no-auth local endpoint", () => {
+    expect(authHeaderFor(baseCap, "")).toEqual({});
+  });
+
   test("authStyle=bearer → Authorization Bearer", () => {
     const h = authHeaderFor({ ...baseCap, authStyle: "bearer" }, "sk-test");
     expect(h).toEqual({ Authorization: "Bearer sk-test" });

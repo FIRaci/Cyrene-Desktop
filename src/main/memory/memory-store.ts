@@ -18,7 +18,7 @@ const DEFAULT_L0: L0Profile = {
   preferredName: "",
   occupation: "",
   longTermInterests: "",
-  language: "zh-CN",
+  language: "en-US",
   permanentNote: "",
   isPinned: false,
   updatedAt: 0,

@@ -25,7 +25,7 @@ describe("buildAskCard", () => {
       { value: "word", label: "Word 文档" },
       { value: "markdown", label: "Markdown 文档" },
       { value: "pdf", label: "PDF 文档" },
-      { value: "__custom__", label: "其他，我自己填写" },
+      { value: "__custom__", label: "Other — I'll enter it myself" },
     ]);
   });
 

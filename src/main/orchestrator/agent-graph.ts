@@ -368,7 +368,7 @@ export async function runAgentGraph(input: AgentGraphInput, deps: AgentGraphDeps
       }
       if (result.status === "failed") {
         step.status = "failed";
-        step.failure = { message: result.failureReason ?? "步骤失败", failedAt: Date.now() };
+        step.failure = { message: result.failureReason ?? "Step failed", failedAt: Date.now() };
         plan.updatedAt = Date.now();
         deps.onPlanUpdate?.(plan, state.replanCount);
         return new Command({

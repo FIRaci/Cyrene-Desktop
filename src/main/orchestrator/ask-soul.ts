@@ -167,7 +167,7 @@ function fallbackQuestion(field: AskMissingField): AskQuestion {
     type,
     options: type === "text" ? [] : options,
     allowCustom: field.allowCustom ?? type !== "text",
-    freeTextPlaceholder: type === "text" ? "请填写你的具体要求" : "填写其他选择",
+    freeTextPlaceholder: type === "text" ? "Enter your specific requirements" : "Enter another choice",
   };
 }
 
@@ -178,10 +178,10 @@ export function buildFallbackAskClarification(
     ? ""
     : input.trustedUserProfile?.callPreference?.trim()
       || input.trustedUserProfile?.nickname?.trim()
-      || "伙伴";
+      || "friend";
   const questions = input.missingFields.slice(0, 3).map(fallbackQuestion);
   return {
-    intro: `${address ? `${address}，` : ""}想让结果更合你心意，我还需要确认一点呀。`,
+    intro: `${address ? `${address}, ` : ""}I need to confirm one detail so I can tailor the result to you.`,
     questions,
     deferredFields: input.missingFields.slice(3).map((field) => field.field),
   };

@@ -101,7 +101,7 @@ export function recordUsage(input: number, output: number, requests = 1): void {
 export function getUsage(days: number): Array<{ date: string; weekday: string; input: number; output: number; hit: number; miss: number; requests: number }> {
   const store = ensureLoaded();
   const result: Array<{ date: string; weekday: string; input: number; output: number; hit: number; miss: number; requests: number }> = [];
-  const weekdays = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+  const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const now = new Date();
 
   for (let i = days - 1; i >= 0; i--) {

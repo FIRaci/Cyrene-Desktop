@@ -27,13 +27,13 @@ export function validateSearchApiKey(rawKey: string, label: string): KeyValidati
   const diagnostics = { length: normalized.length, trimmed, hasNonAscii, hasControlChars };
 
   if (normalized.length === 0) {
-    return { valid: false, normalized: "", error: `${label}不能为空`, diagnostics };
+    return { valid: false, normalized: "", error: `${label} cannot be empty (不能为空)`, diagnostics };
   }
   if (hasControlChars) {
-    return { valid: false, normalized: "", error: `${label}包含控制字符，请重新输入`, diagnostics };
+    return { valid: false, normalized: "", error: `${label} contains control characters / 包含控制字符，请重新输入`, diagnostics };
   }
   if (hasNonAscii) {
-    return { valid: false, normalized: "", error: `${label}包含非 ASCII 字符，请确认是否复制了多余内容`, diagnostics };
+    return { valid: false, normalized: "", error: `${label} contains non-ASCII characters / 包含非 ASCII 字符，请确认是否复制了多余内容`, diagnostics };
   }
   return { valid: true, normalized, diagnostics };
 }
@@ -43,7 +43,7 @@ export function validateSearchApiKey(rawKey: string, label: string): KeyValidati
 export const BUILTIN_SEARCH_TOOL_ID = "web_search";
 export const MINIMAX_SEARCH_TOOL_PREFIX = "minimax-web-search-";
 
-export type SearchBackend = "off" | "bocha" | "tavily" | "minimax";
+export type SearchBackend = "off" | "ddg" | "bocha" | "tavily" | "minimax";
 
 /**
  * 判断一个工具是否应该根据当前搜索后端设置被暴露。
@@ -54,7 +54,7 @@ export function shouldExposeSearchTool(
   activeBackend: SearchBackend,
 ): boolean {
   if (toolId === BUILTIN_SEARCH_TOOL_ID) {
-    return activeBackend === "bocha" || activeBackend === "tavily";
+    return activeBackend === "ddg" || activeBackend === "bocha" || activeBackend === "tavily";
   }
   if (toolId.startsWith(MINIMAX_SEARCH_TOOL_PREFIX)) {
     return activeBackend === "minimax";

@@ -20,7 +20,7 @@ const SKILL_REF_MAX_CHARS = 8000;
 function truncateForContext(text: string, maxChars: number, hint: string): string {
   if (text.length <= maxChars) return text;
   return text.slice(0, maxChars) +
-    "\n\n[...正文过长已截断，仅显示前 " + maxChars + " 字符。" + hint + "...]";
+    "\n\n[...content truncated; showing the first " + maxChars + " characters. " + hint + "...]";
 }
 
 /**
@@ -40,12 +40,12 @@ export function resetReadRefs(): void {
  */
 const EXECUTION_DISCIPLINE =
   "\n\n---\n" +
-  "【执行纪律 — 必须遵守】\n" +
-  "1. 只读完成任务所需的最少 reference，读到能执行就立即开始，不要把所有文档都读一遍。\n" +
-  "2. 同一 reference 文件不要重复读取（系统会拦截重复读取）。\n" +
-  "3. 不要用 list_dir 遍历 templates/scripts 目录——模板和脚本路径上文已给出，直接用。\n" +
-  "4. 信息足够后立即用其他工具执行产出，不要继续研究。\n" +
-  "5. 若预计轮数紧张，优先输出可交付版本而非继续优化格式。";
+  "[EXECUTION DISCIPLINE — REQUIRED]\n" +
+  "1. Read only the minimum references needed, then begin execution.\n" +
+  "2. Do not read the same reference twice.\n" +
+  "3. Do not explore templates/scripts with list_dir; use the supplied paths.\n" +
+  "4. Once information is sufficient, execute instead of continuing research.\n" +
+  "5. When turns are limited, prioritize a deliverable over formatting refinements.";
 
 /**
  * 注册 skill 系统的两个 meta-tool 进 toolRegistry。
@@ -55,19 +55,17 @@ const EXECUTION_DISCIPLINE =
 export function registerSkillTools(): void {
   toolRegistry.register({
     id: "invoke_skill",
-    name: "调用 Skill",
+    name: "Invoke Skill",
     description:
-      "加载某个 skill 的详细执行指令。当你判断当前任务适用某 skill 时（见系统提示里的「可用 Skill」清单），调用此工具获取该 skill 的完整指令，再按指令用其他工具执行。\n\n" +
-      "何时用：系统提示的「可用 Skill」清单里某条 description 适用于当前任务。\n\n" +
-      "不要用于：清单里没有的 skill id。\n\n" +
-      "参数：skill_id（必填，skill 的 id，见清单里的标识）。\n\n" +
-      "返回：该 skill 的指令正文 + 可用的 references 文件清单。若正文引用了 references/xxx，需要详情时再用 read_skill_reference 读取。",
+      "Loads detailed instructions for a Skill that applies to the current task. Follow those instructions with the other tools.\n\n" +
+      "Use only for a Skill ID in the Available Skills catalog.\n\n" +
+      "Argument: skill_id (required). Returns instructions and the available reference-file list.",
     enabled: true,
     risk: "safe",
     inputSchema: {
       type: "object",
       properties: {
-        skill_id: { type: "string", description: "skill 的 id（见「可用 Skill」清单）" },
+        skill_id: { type: "string", description: "Skill ID from the Available Skills catalog" },
       },
       required: ["skill_id"],
     },
@@ -75,41 +73,38 @@ export function registerSkillTools(): void {
       const id = String(args.skill_id || "");
       const skill = skillRegistry.getById(id);
       if (!skill || !skill.enabled || !skillRegistry.isAvailable(id)) {
-        const available = skillRegistry.getEnabled().map(s => s.id).join(", ") || "(无)";
-        return `[invoke_skill] skill not found: ${id}。可用 skill: ${available}`;
+        const available = skillRegistry.getEnabled().map(s => s.id).join(", ") || "(none)";
+        return `[invoke_skill] Skill not found: ${id}. Available Skills: ${available}`;
       }
       const body = skillRegistry.getBody(id);
       if (body === null) {
-        return `[invoke_skill] 读取 skill 正文失败: ${id}`;
+        return `[invoke_skill] Failed to read Skill instructions: ${id}`;
       }
       const refList = skill.references.length > 0
-        ? `\n\n可用 references（需要详情时调 read_skill_reference 读取）：\n${skill.references.map(r => "- " + r).join("\n")}`
+        ? `\n\nAvailable references (use read_skill_reference when details are needed):\n${skill.references.map(r => "- " + r).join("\n")}`
         : "";
       console.log(LOG_PREFIX, "invoke_skill:", id, "bodyLen=" + body.length);
       const truncatedBody = truncateForContext(
         body,
         SKILL_BODY_MAX_CHARS,
-        "如需完整指令或特定部分，可用 read_skill_reference 精准读取对应 reference 文件",
+        "Use read_skill_reference for the exact file needed for complete instructions or a specific section",
       );
-      return `[已加载 skill: ${id}]\n${truncatedBody}${refList}${EXECUTION_DISCIPLINE}`;
+      return `[Loaded Skill: ${id}]\n${truncatedBody}${refList}${EXECUTION_DISCIPLINE}`;
     },
   });
 
   toolRegistry.register({
     id: "read_skill_reference",
-    name: "读取 Skill 附件",
+    name: "Read Skill reference",
     description:
-      "读取某 skill 的 references 附件内容。当 invoke_skill 返回的正文引用了 references/xxx 且你需要详情时调用。\n\n" +
-      "何时用：invoke_skill 返回的正文提到 references/xxx 且需要该附件的详细内容。\n\n" +
-      "不要用于：不在 invoke_skill 返回清单里的 ref。\n\n" +
-      "参数：skill_id（必填），ref（必填，references 文件名，必须是 invoke_skill 返回清单里的）。",
+      "Reads a Skill reference when invoke_skill cites references/xxx and its details are needed. Use only a reference listed by invoke_skill. Arguments: skill_id and ref (both required).",
     enabled: true,
     risk: "safe",
     inputSchema: {
       type: "object",
       properties: {
-        skill_id: { type: "string", description: "skill 的 id" },
-        ref:      { type: "string", description: "references 文件名（必须命中 invoke_skill 返回的清单）" },
+        skill_id: { type: "string", description: "Skill ID" },
+        ref:      { type: "string", description: "Reference filename listed by invoke_skill" },
       },
       required: ["skill_id", "ref"],
     },
@@ -123,19 +118,19 @@ export function registerSkillTools(): void {
       // 去重：同一轮内同一 reference 不重复返回（内容已在对话历史里，再读浪费轮数+token）
       const readKey = `${id}/${ref}`;
       if (readRefs.has(readKey)) {
-        return `[read_skill_reference] "${ref}" 已在本轮读过，内容已在对话中，不要重复读取。` +
-          `如需其他文件，可读：${skill.references.filter(r => !readRefs.has(`${id}/${r}`)).join(", ") || "(全部已读)"}`;
+        return `[read_skill_reference] "${ref}" was already read this turn. Do not read it again. ` +
+          `Other available files: ${skill.references.filter(r => !readRefs.has(`${id}/${r}`)).join(", ") || "(all read)"}`;
       }
       const content = skillRegistry.getReference(id, ref);
       if (content === null) {
-        return `[read_skill_reference] 读取失败（ref 不在清单或文件不存在）: ${ref}。可用: ${skill.references.join(", ") || "(无)"}`;
+        return `[read_skill_reference] Read failed; reference unlisted or missing: ${ref}. Available: ${skill.references.join(", ") || "(none)"}`;
       }
       readRefs.add(readKey);
       console.log(LOG_PREFIX, "read_skill_reference:", id, ref, "len=" + content.length);
       const truncated = truncateForContext(
         content,
         SKILL_REF_MAX_CHARS,
-        "如需后半部分内容，请分段读取或说明你需要的具体章节",
+        "Read in sections or specify the exact section needed to retrieve later content",
       );
       return truncated;
     },

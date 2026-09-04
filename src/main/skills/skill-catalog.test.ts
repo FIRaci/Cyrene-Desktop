@@ -11,42 +11,42 @@ function e(id: string, desc: string, tools?: string[], enabled = true): SkillEnt
 }
 
 describe("buildSkillCatalog", () => {
-  it("无 skill 返回空串", () => {
+  it("returns empty string when skills list is empty", () => {
     expect(buildSkillCatalog([])).toBe("");
   });
 
-  it("全部 disabled 返回空串", () => {
+  it("returns empty string when all skills are disabled", () => {
     expect(buildSkillCatalog([e("a", "x", undefined, false)])).toBe("");
   });
 
-  it("含标题 + 每条 id: description + tools 标注", () => {
-    const out = buildSkillCatalog([e("write-expense-report", "生成支出报告", ["query_expense", "write_excel"])]);
-    expect(out).toContain("可用 Skill");
+  it("includes heading, id: description and tools tag", () => {
+    const out = buildSkillCatalog([e("write-expense-report", "Generate expense report", ["query_expense", "write_excel"])]);
+    expect(out).toContain("Available Skills");
     expect(out).toContain("invoke_skill");
-    expect(out).toContain("- write-expense-report: 生成支出报告");
+    expect(out).toContain("- write-expense-report: Generate expense report");
     expect(out).toContain("[tools: query_expense, write_excel]");
   });
 
-  it("无 tools 字段不输出 tools 标注", () => {
-    const out = buildSkillCatalog([e("plain", "纯指令")]);
-    expect(out).toContain("- plain: 纯指令");
+  it("omits tools tag when tools field is undefined", () => {
+    const out = buildSkillCatalog([e("plain", "Instruction only")]);
+    expect(out).toContain("- plain: Instruction only");
     expect(out).not.toContain("[tools:");
   });
 
-  it("tools 空数组不输出 tools 标注", () => {
+  it("omits tools tag when tools array is empty", () => {
     const out = buildSkillCatalog([e("a", "x", [])]);
     expect(out).toContain("- a: x");
     expect(out).not.toContain("[tools:");
   });
 
-  it("disabled skill 不进清单", () => {
+  it("excludes disabled skills from catalog", () => {
     const out = buildSkillCatalog([e("a", "x"), e("b", "y", undefined, false)]);
     expect(out).toContain("- a: x");
     expect(out).not.toContain("- b:");
   });
 
   it("distinguishes auto-injected skills from skills that require invoke_skill", () => {
-    const music = e("cyrene-music-companion", "音乐陪伴");
+    const music = e("cyrene-music-companion", "Music companion");
     music.manifest = {
       id: music.id,
       version: "1.0.0",
@@ -58,14 +58,14 @@ describe("buildSkillCatalog", () => {
 
     const out = buildSkillCatalog([music]);
 
-    expect(out).toContain("自动注入");
-    expect(out).toContain("无需再次调用 invoke_skill");
+    expect(out).toContain("auto-injected");
+    expect(out).toContain("do not call invoke_skill again");
   });
 });
 
 describe("buildAutoInjectedSkillContext", () => {
   it("injects the full body only for enabled autoInject skills", () => {
-    const music = e("cyrene-music-companion", "音乐陪伴");
+    const music = e("cyrene-music-companion", "Music companion");
     music.manifest = {
       id: music.id,
       version: "1.0.0",
@@ -74,19 +74,19 @@ describe("buildAutoInjectedSkillContext", () => {
       dependencies: [],
       autoInject: true,
     };
-    const ordinary = e("ordinary", "普通 Skill");
+    const ordinary = e("ordinary", "Ordinary skill");
 
     const out = buildAutoInjectedSkillContext([music, ordinary], (id) =>
-      id === music.id ? "只使用真实音乐工具结果。" : "不应注入",
+      id === music.id ? "Use only real music tool results." : "Should not inject",
     );
 
     expect(out).toContain("cyrene-music-companion");
-    expect(out).toContain("只使用真实音乐工具结果。");
-    expect(out).not.toContain("不应注入");
+    expect(out).toContain("Use only real music tool results.");
+    expect(out).not.toContain("Should not inject");
   });
 
   it("does not inject a disabled autoInject skill", () => {
-    const music = e("cyrene-music-companion", "音乐陪伴", undefined, false);
+    const music = e("cyrene-music-companion", "Music companion", undefined, false);
     music.manifest = {
       id: music.id,
       version: "1.0.0",
@@ -96,13 +96,13 @@ describe("buildAutoInjectedSkillContext", () => {
       autoInject: true,
     };
 
-    expect(buildAutoInjectedSkillContext([music], () => "正文")).toBe("");
+    expect(buildAutoInjectedSkillContext([music], () => "Body")).toBe("");
   });
 });
 
 describe("buildAutoInjectedSoulContext", () => {
   it("injects only the Soul reply section and excludes tool instructions", () => {
-    const music = e("cyrene-music-companion", "音乐陪伴");
+    const music = e("cyrene-music-companion", "Music companion");
     music.manifest = {
       id: music.id,
       version: "1.0.0",
@@ -112,21 +112,21 @@ describe("buildAutoInjectedSoulContext", () => {
       autoInject: true,
     };
     const body = [
-      "# 音乐陪伴",
-      "## Soul 回复策略",
-      "用户无聊时可以自然提议听歌。",
-      "## 工具调用策略",
-      "调用 music_get_daily_recommendations。",
+      "# Music companion",
+      "## Soul response strategy",
+      "When user is bored, propose listening to music naturally.",
+      "## Tool invocation policy",
+      "Call music_get_daily_recommendations.",
     ].join("\n");
 
     const out = buildAutoInjectedSoulContext([music], () => body);
 
-    expect(out).toContain("用户无聊时可以自然提议听歌")
-    expect(out).not.toContain("music_get_daily_recommendations")
+    expect(out).toContain("When user is bored, propose listening to music naturally.");
+    expect(out).not.toContain("music_get_daily_recommendations");
   });
 
   it("reads a Soul reply section that ends at end-of-file", () => {
-    const music = e("cyrene-music-companion", "音乐陪伴");
+    const music = e("cyrene-music-companion", "Music companion");
     music.manifest = {
       id: music.id,
       version: "1.0.0",
@@ -138,9 +138,9 @@ describe("buildAutoInjectedSoulContext", () => {
 
     const out = buildAutoInjectedSoulContext(
       [music],
-      () => "# 音乐陪伴\n## Soul 回复策略\n用户无聊时可以提议听歌。",
+      () => "# Music companion\n## Soul response strategy\nWhen user is bored, propose listening to music.",
     );
 
-    expect(out).toContain("用户无聊时可以提议听歌")
+    expect(out).toContain("When user is bored, propose listening to music.");
   });
 });

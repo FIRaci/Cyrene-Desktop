@@ -11,15 +11,15 @@ function parseDuration(val: unknown, field: string): number {
   if (typeof val === "number" && Number.isFinite(val)) return Math.round(val);
   if (typeof val === "string") {
     const m = val.trim().match(/^(\d+)(s|ms)?$/);
-    if (!m) throw new Error(field + " 时长格式非法: " + val);
+    if (!m) throw new Error(field + " has an invalid duration: " + val);
     const n = parseInt(m[1], 10);
     return m[2] === "s" ? n * 1000 : n;
   }
-  throw new Error(field + " 时长必须是数字或字符串");
+  throw new Error(field + " duration must be a number or string");
 }
 
 function str(v: unknown, field: string): string {
-  if (typeof v !== "string" || !v.trim()) throw new Error(field + " 必须是非空字符串");
+  if (typeof v !== "string" || !v.trim()) throw new Error(field + " must be a non-empty string");
   return v;
 }
 
@@ -40,10 +40,10 @@ function optNum(v: unknown): number | undefined {
  * branch.then/else 递归调用 parseStep。
  */
 function parseStep(raw: unknown): Step {
-  if (!raw || typeof raw !== "object") throw new Error("步骤必须是对象");
+  if (!raw || typeof raw !== "object") throw new Error("Each step must be an object");
   const obj = raw as Record<string, unknown>;
   const keys = Object.keys(obj);
-  if (keys.length !== 1) throw new Error("步骤必须只有一个原语键，实际: " + keys.join(","));
+  if (keys.length !== 1) throw new Error("Each step must contain exactly one operation; received: " + keys.join(","));
   const op = keys[0];
   const params = obj[op];
 
@@ -59,10 +59,10 @@ function parseStep(raw: unknown): Step {
       if (params && typeof params === "object") {
         const p = params as { x?: unknown; y?: unknown };
         if (typeof p.x !== "number" || typeof p.y !== "number")
-          throw new Error("click 坐标必须是 {x,y} 数字");
+          throw new Error("click coordinates must be numeric {x,y} values");
         return { type: "click", target: { x: p.x, y: p.y } };
       }
-      throw new Error("click 必须是 center 或 {x,y}");
+      throw new Error("click must be center or {x,y}");
     }
     case "vlm_click": {
       const p = (params ?? {}) as Record<string, unknown>;
@@ -90,7 +90,7 @@ function parseStep(raw: unknown): Step {
     }
     case "vlm_compare": {
       const p = (params ?? {}) as Record<string, unknown>;
-      if (!Array.isArray(p.refs)) throw new Error("vlm_compare.refs 必须是数组");
+      if (!Array.isArray(p.refs)) throw new Error("vlm_compare.refs must be an array");
       return {
         type: "vlm_compare",
         id: str(p.id, "vlm_compare.id"),
@@ -101,13 +101,13 @@ function parseStep(raw: unknown): Step {
     }
     case "branch": {
       const p = (params ?? {}) as Record<string, unknown>;
-      if (!Array.isArray(p.then)) throw new Error("branch.then 必须是步骤数组");
+      if (!Array.isArray(p.then)) throw new Error("branch.then must be an array of steps");
       const then = p.then.map(parseStep);
       const els = Array.isArray(p.else) ? p.else.map(parseStep) : undefined;
       return { type: "branch", if: str(p.if, "branch.if"), then, else: els };
     }
     default:
-      throw new Error("未知原语: " + op);
+      throw new Error("Unknown operation: " + op);
   }
 }
 
@@ -116,15 +116,15 @@ export function parseRecipe(yamlText: string): ParseResult {
   try {
     doc = yaml.load(yamlText);
   } catch (err) {
-    return { ok: false, error: "YAML 解析失败: " + (err instanceof Error ? err.message : String(err)) };
+    return { ok: false, error: "Failed to parse YAML: " + (err instanceof Error ? err.message : String(err)) };
   }
-  if (!doc || typeof doc !== "object") return { ok: false, error: "脚本根必须是对象" };
+  if (!doc || typeof doc !== "object") return { ok: false, error: "Recipe root must be an object" };
   const d = doc as Record<string, unknown>;
   try {
     const name = str(d.name, "name");
     const exe = str(d.exe, "exe");
     const model = optStr(d.model);
-    if (!Array.isArray(d.steps)) throw new Error("steps 必须是数组");
+    if (!Array.isArray(d.steps)) throw new Error("steps must be an array");
     const steps = d.steps.map(parseStep);
     return { ok: true, recipe: { name, exe, model, steps } };
   } catch (err) {

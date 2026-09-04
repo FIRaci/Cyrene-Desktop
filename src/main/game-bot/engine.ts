@@ -57,15 +57,15 @@ function evalExpr(expr: string, vars: Record<string, unknown>): boolean {
 
 function stepDesc(step: Step): string {
   switch (step.type) {
-    case "launch": return "启动 " + step.exe;
-    case "wait": return "等待 " + step.ms + "ms";
-    case "key": return "按键 " + step.combo;
-    case "click": return "点击 " + (step.target === "center" ? "中心" : JSON.stringify(step.target));
-    case "vlm_click": return "识图点击 " + step.ref;
-    case "vlm_select": return "语义选择 " + step.desc;
-    case "vlm_check": return "判断 " + step.id;
-    case "vlm_compare": return "比对 " + step.id;
-    case "branch": return "分支 " + step.if;
+    case "launch": return "Launch " + step.exe;
+    case "wait": return "Wait " + step.ms + "ms";
+    case "key": return "Press " + step.combo;
+    case "click": return "Click " + (step.target === "center" ? "center" : JSON.stringify(step.target));
+    case "vlm_click": return "Locate and click " + step.ref;
+    case "vlm_select": return "Select " + step.desc;
+    case "vlm_check": return "Check " + step.id;
+    case "vlm_compare": return "Compare " + step.id;
+    case "branch": return "Branch " + step.if;
   }
 }
 
@@ -78,7 +78,7 @@ export async function runRecipe(recipe: GameRecipe, ctx: RunContext): Promise<Ru
   let completed = 0;
 
   async function execStep(step: Step): Promise<string | null> {
-    if (ctx.signal?.aborted) return "已中止";
+    if (ctx.signal?.aborted) return "Automation was stopped.";
     switch (step.type) {
       case "launch":
         await tools.launch(resolveVars(step.exe, vars));
@@ -98,12 +98,12 @@ export async function runRecipe(recipe: GameRecipe, ctx: RunContext): Promise<Ru
         const tries = (step.retry ?? 2) + 1;
         let coord: { x: number; y: number } | null = null;
         for (let i = 0; i < tries; i++) {
-          if (ctx.signal?.aborted) return "已中止";
+          if (ctx.signal?.aborted) return "Automation was stopped.";
           coord = await tools.locate(step.ref, step.target);
           if (coord) break;
           if (i < tries - 1) await sleep(1000);
         }
-        if (!coord) return "vlm_click 定位失败: " + step.ref;
+        if (!coord) return "VLM could not locate target: " + step.ref;
         const repeat = step.repeat ?? 1;
         for (let r = 0; r < repeat; r++) {
           await tools.click(coord.x, coord.y);
@@ -116,12 +116,12 @@ export async function runRecipe(recipe: GameRecipe, ctx: RunContext): Promise<Ru
         const tries = (step.retry ?? 2) + 1;
         let coord: { x: number; y: number } | null = null;
         for (let i = 0; i < tries; i++) {
-          if (ctx.signal?.aborted) return "已中止";
+          if (ctx.signal?.aborted) return "Automation was stopped.";
           coord = await tools.select(step.desc);
           if (coord) break;
           if (i < tries - 1) await sleep(1000);
         }
-        if (!coord) return "vlm_select 定位失败: " + step.desc;
+        if (!coord) return "VLM could not locate selection: " + step.desc;
         await tools.click(coord.x, coord.y);
         return null;
       }
@@ -151,7 +151,7 @@ export async function runRecipe(recipe: GameRecipe, ctx: RunContext): Promise<Ru
         const cond = evalExpr(step.if, vars);
         const branchSteps = cond ? step.then : (step.else ?? []);
         for (const sub of branchSteps) {
-          if (ctx.signal?.aborted) return "已中止";
+          if (ctx.signal?.aborted) return "Automation was stopped.";
           const err = await execStep(sub);
           if (err) return err;
         }
@@ -161,7 +161,7 @@ export async function runRecipe(recipe: GameRecipe, ctx: RunContext): Promise<Ru
   }
 
   for (let i = 0; i < recipe.steps.length; i++) {
-    if (ctx.signal?.aborted) return { ok: false, error: "已中止", completed, total };
+    if (ctx.signal?.aborted) return { ok: false, error: "Automation was stopped.", completed, total };
     const step = recipe.steps[i];
     ctx.onProgress?.({ index: i, total, desc: stepDesc(step) });
     const err = await execStep(step);

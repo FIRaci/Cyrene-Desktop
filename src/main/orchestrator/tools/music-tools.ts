@@ -69,7 +69,7 @@ function issueSelectionContext(
       conversationId: set.conversationId,
       domain: "music",
       kind: "selection_set",
-      label: set.source === "daily_recommendation" ? "网易云今日推荐" : `歌曲搜索：${set.query ?? ""}`,
+      label: set.source === "daily_recommendation" ? "NetEase Cloud Music daily recommendations" : `Music search: ${set.query ?? ""}`,
       attributes: { source: [set.source] },
       lifecycle: "active",
       expiresAt: set.expiresAt,
@@ -192,13 +192,13 @@ export function buildMusicTools(service: MusicService, hooks: MusicToolHooks = {
     {
       id: "music_get_daily_recommendations",
       capability: "music.daily_recommendations",
-      name: "获取今日推荐歌曲",
-      description: "获取网易云音乐今日推荐并将前 5 首展示为卡片。需要用户已登录。返回可信候选引用。",
+      name: "Get daily music recommendations",
+      description: "Get the user's NetEase Cloud Music daily recommendations and present up to five tracks as a card. Requires a signed-in account and returns trusted candidate references.",
       enabled: true,
       risk: "safe",
       inputSchema: { type: "object", properties: {}, required: [] },
       needsContext: true,
-      soulActionLabel: "获取每日推荐",
+      soulActionLabel: "Get daily recommendations",
       soulProjection: {
         projector: "entity_list",
         source: "trusted_internal",
@@ -206,8 +206,8 @@ export function buildMusicTools(service: MusicService, hooks: MusicToolHooks = {
         fields: { title: "name", artists: "artists", album: "album", position: "position" },
       },
       soulErrorMessages: {
-        E_ACCOUNT_REQUIRED: "需要登录网易云音乐账号",
-        E_BACKEND_NOT_READY: "音乐服务未就绪",
+        E_ACCOUNT_REQUIRED: "A signed-in NetEase Cloud Music account is required",
+        E_BACKEND_NOT_READY: "The music service is not ready",
       },
       completionEvidence: [
         { kind: "tool_succeeded" },
@@ -232,25 +232,25 @@ export function buildMusicTools(service: MusicService, hooks: MusicToolHooks = {
     {
       id: "music_search",
       capability: "music.search",
-      name: "搜索网易云歌曲",
-      description: "按关键词搜索网易云音乐。purpose=discover 用于展示候选；purpose=play 用于本轮搜索确认后直接播放唯一结果。返回最多 20 首真实歌曲的可信候选引用。",
+      name: "Search NetEase Cloud Music",
+      description: "Search NetEase Cloud Music by keyword. Use purpose=discover to show candidates or purpose=play when a uniquely confirmed result may be played during this turn. Returns trusted references for up to 20 real tracks.",
       enabled: true,
       risk: "safe",
       inputSchema: {
         type: "object",
         properties: {
-          keyword: { type: "string", description: "搜索关键词 (1-100 字)" },
-          limit: { type: "number", description: "返回数量 (1-20)" },
+          keyword: { type: "string", description: "Search query (1-100 characters)" },
+          limit: { type: "number", description: "Maximum number of results (1-20)" },
           purpose: {
             type: "string",
             enum: ["discover", "play"],
-            description: "本次搜索目的。由工具阶段结合用户请求和 CITA 上下文明确选择，Tool Runtime 不猜测。",
+            description: "Search purpose. The tool phase must choose it explicitly from the user request and CITA context; the runtime does not infer it.",
           },
         },
         required: ["keyword", "purpose"],
       },
       needsContext: true,
-      soulActionLabel: "搜索歌曲",
+      soulActionLabel: "Search for tracks",
       soulProjection: {
         projector: "entity_list",
         source: "trusted_internal",
@@ -258,9 +258,9 @@ export function buildMusicTools(service: MusicService, hooks: MusicToolHooks = {
         fields: { title: "name", artists: "artists", album: "album", position: "position" },
       },
       soulErrorMessages: {
-        E_BACKEND_NOT_READY: "音乐服务未就绪",
-        E_INVALID_KEYWORD_EMPTY: "搜索关键词为空",
-        E_INVALID_KEYWORD_TOO_LONG: "搜索关键词过长",
+        E_BACKEND_NOT_READY: "The music service is not ready",
+        E_INVALID_KEYWORD_EMPTY: "The search query is empty",
+        E_INVALID_KEYWORD_TOO_LONG: "The search query is too long",
       },
       completionEvidence: [
         { kind: "tool_succeeded" },
@@ -294,8 +294,8 @@ export function buildMusicTools(service: MusicService, hooks: MusicToolHooks = {
     {
       id: "music_present_tracks",
       capability: "music.present_tracks",
-      name: "呈现已选歌曲为卡片",
-      description: "将可信歌曲候选引用渲染为 AG-UI 卡片。候选必须属于同一个集合，最多 5 首。",
+      name: "Present selected tracks",
+      description: "Render trusted track candidate references as an AG-UI card. All candidates must belong to the same selection set; at most five tracks are allowed.",
       enabled: true,
       risk: "safe",
       inputSchema: {
@@ -308,10 +308,10 @@ export function buildMusicTools(service: MusicService, hooks: MusicToolHooks = {
       },
       controlledInput: { candidateRefs: { type: "context_ref_array", kind: "candidate" } },
       needsContext: true,
-      soulActionLabel: "展示歌曲列表",
+      soulActionLabel: "Present a track list",
       soulErrorMessages: {
-        E_MUSIC_MIXED_CONTEXT_SET: "候选歌曲不属于同一列表",
-        E_SET_NOT_FOUND: "候选列表不存在",
+        E_MUSIC_MIXED_CONTEXT_SET: "The candidate tracks do not belong to the same list",
+        E_SET_NOT_FOUND: "The candidate list could not be found",
       },
       execute: async (args, ctx) => {
         const conversationId = conversationIdOf(ctx);
@@ -337,20 +337,20 @@ export function buildMusicTools(service: MusicService, hooks: MusicToolHooks = {
     {
       id: "music_play_track",
       capability: "music.play_track",
-      name: "播放网易云歌曲",
-      description: "向默认音乐来源发送播放请求。仅接受 CITA 提供的可信歌曲候选引用；dispatched 不等于已开始播放。",
+      name: "Play a NetEase Cloud Music track",
+      description: "Send a playback request to the default music source. Accepts only trusted candidate references supplied by CITA; dispatched does not mean playback has started.",
       enabled: true,
       risk: "input-control",
       inputSchema: {
         type: "object",
         properties: {
-          candidateRef: { type: "string", description: "CITA 提供的可信歌曲候选引用" },
+          candidateRef: { type: "string", description: "Trusted track candidate reference supplied by CITA" },
         },
         required: ["candidateRef"],
       },
       controlledInput: { candidateRef: { type: "context_ref", kind: "candidate" } },
       needsContext: true,
-      soulActionLabel: "播放歌曲",
+      soulActionLabel: "Play a track",
       soulProjection: {
         projector: "action_dispatch",
         source: "trusted_internal",
@@ -361,11 +361,11 @@ export function buildMusicTools(service: MusicService, hooks: MusicToolHooks = {
         },
       },
       soulErrorMessages: {
-        E_TRACK_NOT_PLAYABLE: "该歌曲不可播放",
-        E_TRACK_NOT_IN_SET: "歌曲不在当前候选列表中",
-        E_PLAYBACK_DISPATCH_FAILED: "播放请求发送失败",
-        E_CONTEXT_REF_NOT_FOUND: "引用已失效",
-        E_CONTEXT_REF_EXPIRED: "引用已过期",
+        E_TRACK_NOT_PLAYABLE: "This track cannot be played",
+        E_TRACK_NOT_IN_SET: "The track is not in the current candidate list",
+        E_PLAYBACK_DISPATCH_FAILED: "The playback request could not be sent",
+        E_CONTEXT_REF_NOT_FOUND: "The reference is no longer available",
+        E_CONTEXT_REF_EXPIRED: "The reference has expired",
       },
       completionEvidence: [
         { kind: "projection_claim", claimKind: "request_dispatched" },
@@ -385,8 +385,8 @@ export function buildMusicTools(service: MusicService, hooks: MusicToolHooks = {
     {
       id: "music_play_playlist",
       capability: "music.play_playlist",
-      name: "播放网易云歌单",
-      description: "通过本地网易云客户端播放指定歌单 ID。",
+      name: "Play a NetEase Cloud Music playlist",
+      description: "Play a playlist by ID using the local NetEase Cloud Music client.",
       enabled: true,
       risk: "input-control",
       inputSchema: {
@@ -395,7 +395,7 @@ export function buildMusicTools(service: MusicService, hooks: MusicToolHooks = {
         required: ["playlistId"],
       },
       controlledInput: { playlistId: "tool_result" },
-      soulActionLabel: "播放歌单",
+      soulActionLabel: "Play a playlist",
       soulProjection: {
         projector: "action_dispatch",
         source: "trusted_internal",
@@ -406,8 +406,8 @@ export function buildMusicTools(service: MusicService, hooks: MusicToolHooks = {
         },
       },
       soulErrorMessages: {
-        E_INVALID_ID_FORMAT: "歌单 ID 格式无效",
-        E_PLAYBACK_DISPATCH_FAILED: "播放请求发送失败",
+        E_INVALID_ID_FORMAT: "The playlist ID format is invalid",
+        E_PLAYBACK_DISPATCH_FAILED: "The playback request could not be sent",
       },
       completionEvidence: [
         { kind: "projection_claim", claimKind: "request_dispatched" },

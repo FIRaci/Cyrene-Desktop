@@ -18,6 +18,7 @@ import { app } from "electron";
 import { getAdapterForConfig } from "../orchestrator/vendors";
 import { recordUsage } from "../token-usage-store";
 import { commitMemoryCompression } from "./memory-compression-transaction";
+import { isModelEndpointUsable } from "../../shared/model-endpoint";
 
 // ── LLM 调用（复用与 MemoryJudge 相同的 API 模式） ──
 
@@ -52,7 +53,7 @@ function loadModelSettings(): ModelSettings {
 
 async function callLLM(messages: Array<{ role: "system" | "user"; content: string }>, maxTokens = 500): Promise<string> {
   const settings = loadModelSettings();
-  if (!settings.apiKey) throw new Error("missing api key");
+  if (!isModelEndpointUsable(settings)) throw new Error("No usable model is configured");
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 30000);
@@ -292,7 +293,7 @@ async function runReflection(): Promise<void> {
       l0.preferredName ? `  称呼：${l0.preferredName}` : "",
       l0.occupation ? `  职业：${l0.occupation}` : "",
       l0.longTermInterests ? `  长期兴趣：${l0.longTermInterests}` : "",
-      l0.language ? `  常用语言：${l0.language}` : "",
+      l0.language ? `  Preferred language: ${l0.language}` : "",
       l0.permanentNote ? `  备注：${l0.permanentNote}` : "",
       "",
       "当前近期状态：",

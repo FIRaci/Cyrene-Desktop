@@ -20,6 +20,7 @@ export const IPC = {
   WINDOW_CAPTURE_FRAME: "window:capture-frame",
   WINDOW_GET_CURSOR_POSITION: "window:get-cursor-position",
   PET_VISIBILITY_CHANGED: "pet:visibility-changed",
+  PET_AGENT_EVENT: "pet:agent-event",
   APP_QUIT: "app:quit",
 
   // chat window
@@ -238,7 +239,8 @@ export const IPC = {
   CALL_OPEN: "call:open",                 // sidebar → main：打开通话窗口
   CALL_START: "call:start",               // renderer → main：开始通话（初始化 ASR）
   CALL_AUDIO_FRAME: "call:audio-frame",    // renderer → main：PCM 音频帧
-  CALL_ASR_RESULT: "call:asr-result",     // main → renderer：ASR 识别结果
+  CALL_ASR_RESULT: "call:asr-result",
+  CALL_SUBMIT_TEXT: "call:submit-text",     // main → renderer：ASR 识别结果
   CALL_TURN_END: "call:turn-end",         // renderer → main：VAD 静默，结束本轮
   CALL_TTS_AUDIO: "call:tts-audio",       // main → renderer：TTS 音频
   CALL_TTS_DONE: "call:tts-done",         // renderer → main：TTS 播放完毕
@@ -288,11 +290,11 @@ export const IPC = {
   MUSIC_STATE_CHANGED: "music:state-changed",
   MUSIC_CARD: "music:card",
 
-  // screenshot
+  // screenshot & co-watching
   SCREENSHOT_START: "screenshot:start",
   SCREENSHOT_SAVE_TEMP: "screenshot:save-temp",
   SCREENSHOT_INSERT: "screenshot:insert",
   SCREENSHOT_HOTKEY_CAPTURE_START: "screenshot:hotkey-capture-start",
   SCREENSHOT_HOTKEY_CAPTURE_END: "screenshot:hotkey-capture-end",
+  SCREENSHOT_INSTANT_LOOK: "screenshot:instant-look",
 } as const;
-

@@ -3,11 +3,16 @@
 // 不复用 vision-captioner 模块本身（它写死单图+通用描述），本模块是 game-bot 定位专用。
 
 import { parseClickCoord, parseBoolAnswer, parseMatchIndex } from "./coords";
+import { isModelEndpointUsable, modelAuthorizationHeaders } from "../../shared/model-endpoint";
 
 export interface VlmConfig {
   baseUrl: string;  // 如 https://api.siliconflow.cn/v1
   apiKey: string;
   model: string;    // 如 Qwen/Qwen3-VL-8B-Instruct
+}
+
+export function isVlmConfigUsable(config: VlmConfig): boolean {
+  return isModelEndpointUsable(config);
 }
 
 /** 图片数据（不含 data: 前缀的纯 base64 + mime）。 */
@@ -31,6 +36,10 @@ type ContentBlock =
 
 /** 发一次多图 chat 请求，返回助手文本。失败返回空串。 */
 async function chat(config: VlmConfig, instruction: string, images: ImgData[]): Promise<string> {
+  if (!isVlmConfigUsable(config)) {
+    console.error("[GameBot] VLM configuration is incomplete or requires an API key.");
+    return "";
+  }
   const content: ContentBlock[] = [{ type: "text", text: instruction }];
   for (const img of images) {
     content.push({ type: "image_url", image_url: { url: "data:" + img.mime + ";base64," + img.base64 } });
@@ -47,18 +56,18 @@ async function chat(config: VlmConfig, instruction: string, images: ImgData[]): 
     const resp = await fetch(chatUrl(config.baseUrl), {
       method: "POST",
       signal: controller.signal,
-      headers: { "Content-Type": "application/json", Authorization: "Bearer " + config.apiKey },
+      headers: { "Content-Type": "application/json", ...modelAuthorizationHeaders(config) },
       body: JSON.stringify(body),
     });
     if (!resp.ok) {
       const t = await resp.text().catch(() => "");
-      console.error("[GameBot] VLM 请求失败 HTTP", resp.status, t.slice(0, 200));
+      console.error("[GameBot] VLM request failed with HTTP", resp.status, t.slice(0, 200));
       return "";
     }
     const data = await resp.json() as { choices?: Array<{ message?: { content?: string | null } }> };
     return data.choices?.[0]?.message?.content ?? "";
   } catch (err) {
-    console.error("[GameBot] VLM 请求异常:", err instanceof Error ? err.message : err);
+    console.error("[GameBot] VLM request failed:", err instanceof Error ? err.message : err);
     return "";
   } finally {
     clearTimeout(timer);
@@ -79,11 +88,11 @@ export async function locate(
   screenH: number,
 ): Promise<{ x: number; y: number } | null> {
   const instruction =
-    "以下是参考图（要找的目标元素）和当前游戏屏幕截图。" +
-    (targetDesc ? "目标描述：" + targetDesc + "。" : "") +
-    "请在当前截图中找到与参考图相同或相似的目标元素，返回其中心位置。" +
-    "坐标系为 0-1000 归一化（左上 0,0，右下 1000,1000）。" +
-    "只返回 JSON：{\"x\":<0-1000>,\"y\":<0-1000>}，不要任何其他文字。";
+    "The images contain reference targets followed by the current game screenshot. " +
+    (targetDesc ? "Target description: " + targetDesc + ". " : "") +
+    "Find the same or most visually similar target in the current screenshot and return its center. " +
+    "Use normalized coordinates from 0 to 1000, with 0,0 at top-left and 1000,1000 at bottom-right. " +
+    "Return only JSON: {\"x\":<0-1000>,\"y\":<0-1000>}.";
   // 顺序：参考图在前，当前截图最后
   const text = await chat(config, instruction, [...refImgs, screenImg]);
   if (!text) return null;
@@ -98,7 +107,7 @@ export async function check(
   refImg?: ImgData,
 ): Promise<boolean | null> {
   const instruction =
-    ask + "\n只返回 JSON：{\"answer\":true} 或 {\"answer\":false}，不要任何其他文字。";
+    ask + "\nReturn only JSON: {\"answer\":true} or {\"answer\":false}.";
   const imgs = refImg ? [refImg, screenImg] : [screenImg];
   const text = await chat(config, instruction, imgs);
   if (!text) return null;
@@ -113,8 +122,8 @@ export async function compare(
   ask: string,
 ): Promise<number | null> {
   const instruction =
-    ask + "\n参考图按顺序编号 0,1,2...。请找出与当前截图匹配的参考图序号。" +
-    "只返回 JSON：{\"match\":<序号>}，不要任何其他文字。";
+    ask + "\nReference images are numbered 0, 1, 2, and so on. Select the reference that matches the current screenshot. " +
+    "Return only JSON: {\"match\":<index>}.";
   const text = await chat(config, instruction, [...refImgs, screenImg]);
   if (!text) return null;
   return parseMatchIndex(text, refImgs.length);

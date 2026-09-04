@@ -26,7 +26,7 @@ const KEEP_RECENT_ROUNDS = 6; // 压缩时保留最近 6 轮完整（system + �
 export function truncateToolResult(content: string, maxChars: number = TOOL_RESULT_MAX_CHARS): string {
   if (content.length <= maxChars) return content;
   return content.slice(0, maxChars) +
-    `\n[truncated: 原始 ${content.length} 字符，已截断至 ${maxChars} 字符]`;
+    `\n[truncated: original length ${content.length} characters; kept ${maxChars} characters]`;
 }
 
 /**
@@ -85,7 +85,7 @@ export function compressConversation<T extends { role?: string; content?: unknow
   const totalChars = messages.reduce((sum, m) => sum + contentToText(m.content).length, 0);
   if (totalChars <= thresholdChars) return messages;
 
-  console.log(`[ContextManager] 触发压缩: ${totalChars} 字符 > 阈值 ${thresholdChars}`);
+  console.log(`[ContextManager] Compressing: ${totalChars} characters > ${thresholdChars} threshold`);
 
   const result: T[] = [...messages];
   const nonSystemIndices: number[] = [];
@@ -109,7 +109,7 @@ export function compressConversation<T extends { role?: string; content?: unknow
       if (content.length > 500) {
         result[i] = {
           ...msg,
-          content: content.slice(0, 200) + "\n[compressed: 原始 " + content.length + " 字符]",
+          content: content.slice(0, 200) + "\n[compressed: original length " + content.length + " characters]",
         } as T;
       }
     }
@@ -122,11 +122,11 @@ export function compressConversation<T extends { role?: string; content?: unknow
     if (firstNonSystem === -1 || firstNonSystem >= result.length - keepRecent) break;
     compressedChars -= contentToText(result[firstNonSystem].content).length;
     result.splice(firstNonSystem, 1);
-    console.log("[ContextManager] 丢弃最早一条消息，剩余 " + compressedChars + " 字符");
+    console.log("[ContextManager] Dropped the oldest message; " + compressedChars + " characters remain");
   }
 
   const finalChars = result.reduce((sum, m) => sum + contentToText(m.content).length, 0);
-  console.log(`[ContextManager] 压缩完成: ${totalChars} → ${finalChars} 字符`);
+  console.log(`[ContextManager] Compression complete: ${totalChars} -> ${finalChars} characters`);
 
   return result;
 }

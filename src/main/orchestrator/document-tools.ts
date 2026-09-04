@@ -72,7 +72,7 @@ function loadStylesDir(skillId: string): StyleCacheEntry {
         cache[styleId] = JSON.parse(fs.readFileSync(path.join(stylesDir, f), "utf8"));
       } catch { /* 跳过坏文件 */ }
     }
-    console.log(LOG_PREFIX, `已加载 ${skillId} 样式:`, Object.keys(cache).join(", ") || "(无)");
+    console.log(LOG_PREFIX, `Loaded ${skillId} styles:`, Object.keys(cache).join(", ") || "(none)");
   } catch { /* 目录不存在 */ }
   styleCache.set(skillId, cache);
   return cache;
@@ -107,7 +107,7 @@ export function registerDocumentTools(): void {
   let themesLoaded = false;
 
   const DEFAULT_THEME: Theme = {
-    name: "默认深蓝", headerFill: "FF1F4E79", headerFont: "FFFFFFFF",
+    name: "Default navy", headerFill: "FF1F4E79", headerFont: "FFFFFFFF",
     headerBorder: "FF1F4E79", zebraFill: "FFF2F2F2", borderColor: "FFBFBFBF",
   };
 
@@ -141,7 +141,7 @@ export function registerDocumentTools(): void {
           });
         } catch { /* 跳过坏文件 */ }
       }
-      console.log(LOG_PREFIX, "已加载样式:", Array.from(themeCache.keys()).join(", ") || "(无)");
+      console.log(LOG_PREFIX, "Loaded styles:", Array.from(themeCache.keys()).join(", ") || "(none)");
     } catch {
       // 目录不存在，用默认主题
     }
@@ -171,7 +171,7 @@ export function registerDocumentTools(): void {
   }): Theme {
     if (!colors) return base;
     return {
-      name: base.name + "(自定义)",
+      name: base.name + " (custom)",
       headerFill: colors.headerFill ? toArgb(colors.headerFill) : base.headerFill,
       headerFont: colors.headerFont ? toArgb(colors.headerFont) : base.headerFont,
       headerBorder: colors.headerBorder ? toArgb(colors.headerBorder) : base.headerBorder,
@@ -183,49 +183,44 @@ export function registerDocumentTools(): void {
   // ── write_excel ──────────────────────────────────────
   toolRegistry.register({
     id: "write_excel",
-    name: "写 Excel",
+    name: "Create Excel workbook",
     description:
-      "生成一个美观的 Excel 文件（.xlsx）。支持多种预设风格 + 自定义颜色。已内置：表头加粗+背景、" +
-      "全表细边框、隔行斑马纹、列宽自适应、数字右对齐+千位分隔、冻结首行、自动筛选。\n" +
-      "【优先使用】简单表格生成、数据整理、换算结果导出等场景应直接用此工具，不要走 invoke_skill(xlsx)。\n\n" +
-      "何时用：\n" +
-      "- 用户要把数据整理成表格\n" +
-      "- 用户要「做一张表」「导出 Excel」「整理成 Excel」\n" +
-      "- 用户通过 ask_user_choice 选择了风格 → 用对应 style 参数直接生成\n" +
-      "- 用户给了自定义颜色要求 → 用 colors 参数传 ARGB hex 值\n\n" +
-      "不要用于：\n" +
-      "- 需要 Excel 公式、编辑已有 xlsx → 才考虑 invoke_skill(xlsx)\n\n" +
-      "style：预设风格名（见 skills/xlsx/styles/catalog.md）。可选值含 default / dark / colorful / simple-business / financial。\n" +
-      "colors（可选）：自定义颜色覆盖，每个是 ARGB hex 如 'FFF8BBD0'（粉色）。\n" +
-      "参数：filename（.xlsx 结尾，可含子目录），sheets（工作表数组），style（可选），colors（可选）。",
+      "Create a polished Excel workbook (.xlsx) with preset themes or custom colors. Includes bold filled headers, " +
+      "thin borders, alternating row shading, adaptive column widths, number formatting, a frozen header row, and filters.\n" +
+      "Prefer this tool for simple tables, data organization, conversions, and Excel exports instead of invoke_skill(xlsx).\n\n" +
+      "Use it when the user wants data organized into a table or exported to Excel. Pass a selected preset through style, " +
+      "or translate requested colors into ARGB hex values and pass them through colors.\n\n" +
+      "For formulas or editing an existing workbook, consider invoke_skill(xlsx).\n\n" +
+      "Available styles: default, dark, colorful, simple-business, and financial. See skills/xlsx/styles/catalog.md. " +
+      "filename must end in .xlsx and may include a desktop-relative subdirectory.",
     enabled: true,
     risk: "fs-write",
     inputSchema: {
       type: "object",
       properties: {
-        filename: { type: "string", description: "文件名，可含子目录如 'test/report.xlsx'（相对桌面，.xlsx 结尾）" },
+        filename: { type: "string", description: "Desktop-relative filename ending in .xlsx; may include a subdirectory such as 'test/report.xlsx'" },
         sheets: {
           type: "array",
-          description: "工作表数组",
+          description: "Worksheets to create",
           items: {
             type: "object",
             properties: {
-              name:    { type: "string", description: "工作表名" },
-              headers: { type: "array", description: "表头字符串数组", items: { type: "string" } },
-              rows:    { type: "array", description: "数据行，每行是一个数组", items: { type: "string" } },
+              name:    { type: "string", description: "Worksheet name" },
+              headers: { type: "array", description: "Column header strings", items: { type: "string" } },
+              rows:    { type: "array", description: "Data rows, with each row represented as an array", items: { type: "string" } },
             },
           },
         },
-        style: { type: "string", description: "预设主题：default(深蓝,默认) / simple-business(简洁商务) / dark(深色护眼) / colorful(彩色清晰) / financial(财务报表)" },
+        style: { type: "string", description: "Preset theme: default / simple-business / dark / colorful / financial" },
         colors: {
           type: "object",
-          description: "自定义颜色覆盖（ARGB hex，如 'FFF8BBD0' 粉色 / 'FF2D2D2D' 深灰）。你负责把用户的颜色描述翻译成 hex。",
+          description: "Optional color overrides in ARGB hex, such as 'FFF8BBD0' for pink or 'FF2D2D2D' for dark gray. Convert the user's color request to hex.",
           properties: {
-            headerFill: { type: "string", description: "表头背景色 ARGB hex，如 'FFF8BBD0'(粉)" },
-            headerFont: { type: "string", description: "表头文字色 ARGB hex，如 'FF333333'(深灰)" },
-            headerBorder: { type: "string", description: "表头底线色 ARGB hex" },
-            zebraFill: { type: "string", description: "斑马纹背景色 ARGB hex" },
-            borderColor: { type: "string", description: "边框颜色 ARGB hex" },
+            headerFill: { type: "string", description: "Header background color in ARGB hex" },
+            headerFont: { type: "string", description: "Header text color in ARGB hex" },
+            headerBorder: { type: "string", description: "Header bottom-border color in ARGB hex" },
+            zebraFill: { type: "string", description: "Alternating-row background color in ARGB hex" },
+            borderColor: { type: "string", description: "Border color in ARGB hex" },
           },
         },
       },
@@ -233,14 +228,14 @@ export function registerDocumentTools(): void {
     },
     execute: async (args) => {
       const filename = validateFilename(String(args.filename || ""), ".xlsx");
-      if (!filename) return "[错误] filename 必须是 .xlsx 结尾";
+      if (!filename) return "[Error] filename must end in .xlsx";
       const outputPath = resolveOutputPath(filename);
-      if (!outputPath) return "[错误] 路径不合法（禁止目录穿越或绝对路径）: " + filename;
+      if (!outputPath) return "[Error] Invalid path; absolute paths and directory traversal are not allowed: " + filename;
       const sheets = args.sheets as Array<{
         name: string; headers: string[]; rows: unknown[][];
       }>;
       if (!Array.isArray(sheets) || sheets.length === 0) {
-        return "[错误] sheets 不能为空";
+        return "[Error] sheets must contain at least one worksheet";
       }
 
       const ExcelJS = await import("exceljs");
@@ -253,7 +248,7 @@ export function registerDocumentTools(): void {
         zebraFill?: string; borderColor?: string;
       } | undefined;
       const theme = mergeTheme(baseTheme, colors);
-      console.log(LOG_PREFIX, "Excel 主题:", theme.name, "style=" + (args.style || "default"), colors ? "+自定义颜色" : "");
+      console.log(LOG_PREFIX, "Excel theme:", theme.name, "style=" + (args.style || "default"), colors ? "+custom colors" : "");
 
       const HEADER_FILL: ExcelFill = { type: "pattern", pattern: "solid", fgColor: { argb: theme.headerFill } };
       const ZEBRA_FILL: ExcelFill = { type: "pattern", pattern: "solid", fgColor: { argb: theme.zebraFill } };
@@ -357,45 +352,38 @@ export function registerDocumentTools(): void {
         fs.mkdirSync(dir, { recursive: true });
       }
       await workbook.xlsx.writeFile(outputPath);
-      console.log(LOG_PREFIX, "Excel 已生成（默认美观样式）:", outputPath);
-      return `[write_excel] 已生成：${outputPath}`;
+      console.log(LOG_PREFIX, "Excel workbook created:", outputPath);
+      return `[write_excel] Created: ${outputPath}`;
     },
   });
 
   // ── write_word ───────────────────────────────────────
   toolRegistry.register({
     id: "write_word",
-    name: "写 Word",
+    name: "Create Word document",
     description:
-      "生成一个美观的 Word 文档（.docx）。支持多种预设风格主题。\n" +
-      "已内置：标题样式（颜色/字号/字体）、正文行距/字体/颜色、段落间距。\n\n" +
-      "何时用：\n" +
-      "- 用户要写报告/总结/方案/请假条\n" +
-      "- 需要「导出成 Word」「做成 docx」\n" +
-      "- 用户通过 ask_user_choice 选择了风格 → 用对应 style 参数直接生成\n\n" +
-      "不要用于：\n" +
-      "- 表格数据（用 write_excel）\n" +
-      "- 轻量笔记（用 write_markdown）\n" +
-      "- 需要复杂排版（页眉页脚/目录/图片/表格）→ 才考虑 invoke_skill(docx)\n\n" +
-      "style 可选值（见 skills/docx/styles/catalog.md）：default(商务) / academic(学术) / clean(极简) / elegant(优雅) / formal(公文)。\n" +
-      "参数：filename（只传文件名，如 AI新闻汇总.docx，不要传绝对路径；输出目录由系统固定为桌面），title（标题），paragraphs（段落数组），style（可选预设风格）。",
+      "Create a polished Word document (.docx) using a preset theme. Includes styled titles, body typography, line spacing, and paragraph spacing.\n\n" +
+      "Use it for reports, summaries, proposals, letters, and Word exports. Pass a style selected through ask_user_choice.\n" +
+      "Use write_excel for tabular data and write_markdown for lightweight notes. For complex layouts with headers, footers, tables of contents, images, or tables, consider invoke_skill(docx).\n\n" +
+      "Available styles: default, academic, clean, elegant, and formal. See skills/docx/styles/catalog.md. " +
+      "Pass a desktop-relative .docx filename, title, paragraph strings, and an optional style.",
     enabled: true,
     risk: "fs-write",
     inputSchema: {
       type: "object",
       properties: {
-        filename:   { type: "string", description: "文件名，必须以 .docx 结尾，例如 'AI新闻汇总.docx'。只传文件名，不要传绝对路径或目录。文件默认写入系统指定的桌面目录。" },
-        title:      { type: "string", description: "文档标题" },
-        paragraphs: { type: "array", description: "段落字符串数组", items: { type: "string" } },
-        style:      { type: "string", description: "预设风格：default(商务) / academic(学术) / clean(极简) / elegant(优雅) / formal(公文)" },
+        filename:   { type: "string", description: "Desktop-relative filename ending in .docx; do not pass an absolute path" },
+        title:      { type: "string", description: "Document title" },
+        paragraphs: { type: "array", description: "Paragraph strings", items: { type: "string" } },
+        style:      { type: "string", description: "Preset style: default / academic / clean / elegant / formal" },
       },
       required: ["filename", "title", "paragraphs"],
     },
     execute: async (args) => {
       const filename = validateFilename(String(args.filename || ""), ".docx");
-      if (!filename) return "[错误] filename 必须是 .docx 结尾";
+      if (!filename) return "[Error] filename must end in .docx";
       const outputPath = resolveOutputPath(filename);
-      if (!outputPath) return "[错误] 路径不合法（禁止目录穿越或绝对路径）: " + filename;
+      if (!outputPath) return "[Error] Invalid path; absolute paths and directory traversal are not allowed: " + filename;
 
       // 加载风格
       const styles = loadStylesDir("docx");
@@ -414,7 +402,7 @@ export function registerDocumentTools(): void {
       const lineSpacing = theme?.lineSpacing ?? 360;
       const headingColor = toHexColor(theme?.headingColor ?? "FF1F4E79");
 
-      console.log(LOG_PREFIX, "Word 主题:", theme?.name ?? "默认商务", "style=" + styleId);
+      console.log(LOG_PREFIX, "Word theme:", theme?.name ?? "Default business", "style=" + styleId);
 
       const { Document, Packer, Paragraph, HeadingLevel, TextRun } = await import("docx");
       const doc = new Document({
@@ -448,40 +436,35 @@ export function registerDocumentTools(): void {
       const dir = path.dirname(outputPath);
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
       fs.writeFileSync(outputPath, buffer);
-      console.log(LOG_PREFIX, "Word 已生成:", outputPath);
-      return `[write_word] 已生成：${outputPath}`;
+      console.log(LOG_PREFIX, "Word document created:", outputPath);
+      return `[write_word] Created: ${outputPath}`;
     },
   });
 
   // ── write_pdf ────────────────────────────────────────
   toolRegistry.register({
     id: "write_pdf",
-    name: "写 PDF",
+    name: "Create PDF",
     description:
-      "生成一个 PDF 文件保存到桌面。\n\n" +
-      "何时用：\n" +
-      "- 用户要写正式文档（合同/简历/申请书）\n" +
-      "- 需要「导出成 PDF」\n\n" +
-      "不要用于：\n" +
-      "- 可编辑文档（用 write_word）\n" +
-      "- 表格数据（用 write_excel）\n\n" +
-      "参数：filename（.pdf 结尾），title（标题），paragraphs（段落数组）。",
+      "Create a PDF on the desktop. Use it for formal documents such as contracts, resumes, applications, or PDF exports. " +
+      "Use write_word when the document must remain editable and write_excel for tabular data. " +
+      "Pass a .pdf filename, title, and paragraph strings.",
     enabled: true,
     risk: "fs-write",
     inputSchema: {
       type: "object",
       properties: {
-        filename:   { type: "string", description: "文件名（.pdf 结尾）" },
-        title:      { type: "string", description: "标题" },
-        paragraphs: { type: "array", description: "段落字符串数组", items: { type: "string" } },
+        filename:   { type: "string", description: "Desktop-relative filename ending in .pdf" },
+        title:      { type: "string", description: "Document title" },
+        paragraphs: { type: "array", description: "Paragraph strings", items: { type: "string" } },
       },
       required: ["filename", "title", "paragraphs"],
     },
     execute: async (args) => {
       const filename = validateFilename(String(args.filename || ""), ".pdf");
-      if (!filename) return "[错误] filename 必须是 .pdf 结尾";
+      if (!filename) return "[Error] filename must end in .pdf";
       const outputPath = resolveOutputPath(filename);
-      if (!outputPath) return "[错误] 路径不合法（禁止目录穿越或绝对路径）: " + filename;
+      if (!outputPath) return "[Error] Invalid path; absolute paths and directory traversal are not allowed: " + filename;
 
       const PDFKit = await import("pdfkit");
       const dir = path.dirname(outputPath);
@@ -513,46 +496,40 @@ export function registerDocumentTools(): void {
         stream.on("finish", () => resolve());
         stream.on("error", reject);
       });
-      console.log(LOG_PREFIX, "PDF 已生成:", outputPath);
-      return `[write_pdf] 已生成：${outputPath}`;
+      console.log(LOG_PREFIX, "PDF created:", outputPath);
+      return `[write_pdf] Created: ${outputPath}`;
     },
   });
 
   // ── write_markdown ───────────────────────────────────
   toolRegistry.register({
     id: "write_markdown",
-    name: "写 Markdown",
+    name: "Create Markdown file",
     description:
-      "生成一个 Markdown 文件（.md）保存到桌面。\n\n" +
-      "何时用：\n" +
-      "- 用户要写笔记/文档\n" +
-      "- 需要轻量级文档输出\n" +
-      "- 比 Word/PDF 更轻量的场景\n\n" +
-      "不要用于：\n" +
-      "- 正式文档（用 write_word / write_pdf）\n" +
-      "- 表格数据（用 write_excel）\n\n" +
-      "参数：filename（.md 结尾），content（markdown 内容字符串）。",
+      "Create a Markdown file (.md) on the desktop. Use it for notes, documentation, and lightweight text output. " +
+      "Use write_word or write_pdf for formal documents and write_excel for tabular data. " +
+      "Pass a .md filename and Markdown content.",
     enabled: true,
     risk: "fs-write",
     inputSchema: {
       type: "object",
       properties: {
-        filename: { type: "string", description: "文件名（.md 结尾）" },
-        content:  { type: "string", description: "markdown 内容" },
+        filename: { type: "string", description: "Desktop-relative filename ending in .md" },
+        content:  { type: "string", description: "Markdown content" },
       },
       required: ["filename", "content"],
     },
     execute: async (args) => {
       const filename = validateFilename(String(args.filename || ""), ".md");
-      if (!filename) return "[错误] filename 必须是 .md 结尾";
+      if (!filename) return "[Error] filename must end in .md";
       const outputPath = resolveOutputPath(filename);
-      if (!outputPath) return "[错误] 路径不合法（禁止目录穿越或绝对路径）: " + filename;
+      if (!outputPath) return "[Error] Invalid path; absolute paths and directory traversal are not allowed: " + filename;
 
       const dir = path.dirname(outputPath);
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
       fs.writeFileSync(outputPath, String(args.content || ""), "utf8");
-      console.log(LOG_PREFIX, "Markdown 已生成:", outputPath);
-      return `[write_markdown] 已生成：${outputPath}`;
+      console.log(LOG_PREFIX, "Markdown file created:", outputPath);
+      return `[write_markdown] Created: ${outputPath}`;
     },
   });
 }

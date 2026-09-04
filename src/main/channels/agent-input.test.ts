@@ -18,7 +18,7 @@ describe("buildChannelAttachmentInputs", () => {
 
     await expect(buildChannelAttachmentInputs(msg, { imageMode: "direct" })).resolves.toEqual({
       attachments: [
-        { name: "report.pdf", text: "用户通过微信发送了文件：C:/cache/report.pdf" },
+        { name: "report.pdf", text: "The user sent a file through WeChat: C:/cache/report.pdf" },
       ],
       imageAttachments: [
         { name: "微信图片", filePath: "C:/cache/pic.png", mime: "image/png" },
@@ -45,7 +45,7 @@ describe("buildChannelAttachmentInputs", () => {
       attachments: [
         {
           name: "微信图片",
-          text: "【图片视觉信息】\n用户通过微信发送了图片：微信图片\n画面里是一张聊天截图",
+          text: "[Image context]\nThe user sent an image through WeChat: 微信图片\n画面里是一张聊天截图",
         },
       ],
       imageAttachments: undefined,

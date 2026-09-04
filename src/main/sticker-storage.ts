@@ -65,13 +65,13 @@ export async function addUserSticker(
 ): Promise<void> {
   // 检查 id
   if (isStickerIdTaken(id)) {
-    throw new Error(`表情包 ID "${id}" 已存在`);
+    throw new Error(`Sticker ID "${id}" already exists`);
   }
 
   // 获取扩展名
   const ext = path.extname(sourceFilePath).toLowerCase();
   if (![".png", ".jpg", ".jpeg", ".gif", ".webp"].includes(ext)) {
-    throw new Error(`不支持的图片格式: ${ext}`);
+    throw new Error(`Unsupported image format: ${ext}`);
   }
 
   // 复制文件到 userData/stickers/
@@ -97,12 +97,12 @@ export async function addUserSticker(
 export async function deleteUserSticker(id: string): Promise<void> {
   // 内置 sticker 不允许删除
   if (BUILT_IN_STICKER_IDS.includes(id as any)) {
-    throw new Error(`内置表情包 "${id}" 不能删除，只能禁用`);
+    throw new Error(`Built-in sticker "${id}" cannot be deleted; it can only be disabled`);
   }
 
   const manifest = loadUserStickerManifest();
   const meta = manifest[id];
-  if (!meta) throw new Error(`表情包 "${id}" 不存在`);
+  if (!meta) throw new Error(`Sticker "${id}" does not exist`);
 
   // 删除文件
   const filePath = path.join(getStickersDir(), meta.file);

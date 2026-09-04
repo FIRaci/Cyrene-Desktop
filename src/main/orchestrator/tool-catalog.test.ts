@@ -15,7 +15,7 @@ function makeTool(overrides: Partial<ToolDefinition> & { id: string }): ToolDefi
 
 describe("buildToolCatalog", () => {
   it("空工具列表输出占位", () => {
-    expect(buildToolCatalog([])).toBe("（当前没有可用工具）");
+    expect(buildToolCatalog([])).toBe("(No tools are currently available.)");
   });
 
   it("基础输出：id + 用途 + 风险", () => {
@@ -25,16 +25,16 @@ describe("buildToolCatalog", () => {
     ];
     const out = buildToolCatalog(tools);
     expect(out).toContain("- weather");
-    expect(out).toContain("用途：查询天气");
-    expect(out).toContain("风险：network");
+    expect(out).toContain("Purpose: 查询天气");
+    expect(out).toContain("Risk: network");
     expect(out).toContain("- fetch_url");
-    expect(out).toContain("用途：读取网页");
+    expect(out).toContain("Purpose: 读取网页");
   });
 
   it("默认 risk 为 safe", () => {
     const tools = [makeTool({ id: "x", description: "X" })];
     const out = buildToolCatalog(tools);
-    expect(out).toContain("风险：safe");
+    expect(out).toContain("Risk: safe");
   });
 
   it("catalogHint 优先于 description", () => {
@@ -46,7 +46,7 @@ describe("buildToolCatalog", () => {
       }),
     ];
     const out = buildToolCatalog(tools);
-    expect(out).toContain("用途：查询天气");
+    expect(out).toContain("Purpose: 查询天气");
     expect(out).not.toContain("温度、湿度");
   });
 
@@ -59,7 +59,7 @@ describe("buildToolCatalog", () => {
       }),
     ];
     const out = buildToolCatalog(tools);
-    expect(out).toContain("用途：下载指定 URL 的网页内容并返回正文。");
+    expect(out).toContain("Purpose: 下载指定 URL 的网页内容并返回正文。");
     expect(out).not.toContain("何时用");
   });
 
@@ -72,7 +72,7 @@ describe("buildToolCatalog", () => {
       }),
     ];
     const out = buildToolCatalog(tools);
-    expect(out).toContain("用途：兜底用途");
+    expect(out).toContain("Purpose: 兜底用途");
   });
 
   it("目录不输出参数（避免与 Schema 重复）", () => {

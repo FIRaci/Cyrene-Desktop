@@ -42,6 +42,8 @@ function ensureDir(): void {
   fs.mkdirSync(dir, { recursive: true });
 }
 
+let appendsSincePrune = 0;
+
 /** 追加一条日志。失败不影响主流程。 */
 export function appendLog(entry: Omit<LogEntry, "at">): void {
   const full: LogEntry = { at: new Date().toISOString(), ...entry };
@@ -52,15 +54,21 @@ export function appendLog(entry: Omit<LogEntry, "at">): void {
   try {
     ensureDir();
     fs.appendFileSync(filePath(), JSON.stringify(full) + "\n", "utf8");
-    // 简单截断：超过 MAX_FILE_LINES 行就丢掉最老的
-    const buf = fs.readFileSync(filePath(), "utf8");
-    const lines = buf.split("\n");
-    if (lines.length > MAX_FILE_LINES) {
-      const trimmed = lines.slice(lines.length - MAX_FILE_LINES).join("\n");
-      fs.writeFileSync(filePath(), trimmed + "\n", "utf8");
+    appendsSincePrune++;
+    // 只有每 100 次写入才做一次文件截断，避免每次消息都全量重读磁盘
+    if (appendsSincePrune >= 100) {
+      appendsSincePrune = 0;
+      if (fs.existsSync(filePath())) {
+        const buf = fs.readFileSync(filePath(), "utf8");
+        const lines = buf.split("\n");
+        if (lines.length > MAX_FILE_LINES) {
+          const trimmed = lines.slice(lines.length - MAX_FILE_LINES).join("\n");
+          fs.writeFileSync(filePath(), trimmed + "\n", "utf8");
+        }
+      }
     }
   } catch (err) {
-    console.warn(LOG, "写日志失败:", err instanceof Error ? err.message : err);
+    console.warn(LOG, "Failed to write log:", err instanceof Error ? err.message : err);
   }
 }
 
@@ -89,12 +97,18 @@ export function getRecentLog(limit = 100): LogEntry[] {
 }
 
 /** 清空日志（磁盘 + 内存）。 */
-export function clearLog(): void {
+export function clearLog(): { ok: boolean; error?: string } {
   inMemory.length = 0;
+  appendsSincePrune = 0;
   try {
-    fs.unlinkSync(filePath());
-  } catch {
-    /* ignore */
+    if (fs.existsSync(filePath())) {
+      fs.unlinkSync(filePath());
+    }
+    return { ok: true };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn(LOG, "Failed to clear log file:", message);
+    return { ok: false, error: message };
   }
 }
 
@@ -108,13 +122,14 @@ export function reloadLogFromDisk(): void {
       try {
         parsed.push(JSON.parse(line) as LogEntry);
       } catch {
-        /* skip */
+        /* skip corrupted */
       }
     }
-    inMemory.push(...parsed.slice(-MAX_INMEM));
-  } catch (err) {
-    if (err instanceof Error && "code" in err && (err as NodeJS.ErrnoException).code !== "ENOENT") {
-      console.warn(LOG, "从磁盘 reload 失败:", err.message);
-    }
+    inMemory.length = 0;
+    // 取最后的 MAX_INMEM 条
+    const tail = parsed.slice(-MAX_INMEM);
+    inMemory.push(...tail);
+  } catch {
+    /* 首次启动无文件，正常 */
   }
 }

@@ -94,9 +94,27 @@ export function isDocumentExt(ext: string): boolean {
   return normalized === "" || isTextExt(normalized);
 }
 
+export const MAX_INGEST_FILE_SIZE = 50 * 1024 * 1024; // 50MB limit
+
 export function describePendingAttachment(filePath: string): Attachment {
   const ext = path.extname(filePath).toLowerCase();
   const name = path.basename(filePath);
+
+  try {
+    const stat = fs.statSync(filePath);
+    if (stat.size > MAX_INGEST_FILE_SIZE) {
+      return {
+        name,
+        kind: "unsupported",
+        filePath,
+        status: "error",
+        reason: `File size exceeds 50MB limit (${(stat.size / (1024 * 1024)).toFixed(1)}MB)`,
+      };
+    }
+  } catch {
+    // Stat failure will be handled during processing
+  }
+
   if (isImageExt(ext)) {
     return {
       name,
@@ -205,7 +223,14 @@ export async function ingestOneFile(
     return { name: path.basename(filePath), kind: "unsupported", reason: err?.code || String(err) };
   }
   if (!stat.isFile()) {
-    return { name: path.basename(filePath), kind: "unsupported", reason: "不是文件" };
+    return { name: path.basename(filePath), kind: "unsupported", reason: "Target is not a regular file" };
+  }
+  if (stat.size > MAX_INGEST_FILE_SIZE) {
+    return {
+      name: path.basename(filePath),
+      kind: "unsupported",
+      reason: `File size exceeds 50MB limit (${(stat.size / (1024 * 1024)).toFixed(1)}MB)`,
+    };
   }
 
   const name = path.basename(filePath);
@@ -229,7 +254,7 @@ export async function ingestOneFile(
   if (isTextExt(ext)) {
     // 二进制兜底：标题是文本但实际含 null 字节
     if (isBinary(buf)) {
-      return { name, kind: "unsupported", reason: `文件 ${ext} 含二进制数据，暂不支持` };
+      return { name, kind: "unsupported", reason: `File ${ext} contains binary data, not supported for text ingestion` };
     }
     const text = buf.toString("utf-8");
     if (!text.trim()) {

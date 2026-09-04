@@ -111,7 +111,7 @@ function registerChannelsIpc(): void {
 
 	  // 扫码登录：Main Process 生成 PNG dataURL，推给 Renderer 显示 <img>
 	  ipcMain.handle(IPC.CHANNELS_WECHAT_LOGIN_START, async () => {
-	    if (!wxAdapter) return { ok: false, error: "adapter 未初始化" };
+    if (!wxAdapter) return { ok: false, error: "The WeChat adapter is not initialized." };
 	    try {
 	      const { fetchQrCode } = await import("./adapters/wechat/ilink-protocol-client");
 	      const { createQrDataUrl } = await import("./adapters/wechat/qr");
@@ -141,7 +141,7 @@ function registerChannelsIpc(): void {
 	        }
 	      })();
 
-	      return { ok: true, hint: "请扫描二维码" };
+      return { ok: true, hint: "Scan the QR code with WeChat." };
 	    } catch (err) {
 	      return { ok: false, error: String(err) };
 	    }
@@ -166,7 +166,7 @@ function registerChannelsIpc(): void {
     return [];
   });
 
-  ipcMain.handle(IPC.CHANNELS_WECHAT_PAIRING_APPROVE, () => ({ ok: false, error: "iLink 模式不支持 pairing" }));
+  ipcMain.handle(IPC.CHANNELS_WECHAT_PAIRING_APPROVE, () => ({ ok: false, error: "iLink mode does not support pairing approval." }));
 
   ipcMain.handle(IPC.CHANNELS_WECHAT_LOGOUT, async () => {
     if (!wxAdapter) return { ok: false };
@@ -176,7 +176,7 @@ function registerChannelsIpc(): void {
 
   ipcMain.handle(IPC.CHANNELS_WECHAT_RUNTIME_INSTALL, () => ({
     ok: true,
-    hint: "iLink Bot API 是云端协议，无需本地安装",
+    hint: "iLink Bot API is a cloud protocol and requires no local runtime installation.",
   }));
 
   ipcMain.handle(IPC.CHANNELS_WECHAT_RUNTIME_UPDATE, () => ({ ok: true }));
@@ -191,19 +191,19 @@ function registerChannelsIpc(): void {
   // Phase 2 长连接：测试连接 = 重建 LarkChannel（SDK 内部会自动跑 WSS handshake）
   ipcMain.handle(IPC.CHANNELS_FEISHU_TEST_CONNECTION, async () => {
     const adapter = channelManager.getAdapter("feishu") as FeishuAdapter | undefined;
-    if (!adapter) return { ok: false, error: "飞书 adapter 未注册" };
+    if (!adapter) return { ok: false, error: "The Feishu adapter is not registered." };
     const status = adapter.getStatus();
-    if (!status.enabled) return { ok: false, error: "飞书渠道未启用" };
+    if (!status.enabled) return { ok: false, error: "The Feishu channel is disabled." };
     if (!loadChannelsSettings().feishu.appId || !loadChannelsSettings().feishu.appSecret) {
-      return { ok: false, error: "App ID / App Secret 未配置" };
+      return { ok: false, error: "App ID / App Secret is not configured." };
     }
     try {
       await adapter.rebuild();
       const s = adapter.getStatus();
       if (s.phase === "running") {
-        return { ok: true, message: "WSS 长连接已建立" };
+      return { ok: true, message: "The WSS connection is established." };
       }
-      return { ok: false, error: s.message ?? "握手未完成" };
+    return { ok: false, error: s.message ?? "The handshake is not complete." };
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) };
     }
@@ -213,7 +213,7 @@ function registerChannelsIpc(): void {
   ipcMain.handle(IPC.CHANNELS_FEISHU_TEST_WEBHOOK_REACHABLE, async () => {
     return {
       ok: true,
-      message: "长连接模式不需要公网 URL — SDK 已自动建立 WSS 连接",
+      message: "Persistent-connection mode does not require a public URL; the SDK establishes WSS automatically.",
     };
   });
 
@@ -236,7 +236,7 @@ export function broadcastChannelsStatus(): void {
     try {
       win.webContents.send(IPC.CHANNELS_STATUS_CHANGED, status);
     } catch (err) {
-      console.warn(LOG, "广播失败:", err);
+      console.warn(LOG, "Broadcast failed:", err);
     }
   }
 }
@@ -252,7 +252,7 @@ export function broadcastChannelsInstallProgress(progress: {
     try {
       win.webContents.send(IPC.CHANNELS_INSTALL_PROGRESS, progress);
     } catch (err) {
-      console.warn(LOG, "广播安装进度失败:", err);
+      console.warn(LOG, "Failed to broadcast installation progress:", err);
     }
   }
 }

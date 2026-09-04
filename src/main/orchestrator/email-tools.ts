@@ -177,7 +177,7 @@ export function registerEmailTools(): void {
       "Parameters: to (array of recipients), subject (string), body (plain text),\n" +
       "html (optional HTML body), cc (optional CC array),\n" +
       "attachments (optional array of absolute file paths).",
-    enabled: true,
+    enabled: false, // Disabled by user privacy request
     risk: "network",
     inputSchema: {
       type: "object",

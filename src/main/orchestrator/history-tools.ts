@@ -32,7 +32,7 @@ export async function indexConversationTurn(
       await addMemory(assistantText, "chat_history", { sessionId, role: "assistant", ts });
     }
   } catch (e) {
-    console.warn(LOG_PREFIX, "索引对话失败:", e);
+    console.warn(LOG_PREFIX, "Failed to index conversation:", e);
   }
 }
 
@@ -40,31 +40,25 @@ export async function indexConversationTurn(
 export function registerRecallHistoryTool(): void {
   toolRegistry.register({
     id: "recall_history",
-    name: "回忆历史",
+    name: "Recall conversation history",
     description:
-      "从所有历史对话中语义检索相关内容。返回按时间排序的相关片段（最多 5 条），每条带角色和时间戳。\n\n" +
-      "何时用：\n" +
-      "- 用户说「还记得」「上次」「之前」「那个」「前几天」等指代词\n" +
-      "- 用户问的事在最近几轮对话里找不到答案\n" +
-      "- 用户接续之前的话题但当前上下文没有细节\n\n" +
-      "不要用于：\n" +
-      "- 当前对话最近几轮里能直接看到的信息\n" +
-      "- 完全无关的闲聊\n" +
-      "- 用户从没提过的事（查不到就老实说不知道）\n\n" +
-      "参数：query（必填，检索关键词或自然语言问题），days（可选，限制最近 N 天，默认 30）。",
+      "Semantically search all stored conversations and return up to five relevant excerpts in chronological order, each with a role and timestamp.\n\n" +
+      "Use when the user refers to something from an earlier conversation, continues an older topic whose details are outside the current context, or asks about information absent from recent turns.\n\n" +
+      "Do not use when the answer is already visible in recent turns, for unrelated small talk, or to invent something the user never mentioned. If no result is found, say so honestly.\n\n" +
+      "Parameters: query (required search terms or natural-language question) and days (optional recent-day limit; default 30).",
     enabled: true,
     risk: "safe",
     inputSchema: {
       type: "object",
       properties: {
-        query: { type: "string", description: "检索关键词或自然语言问题" },
-        days: { type: "number", description: "可选，限制最近 N 天，默认 30" },
+        query: { type: "string", description: "Search terms or a natural-language question" },
+        days: { type: "number", description: "Optional recent-day limit; defaults to 30" },
       },
       required: ["query"],
     },
     execute: async (args) => {
       const query = String(args.query || "").trim();
-      if (!query) return "[错误] query 不能为空";
+      if (!query) return "[Error] query is required";
 
       const days = Number(args.days) || 30;
       const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
@@ -73,27 +67,27 @@ export function registerRecallHistoryTool(): void {
       try {
         hits = await searchHistoryEntries(query, 5);
       } catch (e) {
-        return "[recall_history] 检索失败：" + (e instanceof Error ? e.message : String(e));
+        return "[recall_history] Search failed: " + (e instanceof Error ? e.message : String(e));
       }
 
       const filtered = hits.filter(h => h.createdAt >= cutoff);
 
       if (filtered.length === 0) {
-        return `[recall_history] 没有找到关于 "${query}" 的历史记录`;
+        return `[recall_history] No conversation history found for "${query}"`;
       }
 
       // 按时间正序（最早的在前），让对话脉络自然
       const sorted = [...filtered].sort((a, b) => a.createdAt - b.createdAt);
 
       const lines = sorted.map(h => {
-        const date = new Date(h.createdAt).toLocaleString("zh-CN", { timeZone: currentUserTimezone() });
-        const role = h.metadata?.role === "user" ? "用户" : "昔涟";
+        const date = new Date(h.createdAt).toLocaleString("en-US", { timeZone: currentUserTimezone() });
+        const role = h.metadata?.role === "user" ? "User" : "Cyrene";
         // 截断过长内容，避免吃太多 token
         const text = h.text.length > 300 ? h.text.slice(0, 300) + "..." : h.text;
-        return `[${date}] ${role}：${text}`;
+        return `[${date}] ${role}: ${text}`;
       });
 
-      return `[recall_history] 找到 ${sorted.length} 条相关历史：\n\n${lines.join("\n\n")}`;
+      return `[recall_history] Found ${sorted.length} relevant conversation entries:\n\n${lines.join("\n\n")}`;
     },
   });
 }

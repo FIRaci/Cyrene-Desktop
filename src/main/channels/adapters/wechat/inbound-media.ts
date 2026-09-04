@@ -53,7 +53,7 @@ export const SAVE_INTENT_TTL_MS = 5 * 60 * 1000;
 
 export function getWechatDisplayName(callPreference: unknown): string {
   const name = typeof callPreference === "string" ? callPreference.trim() : "";
-  return name || "伙伴";
+  return name || "friend";
 }
 
 function asFileName(value: unknown, fallback: string): string {
@@ -72,16 +72,16 @@ export function isAnalyzableWechatFile(fileName: string): boolean {
 }
 
 export function isWechatSaveIntent(text: string): boolean {
-  const normalized = text.trim().replace(/\s+/g, "");
+  const normalized = text.trim().toLowerCase().replace(/\s+/g, "");
   if (!normalized) return false;
-  return /保存到桌面|存到桌面|放到桌面|代收|帮我收|帮我保存|保存文件|收一下/.test(normalized);
+  return /save(?:it|this|thefile)?to(?:my)?desktop|保存到桌面|存到桌面|放到桌面|代收|帮我收|帮我保存|保存文件|收一下/.test(normalized);
 }
 
 export function describeInboundWechatMedia(items: InboundWechatItem[]): InboundMediaDescriptor[] {
   const media: InboundMediaDescriptor[] = [];
   for (const item of items) {
     if (item.type === 2 && item.image_item) {
-      const fileName = asFileName(item.image_item.file_name ?? item.image_item.name, "微信图片");
+      const fileName = asFileName(item.image_item.file_name ?? item.image_item.name, "wechat-image");
       media.push({
         kind: "image",
         fileName,
@@ -90,7 +90,7 @@ export function describeInboundWechatMedia(items: InboundWechatItem[]): InboundM
         media: asCdnMedia(item.image_item.media),
       });
     } else if (item.type === 3 && item.voice_item) {
-      const fileName = asFileName(item.voice_item.file_name ?? item.voice_item.name, "微信语音");
+      const fileName = asFileName(item.voice_item.file_name ?? item.voice_item.name, "wechat-voice");
       media.push({
         kind: "voice",
         fileName,
@@ -100,7 +100,7 @@ export function describeInboundWechatMedia(items: InboundWechatItem[]): InboundM
         sampleRate: typeof item.voice_item.sample_rate === "number" ? item.voice_item.sample_rate : undefined,
       });
     } else if (item.type === 4 && item.file_item) {
-      const fileName = asFileName(item.file_item.file_name ?? item.file_item.name, "微信文件");
+      const fileName = asFileName(item.file_item.file_name ?? item.file_item.name, "wechat-file");
       media.push({
         kind: "file",
         fileName,
@@ -109,7 +109,7 @@ export function describeInboundWechatMedia(items: InboundWechatItem[]): InboundM
         media: asCdnMedia(item.file_item.media),
       });
     } else if (item.type === 5 && item.video_item) {
-      const fileName = asFileName(item.video_item.file_name ?? item.video_item.name, "微信视频");
+      const fileName = asFileName(item.video_item.file_name ?? item.video_item.name, "wechat-video");
       media.push({
         kind: "video",
         fileName,
@@ -135,25 +135,25 @@ function asCdnMedia(value: unknown): CDNMedia | undefined {
 }
 
 export function buildUnsupportedWechatFilePrompt(username: string): string {
-  return `${username}，这个文件人家还分析不了呢。如果${username}你是想让我帮你代收一下，请在 5 分钟内回复“保存到桌面”哦~~`;
+  return `${username}, I cannot analyze this file yet. If you want me to keep it for you, reply “save to desktop” within five minutes.`;
 }
 
 export function buildWechatVideoPrompt(username: string): string {
-  return `${username}，视频人家现在还看不了呢。如果${username}你只是想让我帮你代收，请在 5 分钟内回复“保存到桌面”哦~~`;
+  return `${username}, I cannot view this video yet. If you only want me to keep it for you, reply “save to desktop” within five minutes.`;
 }
 
 export function buildWechatSaveIntentPrompt(username: string): string {
-  return `好呀，${username}，尽管把文件发过来吧。我会帮你放到桌面的“Cyrene 收件箱”里哦~~`;
+  return `Of course, ${username}. Send the file and I will place it in the “Cyrene Inbox” folder on your desktop.`;
 }
 
 export function buildWechatSaveSuccessPrompt(username: string, filePath: string): string {
-  return `收好啦，${username}。人家已经帮你放到桌面的“Cyrene 收件箱”里了：${filePath}`;
+  return `Saved, ${username}. I placed it in the “Cyrene Inbox” folder on your desktop: ${filePath}`;
 }
 
 export function buildWechatAsrMissingPrompt(username: string): string {
-  return `${username}，人家现在还没有配置语音识别，暂时听不懂这条语音。可以发文字给我哦~~`;
+  return `${username}, speech recognition is not configured yet, so I cannot understand this voice message. Please send text instead.`;
 }
 
 export function buildWechatAsrFailedPrompt(username: string, reason: string): string {
-  return `${username}，这条语音人家暂时没听清楚：${reason}。可以换成文字再发我一次哦~~`;
+  return `${username}, I could not understand this voice message: ${reason}. Please send it again as text.`;
 }

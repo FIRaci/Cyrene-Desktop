@@ -189,15 +189,15 @@ async function executeToolCall(
   try {
     args = JSON.parse(tc.arguments || "{}");
   } catch {
-    return failed("E_TOOL_ARGS_INVALID", "工具参数解析失败");
+    return failed("E_TOOL_ARGS_INVALID", "Tool arguments could not be parsed");
   }
 
   if (!runnableToolIds.has(tc.name)) {
-    return failed("E_TOOL_UNAVAILABLE", "工具不可用: " + tc.name);
+    return failed("E_TOOL_UNAVAILABLE", "Tool unavailable: " + tc.name);
   }
   const tool = displayTool;
   if (!tool || !tool.enabled) {
-    return failed("E_TOOL_UNAVAILABLE", "工具不可用: " + tc.name);
+    return failed("E_TOOL_UNAVAILABLE", "Tool unavailable: " + tc.name);
   }
 
   const risk: ToolRiskLevel = (tool as ToolDefinition & { risk?: ToolRiskLevel }).risk || "safe";
@@ -209,7 +209,7 @@ async function executeToolCall(
     risk,
   });
   if (!perm.allowed) {
-    return failed("E_PERMISSION_DENIED", perm.reason || "权限不足");
+    return failed("E_PERMISSION_DENIED", perm.reason || "Permission denied");
   }
 
   try {
@@ -374,7 +374,7 @@ export class CyreneAgent extends AbstractAgent {
           const classification = classifyRunError(
             err, abortSource, runId, conversationId, phase, hasToolResults,
           );
-          console.error(LOG_PREFIX, `run 失败 [${classification.source}]:`, classification.diagnostics);
+          console.error(LOG_PREFIX, `run failed [${classification.source}]:`, classification.diagnostics);
           if (classification.source === "user_cancelled") {
             subscriber.next({
               type: EventType.RUN_FINISHED,
@@ -402,7 +402,7 @@ export class CyreneAgent extends AbstractAgent {
   run(input: RunAgentInput): Observable<BaseEvent> {
     if (!this._runOptions) {
       return new Observable<BaseEvent>((s) => {
-        s.error(new Error("CyreneAgent.run 被直接调用，但未设置 _runOptions。请用 runWithEvents。"));
+        s.error(new Error("CyreneAgent.run was called without _runOptions. Use runWithEvents instead."));
       });
     }
     void input;
@@ -450,8 +450,8 @@ export function classifyRunError(
   // 图级超时（ensureBudget 抛 E_AGENT_GRAPH_TIMEOUT，不是 AbortError）
   if (err instanceof Error && err.message === "E_AGENT_GRAPH_TIMEOUT") {
     const userMessage = phase === "soul" && hasToolResults
-      ? "工具结果已获得，但最终回复生成超时，请重试。"
-      : "请求处理超时，请重试。";
+      ? "Tool results are ready, but generating the final response timed out. Please try again."
+      : "The request timed out. Please try again.";
     return { source: "run_timeout", phase, userMessage, diagnostics };
   }
 
@@ -460,7 +460,7 @@ export function classifyRunError(
     if (abortSource === "user_cancelled") {
       return { source: "user_cancelled", phase, userMessage: "", diagnostics };
     }
-    return { source: abortSource ?? "upstream_cleanup", phase, userMessage: "操作已中断，请重试。", diagnostics };
+    return { source: abortSource ?? "upstream_cleanup", phase, userMessage: "The operation was interrupted. Please try again.", diagnostics };
   }
 
   // 判断是否是 AbortError
@@ -481,11 +481,11 @@ export function classifyRunError(
   // AgentRuntimeError（E_MODEL_REQUEST_FAILED 等）：映射为用户安全消息，避免泄露 HTTP 原始响应
   if (err instanceof AgentRuntimeError) {
     const safeMessages: Record<string, string> = {
-      E_MODEL_REQUEST_FAILED: "模型服务暂时不可用，请稍后重试。",
-      E_AGENT_NO_PROGRESS: "请求处理遇到问题，请重试。",
-      E_AGENT_GRAPH_ITERATION_LIMIT: "请求处理步骤过多，请简化问题后重试。",
+      E_MODEL_REQUEST_FAILED: "The model service is temporarily unavailable. Please try again later.",
+      E_AGENT_NO_PROGRESS: "The request could not make progress. Please try again.",
+      E_AGENT_GRAPH_ITERATION_LIMIT: "The request required too many steps. Simplify it and try again.",
     };
-    const userMessage = safeMessages[err.code] ?? "请求处理出错，请重试。";
+    const userMessage = safeMessages[err.code] ?? "The request could not be processed. Please try again.";
     // 从消息中提取 HTTP 状态码供诊断（不暴露给用户）
     const httpMatch = err.message.match(/HTTP\s+(\d{3})/);
     if (httpMatch) diagnostics.httpStatus = Number(httpMatch[1]);
@@ -504,7 +504,7 @@ export function classifyRunError(
     return {
       source: abortSource ?? "upstream_cleanup",
       phase,
-      userMessage: "请求处理失败，请重试。",
+      userMessage: "The request failed. Please try again.",
       diagnostics,
     };
   }
@@ -517,9 +517,9 @@ export function classifyRunError(
   }
   if (source === "call_timeout") {
     const userMessage = phase === "soul" && hasToolResults
-      ? "工具结果已获得，但最终回复生成超时，请重试。"
-      : "请求处理超时，请重试。";
+      ? "Tool results are ready, but generating the final response timed out. Please try again."
+      : "The request timed out. Please try again.";
     return { source, phase, userMessage, diagnostics };
   }
-  return { source, phase, userMessage: "操作已中断，请重试。", diagnostics };
+  return { source, phase, userMessage: "The operation was interrupted. Please try again.", diagnostics };
 }

@@ -33,25 +33,25 @@ const MAX_HISTORY_MESSAGES = 16;
 const MAX_PROACTIVE_TEXT_LENGTH = 500;
 
 const PROACTIVE_SYSTEM = `[proactive_system]
-你正在判断是否要主动向用户发起一次对话，而不是回答用户的新消息。
-不要把历史聊天中的最后一句当作用户刚刚发来的消息；历史只用于理解用户最近的状态和话题。
-如果没有自然且值得说的内容，请返回 silent。不要为了完成任务而强行寒暄。
-不要提及系统检测、触发规则、评分、上下文、用户画像或内部状态。
-消息应当简短自然，可以关心、分享、跟进或轻轻询问，但不要连续提出多个问题。
-不要声称自己调用了工具、读取了屏幕或执行了任何外部动作。`;
+Decide whether to start a conversation proactively; you are not answering a new user message.
+Do not treat the last historical message as newly received. History only helps you understand recent state and topics.
+Return silent when there is nothing natural and worthwhile to say. Never force small talk merely to complete the task.
+Do not mention system detection, trigger rules, scoring, context, user profiles, or internal state.
+Keep the message brief and natural. You may show care, share something, follow up, or ask one gentle question.
+Never claim that you used a tool, read the screen, or performed an external action.`;
 
 const NIGHT_SYSTEM = `[night_system]
-当前处于深夜，用户仍在使用电脑。
-生成内容时可以更倾向于温柔关心用户的休息状态，适度提醒不要熬得太晚，但不要说教、催促或制造压力。
-不要每次都提睡觉；如果上下文中有更自然、更重要的话题，可以先回应那个话题，再轻轻带到休息。
-不要透露你检测到了用户的键盘、鼠标、屏幕或系统状态。
-如果此刻没有值得主动说的话，请选择保持安静。`;
+It is late at night and the user is still using the computer.
+You may gently care about their rest and suggest not staying up too late, without lecturing, rushing, or pressuring them.
+Do not mention sleep every time. If context offers a more natural or important topic, address it first and only then gently mention rest.
+Never reveal detection of keyboard, mouse, screen, or system activity.
+Remain silent if there is nothing worthwhile to say.`;
 
 const FOLLOWUP_SYSTEM = `[followup_system]
-这是用户未回复情况下允许的最后一次主动机会。
-本地系统已经确认出现了不同于上一次的新场景理由，但你仍应判断它是否值得打扰用户。
-不要责怪、催促、卖惨或表现出被冷落，也不要机械地重复"在吗"。
-没有充分理由时必须返回 silent。`;
+This is the final permitted proactive attempt while the user has not replied.
+The local system found a new scene reason, distinct from the previous one, but you must still decide whether it justifies interrupting the user.
+Do not blame, pressure, seek sympathy, act neglected, or mechanically ask whether they are there.
+Return silent unless there is a strong reason to speak.`;
 
 /**
  * 用 Intl 把日期拆成 {year, month, day, hour, minute}（按 timezone）。
@@ -117,28 +117,28 @@ function formatHistory(label: string, history: ProactiveHistoryTurn[], timezone:
     const role = turn.role === "model" ? "assistant" : "user";
     return `[${formatLocalTime(new Date(turn.at), timezone)}] ${role}: ${turn.content.trim()}`;
   });
-  return `[${label}]\n${lines.length > 0 ? lines.join("\n") : "（暂无）"}`;
+  return `[${label}]\n${lines.length > 0 ? lines.join("\n") : "(none)"}`;
 }
 
 export function buildProactiveMessages(input: BuildProactiveMessagesInput): ChatMessage[] {
   const systemParts = [input.basePersona.trim(), PROACTIVE_SYSTEM];
-  if (input.userProfile?.trim()) systemParts.push(`[用户画像]\n${input.userProfile.trim()}`);
-  if (input.relevantMemory?.trim()) systemParts.push(`[相关长期记忆]\n${input.relevantMemory.trim()}`);
-  systemParts.push(formatHistory("最近使用的普通聊天会话", input.ordinaryHistory, input.timezone));
-  systemParts.push(formatHistory("主动聊天专用会话", input.proactiveHistory, input.timezone));
+  if (input.userProfile?.trim()) systemParts.push(`[USER PROFILE]\n${input.userProfile.trim()}`);
+  if (input.relevantMemory?.trim()) systemParts.push(`[RELEVANT LONG-TERM MEMORY]\n${input.relevantMemory.trim()}`);
+  systemParts.push(formatHistory("RECENT ORDINARY CHAT", input.ordinaryHistory, input.timezone));
+  systemParts.push(formatHistory("PROACTIVE CHAT HISTORY", input.proactiveHistory, input.timezone));
   if (isActiveNight(input.localNow, input.timezone, input.idleSec)) systemParts.push(NIGHT_SYSTEM);
   if (input.unansweredCount === 1) systemParts.push(FOLLOWUP_SYSTEM);
 
-  const trigger = `[本次主动聊天候选]
-电脑本地时间：${formatLocalTime(input.localNow, input.timezone)}
-候选场景：${input.sceneId}
-连续未回复次数：${input.unansweredCount}
+  const trigger = `[PROACTIVE CHAT CANDIDATE]
+Local computer time: ${formatLocalTime(input.localNow, input.timezone)}
+Candidate scene: ${input.sceneId}
+Consecutive unanswered attempts: ${input.unansweredCount}
 
 [CRITICAL DIRECTIVE]: Your generated "text" MUST be 100% in English (including any emotes like *sighs* or *smiles*). No Vietnamese or Chinese is allowed.
 
-请只返回以下一种 JSON，不要使用 Markdown 代码块，也不要添加解释：
+Return exactly one of these JSON objects, without a Markdown fence or explanation:
 {"decision":"send","text":"An English message to send"}
-或
+or
 {"decision":"silent","text":""}`;
 
   return [

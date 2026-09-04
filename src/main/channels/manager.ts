@@ -89,14 +89,14 @@ export class ChannelManager {
   private makeAdapterHandler(channel: ChannelId) {
     return async (msg: IncomingMessage): Promise<OutgoingMessage | null> => {
       if (!this.dispatchFn) {
-        console.warn(LOG, `收到入站消息但 dispatcher 未注册 [${channel}]`);
+      console.warn(LOG, `Inbound message received before dispatcher registration [${channel}]`);
         return null;
       }
       let outgoing: OutgoingMessage | null = null;
       try {
         outgoing = await this.dispatchFn(msg);
       } catch (err) {
-        console.error(LOG, `dispatcher 处理失败 [${channel}]:`, err);
+      console.error(LOG, `Dispatcher failed [${channel}]:`, err);
         return null;
       }
       // dispatcher 已经算好了回复，现在调 adapter.send() 真发出去
@@ -107,13 +107,13 @@ export class ChannelManager {
           try {
             const result = await adapter.send(outgoing);
             if (!result.ok) {
-              console.warn(LOG, `adapter.send 失败 [${channel}]:`, result.error);
+        console.warn(LOG, `adapter.send failed [${channel}]:`, result.error);
             }
           } catch (err) {
-            console.error(LOG, `adapter.send 抛错 [${channel}]:`, err);
+      console.error(LOG, `adapter.send threw [${channel}]:`, err);
           }
         } else {
-          console.warn(LOG, `找不到 adapter 或 adapter 不支持 send [${channel}]`);
+    console.warn(LOG, `Adapter not found or does not support send [${channel}]`);
         }
       }
       return outgoing;

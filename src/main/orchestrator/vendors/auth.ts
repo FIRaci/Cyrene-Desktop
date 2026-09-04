@@ -15,6 +15,8 @@ export function authHeaderFor(
   cap: ProviderCapability,
   apiKey: string,
 ): Record<string, string> {
+  // Local OpenAI-compatible runtimes such as Ollama commonly require no auth.
+  if (!apiKey.trim()) return {};
   switch (cap.authStyle) {
     case "x-api-key":
       return { "x-api-key": apiKey };

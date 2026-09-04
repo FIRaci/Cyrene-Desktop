@@ -103,7 +103,7 @@ async function handleRequest(
     try {
       msg = route.normalize(channelId, raw);
     } catch (err) {
-      console.error(LOG, `normalize 失败 [${channelId}]:`, err);
+      console.error(LOG, `Normalization failed [${channelId}]:`, err);
       sendJson(res, 500, { ok: false, error: "normalize failed" });
       return;
     }
@@ -122,7 +122,7 @@ async function handleRequest(
       // 当前只回 ack；adapters 自己负责把 outgoing 真的发出去
       sendJson(res, 200, { ok: true, replied: outgoing != null });
     } catch (err) {
-      console.error(LOG, `handler 失败 [${channelId}]:`, err);
+      console.error(LOG, `Handler failed [${channelId}]:`, err);
       sendJson(res, 500, { ok: false, error: "handler failed" });
     }
     return;

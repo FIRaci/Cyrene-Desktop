@@ -59,7 +59,7 @@ export function appendHistory(sessionId: string, role: "user" | "assistant", con
       fs.writeFileSync(fp, trimmed.endsWith("\n") ? trimmed : trimmed + "\n", "utf8");
     }
   } catch (err) {
-    console.warn(LOG, "appendHistory 失败:", sessionId, err instanceof Error ? err.message : err);
+    console.warn(LOG, "appendHistory failed:", sessionId, err instanceof Error ? err.message : err);
   }
 }
 
@@ -86,7 +86,7 @@ export function loadRecentHistory(sessionId: string, limit: number): HistoryEntr
     const sliced = parsed.slice(-limit);
     return sliced;
   } catch (err) {
-    console.warn(LOG, "loadRecentHistory 失败:", sessionId, err instanceof Error ? err.message : err);
+    console.warn(LOG, "loadRecentHistory failed:", sessionId, err instanceof Error ? err.message : err);
     return [];
   }
 }

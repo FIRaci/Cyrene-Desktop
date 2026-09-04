@@ -8,6 +8,7 @@ import type { ConflictLog, L2Memory, MemoryEvidence } from "./memory-types"
 import * as fs from "fs"
 import * as path from "path"
 import { app } from "electron"
+import { isModelEndpointUsable, DEFAULT_OLLAMA_BASE_URL, DEFAULT_OLLAMA_MODEL, LOCAL_MODEL_PROVIDER } from "../../shared/model-endpoint"
 
 export type MemoryConflictResolutionType =
   | "unrelated"
@@ -67,9 +68,9 @@ export interface ResolverRunOptions {
 }
 
 const DEFAULT_MODEL_SETTINGS: ResolverModelSettings = {
-  provider: "DeepSeek（深度求索）",
-  baseUrl: "https://api.deepseek.com",
-  model: "deepseek-v4-pro",
+  provider: LOCAL_MODEL_PROVIDER,
+  baseUrl: DEFAULT_OLLAMA_BASE_URL,
+  model: DEFAULT_OLLAMA_MODEL,
   apiKey: "",
 }
 
@@ -213,7 +214,7 @@ export async function callResolverLLM(
   messages: Array<{ role: "system" | "user"; content: string }>,
   maxTokens = 700,
 ): Promise<string> {
-  if (!settings.apiKey) throw new Error("missing api key")
+  if (!isModelEndpointUsable(settings)) throw new Error("No usable model is configured")
   const cfg: VendorConfig = {
     provider: settings.provider,
     baseUrl: settings.baseUrl,

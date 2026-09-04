@@ -6,7 +6,7 @@ import type {
 
 const CUSTOM_OPTION = {
   value: "__custom__",
-  label: "其他，我自己填写",
+  label: "Other — I'll enter it myself",
 } as const;
 
 export function buildAskCard(output: AskClarificationOutput): AskClarificationCard {

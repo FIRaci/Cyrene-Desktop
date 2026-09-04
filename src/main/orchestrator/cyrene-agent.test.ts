@@ -121,8 +121,8 @@ describe("classifyRunError", () => {
       "run-2", "conv-2", "soul", true,
     );
     expect(result.source).toBe("call_timeout");
-    expect(result.userMessage).toContain("工具结果已获得");
-    expect(result.userMessage).toContain("超时");
+    expect(result.userMessage).toContain("Tool results are ready");
+    expect(result.userMessage).toContain("timed out");
   });
 
   it("returns call_timeout with generic message when before soul (no tool results)", () => {
@@ -132,8 +132,8 @@ describe("classifyRunError", () => {
       "run-3", "conv-3", "decide", false,
     );
     expect(result.source).toBe("call_timeout");
-    expect(result.userMessage).toBe("请求处理超时，请重试。");
-    expect(result.userMessage).not.toContain("工具结果");
+    expect(result.userMessage).toBe("The request timed out. Please try again.");
+    expect(result.userMessage).not.toContain("Tool results");
   });
 
   it("returns run_timeout for E_AGENT_GRAPH_TIMEOUT", () => {
@@ -143,7 +143,7 @@ describe("classifyRunError", () => {
       "run-4", "conv-4", "execute", false,
     );
     expect(result.source).toBe("run_timeout");
-    expect(result.userMessage).toBe("请求处理超时，请重试。");
+    expect(result.userMessage).toBe("The request timed out. Please try again.");
   });
 
   it("returns run_timeout with tool-result message when in soul phase", () => {
@@ -153,7 +153,7 @@ describe("classifyRunError", () => {
       "run-5", "conv-5", "soul", true,
     );
     expect(result.source).toBe("run_timeout");
-    expect(result.userMessage).toContain("工具结果已获得");
+    expect(result.userMessage).toContain("Tool results are ready");
   });
 
   it("returns unknown_abort when abortSource is undefined and error is AbortError", () => {
@@ -163,7 +163,7 @@ describe("classifyRunError", () => {
       "run-6", "conv-6", "unknown", false,
     );
     expect(result.source).toBe("unknown_abort");
-    expect(result.userMessage).toBe("操作已中断，请重试。");
+    expect(result.userMessage).toBe("The operation was interrupted. Please try again.");
   });
 
   it("returns fixed safe message for unknown plain Error (no raw message leak)", () => {
@@ -174,7 +174,7 @@ describe("classifyRunError", () => {
     );
     expect(result.source).toBe("upstream_cleanup");
     // 白名单策略：未知 plain Error 使用固定安全消息，绝不展示原始 message
-    expect(result.userMessage).toBe("请求处理失败，请重试。");
+    expect(result.userMessage).toBe("The request failed. Please try again.");
     expect(result.userMessage).not.toContain("HTTP");
     expect(result.userMessage).not.toContain("overloaded");
     // 原始 message 保留在 diagnostics 供内部日志
@@ -201,7 +201,7 @@ describe("classifyRunError", () => {
     );
     expect(result.userMessage).not.toContain("aborted");
     expect(result.userMessage).not.toContain("AbortError");
-    expect(result.userMessage).not.toContain("operation");
+    expect(result.userMessage).not.toContain("The operation was aborted");
   });
 
   it("call timeout after unsubscribe still classifies as call_timeout (first-source-wins)", () => {
@@ -213,7 +213,7 @@ describe("classifyRunError", () => {
       "run-9", "conv-9", "soul", true,
     );
     expect(result.source).toBe("call_timeout");
-    expect(result.userMessage).toContain("超时");
+    expect(result.userMessage).toContain("timed out");
   });
 
   it("AgentRuntimeError E_MODEL_REQUEST_FAILED returns safe message, not raw HTTP body", () => {
@@ -224,7 +224,7 @@ describe("classifyRunError", () => {
     const result = classifyRunError(
       err, undefined, "run-10", "conv-10", "soul", false,
     );
-    expect(result.userMessage).toBe("模型服务暂时不可用，请稍后重试。");
+    expect(result.userMessage).toBe("The model service is temporarily unavailable. Please try again later.");
     expect(result.userMessage).not.toContain("529");
     expect(result.userMessage).not.toContain("overloaded");
     expect(result.userMessage).not.toContain("HTTP");
@@ -237,7 +237,7 @@ describe("classifyRunError", () => {
     const result = classifyRunError(
       err, undefined, "run-11", "conv-11", "execute", false,
     );
-    expect(result.userMessage).toBe("请求处理遇到问题，请重试。");
+    expect(result.userMessage).toBe("The request could not make progress. Please try again.");
     expect(result.diagnostics.errorCode).toBe("E_AGENT_NO_PROGRESS");
   });
 
@@ -246,7 +246,7 @@ describe("classifyRunError", () => {
     const result = classifyRunError(
       err, undefined, "run-12", "conv-12", "decide", false,
     );
-    expect(result.userMessage).toBe("请求处理步骤过多，请简化问题后重试。");
+    expect(result.userMessage).toBe("The request required too many steps. Simplify it and try again.");
     expect(result.diagnostics.errorCode).toBe("E_AGENT_GRAPH_ITERATION_LIMIT");
   });
 
@@ -258,7 +258,7 @@ describe("classifyRunError", () => {
     const result = classifyRunError(
       err, undefined, "run-13", "conv-13", "decide", false,
     );
-    expect(result.userMessage).toBe("模型服务暂时不可用，请稍后重试。");
+    expect(result.userMessage).toBe("The model service is temporarily unavailable. Please try again later.");
     expect(result.diagnostics.httpStatus).toBe(429);
   });
 
@@ -270,7 +270,7 @@ describe("classifyRunError", () => {
     const result = classifyRunError(
       err, undefined, "run-14", "conv-14", "soul", true,
     );
-    expect(result.userMessage).toBe("模型服务暂时不可用，请稍后重试。");
+    expect(result.userMessage).toBe("The model service is temporarily unavailable. Please try again later.");
     expect(result.diagnostics.httpStatus).toBeUndefined();
     expect(result.diagnostics.errorCode).toBe("E_MODEL_REQUEST_FAILED");
   });
@@ -280,7 +280,7 @@ describe("classifyRunError", () => {
       '模型请求失败：HTTP 529 - {"error":{"message":"overloaded","request_id":"abc-123"}} Authorization: Bearer xxx',
     );
     const result = classifyRunError(err, undefined, "run-15", "conv-15", "decide", false);
-    expect(result.userMessage).toBe("请求处理失败，请重试。");
+    expect(result.userMessage).toBe("The request failed. Please try again.");
     expect(result.userMessage).not.toContain("HTTP");
     expect(result.userMessage).not.toContain("overloaded");
     expect(result.userMessage).not.toContain("request_id");
@@ -303,7 +303,7 @@ describe("classifyRunError", () => {
     };
     const execErr = new AgentExecutionError("LangGraph execution failed", execStatus, { cause: innerErr });
     const result = classifyRunError(execErr, undefined, "run-16", "conv-16", "soul", false);
-    expect(result.userMessage).toBe("模型服务暂时不可用，请稍后重试。");
+    expect(result.userMessage).toBe("The model service is temporarily unavailable. Please try again later.");
     expect(result.diagnostics.httpStatus).toBe(500);
     expect(result.diagnostics.errorCode).toBe("E_MODEL_REQUEST_FAILED");
   });

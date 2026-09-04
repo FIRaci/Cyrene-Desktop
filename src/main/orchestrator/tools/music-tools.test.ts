@@ -34,6 +34,21 @@ function selectionSet(overrides: Record<string, unknown> = {}) {
 }
 
 describe("music Agent tools", () => {
+  it("exposes English-only model-facing contracts and Soul messages", () => {
+    const tools = buildMusicTools(serviceDouble() as never);
+
+    for (const tool of tools) {
+      const modelContract = JSON.stringify({
+        name: tool.name,
+        description: tool.description,
+        inputSchema: tool.inputSchema,
+        soulActionLabel: tool.soulActionLabel,
+        soulErrorMessages: tool.soulErrorMessages,
+      });
+      expect(modelContract).not.toMatch(/[\u3400-\u9fff]/u);
+    }
+  });
+
   it("declares stable capabilities for Action Gate routing", () => {
     const capabilities = Object.fromEntries(
       buildMusicTools(serviceDouble() as never).map((tool) => [tool.id, tool.capability]),

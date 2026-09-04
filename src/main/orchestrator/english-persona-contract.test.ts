@@ -35,10 +35,9 @@ describe("English and persona prompt contract", () => {
     expect(prompt).toContain("Claim an external action or tool result only when the current turn contains a successful result");
   });
 
-  it("allows non-English worldbook aliases only in proper-name headings", () => {
+  it("keeps worldbook character headings English-only", () => {
     const worldbook = readPrompt("worldbook/characters.md");
     const hanLines = worldbook.split(/\r?\n/u).filter((line) => /[\u3400-\u9fff]/u.test(line));
-    expect(hanLines.length).toBeGreaterThan(0);
-    expect(hanLines.every((line) => /^## [^/]+ \/ [A-Za-z]/u.test(line))).toBe(true);
+    expect(hanLines).toEqual([]);
   });
 });

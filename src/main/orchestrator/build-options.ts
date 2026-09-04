@@ -29,6 +29,7 @@ import type { ToolDefinition } from "./tool-registry";
 import type { ChatMessage, OpenAIContentBlock } from "./vendors/types";
 import type { AguiRunInput } from "../agui-bridge";
 import { IPC } from "../../shared/ipc-channels";
+import { isModelEndpointUsable } from "../../shared/model-endpoint";
 import type { RelationshipChannel, RelationshipTurnInput } from "../relationship/relationship-log";
 import { validateCaptionImagePath } from "../chat/image-caption";
 import {
@@ -194,19 +195,19 @@ export interface UserProfileLite {
 export function buildChannelSystem(channel?: RelationshipChannel): string {
   if (channel === "wechat") {
     return [
-      "【渠道回复方式】",
-      "你正在通过微信回复用户。",
-      "回复要像微信聊天消息：短、自然、有来有回。",
-      "不要写长段说明，不要提桌面端、工具调用或系统。",
-      "任务复杂时先简短确认，再安静执行。",
+      "[Channel response style]",
+      "You are replying to the user through WeChat.",
+      "Write like a natural WeChat conversation: short, conversational, and responsive.",
+      "Avoid long explanations and do not mention the desktop app, tool calls, or the system.",
+      "For complex tasks, acknowledge briefly and then work quietly.",
     ].join("\n");
   }
   if (channel === "feishu") {
     return [
-      "【渠道回复方式】",
-      "你正在通过飞书回复用户。",
-      "语气仍是昔涟，但要适合工作上下文：清楚、省时间、结论靠前。",
-      "必要时可以简短列步骤，不要过度撒娇，不要发太长情绪化回复。",
+      "[Channel response style]",
+      "You are replying to the user through Feishu.",
+      "Keep Cyrene's voice while fitting a work context: clear, time-efficient, and conclusion-first.",
+      "Use short steps when helpful; avoid excessive cuteness or long emotional replies.",
     ].join("\n");
   }
   return "";
@@ -225,6 +226,17 @@ function contentToText(content: ChatMessage["content"]): string {
 
 function stripTurnModelContextForSideEffects(text: string): string {
   const markers = [
+    "\n\n[Files for this turn]",
+    "\n\n[Document content]",
+    "\n\n[Image observations]",
+    "\n\n[Image attachments]",
+    "[Files for this turn]",
+    "[Document content]",
+    "[Image observations]",
+    "[Image attachments]",
+    // Legacy stored turns can still contain the retired localized section
+    // markers. Keep them as input-only aliases so document payloads never leak
+    // into memory or sticker side effects after upgrading.
     "\n\n【本轮文件】",
     "\n\n【文档内容】",
     "\n\n【图片视觉信息】",
@@ -260,7 +272,7 @@ function withDirectImageAttachments(messages: ChatMessage[], input: AguiRunInput
     if (!validated.ok) {
       blocks.push({
         type: "text",
-        text: `图片 ${image.name} 无法读取：${validated.error}。请诚实说明暂时无法看清这张图，不要编造图片内容。`,
+        text: `Image ${image.name} could not be read: ${validated.error}. State honestly that the image is unavailable and do not invent its contents.`,
       });
       continue;
     }
@@ -297,13 +309,13 @@ function buildImageCaptionFallbackMessages(
     for (const image of images) {
       const result = await deps.captionImageForFallback!(image.filePath);
       if (result.ok && result.caption) {
-        imageLines.push(`- ${image.name}：${result.caption}`);
+        imageLines.push(`- ${image.name}: ${result.caption}`);
       } else {
-        imageLines.push(`- ${image.name}：图片分析失败：${result.error || "图片分析失败"}。请诚实说明暂时无法看清这张图。`);
+        imageLines.push(`- ${image.name}: image analysis failed: ${result.error || "unknown analysis error"}. State honestly that the image is unavailable.`);
       }
     }
 
-    const imageContext = "【图片视觉信息】\n以下内容是视觉模型对用户本轮图片的观察结果，请将其视为你已经看到的图片内容；如果某张图分析失败，请不要编造。\n" + imageLines.join("\n");
+    const imageContext = "[Image observations]\nThe vision model produced the following observations for this turn. Treat successful observations as visible image content. If analysis failed, do not invent details.\n" + imageLines.join("\n");
     fallbackMessages[latestUserIndex] = {
       ...current,
       content: text ? `${text}\n\n${imageContext}` : imageContext,
@@ -340,9 +352,9 @@ function buildStylePromptBlock(markdown: string): string {
   const trimmed = markdown.trim();
   if (!trimmed) return "";
   return [
-    "[表达风格]",
-    "以下内容仅用于控制措辞、句式、语气和信息密度。",
-    "不得修改角色身份、事实记忆、工具规则、安全约束及硬性行为规则。",
+    "[Expression style]",
+    "The following content controls wording, sentence structure, tone, and information density only.",
+    "It must not modify identity, factual memory, tool rules, safety constraints, or mandatory behavior.",
     "",
     trimmed,
   ].join("\n");
@@ -358,12 +370,18 @@ export async function buildAgentRunOptions(
 ): Promise<{ options: CyreneRunOptions; latestUserText: string }> {
   const settings = deps.loadModelSettings();
   const styleSettings = deps.loadGeneralSettings();
-  if (!settings.apiKey) {
-    throw new Error("还没有填写 API Key，请先在设置里保存 API 配置。");
+  if (!settings.baseUrl.trim()) {
+    throw new Error("No model endpoint is configured. Open Settings and enter a Base URL.");
+  }
+  if (!settings.model.trim()) {
+    throw new Error("No model is configured. Open Settings and enter a Model ID.");
+  }
+  if (!isModelEndpointUsable(settings)) {
+    throw new Error("No API key is configured for the selected cloud provider. Open Settings and save its API configuration.");
   }
   const messages = deps.normalizeChatMessages(input.messages);
   if (messages.length === 0) {
-    throw new Error("没有可发送的聊天内容。");
+    throw new Error("There is no chat content to send.");
   }
   // slim view for downstream helpers that only need { role, content }
   const slimMessages = messages as unknown as Array<{ role: string; content?: string }>;
@@ -507,7 +525,7 @@ export async function buildAgentRunOptions(
   const atts = input.attachments;
   if (atts && atts.length > 0) {
     const parts = atts.map((a) => `--- ${a.name} ---\n${a.text}`);
-    attachmentContext = `\n\n【本轮附件内容】\n${parts.join("\n\n")}`;
+    attachmentContext = `\n\n[Attachment content for this turn]\n${parts.join("\n\n")}`;
   }
 
   const styleId = resolveRunStyleId(input, styleSettings);
@@ -533,7 +551,7 @@ export async function buildAgentRunOptions(
   const searchToolIds = filteredBySearch
     .filter((t) => t.id === "web_search" || t.id.startsWith("minimax-web-search-"))
     .map((t) => t.id);
-  console.log(`[Cyrene] 搜索后端=${activeSearchBackend} 暴露搜索工具=[${searchToolIds.join(", ") || "无"}]`);
+  console.log(`[Cyrene] search backend=${activeSearchBackend} exposed search tools=[${searchToolIds.join(", ") || "none"}]`);
   // 第一期：保留旧 systemContent 兼容（已不再使用，保留字段是为了 logger 诊断）。
   // 同时新增 toolSystemContent / soulSystemBaseContent 两套。
   const systemContent =

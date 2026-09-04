@@ -13,6 +13,7 @@ import * as path from "path";
 import { app } from "electron";
 import { toolRegistry } from "./tool-registry";
 import { currentUserTimezone } from "./built-in-tools";
+import { isModelEndpointUsable, modelAuthorizationHeaders } from "../../shared/model-endpoint";
 
 const LOG_PREFIX = "[LifeTools]";
 
@@ -46,65 +47,58 @@ function saveExpenses(records: ExpenseRecord[]): void {
 function registerExpenseTools(): void {
   toolRegistry.register({
     id: "record_expense",
-    name: "记账",
+    name: "Record expense",
     description:
-      "记录一笔支出。\n\n" +
-      "何时用：\n" +
-      "- 用户说「花了 X 元买 Y」「记一下支出」「记账」\n" +
-      "- 用户提到具体金额和用途\n\n" +
-      "不要用于：\n" +
-      "- 查账（用 query_expense）\n" +
-      "- 收入记录（暂不支持）\n\n" +
-      "参数：amount（金额，数字），category（分类：餐饮/交通/购物/娱乐/生活/其他），note（备注）。",
+      "Record one expense.\n\n" +
+      "Use when the user asks to record a purchase or provides an amount and purpose.\n" +
+      "Do not use to review expenses (use query_expense) or record income, which is not supported.\n\n" +
+      "Parameters: amount (positive number), category (such as food, transport, shopping, entertainment, household, or other), and note.",
     enabled: true,
     risk: "safe",
     inputSchema: {
       type: "object",
       properties: {
-        amount:   { type: "number", description: "金额（元）" },
-        category: { type: "string", description: "分类：餐饮/交通/购物/娱乐/生活/其他" },
-        note:     { type: "string", description: "备注" },
+        amount:   { type: "number", description: "Expense amount" },
+        category: { type: "string", description: "Expense category, such as food, transport, shopping, entertainment, household, or other" },
+        note:     { type: "string", description: "Optional note describing the expense" },
       },
       required: ["amount"],
     },
     execute: async (args) => {
       const amount = Number(args.amount);
       if (!Number.isFinite(amount) || amount <= 0) {
-        return "[错误] amount 必须是正数";
+        return "[Error] amount must be a positive number";
       }
       const records = loadExpenses();
       const rec: ExpenseRecord = {
         ts: Date.now(),
         amount,
-        category: String(args.category || "其他"),
+        category: String(args.category || "Other"),
         note: String(args.note || ""),
       };
       records.push(rec);
       saveExpenses(records);
-      console.log(LOG_PREFIX, "记账:", rec);
-      return `[record_expense] 已记录：${amount} 元 / ${rec.category} / ${rec.note}`;
+      console.log(LOG_PREFIX, "record_expense:", rec);
+      return `[record_expense] Recorded: ${amount} / ${rec.category} / ${rec.note}`;
     },
   });
 
   toolRegistry.register({
     id: "query_expense",
-    name: "查账",
+    name: "Query expenses",
     description:
-      "查询支出记录。\n\n" +
-      "何时用：\n" +
-      "- 用户问「这个月花了多少」「最近记账」「支出明细」\n" +
-      "- 用户想看支出汇总\n\n" +
-      "不要用于：\n" +
-      "- 记新的一笔（用 record_expense）\n\n" +
-      "参数：days（最近 N 天，默认 30），category（可选，按分类过滤），summary（可选，true 只返回汇总）。",
+      "Query recorded expenses and optionally summarize or filter them.\n\n" +
+      "Use when the user asks for recent expenses, spending details, or a spending summary. " +
+      "Do not use to add an expense; use record_expense instead.\n\n" +
+      "Parameters: days (lookback window, default 30), category (optional exact category filter), and summary (return totals only when true).",
     enabled: true,
     risk: "safe",
     inputSchema: {
       type: "object",
       properties: {
-        days:     { type: "number", description: "最近 N 天，默认 30" },
-        category: { type: "string", description: "可选，按分类过滤" },
-        summary:  { type: "boolean", description: "可选，true 只返回汇总" },
+        days:     { type: "number", description: "Number of recent days to query; defaults to 30" },
+        category: { type: "string", description: "Optional exact category filter" },
+        summary:  { type: "boolean", description: "When true, return only aggregate totals" },
       },
     },
     execute: async (args) => {
@@ -115,7 +109,7 @@ function registerExpenseTools(): void {
         records = records.filter(r => r.category === args.category);
       }
       if (records.length === 0) {
-        return `[query_expense] 最近 ${days} 天没有记账记录`;
+        return `[query_expense] No expenses recorded in the last ${days} days`;
       }
       if (args.summary) {
         const total = records.reduce((s, r) => s + r.amount, 0);
@@ -123,13 +117,13 @@ function registerExpenseTools(): void {
         for (const r of records) {
           byCat[r.category] = (byCat[r.category] || 0) + r.amount;
         }
-        return `[query_expense] 最近 ${days} 天共 ${records.length} 笔，合计 ${total.toFixed(2)} 元\n分类：${JSON.stringify(byCat)}`;
+        return `[query_expense] ${records.length} expense(s) in the last ${days} days; total: ${total.toFixed(2)}\nBy category: ${JSON.stringify(byCat)}`;
       }
       const lines = records.map(r => {
-        const d = new Date(r.ts).toLocaleDateString("zh-CN", { timeZone: currentUserTimezone() });
-        return `${d} ${r.amount}元 ${r.category} ${r.note}`;
+        const d = new Date(r.ts).toLocaleDateString("en-CA", { timeZone: currentUserTimezone() });
+        return `${d} ${r.amount} ${r.category} ${r.note}`;
       });
-      return `[query_expense] 最近 ${days} 天 ${records.length} 笔：\n${lines.join("\n")}`;
+      return `[query_expense] ${records.length} expense(s) in the last ${days} days:\n${lines.join("\n")}`;
     },
   });
 }
@@ -141,24 +135,19 @@ function registerExpenseTools(): void {
 function registerExchangeRateTool(): void {
   toolRegistry.register({
     id: "exchange_rate",
-    name: "汇率查询",
+    name: "Exchange rate",
     description:
-      "查询货币汇率并换算。\n\n" +
-      "何时用：\n" +
-      "- 用户问「X 美元等于多少人民币」「100 日元换多少人民币」\n" +
-      "- 用户提到货币换算\n\n" +
-      "不要用于：\n" +
-      "- 加密货币（不支持）\n" +
-      "- 历史汇率（只支持最新）\n\n" +
-      "参数：from（源货币代码，如 USD/EUR/JPY/CNY），to（目标货币），amount（金额，默认 1）。",
+      "Convert an amount using the latest available fiat-currency exchange rate. " +
+      "Do not use for cryptocurrency or historical rates.\n\n" +
+      "Parameters: from (source ISO currency code), to (target ISO currency code), and amount (defaults to 1).",
     enabled: true,
     risk: "network",
     inputSchema: {
       type: "object",
       properties: {
-        from:   { type: "string", description: "源货币代码，如 USD/EUR/JPY/CNY" },
-        to:     { type: "string", description: "目标货币代码" },
-        amount: { type: "number", description: "金额，默认 1" },
+        from:   { type: "string", description: "Source currency code, such as USD, EUR, JPY, or CNY" },
+        to:     { type: "string", description: "Target currency code" },
+        amount: { type: "number", description: "Amount to convert; defaults to 1" },
       },
       required: ["from", "to"],
     },
@@ -167,21 +156,21 @@ function registerExchangeRateTool(): void {
       const to = String(args.to || "CNY").toUpperCase();
       const amount = Number(args.amount) || 1;
       if (from === to) {
-        return `[exchange_rate] ${amount} ${from} = ${amount} ${to}（同币种）`;
+        return `[exchange_rate] ${amount} ${from} = ${amount} ${to} (same currency)`;
       }
       // frankfurter.app 免费、无 key、支持主要货币
       const url = `https://api.frankfurter.app/latest?from=${from}&to=${to}`;
       const resp = await fetch(url);
       if (!resp.ok) {
-        return `[错误] 汇率查询失败：HTTP ${resp.status}`;
+        return `[Error] Exchange-rate request failed: HTTP ${resp.status}`;
       }
       const data = await resp.json() as { rates?: Record<string, number> };
       const rate = data.rates?.[to];
       if (!rate) {
-        return `[exchange_rate] 查不到 ${from} → ${to}，可能是不支持的币种`;
+        return `[exchange_rate] No rate found for ${from} → ${to}; one of the currencies may be unsupported`;
       }
       const result = (amount * rate).toFixed(2);
-      return `[exchange_rate] ${amount} ${from} = ${result} ${to}（汇率 ${rate}，更新于 ${new Date().toLocaleDateString("zh-CN", { timeZone: currentUserTimezone() })}）`;
+      return `[exchange_rate] ${amount} ${from} = ${result} ${to} (rate ${rate}, updated ${new Date().toLocaleDateString("en-CA", { timeZone: currentUserTimezone() })})`;
     },
   });
 }
@@ -201,41 +190,36 @@ export function setTranslateConfig(getter: () => { provider: string; baseUrl: st
 function registerTranslateTool(): void {
   toolRegistry.register({
     id: "translate",
-    name: "翻译",
+    name: "Translate",
     description:
-      "翻译文本。\n\n" +
-      "何时用：\n" +
-      "- 用户说「翻译 X」「这句话用 Y 语怎么说」「X 是什么意思」\n" +
-      "- 用户问外语词义\n\n" +
-      "不要用于：\n" +
-      "- 用户用中文问中文能答的事\n" +
-      "- 长文档翻译（建议分段）\n\n" +
-      "参数：text（要翻译的文本），to（目标语言，如「英文」「中文」「日文」），from（可选，源语言，默认自动检测）。",
+      "Translate text into a requested language. Use for explicit translation requests or foreign-language meaning questions. " +
+      "For long documents, translate in smaller sections.\n\n" +
+      "Parameters: text (source text), to (target language, such as English, Chinese, or Japanese), and from (optional source language; auto-detected by default).",
     enabled: true,
     risk: "network",
     inputSchema: {
       type: "object",
       properties: {
-        text: { type: "string", description: "要翻译的文本" },
-        to:   { type: "string", description: "目标语言，如「英文」「中文」「日文」" },
-        from: { type: "string", description: "可选，源语言，默认自动检测" },
+        text: { type: "string", description: "Text to translate" },
+        to:   { type: "string", description: "Target language, such as English, Chinese, or Japanese" },
+        from: { type: "string", description: "Optional source language; auto-detected when omitted" },
       },
       required: ["text", "to"],
     },
     execute: async (args) => {
       const text = String(args.text || "");
       const to = String(args.to || "");
-      if (!text || !to) return "[错误] text 和 to 不能为空";
+      if (!text || !to) return "[Error] text and to are required";
 
       const settings = modelSettingsGetter?.();
-      if (!settings || !settings.apiKey) {
-        return "[错误] 未配置模型，翻译不可用";
+      if (!settings || !isModelEndpointUsable(settings)) {
+        return "[Error] Translation is unavailable because no model is configured";
       }
 
       // 动态 import 避免循环依赖
       const { buildVendorUrlByProvider } = await import("./vendors");
-      const fromHint = args.from ? `（源语言：${args.from}）` : "（自动检测源语言）";
-      const sysPrompt = `你是翻译器${fromHint}。把以下文本翻译成${to}，只输出译文，不要任何解释或额外文字。`;
+      const fromHint = args.from ? ` The source language is ${String(args.from)}.` : " Detect the source language automatically.";
+      const sysPrompt = `You are a translation engine.${fromHint} Translate the following text into ${to}. Return only the translation, with no explanation or additional text.`;
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), 30000);
       try {
@@ -244,7 +228,7 @@ function registerTranslateTool(): void {
           signal: ctrl.signal,
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${settings.apiKey}`,
+            ...modelAuthorizationHeaders(settings),
           },
           body: JSON.stringify({
             model: settings.model,
@@ -256,13 +240,13 @@ function registerTranslateTool(): void {
             stream: false,
           }),
         });
-        if (!resp.ok) return `[错误] 翻译失败：HTTP ${resp.status}`;
+        if (!resp.ok) return `[Error] Translation request failed: HTTP ${resp.status}`;
         const data = await resp.json() as { choices?: Array<{ message?: { content?: string } }> };
         const result = data.choices?.[0]?.message?.content?.trim() || "";
-        if (!result) return "[错误] 翻译返回空";
+        if (!result) return "[Error] The translation response was empty";
         return `[translate] ${result}`;
       } catch (e) {
-        return "[错误] 翻译失败：" + (e instanceof Error ? e.message : String(e));
+        return "[Error] Translation failed: " + (e instanceof Error ? e.message : String(e));
       } finally {
         clearTimeout(timer);
       }
@@ -277,50 +261,45 @@ function registerTranslateTool(): void {
 function registerApplyPatchTool(): void {
   toolRegistry.register({
     id: "apply_patch",
-    name: "应用代码补丁",
+    name: "Apply code patch",
     description:
-      "对文件应用精确的字符串替换。\n\n" +
-      "何时用：\n" +
-      "- 修改现有文件中的特定代码片段\n" +
-      "- 用户要「把 X 改成 Y」「把第 N 行的 A 替换成 B」\n\n" +
-      "不要用于：\n" +
-      "- 整文件重写（用 write_file）\n" +
-      "- 新建文件（用 write_file）\n\n" +
-      "参数：file_path（文件路径），old_string（要替换的原文本，必须精确匹配含缩进），new_string（替换后的文本）。\n" +
-      "old_string 必须在文件中唯一；匹配多处会报错，需要更长的上下文使其唯一。",
+      "Apply one exact string replacement to an existing file. Use for a precise, localized edit. " +
+      "Use write_file for new files or complete rewrites.\n\n" +
+      "Parameters: file_path, old_string (an exact match including whitespace), and new_string. " +
+      "old_string must occur exactly once; include more surrounding context if it is ambiguous.",
     enabled: true,
     risk: "fs-write",
     inputSchema: {
       type: "object",
       properties: {
-        file_path:   { type: "string", description: "文件绝对路径" },
-        old_string:  { type: "string", description: "要替换的原文本（必须精确匹配，含缩进）" },
-        new_string:  { type: "string", description: "替换后的文本" },
+        file_path:   { type: "string", description: "Absolute path of the file to update" },
+        old_string:  { type: "string", description: "Exact text to replace, including indentation" },
+        new_string:  { type: "string", description: "Replacement text" },
       },
       required: ["file_path", "old_string", "new_string"],
     },
     execute: async (args) => {
       const filePath = String(args.file_path || "");
-      if (!filePath) return "[错误] file_path 不能为空";
-      if (!fs.existsSync(filePath)) return `[错误] 文件不存在：${filePath}`;
+      if (!filePath) return "[Error] file_path is required";
+      if (!fs.existsSync(filePath)) return `[Error] File not found: ${filePath}`;
 
       const content = fs.readFileSync(filePath, "utf8");
       const oldStr = String(args.old_string ?? "");
       const newStr = String(args.new_string ?? "");
-      if (!oldStr) return "[错误] old_string 不能为空";
+      if (!oldStr) return "[Error] old_string is required";
 
       const count = content.split(oldStr).length - 1;
       if (count === 0) {
-        return "[错误] old_string 在文件中未找到。请确认内容（包括缩进、换行）是否精确匹配。";
+        return "[Error] old_string was not found. Verify the exact content, including indentation and line breaks.";
       }
       if (count > 1) {
-        return `[错误] old_string 在文件中匹配 ${count} 处，需要更长的上下文使其唯一。`;
+        return `[Error] old_string matched ${count} locations. Include more context so the match is unique.`;
       }
 
       const newContent = content.replace(oldStr, newStr);
       fs.writeFileSync(filePath, newContent, "utf8");
       console.log(LOG_PREFIX, "apply_patch:", filePath);
-      return `[apply_patch] 已更新 ${filePath}`;
+      return `[apply_patch] Updated ${filePath}`;
     },
   });
 }

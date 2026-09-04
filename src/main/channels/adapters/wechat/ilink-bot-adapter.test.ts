@@ -267,7 +267,7 @@ describe("ILinkBotAdapter inbound media", () => {
           kind: "image",
           filePath: "C:/tmp/cyrene-test-user-data/channels/cache/wechat-msg-1-image.png",
           mime: "image/png",
-          caption: "微信图片",
+          caption: "wechat-image",
         },
       ],
     }));
@@ -307,7 +307,7 @@ describe("ILinkBotAdapter inbound media", () => {
 
     expect(sendText).toHaveBeenCalledWith(
       "wx-user-1",
-      expect.stringContaining("微信附件下载失败"),
+      expect.stringContaining("WeChat attachment could not be downloaded"),
       "ctx-1",
     );
     expect(onMessage).not.toHaveBeenCalled();
@@ -360,7 +360,7 @@ describe("ILinkBotAdapter inbound media", () => {
     );
     expect(sendText).toHaveBeenLastCalledWith(
       "wx-user-1",
-      "收好啦，伙伴。人家已经帮你放到桌面的“Cyrene 收件箱”里了：C:/Users/13575/Desktop/Cyrene 收件箱/archive.zip",
+      "Saved, friend. I placed it in the “Cyrene Inbox” folder on your desktop: C:/Users/13575/Desktop/Cyrene 收件箱/archive.zip",
       "ctx-text",
     );
     expect(onMessage).not.toHaveBeenCalled();
@@ -410,7 +410,7 @@ describe("ILinkBotAdapter inbound media", () => {
     expect(sendText).toHaveBeenNthCalledWith(
       1,
       "wx-user-1",
-      "好呀，伙伴，尽管把文件发过来吧。我会帮你放到桌面的“Cyrene 收件箱”里哦~~",
+      "Of course, friend. Send the file and I will place it in the “Cyrene Inbox” folder on your desktop.",
       "ctx-text",
     );
     expect((adapter as any).saveInboundMedia).toHaveBeenCalledWith(
@@ -419,7 +419,7 @@ describe("ILinkBotAdapter inbound media", () => {
     );
     expect(sendText).toHaveBeenLastCalledWith(
       "wx-user-1",
-      "收好啦，伙伴。人家已经帮你放到桌面的“Cyrene 收件箱”里了：C:/Users/13575/Desktop/Cyrene 收件箱/movie.mp4",
+      "Saved, friend. I placed it in the “Cyrene Inbox” folder on your desktop: C:/Users/13575/Desktop/Cyrene 收件箱/movie.mp4",
       "ctx-video",
     );
     expect(onMessage).not.toHaveBeenCalled();
@@ -508,7 +508,7 @@ describe("ILinkBotAdapter inbound media", () => {
     });
 
     expect((adapter as any).transcribeVoice).toHaveBeenCalledWith(
-      expect.objectContaining({ kind: "voice", fileName: "微信语音" }),
+      expect.objectContaining({ kind: "voice", fileName: "wechat-voice" }),
       "msg-voice-1",
     );
     expect(sendText).not.toHaveBeenCalled();
@@ -556,7 +556,7 @@ describe("ILinkBotAdapter inbound media", () => {
 
     expect(sendText).toHaveBeenCalledWith(
       "wx-user-1",
-      "伙伴，这条语音人家暂时没听清楚：ASR timeout。可以换成文字再发我一次哦~~",
+      "friend, I could not understand this voice message: ASR timeout. Please send it again as text.",
       "ctx-voice",
     );
     expect(onMessage).not.toHaveBeenCalled();

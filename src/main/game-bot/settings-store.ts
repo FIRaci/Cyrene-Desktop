@@ -5,6 +5,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { app } from "electron";
+import { DEFAULT_OLLAMA_BASE_URL, DEFAULT_OLLAMA_VISION_MODEL } from "../../shared/model-endpoint";
 
 export interface GameBotSettings {
   enabled: boolean;
@@ -21,7 +22,7 @@ const DEFAULTS: GameBotSettings = {
   enabled: false,
   exePath: "",
   activeRecipe: "star-rail-daily",
-  vlm: { baseUrl: "", apiKey: "", model: "" },
+  vlm: { baseUrl: DEFAULT_OLLAMA_BASE_URL, apiKey: "", model: DEFAULT_OLLAMA_VISION_MODEL },
 };
 
 // IDs are filenames without an extension. Keeping this deliberately narrow makes
@@ -44,9 +45,9 @@ function normalize(input: Partial<GameBotSettings> | null | undefined): GameBotS
     activeRecipe: isGameBotIdentifier(input?.activeRecipe)
       ? input.activeRecipe : DEFAULTS.activeRecipe,
     vlm: {
-      baseUrl: typeof v.baseUrl === "string" ? v.baseUrl.trim() : "",
+      baseUrl: typeof v.baseUrl === "string" && v.baseUrl.trim() ? v.baseUrl.trim() : DEFAULTS.vlm.baseUrl,
       apiKey: typeof v.apiKey === "string" ? v.apiKey.trim() : "",
-      model: typeof v.model === "string" ? v.model.trim() : "",
+      model: typeof v.model === "string" && v.model.trim() ? v.model.trim() : DEFAULTS.vlm.model,
     },
   };
 }

@@ -4,7 +4,7 @@
 
 import * as fs from "fs";
 import * as path from "path";
-import { app, ipcMain, BrowserWindow } from "electron";
+import { app, ipcMain, BrowserWindow, type IpcMainInvokeEvent } from "electron";
 import { toolRegistry } from "../orchestrator/tool-registry";
 import { IPC } from "../../shared/ipc-channels";
 import { parseRecipe } from "./script-parser";
@@ -55,7 +55,7 @@ export function listRecipes(): { id: string; name: string }[] {
       result.push({ id, name: r.ok ? r.recipe.name : id });
     }
   } catch (err) {
-    console.warn(LOG, "listRecipes 失败:", err);
+    console.warn(LOG, "Failed to list recipes:", err);
   }
   return result;
 }
@@ -132,14 +132,14 @@ function broadcastProgress(info: { index: number; total: number; desc: string })
 
 /** 启动代肝（设置面板 / agent 都调这个）。异步运行，不阻塞调用方。 */
 export async function startGameBot(): Promise<{ ok: boolean; error?: string }> {
-  if (runSignal) return { ok: false, error: "已有代肝任务在运行" };
+  if (runSignal) return { ok: false, error: "Game automation is already running." };
   const settings = loadGameBotSettings();
-  if (!settings.enabled) return { ok: false, error: "代肝未启用（设置→插件→游戏代肝 开启开关）" };
-  if (!settings.exePath) return { ok: false, error: "未配置游戏 exe 路径" };
-  if (!settings.vlm.baseUrl || !settings.vlm.apiKey || !settings.vlm.model)
-    return { ok: false, error: "未配置 VLM（baseUrl/apiKey/model）" };
+  if (!settings.enabled) return { ok: false, error: "Game automation is disabled. Enable it in Settings > Plugins > Game Bot." };
+  if (!settings.exePath) return { ok: false, error: "The game executable path is not configured." };
+  if (!vlm.isVlmConfigUsable(settings.vlm))
+    return { ok: false, error: "No usable VLM is configured. Set a Base URL and Model ID; non-local endpoints also require an API key." };
   const recipe = loadRecipe(settings.activeRecipe);
-  if (!recipe) return { ok: false, error: "找不到脚本: " + settings.activeRecipe };
+  if (!recipe) return { ok: false, error: "Recipe not found: " + settings.activeRecipe };
 
   runningRecipe = settings.activeRecipe;
   runSignal = { aborted: false };
@@ -151,11 +151,11 @@ export async function startGameBot(): Promise<{ ok: boolean; error?: string }> {
     onProgress: broadcastProgress,
     signal: runSignal,
   }).then((res) => {
-    console.log(LOG, "代肝结束:", res.ok ? "成功" : "失败(" + res.error + ")", res.completed + "/" + res.total);
-    broadcastProgress({ index: -1, total: res.total, desc: res.ok ? "完成" : "失败: " + (res.error ?? "") });
+    console.log(LOG, "Automation finished:", res.ok ? "success" : "failed (" + res.error + ")", res.completed + "/" + res.total);
+    broadcastProgress({ index: -1, total: res.total, desc: res.ok ? "Completed" : "Failed: " + (res.error ?? "") });
   }).catch((err) => {
-    console.error(LOG, "代肝异常:", err);
-    broadcastProgress({ index: -1, total: 0, desc: "异常: " + (err instanceof Error ? err.message : String(err)) });
+    console.error(LOG, "Automation failed:", err);
+    broadcastProgress({ index: -1, total: 0, desc: "Error: " + (err instanceof Error ? err.message : String(err)) });
   }).finally(() => {
     runSignal = null;
     runningRecipe = null;
@@ -170,25 +170,48 @@ export function stopGameBot(): { ok: boolean } {
 }
 
 /** 注册 IPC + game_bot_start 工具。app.whenReady 后调一次。 */
-export function initGameBot(options: { captureScreen?: () => Promise<ScreenshotResult | null>; isSettingsSender?: (senderId: number) => boolean } = {}): void {
+type PublicGameBotSettings = Omit<GameBotSettings, "vlm"> & {
+  vlm: Omit<GameBotSettings["vlm"], "apiKey"> & { apiKey: ""; hasKey: boolean };
+};
+
+function toPublicGameBotSettings(settings: GameBotSettings): PublicGameBotSettings {
+  return { ...settings, vlm: { ...settings.vlm, apiKey: "", hasKey: Boolean(settings.vlm.apiKey) } };
+}
+
+function restoreGameBotSecret(patch: Partial<GameBotSettings> & { vlm?: Partial<GameBotSettings["vlm"]> & { clearApiKey?: boolean } }): Partial<GameBotSettings> {
+  if (!patch.vlm) return patch;
+  const stored = loadGameBotSettings();
+  const supplied = typeof patch.vlm.apiKey === "string" ? patch.vlm.apiKey.trim() : "";
+  return {
+    ...patch,
+    vlm: { ...patch.vlm, apiKey: patch.vlm.clearApiKey ? "" : supplied || stored.vlm.apiKey },
+  } as Partial<GameBotSettings>;
+}
+
+export function initGameBot(options: { captureScreen?: () => Promise<ScreenshotResult | null>; isSettingsSender?: (event: IpcMainInvokeEvent) => boolean } = {}): void {
   captureScreen = options.captureScreen ?? captureDesktopScreen;
-  ipcMain.handle(IPC.GAME_BOT_GET_CONFIG, () => loadGameBotSettings());
-  ipcMain.handle(IPC.GAME_BOT_SAVE_CONFIG, (_e, patch: unknown) => {
-    const saved = saveGameBotSettings(patch as Partial<GameBotSettings>);
+  const requireSettings = (event: IpcMainInvokeEvent): void => {
+    if (!options.isSettingsSender || !options.isSettingsSender(event)) throw new Error("UNTRUSTED_GAME_BOT_SENDER");
+  };
+  ipcMain.handle(IPC.GAME_BOT_GET_CONFIG, (event) => {
+    requireSettings(event);
+    return toPublicGameBotSettings(loadGameBotSettings());
+  });
+  ipcMain.handle(IPC.GAME_BOT_SAVE_CONFIG, (event, patch: unknown) => {
+    requireSettings(event);
+    const saved = saveGameBotSettings(restoreGameBotSecret(patch as Partial<GameBotSettings>));
     // enabled 开关同步到 agent 工具，关了 agent 就看不到/调不到
     toolRegistry.setEnabled("game_bot_start", saved.enabled);
-    return saved;
+    return toPublicGameBotSettings(saved);
   });
-  ipcMain.handle(IPC.GAME_BOT_LIST_RECIPES, () => listRecipes());
-  ipcMain.handle(IPC.GAME_BOT_LIST_REFS, (_e, recipeId: string) => listRefs(recipeId));
-  ipcMain.handle(IPC.GAME_BOT_REFS_DIR, (_e, recipeId: string) => refsDirPath(recipeId));
+  ipcMain.handle(IPC.GAME_BOT_LIST_RECIPES, (event) => { requireSettings(event); return listRecipes(); });
+  ipcMain.handle(IPC.GAME_BOT_LIST_REFS, (event, recipeId: string) => { requireSettings(event); return listRefs(recipeId); });
+  ipcMain.handle(IPC.GAME_BOT_REFS_DIR, (event, recipeId: string) => { requireSettings(event); return refsDirPath(recipeId); });
   ipcMain.handle(IPC.GAME_BOT_START, (event) => {
-    if (options.isSettingsSender && !options.isSettingsSender(event.sender.id)) {
-      return { ok: false, error: "Game automation can only be started from the trusted settings UI." };
-    }
+    requireSettings(event);
     return startGameBot();
   });
-  ipcMain.handle(IPC.GAME_BOT_STOP, () => stopGameBot());
+  ipcMain.handle(IPC.GAME_BOT_STOP, (event) => { requireSettings(event); return stopGameBot(); });
 
   // agent 触发工具：用户在聊天里要代肝时调用。enabled 跟随配置开关。
   const initialSettings = loadGameBotSettings();

@@ -69,7 +69,7 @@ describe("downgradeToCapability", () => {
       expect(p.kind).toBe("text");
       if (p.kind === "text") {
         expect(p.text.length).toBeLessThanOrEqual(100);
-        expect(p.text).toMatch(/…?\(过长已截断\)$/);
+        expect(p.text).toMatch(/\(truncated: too long\)$/);
       }
     });
 
@@ -98,10 +98,10 @@ describe("downgradeToCapability", () => {
       const p = out.parts[0];
       expect(p.kind).toBe("text");
       if (p.kind === "text") {
-        expect(p.text).toContain("[图片]");
+        expect(p.text).toContain("[Image]");
         expect(p.text).toContain("我的截图");
         // url 兜底会包含 filePath 或 url: 当 caption 优先时, url 在 fallback
-        expect(p.text).toMatch(/https:\/\/x\.png|\[图片\] 我的截图/);
+        expect(p.text).toMatch(/https:\/\/x\.png|\[Image\] 我的截图/);
       }
     });
 
@@ -110,7 +110,7 @@ describe("downgradeToCapability", () => {
       const out = stubDispatcher.downgradeToCapability(msg, makeCap({ image: false }));
       const p = out.parts[0];
       expect(p.kind).toBe("text");
-      if (p.kind === "text") expect(p.text).toBe("[图片] ");
+      if (p.kind === "text") expect(p.text).toBe("[Image] ");
     });
   });
 
@@ -128,7 +128,7 @@ describe("downgradeToCapability", () => {
       const p = out.parts[0];
       expect(p.kind).toBe("text");
       if (p.kind === "text") {
-        expect(p.text).toContain("[语音消息");
+        expect(p.text).toContain("[Voice message");
         expect(p.text).toContain("audio/mpeg");
       }
     });
@@ -141,7 +141,7 @@ describe("downgradeToCapability", () => {
       const p = out.parts[0];
       expect(p.kind).toBe("text");
       if (p.kind === "text") {
-        expect(p.text).toContain("[文件]");
+        expect(p.text).toContain("[File]");
         expect(p.text).toContain("report.pdf");
       }
     });
@@ -152,7 +152,7 @@ describe("downgradeToCapability", () => {
       const p = out.parts[0];
       expect(p.kind).toBe("text");
       if (p.kind === "text") {
-        expect(p.text).toContain("[视频]");
+        expect(p.text).toContain("[Video]");
         expect(p.text).toContain("demo.mp4");
       }
     });

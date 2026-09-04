@@ -25,6 +25,28 @@ function toJsonResult(r: PlayLive2DActionResult): string {
   return JSON.stringify(r);
 }
 
+const LEGACY_LOCALIZED_ALIASES: Readonly<Record<string, string>> = {
+  "回正": "reset",
+  "眨眨眼": "wink",
+  "可爱一下": "act cute",
+  "笑一笑": "smile",
+  "戴墨镜": "sunglasses",
+  "问号": "question mark",
+  "闪闪发光": "sparkle",
+  "星星眼": "starry eyes",
+  "圈圈眼": "dizzy eyes",
+  "开心眼": "happy eyes",
+};
+
+function findLocalizedAction(alias: string) {
+  const englishAlias = LEGACY_LOCALIZED_ALIASES[alias.trim()];
+  return englishAlias ? findAction(englishAlias) : undefined;
+}
+
+function availableEnglishAliases(): string[] {
+  return LIVE2D_ACTIONS.map((action) => action.alias);
+}
+
 /**
  * Build the handler. Returns a function compatible with
  * `ToolDefinition.execute` (Promise<string>).
@@ -39,15 +61,17 @@ export function createPlayLive2DActionHandler(deps: PlayLive2DActionDeps) {
       return toJsonResult({
         ok: false,
         error: "unknown_action",
-        available: LIVE2D_ACTIONS.map((a) => a.alias),
+        available: availableEnglishAliases(),
       });
     }
-    const action = findAction(raw);
+    // English aliases are model-facing. Legacy/localized aliases remain accepted
+    // so multilingual user input and existing callers do not regress.
+    const action = findAction(raw) ?? findLocalizedAction(raw);
     if (!action) {
       return toJsonResult({
         ok: false,
         error: "unknown_action",
-        available: LIVE2D_ACTIONS.map((a) => a.alias),
+        available: availableEnglishAliases(),
       });
     }
     try {
@@ -62,16 +86,16 @@ export function createPlayLive2DActionHandler(deps: PlayLive2DActionDeps) {
 
 /** Build the description string from the catalog so adding an alias needs no prompt edits. */
 function buildDescription(): string {
-  const lines = LIVE2D_ACTIONS.map((a) => `- ${a.alias}（${a.description}）`).join("\n");
+  const lines = LIVE2D_ACTIONS.map((a) => `- ${a.alias}: ${a.description}`).join("\n");
   return [
-    "让 Cyrene 在 Live2D 模型上做一个动作（表情或肢体动作）。",
-    "当用户让她做一个屏幕上可以做的动作时调用此工具。",
+    "Make Cyrene perform an expression or body motion on her Live2D model.",
+    "Use this tool when the user asks her to perform an action visible on screen.",
     "",
-    "可选动作列表：",
+    "Available actions:",
     lines,
     "",
-    "如果用户要的动作不在这个列表里，不要调用此工具 — 用文字告诉用户你能做什么，并（可选）推荐一个最接近的动作。",
-    "参数：name（必填，从上面的列表中选一个中文别名）。",
+    "If the requested action is not listed, do not call this tool. Explain what Cyrene can do and optionally suggest the closest available action.",
+    "Parameter: name (required; choose one English alias from the list above).",
   ].join("\n");
 }
 
@@ -79,7 +103,7 @@ function buildDescription(): string {
 export function createPlayLive2DActionTool(deps: PlayLive2DActionDeps): ToolDefinition {
   return {
     id: "play_live2d_action",
-    name: "做动作",
+    name: "Perform Live2D action",
     description: buildDescription(),
     enabled: true,
     risk: "input-control",
@@ -88,7 +112,7 @@ export function createPlayLive2DActionTool(deps: PlayLive2DActionDeps): ToolDefi
       properties: {
         name: {
           type: "string",
-          description: "动作的中文别名，例如「眨眨眼」「戴墨镜」「笑一笑」",
+          description: "English action alias, such as wink, sunglasses, or smile",
         },
       },
       required: ["name"],

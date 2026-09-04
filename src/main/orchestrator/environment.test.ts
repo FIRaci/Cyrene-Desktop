@@ -13,8 +13,8 @@ describe("buildEnvironmentContext timezone", () => {
       gender: "male",
     });
 
-    expect(ctx).toContain("重要提问或确认时，可以自然使用一次「伙伴」");
-    expect(ctx).toContain("不得使用女性指向称呼");
+    expect(ctx).toContain('use "伙伴" naturally for an important question or confirmation');
+    expect(ctx).toContain("do not use feminine forms of address");
   });
 
   it("uses profile.timezone when valid and includes time label", () => {
@@ -23,22 +23,22 @@ describe("buildEnvironmentContext timezone", () => {
       { timezone: "Asia/Tokyo" },
     );
     // 时间行格式：- 当前时间：YYYY-MM-DD 周X HH:MM（时区 Asia/Tokyo）
-    const m = ctx.match(/- 当前时间：(\d{4}-\d{2}-\d{2} [周星期]\S? \d{2}:\d{2})（时区 ([\w/]+)）/);
+    const m = ctx.match(/- Current time: (\d{4}-\d{2}-\d{2} [A-Za-z]{3} \d{2}:\d{2}) \(time zone ([\w/]+)\)/);
     expect(m).not.toBeNull();
     expect(m?.[2]).toBe("Asia/Tokyo");
     // 不含系统时区痕迹（如 Asia/Shanghai 恰好和系统一致也可能存在；但当 profile=Asia/Tokyo 时绝对不含 Asia/Shanghai）
-    expect(ctx).not.toMatch(/时区 Asia\/Shanghai/);
+    expect(ctx).not.toMatch(/time zone Asia\/Shanghai/);
   });
 
   it("falls back to Asia/Shanghai when profile.timezone missing or invalid (never reads system tz)", () => {
     const ctx1 = buildEnvironmentContext(undefined, undefined);
-    expect(ctx1).toMatch(/时区 Asia\/Shanghai/);
+    expect(ctx1).toMatch(/time zone Asia\/Shanghai/);
 
     const ctx2 = buildEnvironmentContext(undefined, { timezone: "bad/timezone" });
-    expect(ctx2).toMatch(/时区 Asia\/Shanghai/);
+    expect(ctx2).toMatch(/time zone Asia\/Shanghai/);
 
     const ctx3 = buildEnvironmentContext(undefined, { timezone: "" });
-    expect(ctx3).toMatch(/时区 Asia\/Shanghai/);
+    expect(ctx3).toMatch(/time zone Asia\/Shanghai/);
   });
 
   it("emits the timezone-not-location disclaimer", () => {
@@ -46,10 +46,10 @@ describe("buildEnvironmentContext timezone", () => {
       undefined,
       { defaultCity: "上海", timezone: "Asia/Shanghai" },
     );
-    expect(ctx).toContain("用户时区仅用于时间计算");
-    expect(ctx).toContain("不得根据时区推断用户所在城市");
+    expect(ctx).toContain("The user's time zone is only for time calculations");
+    expect(ctx).toContain("Never infer a city from it");
     // 时区与默认城市分两段呈现，不合并
-    expect(ctx).toMatch(/默认城市：上海[\s\S]*用户时区仅用于时间计算/);
+    expect(ctx).toMatch(/Default city: 上海[\s\S]*time zone is only for time calculations/);
   });
 
   it("formats time as YYYY-MM-DD 周X HH:MM using formatToParts (fixed assembly, not locale string)", () => {
@@ -64,7 +64,7 @@ describe("buildEnvironmentContext timezone", () => {
       { timezone: "America/New_York" },
     );
 
-    const timeLineRe = /- 当前时间：(\d{4}-\d{2}-\d{2} [周星期]\S? \d{2}:\d{2}（时区 [\w/]+)/;
+    const timeLineRe = /- Current time: (\d{4}-\d{2}-\d{2} [A-Za-z]{3} \d{2}:\d{2} \(time zone [\w/]+)/;
     const m = ctx.match(timeLineRe);
     expect(m).not.toBeNull();
     expect(ctx).toMatch(timeLineRe);
@@ -75,13 +75,13 @@ describe("buildEnvironmentContext timezone", () => {
     expect(ctxNyc).not.toMatch(/(上午|下午|AM|PM)/);
 
     // 时区标签准确
-    expect(ctx).toContain("（时区 Asia/Shanghai）");
-    expect(ctxNyc).toContain("（时区 America/New_York）");
+    expect(ctx).toContain("(time zone Asia/Shanghai)");
+    expect(ctxNyc).toContain("(time zone America/New_York)");
   });
 
   it("survives illegal IANA timezone (resolver returns Asia/Shanghai, no RangeError)", () => {
     expect(() => buildEnvironmentContext(undefined, { timezone: "Foo/Bar" })).not.toThrow();
     const ctx = buildEnvironmentContext(undefined, { timezone: "Foo/Bar" });
-    expect(ctx).toMatch(/时区 Asia\/Shanghai/);
+    expect(ctx).toMatch(/time zone Asia\/Shanghai/);
   });
 });

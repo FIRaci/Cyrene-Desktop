@@ -39,8 +39,8 @@ describe("buildToolExecutionContext", () => {
     expect(block).toContain('"terminal":true');
     expect(block).toContain('"retryable":false');
     expect(block).toContain('"deduplicated":true');
-    expect(block).toContain("不得重复执行相同 toolId");
-    expect(block).toContain("deduplicated=true 表示本次调用未重新执行");
+    expect(block).toContain("Never repeat a completed terminal action with the same toolId");
+    expect(block).toContain("deduplicated=true means the call was not run again");
   });
 
   it("omits deduplicated field when not set", () => {
@@ -67,8 +67,8 @@ describe("buildToolExecutionContext", () => {
       status: "succeeded",
     }]);
 
-    expect(block).toContain("web_fallback 表示已在浏览器中打开");
-    expect(block).toContain("不能声称网易云桌面客户端已开始播放");
+    expect(block).toContain("web_fallback means the item was opened in a browser");
+    expect(block).toContain("do not claim that the NetEase Cloud Music desktop client started playback");
   });
 
   it("preserves a runtime failure as data instead of inferring it from Soul text", () => {

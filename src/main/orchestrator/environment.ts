@@ -39,7 +39,7 @@ function safeGetPath(name: "desktop" | "documents" | "downloads" | "home"): stri
   try {
     return app.getPath(name);
   } catch (err) {
-    console.warn(LOG_PREFIX, "getPath 失败:", name, err);
+    console.warn(LOG_PREFIX, "getPath failed:", name, err);
     return "";
   }
 }
@@ -53,7 +53,7 @@ function safeGetPath(name: "desktop" | "documents" | "downloads" | "home"): stri
 function formatDate(d: Date, tz: string): string {
   let parts: Intl.DateTimeFormatPart[];
   try {
-    parts = new Intl.DateTimeFormat("zh-CN", {
+    parts = new Intl.DateTimeFormat("en-US", {
       timeZone: tz,
       year: "numeric",
       month: "2-digit",
@@ -64,11 +64,11 @@ function formatDate(d: Date, tz: string): string {
       hourCycle: "h23",
     }).formatToParts(d);
   } catch (err) {
-    console.warn(LOG_PREFIX, "formatToParts 失败，回退系统本地时间:", err);
+    console.warn(LOG_PREFIX, "formatToParts failed; using system-local time:", err);
     const yyyy = d.getFullYear();
     const mm = String(d.getMonth() + 1).padStart(2, "0");
     const dd = String(d.getDate()).padStart(2, "0");
-    const week = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"][d.getDay()];
+    const week = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d.getDay()];
     const hh = String(d.getHours()).padStart(2, "0");
     const min = String(d.getMinutes()).padStart(2, "0");
     return `${yyyy}-${mm}-${dd} ${week} ${hh}:${min}`;
@@ -83,11 +83,8 @@ function formatDate(d: Date, tz: string): string {
   const weekdayRaw = get("weekday");
   // zh-CN short weekday 形如"周一"；其它 locale 兜底按 d.getUTCDay() 映射
   // （注意：getUTCDay 对 tz 不是 tz 本地日，下方回退仅在 Intl 异常路径使用）。
-  const weekMap = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
-  const week =
-    weekdayRaw && /[周星期]/.test(weekdayRaw)
-      ? weekdayRaw
-      : weekMap[d.getDay()];
+  const weekMap = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const week = weekdayRaw || weekMap[d.getDay()];
   const hh = get("hour");
   const min = get("minute");
   return `${yyyy}-${mm}-${dd} ${week} ${hh}:${min}`;
@@ -139,38 +136,38 @@ export function buildEnvironmentContext(modelInfo?: ModelInfo, userInfo?: UserIn
   }
 
   // MCP server 状态
-  let mcpLine = "未连接任何 MCP server";
+  let mcpLine = "No MCP servers connected";
   try {
     const servers = listMcpServers();
     if (servers.length > 0) {
       mcpLine = servers
-        .map((s) => `${s.name}[${s.connected ? "已连接" : "未连接"}, ${s.toolCount} 工具]`)
+        .map((s) => `${s.name}[${s.connected ? "connected" : "disconnected"}, ${s.toolCount} tools]`)
         .join(", ");
     }
   } catch (err) {
-    console.warn(LOG_PREFIX, "列 MCP server 失败:", err);
+    console.warn(LOG_PREFIX, "Failed to list MCP servers:", err);
   }
 
   const lines: string[] = [];
-  lines.push("## 运行环境（机器实际状态，不要再凭印象猜）");
+  lines.push("## Runtime environment (actual machine state; do not guess)");
   lines.push("");
-  lines.push(`- 当前时间：${dateStr}（时区 ${tz}）`);
-  lines.push(`- 操作系统：${platformLabel()}`);
-  lines.push(`- 当前用户名：${username}`);
-  if (home) lines.push(`- 用户主目录：${home}`);
-  if (desktop) lines.push(`- 桌面路径：${desktop}`);
-  if (documents) lines.push(`- 文档路径：${documents}`);
-  if (downloads) lines.push(`- 下载路径：${downloads}`);
+  lines.push(`- Current time: ${dateStr} (time zone ${tz})`);
+  lines.push(`- Operating system: ${platformLabel()}`);
+  lines.push(`- Current username: ${username}`);
+  if (home) lines.push(`- Home directory: ${home}`);
+  if (desktop) lines.push(`- Desktop path: ${desktop}`);
+  if (documents) lines.push(`- Documents path: ${documents}`);
+  if (downloads) lines.push(`- Downloads path: ${downloads}`);
   lines.push("");
-  lines.push(`- 文件权限档位：${levelLabel}（${level}）`);
-  lines.push(`- 当前档位下可直接调用的工具：${allowedTools.length > 0 ? allowedTools.join(", ") : "（无）"}`);
+  lines.push(`- File permission level: ${levelLabel} (${level})`);
+  lines.push(`- Tools allowed without approval: ${allowedTools.length > 0 ? allowedTools.join(", ") : "(none)"}`);
   if (askTools.length > 0) {
-    lines.push(`- 当前档位需先弹审批的工具：${askTools.join(", ")}`);
+    lines.push(`- Tools requiring approval: ${askTools.join(", ")}`);
   }
   if (deniedTools.length > 0) {
-    lines.push(`- 当前档位被拒绝的工具（提到也调不出）：${deniedTools.join(", ")}`);
+    lines.push(`- Tools denied at this permission level: ${deniedTools.join(", ")}`);
   }
-  lines.push(`- MCP 服务：${mcpLine}`);
+  lines.push(`- MCP services: ${mcpLine}`);
   lines.push("");
 
   // 模型能力边界：把"你当前这个模型能不能看图"作为事实告诉模型，
@@ -181,42 +178,42 @@ export function buildEnvironmentContext(modelInfo?: ModelInfo, userInfo?: UserIn
     const cap = getCapability(modelInfo.provider);
     supportsVision = cap?.supportsVision ?? false;
   }
-  lines.push(`- 当前模型是否支持查看图片：${supportsVision ? "支持（可调 read_image 看图）" : "不支持（看不了图片，遇到图片问题必须如实说明，不许编造图片内容）"}`);
+  lines.push(`- Current model image support: ${supportsVision ? "supported (use read_image)" : "unsupported (state this honestly and never invent image content)"}`);
   lines.push("");
 
   // 用户信息：昵称、称呼偏好、生日、默认城市等。让模型知道"在和谁说话、用户在哪"，
   // 避免每次问天气/位置都要反问用户。默认城市尤其重要——天气工具会用到。
   if (userInfo) {
-    lines.push("## 用户信息");
+    lines.push("## User information");
     lines.push("");
     if (userInfo.callPreference) {
-      lines.push(`- 称呼偏好：${userInfo.callPreference}（称呼用户时优先用这个）`);
+      lines.push(`- Preferred form of address: ${userInfo.callPreference}`);
     } else if (userInfo.nickname) {
-      lines.push(`- 昵称：${userInfo.nickname}（称呼用户时用这个）`);
+      lines.push(`- Nickname: ${userInfo.nickname}`);
     }
-    if (userInfo.birthday) lines.push(`- 生日：${userInfo.birthday}`);
-    if (userInfo.defaultCity) lines.push(`- 默认城市：${userInfo.defaultCity}（用户问天气/位置且没指定其他城市时，默认用这个）`);
-    if (userInfo.gender === "male") lines.push(`- 性别：男`);
-    else if (userInfo.gender === "female") lines.push(`- 性别：女`);
+    if (userInfo.birthday) lines.push(`- Birthday: ${userInfo.birthday}`);
+    if (userInfo.defaultCity) lines.push(`- Default city: ${userInfo.defaultCity} (use for weather or location requests when no other city is specified)`);
+    if (userInfo.gender === "male") lines.push("- Gender: male");
+    else if (userInfo.gender === "female") lines.push("- Gender: female");
     const preferredAddress = userInfo.callPreference?.trim() || userInfo.nickname?.trim();
     if (preferredAddress) {
-      lines.push(`- 称呼使用：在重要提问或确认时，可以自然使用一次「${preferredAddress}」；不要每句话重复称呼。`);
+      lines.push(`- Address usage: use "${preferredAddress}" naturally for an important question or confirmation, but not in every sentence.`);
     }
     if (userInfo.gender === "male") {
-      lines.push("- 性别约束：不得使用女性指向称呼；性别只用于防止误称，不要求主动提及。");
+      lines.push("- Gender constraint: do not use feminine forms of address. Gender is only for avoiding misgendering; do not mention it proactively.");
     } else if (userInfo.gender === "female") {
-      lines.push("- 性别约束：不得使用男性指向称呼；性别只用于防止误称，不要求主动提及。");
+      lines.push("- Gender constraint: do not use masculine forms of address. Gender is only for avoiding misgendering; do not mention it proactively.");
     } else {
-      lines.push("- 性别约束：性别未知或保密时只使用中性称呼，不得根据昵称、头像或语气推断。");
+      lines.push("- Gender constraint: when gender is unknown or private, use neutral address and never infer it from a nickname, avatar, or tone.");
     }
     lines.push("");
     // 时区≠地点：明确告知模型 timezone 与 defaultCity 是两个独立维度，不得交叉推断。
-    lines.push("> 用户时区仅用于时间计算，不代表用户所在地，不得根据时区推断用户所在城市。默认城市仅用于天气等需要定位的工具。");
+    lines.push("> The user's time zone is only for time calculations and does not reveal their location. Never infer a city from it. Use the default city only for tools that need a location, such as weather.");
     lines.push("");
   }
 
   lines.push(
-    "当用户提到「桌面 / 文档 / 下载」却没给绝对路径时，使用上面这些真实路径拼接，再交给文件类工具；不要写 `~/Desktop` 或硬编码盘符。",
+    "When the user mentions Desktop, Documents, or Downloads without an absolute path, resolve it from the real paths above before using file tools. Do not use `~/Desktop` or a hard-coded drive letter.",
   );
 
   const text = lines.join("\n");
@@ -228,7 +225,7 @@ export function buildEnvironmentContext(modelInfo?: ModelInfo, userInfo?: UserIn
     `allowed=${allowedTools.length}`,
     `ask=${askTools.length}`,
     `deny=${deniedTools.length}`,
-    `mcp=${mcpLine.startsWith("未连接") ? "none" : "active"}`,
+    `mcp=${mcpLine.startsWith("No MCP") ? "none" : "active"}`,
     `vision=${supportsVision}`,
   );
 

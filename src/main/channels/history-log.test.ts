@@ -1,12 +1,16 @@
 // channels/history-log 单元测试
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterAll, vi } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 
 // Mock electron
-const HISTORY_TMP = path.join(os.tmpdir(), "cyrene-history-test");
+const HISTORY_TMP = fs.mkdtempSync(path.join(os.tmpdir(), `cyrene-history-test-${process.pid}-`));
 fs.mkdirSync(HISTORY_TMP, { recursive: true });
+
+afterAll(() => {
+  fs.rmSync(HISTORY_TMP, { recursive: true, force: true });
+});
 
 vi.mock("electron", () => ({
   app: {

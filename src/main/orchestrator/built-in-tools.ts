@@ -65,7 +65,7 @@ function stripHtml(html: string): string {
 async function executeFetchUrl(args: Record<string, unknown>): Promise<string> {
   const url = String(args.url || "").trim();
   if (!/^https?:\/\//i.test(url)) {
-    return "[错误] url 必须以 http:// 或 https:// 开头";
+    return "[Error] URL must start with http:// or https://.";
   }
   const asMarkdown = args.format === "markdown" || args.format === undefined;
   console.log(LOG_PREFIX, "fetch_url:", url, "format=" + (asMarkdown ? "markdown" : "raw"));
@@ -82,7 +82,7 @@ async function executeFetchUrl(args: Record<string, unknown>): Promise<string> {
       redirect: "follow",
     });
     if (!resp.ok) {
-      return "[错误] HTTP " + resp.status + " " + resp.statusText;
+      return "[Error] HTTP " + resp.status + " " + resp.statusText;
     }
     const ctype = resp.headers.get("content-type") || "";
     const buf = await resp.arrayBuffer();
@@ -92,11 +92,11 @@ async function executeFetchUrl(args: Record<string, unknown>): Promise<string> {
     if (asMarkdown && /text\/html|application\/xhtml/i.test(ctype)) {
       text = stripHtml(text);
     }
-    const meta = "URL: " + url + "\nContent-Type: " + ctype + (truncated ? "\n[已截断到 " + FETCH_MAX_BYTES + " 字节]" : "") + "\n\n";
+    const meta = "URL: " + url + "\nContent-Type: " + ctype + (truncated ? "\n[Truncated to " + FETCH_MAX_BYTES + " bytes]" : "") + "\n\n";
     return meta + text;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    return "[错误] fetch 失败: " + msg;
+    return "[Error] Fetch failed: " + msg;
   } finally {
     clearTimeout(timer);
   }
@@ -104,27 +104,19 @@ async function executeFetchUrl(args: Record<string, unknown>): Promise<string> {
 
 toolRegistry.register({
   id: "fetch_url",
-  name: "读取网页",
+  name: "Fetch URL",
   description:
-    "下载指定 URL 的网页内容并返回正文。HTML 会用 turndown 转成结构化 markdown" +
-    "（保留标题/列表/代码块/表格），便于阅读。\n\n" +
-    "何时用：\n" +
-    "- 用户给了明确的网址（https://...），想看内容\n" +
-    "- 用户说'看看这个链接''读一下这个网页'\n" +
-    "- 需要读 GitHub README、MCP 安装文档、API 文档等具体页面\n" +
-    "- web_search 之后拿到链接，想看具体内容\n\n" +
-    "不要用于：\n" +
-    "- 用户只给关键词没给网址 → 用 web_search\n" +
-    "- 用户问'今天有什么新闻' → 用 web_search\n" +
-    "- 本地文件路径 → 用 read_file\n\n" +
-    "参数：url (必填，完整 http(s) 地址)，format (可选 markdown|raw，默认 markdown)。",
+    "Downloads a URL and returns its content. HTML is converted to structured Markdown while preserving headings, lists, code blocks, and tables.\n\n" +
+    "Use when the user provides a specific URL, asks to read a link, needs a GitHub README or API document, or when a web search result needs closer inspection.\n" +
+    "Do not use for keyword-only searches (use web_search), local files (use read_file), or general current-news questions (use web_search).\n\n" +
+    "Parameters: url (required full HTTP(S) URL), format (optional markdown|raw; default markdown).",
   enabled: true,
   risk: "network",
   inputSchema: {
     type: "object",
     properties: {
-      url: { type: "string", description: "要拉取的完整 URL（必须包含 https:// 或 http://）" },
-      format: { type: "string", description: "markdown=自动清洗 HTML 为纯文本（默认）；raw=原文不处理" },
+      url: { type: "string", description: "Full URL to fetch; must start with https:// or http://." },
+      format: { type: "string", description: "markdown converts HTML to readable Markdown (default); raw returns the original response." },
     },
     required: ["url"],
   },
@@ -196,7 +188,7 @@ function runShellOnce(command: string, args: string[], cwd?: string): Promise<Sh
     let stderr = "";
     let truncated = false;
     const timeoutTimer = setTimeout(() => {
-      console.warn(LOG_PREFIX, "run_shell 超时，kill 进程树:", command);
+      console.warn(LOG_PREFIX, "run_shell timed out; terminating process tree:", command);
       killTree(child);
     }, SHELL_TIMEOUT_MS);
 
@@ -243,11 +235,11 @@ async function executeRunShell(args: Record<string, unknown>): Promise<string> {
   // 容错：模型常把 args 当字符串传（如 "--version"），normalizeArgs 会自动拆成 argv 数组
   const cmdArgs = normalizeArgs(args.args);
   const cwd = args.cwd ? String(args.cwd) : undefined;
-  if (!cmd) return "[错误] command 不能为空";
+  if (!cmd) return "[Error] command cannot be empty.";
 
   console.log(LOG_PREFIX, "run_shell:", cmd, JSON.stringify(cmdArgs), cwd ? "cwd=" + cwd : "");
   const result = await runShellOnce(cmd, cmdArgs, cwd);
-  console.log(LOG_PREFIX, "run_shell 完成 exitCode=" + result.exitCode + " stdout.len=" + result.stdout.length + " stderr.len=" + result.stderr.length);
+  console.log(LOG_PREFIX, "run_shell completed exitCode=" + result.exitCode + " stdout.len=" + result.stdout.length + " stderr.len=" + result.stderr.length);
 
   const lines: string[] = [];
   lines.push("$ " + cmd + (cmdArgs.length ? " " + cmdArgs.join(" ") : ""));
@@ -255,35 +247,25 @@ async function executeRunShell(args: Record<string, unknown>): Promise<string> {
   lines.push("exitCode: " + result.exitCode);
   if (result.stdout) lines.push("--- stdout ---\n" + result.stdout.trimEnd());
   if (result.stderr) lines.push("--- stderr ---\n" + result.stderr.trimEnd());
-  if (result.truncated) lines.push("[输出已截断]");
+  if (result.truncated) lines.push("[Output truncated]");
   return lines.join("\n");
 }
 
 toolRegistry.register({
   id: "run_shell",
-  name: "执行命令",
+  name: "Run command",
   description:
-    "在用户电脑上执行一条命令（不通过 shell，按 argv 数组传参）。返回 exitCode + stdout + stderr。\n\n" +
-    "何时用：\n" +
-    "- git clone / git status / git log 等版本控制操作\n" +
-    "- npm install / npm run / pip install / node xxx.js 等开发操作\n" +
-    "- node --version / python --version 等查环境\n" +
-    "- 用户明确要求'跑一下这条命令'\n\n" +
-    "不要用于：\n" +
-    "- 读文件 → read_file（更安全）\n" +
-    "- 列目录 → list_dir\n" +
-    "- 下载网页 → fetch_url\n" +
-    "- 能用专用工具完成的事\n\n" +
-    "高风险：会真实修改用户系统。危险命令需用户在权限档位授权或单次同意。" +
-    "参数：command (可执行文件名或绝对路径)，args (字符串数组)，cwd (可选工作目录)。",
+    "Runs a command directly on the user's computer without a shell and returns exitCode, stdout, and stderr. Use for Git, package-manager, development, and environment-inspection commands, or when the user explicitly asks to run a command.\n\n" +
+    "Do not use to read files, list directories, fetch URLs, or perform work covered by a safer dedicated tool.\n\n" +
+    "High risk: commands can modify the user's system and may require permission. Parameters: command, args as an argv array, and optional cwd.",
   enabled: true,
   risk: "shell",
   inputSchema: {
     type: "object",
     properties: {
-      command: { type: "string", description: "可执行文件名（如 'git'、'npm'）或绝对路径" },
-      args: { type: "array", description: "命令行参数，按 argv 数组形式给，例如 ['clone', 'https://...']" },
-      cwd: { type: "string", description: "工作目录绝对路径，可选" },
+      command: { type: "string", description: "Executable name such as git or npm, or an absolute executable path." },
+      args: { type: "array", description: "Command-line arguments as an argv array, for example ['clone', 'https://...']." },
+      cwd: { type: "string", description: "Optional absolute working-directory path." },
     },
     required: ["command"],
   },
@@ -298,7 +280,7 @@ async function executeInstallMcp(args: Record<string, unknown>): Promise<string>
   const id = (String(args.id || "").trim()) || ("mcp-" + Date.now());
   const name = String(args.name || "").trim() || id;
   const command = String(args.command || "").trim();
-  if (!command) return "[错误] command 不能为空";
+  if (!command) return "[Error] command cannot be empty.";
 
   const cmdArgs = Array.isArray(args.args) ? (args.args as unknown[]).map((x) => String(x)) : [];
   let env: Record<string, string> | undefined;
@@ -325,48 +307,41 @@ async function executeInstallMcp(args: Record<string, unknown>): Promise<string>
       cwd,
     });
     if (!result.ok) {
-      return "[错误] 安装失败: " + (result.error || "未知错误");
+      return "[Error] Installation failed: " + (result.error || "Unknown error");
     }
     const tools = result.toolIds || [];
     return (
-      "✅ MCP server \"" + name + "\" 已连接\n" +
+      "✅ MCP server \"" + name + "\" connected\n" +
       "id: " + id + "\n" +
       "command: " + command + (cmdArgs.length ? " " + cmdArgs.join(" ") : "") + "\n" +
-      "发现 " + tools.length + " 个工具" + (tools.length ? "：\n  - " + tools.join("\n  - ") : "") + "\n" +
-      "你现在可以让我用这些工具帮你做事。"
+      "Discovered " + tools.length + " tool(s)" + (tools.length ? ":\n  - " + tools.join("\n  - ") : "") + "\n" +
+      "These tools are now available for use."
     );
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    return "[错误] 安装异常: " + msg;
+    return "[Error] Installation error: " + msg;
   }
 }
 
 toolRegistry.register({
   id: "install_mcp_server",
-  name: "安装 MCP",
+  name: "Install MCP server",
   description:
-    "把一个 MCP server 加到昔涟的工具盘里：写入配置 → 启动 → 发现工具。\n\n" +
-    "何时用：\n" +
-    "- 用户明确要装某个 MCP server（'帮我装 xxx mcp'）\n" +
-    "- 用户给了 MCP 的 GitHub 仓库或配置\n\n" +
-    "推荐流程：先用 fetch_url 读 README，找到 mcpServers 配置块" +
-    "（command/args/env），再用本工具一次性安装。\n\n" +
-    "不要用于：\n" +
-    "- 日常工具调用（已注册的工具直接用）\n" +
-    "- 系统软件安装（那是 run_shell 的活）\n\n" +
-    "参数：id (可选，唯一标识，留空则用时间戳)，name (展示名)，command (可执行命令)，" +
-    "args (字符串数组)，env (键值对，环境变量)，cwd (可选工作目录)。",
+    "Adds an MCP server to Cyrene's tool registry by saving its configuration, starting it, and discovering its tools.\n\n" +
+    "Use when the user explicitly asks to install an MCP server or supplies its repository/configuration. Read its README with fetch_url first, then pass the documented command, args, and env here.\n" +
+    "Do not use for routine tool calls or general system-software installation.\n\n" +
+    "Parameters: optional id, display name, executable command, args array, environment variables, and optional cwd.",
   enabled: true,
   risk: "fs-write",
   inputSchema: {
     type: "object",
     properties: {
-      id: { type: "string", description: "唯一标识，留空则自动生成" },
-      name: { type: "string", description: "展示名，比如 'mail-mcp'" },
-      command: { type: "string", description: "可执行命令，例如 'node' / 'pythonw' / 'npx'" },
-      args: { type: "array", description: "命令行参数数组，例如 ['C:/.../bridging_mail_mcp.py']" },
-      env: { type: "object", description: "环境变量键值对" },
-      cwd: { type: "string", description: "工作目录绝对路径，可选" },
+      id: { type: "string", description: "Unique identifier; generated automatically when omitted." },
+      name: { type: "string", description: "Display name, for example mail-mcp." },
+      command: { type: "string", description: "Executable command such as node, pythonw, or npx." },
+      args: { type: "array", description: "Command-line argument array." },
+      env: { type: "object", description: "Environment-variable key-value pairs." },
+      cwd: { type: "string", description: "Optional absolute working-directory path." },
     },
     required: ["command"],
   },
@@ -457,22 +432,42 @@ function weatherIconFromText(text: string): string {
   return "🌤️";
 }
 
+/** Translate Amap's Chinese weather payload while retaining its raw-input compatibility. */
+function translateAmapWeatherText(text: string): string {
+  const exact: Record<string, string> = {
+    "晴": "Clear", "少云": "Mostly clear", "晴间多云": "Mostly clear", "多云": "Cloudy", "阴": "Overcast",
+    "阵雨": "Rain showers", "雷阵雨": "Thunderstorms", "小雨": "Light rain", "中雨": "Rain",
+    "大雨": "Heavy rain", "暴雨": "Torrential rain", "小雪": "Light snow", "中雪": "Snow",
+    "大雪": "Heavy snow", "暴雪": "Blizzard", "雾": "Fog", "霾": "Haze", "雨夹雪": "Sleet",
+  };
+  return exact[text.trim()] ?? "Unknown";
+}
+
+function translateAmapWindDirection(text: string): string {
+  const exact: Record<string, string> = {
+    "无风向": "Variable", "北": "N", "东北": "NE", "东": "E", "东南": "SE",
+    "南": "S", "西南": "SW", "西": "W", "西北": "NW",
+  };
+  const normalized = text.replace(/风$/, "").trim();
+  return exact[normalized] ?? "Variable";
+}
+
 /** AQI → 等级文字 + 颜文字。 */
 function aqiKaomoji(aqi: number): { text: string; kaomoji: string } {
-  if (aqi <= 50) return { text: "优", kaomoji: "(◕‿◕)" };
-  if (aqi <= 100) return { text: "良", kaomoji: "(´ー`)" };
-  if (aqi <= 150) return { text: "轻度污染", kaomoji: "(´-ω-`)" };
-  if (aqi <= 200) return { text: "中度污染", kaomoji: "(；´д`)" };
-  return { text: "重度污染", kaomoji: "(╥﹏╥)" };
+  if (aqi <= 50) return { text: "Good", kaomoji: "(◕‿◕)" };
+  if (aqi <= 100) return { text: "Moderate", kaomoji: "(´ー`)" };
+  if (aqi <= 150) return { text: "Unhealthy for sensitive groups", kaomoji: "(´-ω-`)" };
+  if (aqi <= 200) return { text: "Unhealthy", kaomoji: "(；´д`)" };
+  return { text: "Very unhealthy", kaomoji: "(╥﹏╥)" };
 }
 
 /** 紫外线指数 → 文字。 */
 function uvText(uv: number): string {
-  if (uv <= 2) return "弱";
-  if (uv <= 5) return "中等";
-  if (uv <= 7) return "强";
-  if (uv <= 10) return "很强";
-  return "极强";
+  if (uv <= 2) return "Low";
+  if (uv <= 5) return "Moderate";
+  if (uv <= 7) return "High";
+  if (uv <= 10) return "Very high";
+  return "Extreme";
 }
 
 /**
@@ -519,7 +514,7 @@ async function omResolveCity(city: string): Promise<OMCity | null> {
 async function omFetchWeather(city: string): Promise<string> {
   const loc = await omResolveCity(city);
   if (!loc) {
-    return `[错误] 找不到城市"${city}"，请确认城市名（支持中文/拼音）。`;
+    return `[Error] City "${city}" was not found. Check the city name; Chinese names and pinyin are supported.`;
   }
   const currentParams = [
     "temperature_2m", "relative_humidity_2m", "apparent_temperature",
@@ -532,7 +527,7 @@ async function omFetchWeather(city: string): Promise<string> {
   const timer = setTimeout(() => ctrl.abort(), WEATHER_TIMEOUT_MS);
   try {
     const resp = await fetch(url, { signal: ctrl.signal });
-    if (!resp.ok) return `[错误] 天气查询失败：HTTP ${resp.status}`;
+    if (!resp.ok) return `[Error] Weather lookup failed: HTTP ${resp.status}`;
     const data = await resp.json() as {
       current?: {
         temperature_2m: number; relative_humidity_2m: number; apparent_temperature: number;
@@ -550,14 +545,14 @@ async function omFetchWeather(city: string): Promise<string> {
       };
     };
     const c = data.current;
-    if (!c) return "[错误] 天气查询失败：Open-Meteo 未返回数据";
+    if (!c) return "[Error] Weather lookup failed: Open-Meteo returned no data.";
     const wmoText = omWeatherCodeText(c.weather_code);
     const windDir = omWindDir(c.wind_direction_10m);
     const adm = loc.admin1 ? `${loc.admin1}` : loc.country;
     const icon = weatherIconFromCode(c.weather_code);
 
     // 解析 3 天预报（今天 + 未来 2 天）
-    const weekNames = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+    const weekNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
     const forecast: WeatherForecastDay[] = [];
     if (data.daily?.time) {
       const d = data.daily;
@@ -565,8 +560,8 @@ async function omFetchWeather(city: string): Promise<string> {
       for (let i = 0; i < count; i++) {
         const dt = new Date(d.time[i] + "T00:00:00");
         forecast.push({
-          date: `${dt.getMonth() + 1}月${dt.getDate()}日`,
-          weekDay: i === 0 ? "今天" : weekNames[dt.getDay()],
+          date: `${dt.getMonth() + 1}/${dt.getDate()}`,
+          weekDay: i === 0 ? "Today" : weekNames[dt.getDay()],
           textDay: omWeatherCodeText(d.weather_code[i]),
           textNight: omWeatherCodeText(d.weather_code[i]),
           hi: Math.round(d.temperature_2m_max[i]),
@@ -591,7 +586,7 @@ async function omFetchWeather(city: string): Promise<string> {
       uv: c.uv_index,
       visibility: Math.round(c.visibility / 1000), // m → km
       source: "Open-Meteo",
-      updateTime: new Date().toLocaleString("zh-CN", { hour: "2-digit", minute: "2-digit", timeZone: currentUserTimezone() }),
+      updateTime: new Date().toLocaleString("en-GB", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: currentUserTimezone() }),
     };
 
     // 发送天气卡片数据给渲染端
@@ -611,7 +606,7 @@ async function omFetchWeather(city: string): Promise<string> {
     return JSON.stringify(weatherData);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    return "[错误] 天气查询失败：" + msg;
+    return "[Error] Weather lookup failed: " + msg;
   } finally {
     clearTimeout(timer);
   }
@@ -620,25 +615,25 @@ async function omFetchWeather(city: string): Promise<string> {
 /** WMO 天气代码 → 中文描述（Open-Meteo 用 WMO 标准代码）。 */
 function omWeatherCodeText(code: number): string {
   const map: Record<number, string> = {
-    0: "晴", 1: "晴间多云", 2: "多云", 3: "阴",
-    45: "雾", 48: "雾凇",
-    51: "小雨", 53: "中雨", 55: "大雨",
-    56: "冻雨", 57: "强冻雨",
-    61: "小雨", 63: "中雨", 65: "大雨",
-    66: "冻雨", 67: "强冻雨",
-    71: "小雪", 73: "中雪", 75: "大雪",
-    77: "雪粒",
-    80: "阵雨", 81: "强阵雨", 82: "暴雨",
-    85: "阵雪", 86: "强阵雪",
-    95: "雷暴", 96: "雷暴伴冰雹", 99: "强雷暴伴冰雹",
+    0: "Clear", 1: "Mostly clear", 2: "Partly cloudy", 3: "Overcast",
+    45: "Fog", 48: "Rime fog",
+    51: "Light drizzle", 53: "Drizzle", 55: "Heavy drizzle",
+    56: "Freezing drizzle", 57: "Heavy freezing drizzle",
+    61: "Light rain", 63: "Rain", 65: "Heavy rain",
+    66: "Freezing rain", 67: "Heavy freezing rain",
+    71: "Light snow", 73: "Snow", 75: "Heavy snow",
+    77: "Snow grains",
+    80: "Rain showers", 81: "Heavy rain showers", 82: "Violent rain showers",
+    85: "Snow showers", 86: "Heavy snow showers",
+    95: "Thunderstorm", 96: "Thunderstorm with hail", 99: "Severe thunderstorm with hail",
   };
-  return map[code] ?? `未知（代码${code}）`;
+  return map[code] ?? `Unknown (code ${code})`;
 }
 
 /** 风向角度 → 中文方位。 */
 function omWindDir(deg: number): string {
-  const dirs = ["北", "东北偏北", "东北", "东北偏东", "东", "东南偏东", "东南", "东南偏南",
-    "南", "西南偏南", "西南", "西南偏西", "西", "西北偏西", "西北", "西北偏北"];
+  const dirs = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
+    "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
   return dirs[Math.round(deg / 22.5) % 16];
 }
 
@@ -668,7 +663,7 @@ async function amapResolveAdcode(city: string, key: string): Promise<AmapDistric
 async function amapFetchWeather(city: string, key: string): Promise<string> {
   const district = await amapResolveAdcode(city, key);
   if (!district) {
-    return `[错误] 找不到城市"${city}"，请确认城市名（支持中文，如"无锡"）。`;
+    return `[Error] City "${city}" was not found. Check the city name; Chinese city names are supported.`;
   }
 
   // 并行请求实况 + 预报
@@ -682,13 +677,13 @@ async function amapFetchWeather(city: string, key: string): Promise<string> {
     ]);
 
     // 解析实况
-    if (!baseResp.ok) return `[错误] 天气查询失败：HTTP ${baseResp.status}`;
+    if (!baseResp.ok) return `[Error] Weather lookup failed: HTTP ${baseResp.status}`;
     const baseData = await baseResp.json() as { status?: string; lives?: Array<{
       province: string; city: string; weather: string; temperature: string;
       winddirection: string; windpower: string; humidity: string; reporttime: string;
     }> };
     if (baseData.status !== "1" || !baseData.lives || baseData.lives.length === 0) {
-      return `[错误] 天气查询失败：高德返回 status=${baseData.status ?? "?"}`;
+      return `[Error] Weather lookup failed: Amap returned status=${baseData.status ?? "?"}.`;
     }
     const w = baseData.lives[0];
     const icon = weatherIconFromText(w.weather);
@@ -705,19 +700,19 @@ async function amapFetchWeather(city: string, key: string): Promise<string> {
         }>;
       }> };
       if (fcData.status === "1" && fcData.forecasts?.[0]?.casts) {
-        const weekMap: Record<string, string> = { "1": "周一", "2": "周二", "3": "周三", "4": "周四", "5": "周五", "6": "周六", "7": "周日" };
+        const weekMap: Record<string, string> = { "1": "Monday", "2": "Tuesday", "3": "Wednesday", "4": "Thursday", "5": "Friday", "6": "Saturday", "7": "Sunday" };
         const today = new Date().toISOString().slice(0, 10);
         for (const c of fcData.forecasts[0].casts) {
           const dt = new Date(c.date + "T00:00:00");
           forecast.push({
-            date: `${dt.getMonth() + 1}月${dt.getDate()}日`,
-            weekDay: c.date === today ? "今天" : (weekMap[c.week] ?? `周${c.week}`),
-            textDay: c.dayweather,
-            textNight: c.nightweather,
+            date: `${dt.getMonth() + 1}/${dt.getDate()}`,
+            weekDay: c.date === today ? "Today" : (weekMap[c.week] ?? `Day ${c.week}`),
+            textDay: translateAmapWeatherText(c.dayweather),
+            textNight: translateAmapWeatherText(c.nightweather),
             hi: Number(c.daytemp),
             lo: Number(c.nighttemp),
-            windDir: c.daywind,
-            windScale: `${c.daypower}级`,
+            windDir: translateAmapWindDirection(c.daywind),
+            windScale: `Force ${c.daypower}`,
           });
         }
       }
@@ -726,12 +721,12 @@ async function amapFetchWeather(city: string, key: string): Promise<string> {
     const weatherData = {
       city: w.city,
       region: w.province,
-      weather: w.weather,
+      weather: translateAmapWeatherText(w.weather),
       temperature: Number(w.temperature),
       humidity: Number(w.humidity),
-      windDirection: w.winddirection,
-      windSpeed: `${w.windpower}级`,
-      source: "高德天气",
+      windDirection: translateAmapWindDirection(w.winddirection),
+      windSpeed: `Force ${w.windpower}`,
+      source: "Amap Weather",
       updateTime: w.reporttime.slice(11, 16) || new Date().toLocaleString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
     };
 
@@ -751,7 +746,7 @@ async function amapFetchWeather(city: string, key: string): Promise<string> {
     return JSON.stringify(weatherData);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    return "[错误] 天气查询失败：" + msg;
+    return "[Error] Weather lookup failed: " + msg;
   } finally {
     clearTimeout(timer);
   }
@@ -782,7 +777,7 @@ async function executeWeather(args: Record<string, unknown>): Promise<string> {
     `[Weather] city resolution: argsCity=${argsCityRaw || "(empty)"} defaultCity=${defaultCityRaw || "(empty)"} final=${city || "(empty)"} source=${source2}`,
   );
   if (!city) {
-    return "[提示] 没有指定城市，也没设置默认城市。请告诉用户：在 设置 → 我的信息 填默认城市，或直接说出要查的城市名。";
+    return "[Notice] No city was provided and no default city is configured. Ask the user to set one under Settings > Profile or provide a city name.";
   }
 
   // 按天气源分支
@@ -792,39 +787,30 @@ async function executeWeather(args: Record<string, unknown>): Promise<string> {
   if (source === "amap") {
     const amapKey = amapKeyGetter?.() ?? "";
     if (!amapKey) {
-      return "[错误] 还没有配置高德天气 Key。请在 设置 → 插件 → 天气查询 填入高德 Key，或切换天气源为 Open-Meteo（免配置）。";
+      return "[Error] No Amap Weather key is configured. Add one under Settings > Plugins > Weather, or switch to Open-Meteo.";
     }
     return amapFetchWeather(city, amapKey);
   }
 
   // 未知天气源
-  return `[错误] 未知的天气源"${source}"。请在 设置 → 插件 → 天气查询 选择 Open-Meteo 或 高德天气。`;
+  return `[Error] Unknown weather source "${source}". Select Open-Meteo or Amap Weather under Settings > Plugins > Weather.`;
 }
 
 toolRegistry.register({
   id: "weather",
-  name: "查天气",
+  name: "Weather",
   description:
-    "查询指定城市的实时天气。返回温度、体感温度、湿度、风速风向、降水、日出日落、AQI、UV 等。\n\n" +
-    "何时用：\n" +
-    "- 用户问'今天天气怎样''外面冷不冷''热不热''要不要带伞''穿什么'\n" +
-    "- 用户提到城市名 + 天气相关词\n" +
-    "- 用户问'周末适合出去玩吗'且涉及天气判断\n\n" +
-    "不要用于：\n" +
-    "- 历史天气（'上周北京天气'）—— 做不到，直接告诉用户\n" +
-    "- 逐小时精确预报\n" +
-    "- 完全跟天气无关的问题\n\n" +
-    "参数：city（可选，城市名中文或拼音；不传则用用户设置的默认城市）。",
+    "Gets current weather for a city, including temperature, apparent temperature, humidity, wind, precipitation, AQI, and UV data. Use for current conditions, clothing or umbrella advice, and short-range outdoor planning. Do not use for historical weather or precise hourly forecasts. The optional city may be supplied in any supported language or pinyin; when omitted, the configured default city is used.",
   enabled: true,
   risk: "network",
   inputSchema: {
     type: "object",
     properties: {
-      city: { type: "string", description: "要查询的城市名（中文或拼音），不传则用用户默认城市" },
+      city: { type: "string", description: "Optional city name in any supported language or pinyin; defaults to the user's configured city." },
     },
     required: [],
   },
-  soulActionLabel: "查询天气",
+  soulActionLabel: "Checking weather",
   soulProjection: {
     projector: "entity_detail",
     source: "trusted_internal",
@@ -947,7 +933,7 @@ async function bochaSearch(query: string, key: string): Promise<string> {
     return JSON.stringify(output);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    throw new Error(`搜索失败：${msg}`);
+    throw new Error(`Search failed: ${msg}`);
   } finally {
     clearTimeout(timer);
   }
@@ -992,7 +978,70 @@ async function tavilySearch(query: string, key: string): Promise<string> {
     return JSON.stringify(output);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    throw new Error(`搜索失败：${msg}`);
+    throw new Error(`Search failed: ${msg}`);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** DuckDuckGo 免费搜索：无需 API Key，零门槛直连。 */
+async function duckduckgoSearch(query: string): Promise<string> {
+  const url = "https://html.duckduckgo.com/html/";
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), SEARCH_TIMEOUT_MS);
+  try {
+    const resp = await fetch(url, {
+      method: "POST",
+      signal: ctrl.signal,
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: `q=${encodeURIComponent(query)}`,
+    });
+    if (!resp.ok) {
+      throw new Error(`HTTP ${resp.status}`);
+    }
+    const html = await resp.text();
+    const results: WebSearchResult[] = [];
+    const blocks = html.split(/class=["']result\s+results_links/i);
+    for (let i = 1; i < blocks.length; i++) {
+      if (results.length >= 8) break;
+      const block = blocks[i];
+      const titleMatch = block.match(/class=["']result__title["'][\s\S]*?<a[^>]*class=["']result__a["'][^>]*>([\s\S]*?)<\/a>/i);
+      const snippetMatch = block.match(/class=["']result__snippet["'][^>]*>([\s\S]*?)<\/a>/i) || block.match(/class=["']result__snippet["'][^>]*>([\s\S]*?)<\//i);
+      const urlMatch = block.match(/class=["']result__url["'][^>]*href=["']([^"']*)["']/i) || block.match(/class=["']result__a["'][^>]*href=["']([^"']*)["']/i);
+      if (titleMatch) {
+        let title = titleMatch[1].replace(/<[^>]+>/g, "").trim();
+        let snippet = snippetMatch ? snippetMatch[1].replace(/<[^>]+>/g, "").trim() : "";
+        let resultUrl = urlMatch ? urlMatch[1].trim() : "";
+        if (resultUrl.includes("uddg=")) {
+          const match = resultUrl.match(/uddg=([^&]+)/);
+          if (match) resultUrl = decodeURIComponent(match[1]);
+        }
+        if (resultUrl.includes("duckduckgo.com/y.js") || resultUrl.includes("ad_provider=")) {
+          continue;
+        }
+        if (title && resultUrl) {
+          results.push({
+            title,
+            url: resultUrl,
+            snippet: truncateSnippet(snippet),
+            source: "DuckDuckGo",
+          });
+        }
+      }
+    }
+    const output: WebSearchOutput = {
+      success: true,
+      query,
+      resultCount: results.length,
+      results,
+    };
+    return JSON.stringify(output);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(`Search failed: ${msg}`);
   } finally {
     clearTimeout(timer);
   }
@@ -1007,6 +1056,10 @@ async function executeWebSearch(args: Record<string, unknown>): Promise<string> 
   const query = String(args.query ?? "").trim();
   if (!query) {
     throw new Error("E_SEARCH_QUERY_EMPTY");
+  }
+
+  if (engine === "ddg" || engine === "duckduckgo") {
+    return duckduckgoSearch(query);
   }
 
   if (engine === "bocha") {
@@ -1030,28 +1083,19 @@ async function executeWebSearch(args: Record<string, unknown>): Promise<string> 
 
 toolRegistry.register({
   id: "web_search",
-  name: "联网搜索",
+  name: "Web search",
   description:
-    "搜索互联网获取实时信息。返回搜索结果的标题、链接和摘要。\n\n" +
-    "何时用：\n" +
-    "- 用户问'最近有什么新闻''搜一下 xxx 怎么用''xxx 是什么'\n" +
-    "- 用户问的事需要联网才能知道（股价、赛事、最新技术）\n" +
-    "- 用户只给关键词，没给具体网址\n\n" +
-    "不要用于：\n" +
-    "- 用户已经给了明确网址 -> 用 fetch_url\n" +
-    "- 用户问本机文件 -> read_file / list_dir\n" +
-    "- 能凭已有知识直接回答的简单问题\n\n" +
-    "参数：query（必填，搜索关键词）。",
+    "Searches the web for current information and returns result titles, URLs, and snippets. Use for news, prices, events, recent technology, or keyword queries without a specific URL. Use fetch_url when the user already supplied a URL, and use file tools for local files. Parameter: query (required search terms).",
   enabled: true,
   risk: "network",
   inputSchema: {
     type: "object",
     properties: {
-      query: { type: "string", description: "搜索关键词" },
+      query: { type: "string", description: "Search query." },
     },
     required: ["query"],
   },
-  soulActionLabel: "网络搜索",
+  soulActionLabel: "Searching the web",
   soulProjection: {
     projector: "entity_list",
     source: "external_untrusted",
@@ -1065,9 +1109,9 @@ toolRegistry.register({
     maxItems: MAX_PROJECTION_RESULTS,
   },
   soulErrorMessages: {
-    E_SEARCH_NOT_ENABLED: "联网搜索未启用",
-    E_SEARCH_KEY_MISSING: "搜索 API Key 未配置",
-    E_SEARCH_QUERY_EMPTY: "搜索关键词为空",
+    E_SEARCH_NOT_ENABLED: "Web search is disabled.",
+    E_SEARCH_KEY_MISSING: "The search API key is not configured.",
+    E_SEARCH_QUERY_EMPTY: "The search query is empty.",
   },
   completionEvidence: [
     { kind: "tool_succeeded" },
@@ -1083,21 +1127,9 @@ import { setTodos, getTodos, clearTodos, type TodoItem } from "./todo-store";
 
 toolRegistry.register({
   id: "todo_write",
-  name: "任务清单",
+  name: "Task list",
   description:
-    "更新当前任务清单（todo list）。用于把复杂任务拆解成可执行步骤，让用户看到进度。\n" +
-    "【任务规划优先】收到多步任务时，应先调本工具列出步骤，再开始执行（包括在调 ask_user_choice 之前先列清单）。\n\n" +
-    "何时用：\n" +
-    "- 用户给的任务有 2 步以上（'帮我查 X 然后整理成报告'）\n" +
-    "- 用户要求'规划一下''拆解一下''分步骤完成'\n" +
-    "- 你自己判断这个任务需要多轮工具调用才能完成\n\n" +
-    "不要用于：\n" +
-    "- 简单问答（一句话能答完）\n" +
-    "- 纯闲聊\n" +
-    "- 已经在 todo 里的步骤更新（直接整体覆盖即可）\n\n" +
-    "用法：每次调用用完整列表覆盖（不是增量）。status 用 pending/in_progress/completed。\n" +
-    "开始做某一步时把它标 in_progress，做完标 completed。\n" +
-    "完成所有步骤后调一次空列表清空，表示任务结束。",
+    "Replaces the current task list so complex work can be shown as executable steps. For multi-step work, create the list before starting. Each call replaces the entire list; statuses are pending, in_progress, or completed. Mark the active step in_progress, completed steps completed, and send an empty list when the task is finished. Do not use for simple questions or casual conversation.",
   enabled: true,
   risk: "safe",
   inputSchema: {
@@ -1105,14 +1137,14 @@ toolRegistry.register({
     properties: {
       todos: {
         type: "array",
-        description: "任务列表。完整覆盖当前清单。空数组表示清空（任务结束）。",
+        description: "Complete replacement task list. An empty array clears the list when work is finished.",
         items: {
           type: "object",
           properties: {
-            id:       { type: "string", description: "任务唯一标识，如 '1' '2' '3'" },
-            content:  { type: "string", description: "任务描述" },
-            status:   { type: "string", description: "状态：pending(待办) / in_progress(进行中) / completed(已完成)" },
-            priority: { type: "string", description: "可选优先级：high/medium/low" },
+            id:       { type: "string", description: "Unique task identifier, such as 1, 2, or 3." },
+            content:  { type: "string", description: "Task description." },
+            status:   { type: "string", description: "Status: pending, in_progress, or completed." },
+            priority: { type: "string", description: "Optional priority: high, medium, or low." },
           },
         },
       },
@@ -1125,7 +1157,7 @@ toolRegistry.register({
     // 空列表 = 清空（任务结束）
     if (items.length === 0) {
       clearTodos();
-      return "[todo_write] 已清空任务清单（任务结束）";
+      return "[todo_write] Task list cleared; the task is finished.";
     }
 
     const state = setTodos(items);
@@ -1136,11 +1168,11 @@ toolRegistry.register({
       return acc;
     }, {} as Record<string, number>);
 
-    return "[todo_write] 已更新任务清单：共 " + items.length + " 项，" +
-      "进行中 " + (counts.in_progress || 0) + " / " +
-      "已完成 " + (counts.completed || 0) + " / " +
-      "待办 " + (counts.pending || 0) +
-      "。updatedAt=" + state.updatedAt;
+    return "[todo_write] Task list updated: " + items.length + " total; " +
+      "in progress " + (counts.in_progress || 0) + " / " +
+      "completed " + (counts.completed || 0) + " / " +
+      "pending " + (counts.pending || 0) +
+      ". updatedAt=" + state.updatedAt;
   },
 });
 
@@ -1160,50 +1192,40 @@ export { setDelegateSettings };
 // 执行完只返回结构化摘要给主 agent，不被重工具的过程数据（skill 正文、XML 文件等）污染。
 toolRegistry.register({
   id: "delegate_task",
-  name: "委托子任务",
+  name: "Delegate task",
   description:
-    "把一个需要多步工具调用的子任务委托给子代理独立执行。子代理有自己的上下文（不占用主对话空间），" +
-    "执行完返回结构化摘要（状态 + 摘要 + 产出文件 + 关键数据）。\n\n" +
-    "何时用：\n" +
-    "- 任务需要 ≥2 步工具调用且中间结果不需要用户确认\n" +
-    "- 涉及大量中间数据（如读取 skill 文档 + 生成文件），不想让中间内容占用主对话上下文\n" +
-    "- 例：「用 xlsx skill 生成带公式的 Excel」→ 子代理内部读 create.md + format.md + 写 XML，主对话只看到最终摘要\n\n" +
-    "不要用于：\n" +
-    "- 单步操作（直接调对应工具即可）\n" +
-    "- 需要跟用户交互的任务（子代理不能弹卡片）\n" +
-    "- 简单表格生成（直接用 write_excel）\n\n" +
-    "参数：task（子任务的完整描述，子代理会独立理解并执行）。" ,
+    "Delegates a multi-step tool task to an isolated sub-agent and returns a structured summary with status, artifacts, and key facts. Use when at least two tool steps can run without user confirmation or when large intermediate data should stay out of the main conversation. Do not use for single-step work, tasks requiring user interaction, or simple spreadsheet generation. Parameter: task, a complete standalone description.",
   enabled: true,
   risk: "safe",
   hideInPlanMode: true,  // 子代理走旧 FC Loop，避免在 Plan 步骤里降级
   inputSchema: {
     type: "object",
     properties: {
-      task: { type: "string", description: "子任务的完整描述。要足够详细让子代理能独立执行，如「读取 test20.txt 的商品价格，查汇率换算成人民币，用 write_excel 生成深色风格 Excel 存到桌面 test 文件夹」" },
+      task: { type: "string", description: "Complete standalone task description with enough detail for the sub-agent to execute independently." },
     },
     required: ["task"],
   },
   execute: async (args) => {
     const task = String(args.task || "");
-    if (!task) return "[错误] task 不能为空";
+    if (!task) return "[Error] task cannot be empty.";
 
     console.log(LOG_PREFIX, "delegate_task:", task.slice(0, 100));
     const result = await runSubAgent(task);
 
     if (result.status === "success") {
-      let output = `[delegate_task] 子代理执行成功：${result.summary}`;
+      let output = `[delegate_task] Sub-agent completed successfully: ${result.summary}`;
       if (result.artifacts && result.artifacts.length > 0) {
-        output += `\n产出文件：${result.artifacts.join(", ")}`;
+        output += `\nArtifacts: ${result.artifacts.join(", ")}`;
       }
       if (result.key_facts) {
-        output += `\n关键数据：${JSON.stringify(result.key_facts)}`;
+        output += `\nKey facts: ${JSON.stringify(result.key_facts)}`;
       }
       return output;
     }
 
-    let output = `[delegate_task] 子代理执行失败：${result.summary}`;
+    let output = `[delegate_task] Sub-agent failed: ${result.summary}`;
     if (result.recoverable) {
-      output += "\n（可恢复：可尝试换方案或直接用对应工具执行）";
+      output += "\nRecoverable: try a different approach or use the relevant tool directly.";
     }
     return output;
   },
@@ -1214,38 +1236,28 @@ console.log(LOG_PREFIX, "Registered: fetch_url / run_shell / install_mcp_server 
 // ── 工具：ask_user_choice（歧义消解器）─────────────────────
 toolRegistry.register({
   id: "ask_user_choice",
-  name: "询问用户选择",
+  name: "Ask user to choose",
   description:
-    "当用户需求模糊（如「美观」「好看」「专业」「好看一点」）需要明确具体方向时，" +
-    "弹卡片让用户从选项中选择。工具会阻塞等待用户选择后返回结果。\n\n" +
-    "何时用：\n" +
-    "- 用户说「美观」「好看」「专业」但没给具体要求\n" +
-    "- 需要在多个方案间让用户选择\n" +
-    "- 用户的需求有多种合理解读\n\n" +
-    "不要用于：\n" +
-    "- 用户需求已经很明确（直接执行）\n" +
-    "- 用户说「你自己决定」「看着办」（按默认策略执行，不要弹窗）\n\n" +
-    "参数：question（问题文本），options（选项数组，每项含 label/value/description），" +
-    "default（可选，超时时的默认选择值）。",
+    "Shows a choice card when the user's request has multiple reasonable interpretations and waits for a selection. Do not use when the request is already clear or when the user asks you to decide. Parameters: question, 2-5 options containing label/value/optional description, and an optional default value for timeout.",
   enabled: true,
   risk: "safe",
   inputSchema: {
     type: "object",
     properties: {
-      question: { type: "string", description: "要问用户的问题，如「请选择 Excel 风格」" },
+      question: { type: "string", description: "Question to show the user, for example: Choose an Excel style." },
       options: {
         type: "array",
-        description: "选项数组（2-5 个），每项含 label（显示名）/ value（返回值）/ description（说明，可选）",
+        description: "Array of 2-5 options, each with label, value, and an optional description.",
         items: {
           type: "object",
           properties: {
-            label: { type: "string", description: "选项显示名，如「简洁商务」" },
-            value: { type: "string", description: "选项返回值，如「simple-business」" },
-            description: { type: "string", description: "选项说明，如「表头加粗+边框+斑马纹」" },
+            label: { type: "string", description: "User-facing option label." },
+            value: { type: "string", description: "Returned option value, such as simple-business." },
+            description: { type: "string", description: "Optional explanation of the option." },
           },
         },
       },
-      default: { type: "string", description: "可选，超时（120s）时的默认选择值" },
+      default: { type: "string", description: "Optional default value used after the 120-second timeout." },
     },
     required: ["question", "options"],
   },
@@ -1254,25 +1266,25 @@ toolRegistry.register({
     const options = (args.options || []) as ChoiceOption[];
     const defaultValue = args.default ? String(args.default) : undefined;
 
-    if (!question) return "[错误] question 不能为空";
+    if (!question) return "[Error] question cannot be empty.";
     if (!Array.isArray(options) || options.length < 2) {
-      return "[错误] options 至少需要 2 个选项";
+      return "[Error] options must contain at least two choices.";
     }
 
-    console.log(LOG_PREFIX, "ask_user_choice:", question, options.length + " 个选项");
+    console.log(LOG_PREFIX, "ask_user_choice:", question, options.length + " options");
     const userChoice = await requestUserChoice(question, options, defaultValue);
-    console.log(LOG_PREFIX, "用户选择了:", userChoice);
+    console.log(LOG_PREFIX, "User selected:", userChoice);
 
     if (!userChoice) {
-      return "[ask_user_choice] 用户未选择（超时），请按默认方案执行。";
+      return "[ask_user_choice] The user did not select an option before timeout. Continue with the default approach.";
     }
     // 找到用户选的选项，返回 label + value 方便 LLM 理解
     const selected = options.find(o => o.value === userChoice);
     if (selected) {
-      return `[ask_user_choice] 用户选择了：${selected.label}（${userChoice}）。请按此选择执行。`;
+      return `[ask_user_choice] The user selected ${selected.label} (${userChoice}). Continue with this choice.`;
     }
     // 用户自定义输入（value 不在预设选项里）
-    return `[ask_user_choice] 用户自定义输入：${userChoice}。请按此要求执行。`;
+    return `[ask_user_choice] The user provided a custom choice: ${userChoice}. Follow this request.`;
   },
 });
 

@@ -84,7 +84,7 @@ function encryptField(plain: string): string {
       const buf = safeStorage.encryptString(plain);
       return ENC_PREFIX + buf.toString("base64");
     } catch (err) {
-      console.warn("[ChannelsSettings] safeStorage.encryptString 失败, 回退混淆:", err);
+      console.warn("[ChannelsSettings] safeStorage.encryptString failed; using obfuscation fallback:", err);
     }
   }
   return obfuscate(plain);
@@ -97,14 +97,14 @@ function decryptField(stored: string): string {
     if (!isSafeStorageAvailable()) {
       // safeStorage 不可用时 enc: 解不开 —— 这种情况通常意味着首次加密时也没用 safeStorage
       // 兜底：直接 base64 解码（会拿到乱码但不会让用户丢失 secret）
-      console.warn("[ChannelsSettings] safeStorage 不可用, 无法解密 enc: 字段");
+      console.warn("[ChannelsSettings] safeStorage is unavailable; cannot decrypt enc: field");
       return "";
     }
     try {
       const buf = Buffer.from(stored.slice(ENC_PREFIX.length), "base64");
       return safeStorage.decryptString(buf);
     } catch (err) {
-      console.warn("[ChannelsSettings] safeStorage.decryptString 失败:", err);
+      console.warn("[ChannelsSettings] safeStorage.decryptString failed:", err);
       return "";
     }
   }
@@ -112,7 +112,7 @@ function decryptField(stored: string): string {
     try {
       return deobfuscate(stored);
     } catch (err) {
-      console.warn("[ChannelsSettings] deobfuscate 失败:", err);
+      console.warn("[ChannelsSettings] deobfuscation failed:", err);
       return "";
     }
   }

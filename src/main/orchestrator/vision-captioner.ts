@@ -6,6 +6,8 @@
 // 判断全交给视觉模型：不本地判断"具体vs泛泛"，把用户原话+图片一起发，
 // 配框架指令让视觉模型自己理解任务。
 
+import { modelAuthorizationHeaders } from "../../shared/model-endpoint";
+
 /** 视觉模型配置（OpenAI 兼容）。 */
 export interface VisionConfig {
   baseUrl: string;  // 如 https://api.openai.com/v1
@@ -20,6 +22,12 @@ export interface VisionImage {
 }
 
 const VISION_TIMEOUT_MS = 30_000;
+const VISION_ERROR_PREFIX = "[Runtime error]";
+
+/** Recognize current failures and legacy localized failures during migration. */
+export function isVisionCaptionError(value: string): boolean {
+  return value.startsWith(VISION_ERROR_PREFIX) || value.startsWith("[错误");
+}
 
 /**
  * 构造框架指令。判断全交给视觉模型——它本身是语言模型，
@@ -29,14 +37,14 @@ const VISION_TIMEOUT_MS = 30_000;
 function buildInstruction(userQuery: string): string {
   if (userQuery && userQuery.trim()) {
     return (
-      "你是图片分析助手。用户给你一张图，用户的问题如下：\n" +
+      "You are an image-analysis assistant. The user supplied an image and asked:\n" +
       '"' + userQuery + '"\n' +
-      "请基于图片直接回答用户的问题。回答务必简洁，直接针对问题给出结论，不要过度展开无关细节。"
+      "Answer the question directly from the image. Be concise, state the conclusion clearly, and avoid unrelated detail. Reply in the user's language."
     );
   }
   return (
-    "你是图片分析助手。用户给你一张图，但没有提出具体问题。\n" +
-    "请客观描述这张图片：主要物体、场景、可见文字和重要细节，不要无依据猜测。描述控制在 200 字以内。"
+    "You are an image-analysis assistant. The user supplied an image without a specific question.\n" +
+    "Objectively describe its main subjects, scene, visible text, and important details. Do not make unsupported guesses. Keep the description under 200 words and reply in the user's language when it can be inferred."
   );
 }
 
@@ -91,7 +99,7 @@ export async function captionImage(
       signal: controller.signal,
       headers: {
         "Content-Type": "application/json",
-        Authorization: "Bearer " + config.apiKey,
+        ...modelAuthorizationHeaders(config),
       },
       body: JSON.stringify(body),
     });
@@ -99,7 +107,7 @@ export async function captionImage(
     if (!resp.ok) {
       const errText = await resp.text().catch(() => "");
       console.error("[Vision] 请求失败 HTTP " + resp.status, errText.slice(0, 200));
-      return "[错误·运行时] 视觉模型请求失败：HTTP " + resp.status + " " + errText.slice(0, 200);
+      return VISION_ERROR_PREFIX + " Vision model request failed: HTTP " + resp.status + " " + errText.slice(0, 200);
     }
 
     const data = await resp.json() as {
@@ -108,7 +116,7 @@ export async function captionImage(
     const text = data.choices?.[0]?.message?.content ?? "";
     if (!text) {
       console.error("[Vision] 视觉模型未返回有效内容");
-      return "[错误·运行时] 视觉模型未返回有效内容";
+      return VISION_ERROR_PREFIX + " The vision model returned no usable content";
     }
 
     console.log("[Vision] 完成，耗时=" + (Date.now() - startMs) + "ms，返回长度=" + text.length);
@@ -116,11 +124,11 @@ export async function captionImage(
   } catch (err) {
     if (err instanceof Error && err.name === "AbortError") {
       console.error("[Vision] 请求超时");
-      return "[错误·运行时] 视觉模型请求超时";
+      return VISION_ERROR_PREFIX + " The vision model request timed out";
     }
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[Vision] 请求异常:", msg);
-    return "[错误·运行时] 视觉模型请求异常：" + msg;
+    return VISION_ERROR_PREFIX + " Vision model request failed: " + msg;
   } finally {
     clearTimeout(timer);
   }

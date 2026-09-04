@@ -271,7 +271,7 @@ export class OpenAICompatAdapter implements ChatVendorAdapter {
     try {
       const req: ChatRequest = {
         model: cfg.model,
-        messages: [{ role: "user", content: "ping，请只回复两个字符：ok" }],
+        messages: [{ role: "user", content: "Ping. Reply with only: ok" }],
         // 不传 temperature：某些模型（如 Kimi k2.6）只允许特定值，传 0 会报错
         stream: false,
       };
@@ -289,7 +289,7 @@ export class OpenAICompatAdapter implements ChatVendorAdapter {
       }
       const data = await res.json();
       const parsed = this.parseResponse(data);
-      return { ok: true, latency, sample: parsed.text.slice(0, 80) || "(空回复)" };
+      return { ok: true, latency, sample: parsed.text.slice(0, 80) || "(empty response)" };
     } catch (e) {
       return { ok: false, latency: Date.now() - start, error: e instanceof Error ? e.message : String(e) };
     } finally {

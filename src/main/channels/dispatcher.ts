@@ -235,7 +235,7 @@ export class ChannelDispatcher {
    */
   async handleIncoming(msg: IncomingMessage): Promise<OutgoingMessage | null> {
     if (!this.limiter.hit(msg.channel, msg.senderId)) {
-      console.warn(LOG, `限速: ${msg.channel}:${msg.senderId}`);
+      console.warn(LOG, `Rate limited: ${msg.channel}:${msg.senderId}`);
       return null;
     }
 
@@ -256,7 +256,7 @@ export class ChannelDispatcher {
           at: msg.at.getTime(),
         });
       } catch (err) {
-        console.warn(LOG, "broadcastChat (incoming) 失败:", err);
+      console.warn(LOG, "broadcastChat (incoming) failed:", err);
       }
     }
 
@@ -272,14 +272,14 @@ export class ChannelDispatcher {
         hasAttachments: (msg.attachments?.length ?? 0) > 0,
       });
     } catch (err) {
-      console.warn(LOG, "appendLog (incoming) 失败:", err);
+      console.warn(LOG, "appendLog (incoming) failed:", err);
     }
 
     // Phase A2：入站消息落对话历史（下一步 LLM 取的滑窗数据源）
     try {
       appendChannelHistory(sessionId, "user", msg.text);
     } catch (err) {
-      console.warn(LOG, "appendHistory (incoming) 失败:", err);
+      console.warn(LOG, "appendHistory (incoming) failed:", err);
     }
 
     // Phase 1 实装的 agent 调用；Phase 0 没有 → echo
@@ -293,7 +293,7 @@ export class ChannelDispatcher {
         try {
           priorMessages = await this.deps.loadRecentChannelHistory(sessionId, 16);
         } catch (err) {
-          console.warn(LOG, "loadRecentChannelHistory 失败 (继续不带历史):", err);
+      console.warn(LOG, "loadRecentChannelHistory failed; continuing without history:", err);
           priorMessages = undefined;
         }
       }
@@ -302,12 +302,12 @@ export class ChannelDispatcher {
         replyText = result.text;
         sticker = result.sticker;
       } catch (err) {
-        console.error(LOG, "agent 调用失败:", err instanceof Error ? err.message : err);
+      console.error(LOG, "Agent invocation failed:", err instanceof Error ? err.message : err);
         return null;
       }
     } else {
       replyText = `[echo][${msg.channel}][${msg.senderId}] ${msg.text}`;
-      console.log(LOG, "Phase 0 echo (无 buildAndRunAgent):", replyText);
+      console.log(LOG, "Phase 0 echo (buildAndRunAgent unavailable):", replyText);
     }
 
     // 构造 OutgoingMessage parts
@@ -317,14 +317,14 @@ export class ChannelDispatcher {
     const parts: OutgoingPart[] = buildTextOutgoingParts(replyText, mobileMessageSegmentation);
 
     // Phase 3：TTS 音频自动追加（如果启用且适配器支持 audio）
-    console.log(LOG, `TTS 决策: ttsEnabled=${this.settings.ttsEnabled} hasFn=${!!this.deps.synthesizeTts}`);
+        console.log(LOG, `TTS decision: ttsEnabled=${this.settings.ttsEnabled} hasFn=${!!this.deps.synthesizeTts}`);
     const adapterCap = this.deps.manager.getAdapter(msg.channel)?.capability;
-    console.log(LOG, `TTS 决策: adapterCap.audio=${adapterCap?.audio}`);
+        console.log(LOG, `TTS decision: adapterCap.audio=${adapterCap?.audio}`);
     if (shouldAppendChannelTtsAudio(msg.channel, this.settings.ttsEnabled, !!this.deps.synthesizeTts, adapterCap?.audio)) {
       if (this.deps.synthesizeTts) {
         try {
           const audioResult = normalizeTtsResult(await this.deps.synthesizeTts(replyText, { channel: msg.channel }));
-          console.log(LOG, `TTS 决策: 合成结果 length=${audioResult?.audio.length ?? "null"} format=${audioResult?.format ?? "null"}`);
+          console.log(LOG, `TTS result: length=${audioResult?.audio.length ?? "null"} format=${audioResult?.format ?? "null"}`);
           if (audioResult && audioResult.audio.length > 0) {
             // 写到 userData/channels/audio/<messageId>.<ext> 缓存
             const audioDir = path.join(app.getPath("userData"), "channels", "audio");
@@ -333,10 +333,10 @@ export class ChannelDispatcher {
             fs.writeFileSync(audioPath, audioResult.audio);
             console.log(LOG, `TTS verify: written path=${audioPath} ext=${audioResult.extension} mime=${audioResult.mime}`);
             parts.push({ kind: "audio", filePath: audioPath, mime: audioResult.mime });
-            console.log(LOG, `TTS 合成完成: ${audioResult.audio.length} bytes → ${audioPath}`);
+            console.log(LOG, `TTS synthesis completed: ${audioResult.audio.length} bytes -> ${audioPath}`);
           }
         } catch (err) {
-          console.warn(LOG, "TTS 合成失败（跳过音频）:", err instanceof Error ? err.message : err);
+          console.warn(LOG, "TTS synthesis failed; skipping audio:", err instanceof Error ? err.message : err);
         }
       }
     }
@@ -349,9 +349,9 @@ export class ChannelDispatcher {
       const stickerPath = resolveStickerImagePath(sticker);
       if (stickerPath) {
         parts.push({ kind: "sticker", stickerId: sticker, imagePath: stickerPath });
-        console.log(LOG, `sticker 决定: id=${sticker} → ${stickerPath}`);
+          console.log(LOG, `Sticker selected: id=${sticker} -> ${stickerPath}`);
       } else {
-        console.warn(LOG, `sticker 解析失败（跳过）: id=${sticker}`);
+          console.warn(LOG, `Sticker resolution failed; skipping: id=${sticker}`);
       }
     }
 
@@ -368,7 +368,7 @@ export class ChannelDispatcher {
           at: Date.now(),
         });
       } catch (err) {
-        console.warn(LOG, "broadcastChat (outgoing) 失败:", err);
+      console.warn(LOG, "broadcastChat (outgoing) failed:", err);
     }
     }
 
@@ -384,14 +384,14 @@ export class ChannelDispatcher {
         hasAttachments: parts.some((p) => p.kind === "audio"),
       });
     } catch (err) {
-      console.warn(LOG, "appendLog (outgoing) 失败:", err);
+      console.warn(LOG, "appendLog (outgoing) failed:", err);
     }
 
     // Phase A2：出站消息落对话历史（assistant 角色）
     try {
       appendChannelHistory(sessionId, "assistant", replyText);
     } catch (err) {
-      console.warn(LOG, "appendHistory (outgoing) 失败:", err);
+      console.warn(LOG, "appendHistory (outgoing) failed:", err);
     }
 
     // 构造 OutgoingMessage，capability 降级
@@ -413,19 +413,19 @@ export class ChannelDispatcher {
         if (cap.maxTextLength > 0 && p.text.length > cap.maxTextLength) {
           parts.push({
             kind: "text",
-            text: p.text.slice(0, Math.max(0, cap.maxTextLength - 20)) + "\n...(过长已截断)",
+          text: p.text.slice(0, Math.max(0, cap.maxTextLength - 25)) + "\n...(truncated: too long)",
           });
         } else {
           parts.push(p);
         }
       } else if (p.kind === "image" && !cap.image) {
-        parts.push({ kind: "text", text: `[图片] ${p.caption ?? p.url ?? p.filePath ?? ""}` });
+        parts.push({ kind: "text", text: `[Image] ${p.caption ?? p.url ?? p.filePath ?? ""}` });
       } else if (p.kind === "audio" && !cap.audio) {
-        parts.push({ kind: "text", text: `[语音消息 ${p.mime}, 见桌面端]` });
+        parts.push({ kind: "text", text: `[Voice message ${p.mime}; view in the desktop app]` });
       } else if (p.kind === "file" && !cap.file) {
-        parts.push({ kind: "text", text: `[文件] ${p.name ?? p.filePath}` });
+        parts.push({ kind: "text", text: `[File] ${p.name ?? p.filePath}` });
       } else if (p.kind === "video" && !cap.video) {
-        parts.push({ kind: "text", text: `[视频] ${p.name ?? p.filePath}` });
+        parts.push({ kind: "text", text: `[Video] ${p.name ?? p.filePath}` });
       } else if (p.kind === "card" && !cap.card) {
         const lines: string[] = [p.title];
         if (p.markdown) lines.push(p.markdown);

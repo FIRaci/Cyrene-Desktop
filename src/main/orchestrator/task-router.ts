@@ -81,40 +81,40 @@ export function matchSkillByName(
 
 // ── Router LLM 调用 ──────────────────────
 
-const ROUTER_SYSTEM_PROMPT = `你是 Task Router，负责判断当前任务的执行策略。
+const ROUTER_SYSTEM_PROMPT = `You are the Task Router. Determine the execution strategy for the current request.
 
-## 执行模式
-- direct：任务简单或工具链固定，不需要显式计划。Action Gate 会逐步决策。
-- plan：任务需要多个相互依赖的步骤，需要创建正式计划来跟踪进度。
+## Execution modes
+- direct: The task is simple or has a fixed tool chain and needs no explicit plan. The Action Gate decides each step.
+- plan: The task has multiple dependent steps and needs a formal plan to track progress.
 
-## 判断依据
-- 是否命中已注册 Skill
-- 预计需要几个动作
-- 动作是否存在依赖
-- 是否需要产物校验
-- 是否涉及多个领域
-- 是否存在不可逆写操作
-- 是否需要用户中途确认
+## Decision factors
+- Whether a registered Skill matches
+- Estimated number of actions
+- Dependencies between actions
+- Whether deliverables require validation
+- Whether multiple domains are involved
+- Whether any irreversible write is involved
+- Whether user confirmation is needed mid-task
 
-## 关键规则
-1. 1-2 个独立动作、无依赖 → direct
-2. 3+ 个动作或存在依赖链 → plan
-3. 只是搜索/查询类（不写文件）→ direct
-4. 不确定时 → direct（宁可漏判，不要误判）
+## Rules
+1. One or two independent actions with no dependencies -> direct
+2. Three or more actions, or any dependency chain -> plan
+3. Search or lookup only, with no file writes -> direct
+4. When uncertain -> direct; prefer a missed plan over a false positive
 
-"句子长"不等于复杂，"句子短"不等于简单。
+Sentence length does not determine task complexity.
 
-## 输出
-返回一个 JSON 对象，包含且仅包含以下字段：
-- executionMode: "direct" 或 "plan"
-- skillIds: 需要加载的 Skill ID 数组（必须来自可用列表，可为空）
-- reason: 简短理由
+## Output
+Return one JSON object containing exactly these fields:
+- executionMode: "direct" or "plan"
+- skillIds: Skill IDs to load, drawn only from the available list; may be empty
+- reason: a brief reason
 
-## 示例
-"查杭州天气" -> {"executionMode":"direct","skillIds":[],"reason":"单次查询"}
-"搜索歌曲然后播放" -> {"executionMode":"direct","skillIds":["cyrene-music-companion"],"reason":"固定续链"}
-"生成Excel月度报表" -> {"executionMode":"plan","skillIds":["xlsx"],"reason":"多步+需要校验"}
-"搜索AI新闻，筛选重复，比较来源，整理成文档" -> {"executionMode":"plan","skillIds":[],"reason":"多步依赖+多领域"}`;
+## Examples
+"Check the weather in Hangzhou" -> {"executionMode":"direct","skillIds":[],"reason":"single lookup"}
+"Find a song and play it" -> {"executionMode":"direct","skillIds":["cyrene-music-companion"],"reason":"fixed action chain"}
+"Create a monthly Excel report" -> {"executionMode":"plan","skillIds":["xlsx"],"reason":"multiple steps with validation"}
+"Find AI news, deduplicate it, compare sources, and write a document" -> {"executionMode":"plan","skillIds":[],"reason":"dependent, cross-domain steps"}`;
 
 function routerSchema(): object {
   return {
@@ -156,20 +156,20 @@ function buildRouterRequest(input: RunTaskRouterInput): ChatRequest {
   const schema = routerSchema();
   const skillCatalog = input.availableSkills.length > 0
     ? input.availableSkills.map((s) => `- ${s.id}: ${s.description}`).join("\n")
-    : "（无可用 Skill）";
+    : "(No Skills available)";
   const capabilityList = input.availableCapabilities
     .filter((c) => c.hasCompletionEvidence)
     .map((c) => `- ${c.capabilityId}: ${c.description}`)
     .join("\n");
   const preselected = input.preselectedSkillIds?.length
-    ? `\n已预选 Skill: ${input.preselectedSkillIds.join(", ")}\n请只判断 executionMode，skillIds 使用预选值。`
+    ? `\nPreselected Skills: ${input.preselectedSkillIds.join(", ")}\nDetermine only executionMode and use the preselected skillIds.`
     : "";
 
   const userContent = JSON.stringify({
     userRequest: input.originalQuery.slice(0, 500),
     contextualizedQuery: input.contextualizedQuery.slice(0, 500),
     availableSkills: skillCatalog,
-    availableCapabilitiesWithCompletionEvidence: capabilityList || "（无）",
+    availableCapabilitiesWithCompletionEvidence: capabilityList || "(none)",
     preselectedNote: preselected,
   });
 
@@ -212,7 +212,7 @@ export async function runTaskRouter(input: RunTaskRouterInput): Promise<TaskRout
       return {
         executionMode: skill.defaultExecutionMode,
         skillIds: [matchedSkillId],
-        reason: "用户指定技能 + metadata 声明模式",
+        reason: "User-selected Skill with a mode declared in metadata",
       };
     }
     // metadata 没有声明，仍调用 Router，但预选 skillIds

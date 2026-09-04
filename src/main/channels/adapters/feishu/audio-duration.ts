@@ -183,18 +183,18 @@ export async function getAudioDurationMs(filePath: string): Promise<number | und
   // 2) 自己解析 mp3 frame header (纯 Buffer, 零依赖)
   const fromHeader = parseMp3Duration(filePath);
   if (fromHeader) {
-    console.log(LOG, `mp3 header 解析: ${fromHeader}ms`);
+  console.log(LOG, `Parsed MP3 header: ${fromHeader}ms`);
     return fromHeader;
   }
-  console.log(LOG, `mp3 header 解析失败（可能不是 mp3）: ${filePath}`);
+  console.log(LOG, `Could not parse MP3 header (file may not be MP3): ${filePath}`);
 
   // 3) 兜底估算
   const est = estimateByFileSize(filePath);
   if (est) {
-    console.warn(LOG, `估算时长: ${est}ms (建议安装 ffprobe 提高精度)`);
+    console.warn(LOG, `Estimated duration: ${est}ms (install ffprobe for better accuracy)`);
     return est;
   }
 
-  console.warn(LOG, `无法计算时长: ${filePath}`);
+  console.warn(LOG, `Could not determine duration: ${filePath}`);
   return undefined;
 }

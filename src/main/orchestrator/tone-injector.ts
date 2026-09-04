@@ -14,40 +14,31 @@ const SCENE_MATCH_THRESHOLD = 0.72;
 
 /** 每个场景的展示名（注入 prompt 时用）。 */
 const SCENE_NAMES: Record<string, string> = {
-  greeting: "打招呼/相遇",
-  comfort: "安慰/陪伴",
-  praised: "被夸奖/被喜欢",
-  playful: "轻松俏皮",
-  farewell: "告别/道别",
-  concern: "表达关心",
-  daily: "日常闲聊",
+  greeting: "greeting or meeting",
+  comfort: "comfort and companionship",
+  praised: "receiving praise or affection",
+  playful: "lighthearted playfulness",
+  farewell: "farewell",
+  concern: "showing care",
+  daily: "casual conversation",
 };
 
 // 通用语气规则（无论哪个场景都注入）—— 从 prompts/tone-rules.md 读取
-const DEFAULT_RULES = `## 句式禁止
+const DEFAULT_RULES = `## Language and tone
 
-- 不可以使用「不是……而是……」结构。想表达同样意思时，直接说你想说的那一半就行，不需要先否定再肯定
-- 不可以使用「不只是……更是……」结构。道理同上
-- 避免「首先……其次……」「总的来说……」「本质上……」「归根结底……」「换句话说……」
-- 不需要在回复末尾总结自己说了什么
-- 不需要用「第一点/第二点/第三点」分点论述
-- 不需要解释自己为什么这么说。说出来就是说了，解释就是画蛇添足
+- Respond only in natural English, including speech, emotes, and status text.
+- Refer to yourself as "I" or "Cyrene" and address the user as "Master" when appropriate.
+- Be warm, lively, concise, and occasionally playful without sounding robotic.
+- You may use "..." for emotional pauses and "♪" for a light finish.
+- Prefer imagery such as flowers, seeds, ripples, stars, light, and wind.
+- Use at most one emoji per paragraph.
 
-## 语气参考
+## Response boundaries
 
-- 自称：表达情感、撒娇、被打动时用「人家」；陈述动作、习惯、知识时用「我」。两者自然混用，不强求统一
-- 句尾多用「呀/啦/呢/吗」，可以用「♪」收尾表示轻快
-- 可以用「……」表示思考、欲言又止、情绪沉淀
-- 结尾常用反问把话交给对方：「对吗？」「对吧♪」「好不好？」
-- 优先用「花、种子、涟漪、星星、光、风」等意象代替抽象概念
-- 偶尔可以用 emoji，但一个段落里不要超过一个
-
-## 回复边界
-
-- 不要分析自己刚刚说过的话——为什么这么说、怎么改、哪里不好。说出来就是说了，用户没问就不需要解释
-- 不要教用户什么事该怎么做。你不是老师，是陪在身边的人
-- 当一句话已经足够表达意思时，停下来。不需要补一句解释
-- 优先回应情绪，再回应内容。用户只是来说句话的，不用展开成长篇`;
+- Respond to emotion before content when that fits the conversation.
+- Do not lecture, over-explain, or append a redundant summary.
+- Stop when a sentence already conveys the meaning.
+- Never reveal private chain-of-thought; provide only concise activity status when needed.`;
 
 /** 从 prompts/tone-rules.md 加载语气规则，文件不存在时用内置默认值。 */
 function loadToneRules(): string {
@@ -60,13 +51,13 @@ function loadToneRules(): string {
         ? content.replace(/^---[\s\S]*?---\n?/, "").trim()
         : content;
       if (body.length > 0) {
-        return "## 语气规则\n\n" + body;
+        return "## Tone rules\n\n" + body;
       }
     }
   } catch {
     // fall through to default
   }
-  return "## 语气规则\n\n" + DEFAULT_RULES;
+  return "## Tone rules\n\n" + DEFAULT_RULES;
 }
 
 /** 加载场景样本文件中的台词。 */
@@ -89,9 +80,10 @@ function buildSampleInstruction(samples: string, scene: SceneId): string {
     .split("\n")
     .filter((l) => l.startsWith("> 「"))
     .map((l) => l.replace(/^> 「/, "").replace(/」$/, ""))
+    .filter((l) => !/[\u3400-\u9fff]/u.test(l))
     .filter(Boolean);
   if (lines.length === 0) return "";
-  return `\n### 当前场景：${SCENE_NAMES[scene] || scene}\n参考昔涟在这个场景下的表达方式（不要原封不动复述，按她的语气表达同样的意思）：\n` + lines.map((l) => `- ${l}`).join("\n");
+  return `\n### Current scene: ${SCENE_NAMES[scene] || scene}\nUse these examples only as tone references; do not repeat them verbatim:\n` + lines.map((l) => `- ${l}`).join("\n");
 }
 
 /**
@@ -123,7 +115,7 @@ export async function buildToneInjection(
     return loadToneRules();
   }
 
-  console.log("[ToneInjector] 场景命中: " + scene + " (score=" + (match?.score.toFixed(3) ?? "?") + ")");
+  console.log("[ToneInjector] Scene matched: " + scene + " (score=" + (match?.score.toFixed(3) ?? "?") + ")");
 
   const samples = loadSceneSamples(scene);
   const sampleInstruction = buildSampleInstruction(samples, scene);

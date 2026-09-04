@@ -52,18 +52,18 @@ function buildToolSpecs(): ToolSpec[] {
  */
 function buildFallbackReply(toolResults: ToolCallResult[], reason: string): string {
   const lines: string[] = [
-    "抱歉，任务执行到一半被中断了。",
+    "Sorry, the task was interrupted before it could finish.",
     "",
-    "中断原因：" + reason,
+    "Reason: " + reason,
   ];
   if (toolResults.length > 0) {
-    lines.push("", "以下是中断前已经完成的步骤：");
+    lines.push("", "Completed steps before the interruption:");
     for (const r of toolResults) {
       const preview = r.output.length > 200 ? r.output.slice(0, 200) + "…" : r.output;
-      lines.push("- 「" + r.toolId + "」：" + preview);
+      lines.push("- " + r.toolId + ": " + preview);
     }
   } else {
-    lines.push("", "（暂无已完成的步骤信息）");
+    lines.push("", "No completed-step information is available.");
   }
   return lines.join("\n");
 }
@@ -158,7 +158,7 @@ export async function runFunctionCallingLoop(
     if (!response.ok) {
       const errorText = await response.text().catch(() => "");
       console.error(LOG_PREFIX, "LLM 请求失败 HTTP " + response.status + ":", errorText.slice(0, 300));
-      throw new Error("模型请求失败：HTTP " + response.status + (errorText ? " — " + errorText.slice(0, 200) : ""));
+      throw new Error("Model request failed: HTTP " + response.status + (errorText ? " — " + errorText.slice(0, 200) : ""));
     }
 
     const data = await response.json();
@@ -209,7 +209,7 @@ export async function runFunctionCallingLoop(
         let status: ToolCallResult["status"] = "failed";
         let errorCode: string | undefined;
         if (!tool || !tool.enabled || !isCompanionSafeTool(tool)) {
-          output = "[错误] 工具不可用: " + tc.name;
+          output = "[Error] Tool is unavailable: " + tc.name;
           errorCode = "E_TOOL_UNAVAILABLE";
           console.warn(LOG_PREFIX, output);
         } else {
@@ -223,7 +223,7 @@ export async function runFunctionCallingLoop(
             risk,
           });
           if (!perm.allowed) {
-            output = "[已拒绝] " + (perm.reason || "权限不足");
+            output = "[Denied] " + (perm.reason || "Insufficient permission");
             errorCode = "E_PERMISSION_DENIED";
             console.warn(LOG_PREFIX, "权限拒绝 [" + tc.name + "]:", perm.reason);
           } else {
@@ -238,7 +238,7 @@ export async function runFunctionCallingLoop(
               console.log(LOG_PREFIX, "工具返回 [" + tc.name + "]:", output.slice(0, 200));
             } catch (err) {
               const errMsg = err instanceof Error ? err.message : String(err);
-              output = "[工具执行失败] " + errMsg;
+              output = "[Tool execution failed] " + errMsg;
               errorCode = "E_TOOL_EXECUTION_FAILED";
               console.error(LOG_PREFIX, "工具执行失败 [" + tc.name + "]:", errMsg);
             }
@@ -271,7 +271,7 @@ export async function runFunctionCallingLoop(
   console.warn(LOG_PREFIX, "达到最大轮数 " + MAX_TOOL_ROUNDS + "，强制要求模型回复");
   conversation.push({
     role: "user",
-    content: "请基于以上所有工具返回的信息，给出最终回复。不要继续调用工具。",
+    content: "Provide the final response using all tool results above. Do not call any more tools.",
   });
 
   let finalReq: ChatRequest = {
@@ -297,7 +297,7 @@ export async function runFunctionCallingLoop(
     });
 
     if (!response.ok) {
-      throw new Error("最终回复请求失败：HTTP " + response.status);
+      throw new Error("Final response request failed: HTTP " + response.status);
     }
 
     const data = await response.json();
@@ -315,7 +315,7 @@ export async function runFunctionCallingLoop(
     // 兜底再失败也别让整个 run 崩掉（抛错会让用户彻底没回复）。
     // 用已收集的工具结果拼一个"任务中断"文案降级返回。
     const reason = err instanceof Error && err.name === "AbortError"
-      ? "总结请求超时"
+      ? "The final response request timed out"
       : (err instanceof Error ? err.message : String(err));
     console.error(LOG_PREFIX, "强制总结也失败，降级返回已有结果:", reason);
     const fallback = buildFallbackReply(allToolResults, reason);

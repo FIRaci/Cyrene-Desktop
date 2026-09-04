@@ -85,7 +85,7 @@ export async function runChatLoop(options: ChatLoopOptions): Promise<TwoPhaseFcR
         const body = await response.text().catch(() => "");
         throw new AgentRuntimeError(
           "E_MODEL_REQUEST_FAILED",
-          `模型请求失败：HTTP ${response.status}${body ? ` - ${body.slice(0, 200)}` : ""}`,
+          `Model request failed: HTTP ${response.status}${body ? ` - ${body.slice(0, 200)}` : ""}`,
         );
       }
       return options.adapter.parseResponse(await response.json());
@@ -112,7 +112,7 @@ export async function runChatLoop(options: ChatLoopOptions): Promise<TwoPhaseFcR
       usageRecorder(response.usage.input, response.usage.output, 1);
     }
     const reply = stripLeakedChatTimeContext(stripToolProtocol(response.text))
-      || "刚才没有生成正常回复，请再试一次。";
+      || "No valid response was generated. Please try again.";
     emitText(options.onEvent, reply);
     return {
       reply,

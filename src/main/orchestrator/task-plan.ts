@@ -194,7 +194,7 @@ export function verifyStep(
     const failed = stepResults.find((r) => r.status === "failed" && !r.retryable);
     return {
       status: "failed",
-      failureReason: failed?.errorCode ?? "工具执行失败",
+      failureReason: failed?.errorCode ?? "Tool execution failed",
     };
   }
 
@@ -276,23 +276,23 @@ export interface RunCreatePlanInput {
   signal?: AbortSignal;
 }
 
-const PLANNER_SYSTEM_PROMPT = `你是 Planner，负责为当前任务创建执行计划。
+const PLANNER_SYSTEM_PROMPT = `You are the Planner responsible for creating an execution plan for the current task.
 
-## 规则
-- 每个步骤必须能够映射到工具动作或产生明确 projection claim。
-- 不允许生成纯思考步骤（如"分析结果""比较来源"），纯分析被包含在产物生成动作中。
-- 3-7 步为宜，不过度拆分。
-- 每个步骤的 objective 要具体、可验证。
-- completionPolicy 使用 allOf（全部满足）和 anyOf（每组至少满足一项）。
-- 互斥证据（如 dispatched 和 web_fallback）放在同一个 anyOf 分组中。
+## Rules
+- Every step must map to a tool action or produce an explicit projection claim.
+- Do not create thinking-only steps such as "analyze results" or "compare sources"; include analysis in the action that produces an artifact.
+- Prefer 3-7 steps and avoid unnecessary fragmentation.
+- Every objective must be specific and verifiable.
+- Use allOf for criteria that must all pass and anyOf for groups where at least one criterion must pass.
+- Put mutually exclusive evidence, such as dispatched and web_fallback, in the same anyOf group.
 
-## 输出格式
-返回 JSON：
+## Output format
+Return JSON:
 {
-  "goal": "任务最终目标",
+  "goal": "Final task goal",
   "steps": [
     {
-      "objective": "步骤目标",
+      "objective": "Step objective",
       "completionPolicy": {
         "allOf": [{ "kind": "tool_succeeded", "capabilityId": "..." }],
         "anyOf": [[{ "kind": "projection_claim", "capabilityId": "...", "claimKind": "..." }]]
@@ -476,7 +476,7 @@ export async function runCreatePlan(input: RunCreatePlanInput): Promise<TaskPlan
     userRequest: input.userRequest.slice(0, 500),
     contextualizedQuery: input.contextualizedQuery.slice(0, 500),
     availableCapabilities: evidenceCatalog,
-    loadedSkills: input.loadedSkillInstructions?.slice(0, 6000) ?? "（无）",
+    loadedSkills: input.loadedSkillInstructions?.slice(0, 6000) ?? "(none)",
   });
 
   const schema = planSchema();
@@ -545,16 +545,16 @@ export interface RunReplanInput {
   signal?: AbortSignal;
 }
 
-const REPLANNER_SYSTEM_PROMPT = `你是 Replanner，负责在步骤失败后调整执行计划。
+const REPLANNER_SYSTEM_PROMPT = `You are the Replanner responsible for adjusting an execution plan after a step fails.
 
-## 规则
-- 已完成的步骤不可撤销。
-- 失败步骤及其后的所有未完成步骤可以被替换。
-- 替代步骤必须有明确的 completionPolicy。
-- 不允许生成纯思考步骤。
+## Rules
+- Completed steps cannot be reversed.
+- The failed step and every later incomplete step may be replaced.
+- Replacement steps must have an explicit completionPolicy.
+- Do not create thinking-only steps.
 
-## 输出格式
-返回 JSON：
+## Output format
+Return JSON:
 {
   "replacementSteps": [
     {
@@ -663,7 +663,7 @@ export function applyReplan(
   // 将 failed 步骤之后的所有 pending 步骤也标记为 superseded
   for (let i = failedIndex + 1; i < plan.steps.length; i++) {
     if (plan.steps[i].status === "pending") {
-      markStepSuperseded(plan.steps[i], { message: "前置步骤失败", failedAt: Date.now() }, replacementIds);
+      markStepSuperseded(plan.steps[i], { message: "A prerequisite step failed", failedAt: Date.now() }, replacementIds);
     }
   }
 

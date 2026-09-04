@@ -131,25 +131,25 @@ function formatMemoryResult(result: unknown): string {
 
 toolRegistry.register({
   id: 'imported_docs',
-  name: '导入文档',
+  name: 'Imported documents',
   description:
-    '在用户上传导入的文档/小说/文件范围内做语义检索，返回相关片段。\n\n' +
-    '何时用：\n' +
-    '- 用户提到「文件」「文档」「小说」，或消息包含「已上传文件」标记\n' +
-    '- 用户问的内容可能在导入的文档里\n' +
-    '- 用户要「在文档里找 xxx」「小说里有没有写到 yyy」\n\n' +
-    '不要用于：\n' +
-    '- 本机任意路径的文件（那是 read_file）\n' +
-    '- 用户的历史对话记忆（那是 user_memory）\n' +
-    '- 联网信息（那是 web_search）\n\n' +
-    '参数：query (必填，搜索关键词)，topK (可选，返回条数，默认5)。',
+    'Semantically searches documents, novels, and files imported by the user and returns relevant excerpts.\n\n' +
+    'Use it when:\n' +
+    '- The user refers to a file, document, novel, or an uploaded-file marker\n' +
+    '- The answer may be in an imported document\n' +
+    '- The user asks you to find something in a document or novel\n\n' +
+    'Do not use it for:\n' +
+    '- Arbitrary local files (use read_file)\n' +
+    '- Facts from previous conversations (use user_memory)\n' +
+    '- Online information (use web_search)\n\n' +
+    'Arguments: query (required search query), topK (optional result count, default 5).',
   enabled: true,
   risk: 'safe',
   inputSchema: {
     type: 'object',
     properties: {
-      query: { type: 'string', description: '搜索关键词' },
-      topK:  { type: 'number', description: '返回条数，默认5' },
+      query: { type: 'string', description: 'Search query' },
+      topK:  { type: 'number', description: 'Number of results; defaults to 5' },
     },
     required: ['query'],
   },
@@ -161,25 +161,25 @@ toolRegistry.register({
 
 toolRegistry.register({
   id: 'user_memory',
-  name: '用户记忆',
+  name: 'User memory',
   description:
-    '查询用户的历史记忆、个人信息、过往对话中提到的事实。\n\n' +
-    '何时用：\n' +
-    '- 用户说「你还记得」「我之前说过」「以前」「上次」等指代词\n' +
-    '- 用户问自己的偏好/习惯/背景（「我喜欢什么」「我是做什么的」）\n' +
-    '- 需要确认用户曾经提过的具体信息\n\n' +
-    '不要用于：\n' +
-    '- 当前对话最近几轮能看到的内容\n' +
-    '- 导入文档内容（那是 imported_docs）\n' +
-    '- 用户从没提过的信息（查不到就老实说不知道）\n\n' +
-    '参数：query (必填，搜索关键词)，topK (可选，返回条数，默认5)。',
+    'Searches memories, personal details, and facts the user mentioned in earlier conversations.\n\n' +
+    'Use it when:\n' +
+    '- The user asks whether you remember something they said before\n' +
+    '- The user asks about their preferences, habits, or background\n' +
+    '- You need to verify a specific detail previously shared by the user\n\n' +
+    'Do not use it for:\n' +
+    '- Information already visible in the recent conversation\n' +
+    '- Imported document content (use imported_docs)\n' +
+    '- Information the user never shared; say you do not know when no memory is found\n\n' +
+    'Arguments: query (required search query), topK (optional result count, default 5).',
   enabled: true,
   risk: 'safe',
   inputSchema: {
     type: 'object',
     properties: {
-      query: { type: 'string', description: '搜索关键词' },
-      topK:  { type: 'number', description: '返回条数，默认5' },
+      query: { type: 'string', description: 'Search query' },
+      topK:  { type: 'number', description: 'Number of results; defaults to 5' },
     },
     required: ['query'],
   },

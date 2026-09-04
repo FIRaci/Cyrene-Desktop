@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { LIVE2D_ACTIONS, findAction } from "../../../shared/live2d-actions";
 import { IPC } from "../../../shared/ipc-channels";
-import { createPlayLive2DActionHandler } from "./play-live2d-action";
+import { createPlayLive2DActionHandler, createPlayLive2DActionTool } from "./play-live2d-action";
 
 function makeDeps() {
   return {
@@ -20,6 +20,18 @@ describe("play-live2d-action handler", () => {
     const [channel, payload] = deps.sendToLive2DWindow.mock.calls[0];
     expect(channel).toBe(IPC.LIVE2D_PLAY_ACTION);
     expect(payload).toEqual({
+      kind: "motion",
+      group: "动作#6",
+      motionName: "Wink~",
+    });
+  });
+
+  it("resolves model-facing English aliases to internal asset targets", async () => {
+    const deps = makeDeps();
+    const handler = createPlayLive2DActionHandler(deps);
+
+    expect(JSON.parse(await handler({ name: "wink" }, undefined))).toMatchObject({ ok: true });
+    expect(deps.sendToLive2DWindow).toHaveBeenCalledWith(IPC.LIVE2D_PLAY_ACTION, {
       kind: "motion",
       group: "动作#6",
       motionName: "Wink~",
@@ -67,13 +79,21 @@ describe("play-live2d-action handler", () => {
     expect(JSON.parse(result)).toMatchObject({ ok: false, error: "ipc_failed" });
   });
 
-  it("available list matches the catalog aliases", async () => {
+  it("returns only English aliases in the model-facing available list", async () => {
     const deps = makeDeps();
     const handler = createPlayLive2DActionHandler(deps);
     const result = JSON.parse(await handler({ name: "挥手" }, undefined)) as { available: string[] };
-    for (const a of LIVE2D_ACTIONS) {
-      expect(result.available).toContain(a.alias);
-    }
+    expect(result.available).toContain("wink");
+    expect(result.available).toContain("sunglasses");
+    expect(result.available.join(" ")).not.toMatch(/[\u3400-\u9fff]/u);
+  });
+
+  it("exposes an English-only tool contract", () => {
+    const tool = createPlayLive2DActionTool(makeDeps());
+    const contract = `${tool.name}\n${tool.description}\n${tool.inputSchema.properties.name.description}`;
+
+    expect(contract).toContain("Available actions:");
+    expect(contract).not.toMatch(/[\u3400-\u9fff]/u);
   });
 
   it("findAction is consistent with catalog (sanity)", () => {

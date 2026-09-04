@@ -13,6 +13,7 @@ import type { TtsEngine } from "../../shared/tts-types";
 import { runFunctionCallingLoop } from "../orchestrator";
 import { getAdapter, buildVendorUrlByProvider } from "../orchestrator/vendors";
 import type { ChatMessage } from "../orchestrator/vendors/types";
+import { isModelEndpointUsable } from "../../shared/model-endpoint";
 
 const LOG_PREFIX = "[CallManager]";
 
@@ -97,14 +98,14 @@ function sendState(state: CallState): void {
   if (callWindow && !callWindow.isDestroyed()) {
     callWindow.webContents.send(IPC.CALL_STATE, { state });
   }
-  console.log(LOG_PREFIX, "状态 →", state);
+  console.log(LOG_PREFIX, "State ->", state);
 }
 
 function sendError(message: string): void {
   if (callWindow && !callWindow.isDestroyed()) {
     callWindow.webContents.send(IPC.CALL_ERROR, { message });
   }
-  console.error(LOG_PREFIX, "错误:", message);
+  console.error(LOG_PREFIX, "Error:", message);
 }
 
 function sendAsrResult(partial: string | undefined, final: string | undefined): void {
@@ -124,7 +125,7 @@ export function startCall(): void {
   if (active) return;
   const cfg = getAsrConfig();
   if (!cfg || cfg.engine !== "aliyun" || !cfg.appKey || !cfg.accessKeyId || !cfg.accessKeySecret) {
-    sendError("ASR 未配置：请在设置→ASR 中配置阿里云 AppKey 和 AccessKey");
+    sendError("ASR is not configured. Add the Aliyun AppKey and AccessKey in Settings > ASR.");
     sendState("ERROR");
     return;
   }
@@ -132,8 +133,8 @@ export function startCall(): void {
   active = true;
   finalText = "";
   callHistory.length = 0;
-  console.log(LOG_PREFIX, "startCall 重置: finalText 清空, history 清空");
-  startAsrStream(cfg);
+  console.log(LOG_PREFIX, "Call reset: cleared final text and history");
+  if (cfg.engine === "aliyun") { startAsrStream(cfg as { appKey: string; accessKeyId: string; accessKeySecret: string; language: string }); }
   sendState("LISTENING");
 }
 
@@ -155,7 +156,7 @@ function startAsrStream(cfg: { appKey: string; accessKeyId: string; accessKeySec
 
 /** 结束本轮（VAD 静默）：停 ASR → 跑 agent → TTS → 播放。 */
 export async function endTurn(): Promise<void> {
-  console.log(LOG_PREFIX, "endTurn 入口: active=", active, "state=", currentState, "finalText.length=", finalText.length);
+  console.log(LOG_PREFIX, "Ending turn: active=", active, "state=", currentState, "finalText.length=", finalText.length);
   if (!active || currentState !== "LISTENING") return;
 
   if (asrStream) asrStream.stop();
@@ -165,7 +166,7 @@ export async function endTurn(): Promise<void> {
 
   if (!text) {
     // 空文本，直接重启 ASR 回 LISTENING
-    console.log(LOG_PREFIX, "endTurn 空文本，直接重启 ASR");
+    console.log(LOG_PREFIX, "Empty turn; restarting ASR");
     restartAsr();
     return;
   }
@@ -174,11 +175,11 @@ export async function endTurn(): Promise<void> {
 
   try {
     // 调 agent 获取回复
-    console.log(LOG_PREFIX, "runAgentTurn 开始, text.length=", text.length);
+    console.log(LOG_PREFIX, "Agent turn started, text.length=", text.length);
     const reply = await runAgentTurn(text);
-    console.log(LOG_PREFIX, "runAgentTurn 结果: reply.length=", reply?.length ?? "null");
+    console.log(LOG_PREFIX, "Agent turn result, reply.length=", reply?.length ?? "null");
     if (!reply) {
-      sendError("未收到 agent 回复");
+      sendError("The agent did not return a reply.");
       sendState("LISTENING");
       restartAsr();
       return;
@@ -187,7 +188,7 @@ export async function endTurn(): Promise<void> {
     // TTS 合成（按 ttsEngine 分发到对应引擎）
     const tts = ttsSettingsGetter?.();
     if (!tts || tts.ttsEngine === "off") {
-      sendError("TTS 未配置：请在设置中启用 TTS 引擎");
+      sendError("TTS is not configured. Enable a TTS engine in Settings.");
       sendState("LISTENING");
       restartAsr();
       return;
@@ -195,25 +196,25 @@ export async function endTurn(): Promise<void> {
 
     // 引擎配置完整性检查
     if (tts.ttsEngine === "minimax" && (!tts.ttsMinimaxKey || !tts.ttsMinimaxVoiceId)) {
-      sendError("TTS 未配置：请在设置中配置 MiniMax API Key 和音色 ID");
+      sendError("MiniMax TTS is not configured. Add its API key and voice ID in Settings.");
       sendState("LISTENING");
       restartAsr();
       return;
     }
     if (tts.ttsEngine === "gptsovits" && (!tts.ttsGptsovitsBaseUrl || !tts.ttsGptsovitsRefAudioPath || !tts.ttsGptsovitsPromptText)) {
-      sendError("TTS 未配置：请在设置中配置 GPT-SoVITS baseUrl、参考音频和文本");
+      sendError("GPT-SoVITS is not configured. Add its base URL, reference audio, and prompt text in Settings.");
       sendState("LISTENING");
       restartAsr();
       return;
     }
     if (tts.ttsEngine === "custom-cloud" && !tts.ttsCustomCloudEndpointUrl) {
-      sendError("TTS 未配置：请在设置中配置自定义云端 Endpoint URL");
+      sendError("Custom cloud TTS is not configured. Add its endpoint URL in Settings.");
       sendState("LISTENING");
       restartAsr();
       return;
     }
     if (tts.ttsEngine === "mimo" && (!tts.ttsMimoKey || !tts.ttsMimoVoiceAudioPath)) {
-      sendError("TTS 未配置：请在设置中配置小米 MiMo API Key 和昔涟克隆音频");
+      sendError("MiMo TTS is not configured. Add its API key and Cyrene voice-clone audio in Settings.");
       sendState("LISTENING");
       restartAsr();
       return;
@@ -253,13 +254,13 @@ export async function endTurn(): Promise<void> {
       // 等渲染端 CALL_TTS_DONE 后恢复 LISTENING
     } catch (ttsErr) {
       const msg = ttsErr instanceof Error ? ttsErr.message : String(ttsErr);
-      sendError("TTS 合成失败：" + msg);
+      sendError("TTS synthesis failed: " + msg);
       sendState("LISTENING");
       restartAsr();
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    sendError("通话出错：" + msg);
+    sendError("Call failed: " + msg);
     sendState("LISTENING");
     restartAsr();
   }
@@ -324,13 +325,13 @@ async function runAgentTurn(userText: string): Promise<string | null> {
 
     // 2. 直接调 LLM（不走 FC loop）
     const ms = modelSettingsGetter?.();
-    if (!ms || !ms.apiKey) {
-      throw new Error("模型配置缺失或未填写 API Key");
+    if (!ms || !isModelEndpointUsable(ms)) {
+      throw new Error("No usable model is configured. Check the model endpoint, model ID, and cloud API key.");
     }
 
     const adapter = getAdapter(ms.provider);
     if (!adapter) {
-      throw new Error(`不支持的模型 provider: ${ms.provider}`);
+      throw new Error(`Unsupported model provider: ${ms.provider}`);
     }
 
     const url = buildVendorUrlByProvider(ms.provider, ms.baseUrl);
@@ -355,7 +356,7 @@ async function runAgentTurn(userText: string): Promise<string | null> {
     });
 
     if (!httpResp.ok) {
-      throw new Error(`LLM 请求失败: ${httpResp.status}`);
+      throw new Error(`Model request failed: ${httpResp.status}`);
     }
 
     const raw = await httpResp.json();
@@ -373,8 +374,8 @@ async function runAgentTurn(userText: string): Promise<string | null> {
     return reply || null;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error(LOG_PREFIX, "LLM 调用失败:", msg);
-    throw new Error(`LLM 调用失败: ${msg}`);
+    console.error(LOG_PREFIX, "Model request failed:", msg);
+    throw new Error(`Model request failed: ${msg}`);
   }
 }
 
@@ -383,6 +384,10 @@ export function registerCallIpc(): void {
   ipcMain.on(IPC.CALL_START, () => startCall());
   ipcMain.on(IPC.CALL_AUDIO_FRAME, (_event, frame: ArrayBuffer) => handleAudioFrame(Buffer.from(frame)));
   ipcMain.on(IPC.CALL_TURN_END, () => void endTurn());
+  ipcMain.on(IPC.CALL_SUBMIT_TEXT, (_event, text: string) => {
+    finalText = String(text || "").trim();
+    void endTurn();
+  });
   ipcMain.on(IPC.CALL_TTS_DONE, () => onTtsDone());
   ipcMain.on(IPC.CALL_STOP, () => stopCall());
 }

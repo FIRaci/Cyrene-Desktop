@@ -12,31 +12,28 @@ import type { SkillEntry } from "./types";
  */
 const AMBIGUITY_POLICY = [
   "",
-  "## 歧义识别与处理策略",
+  "## Ambiguity handling policy",
   "",
-  "### 何时弹卡片（ask_user_choice）",
-  "当用户**主动**提到风格/样式相关词（「美观」「好看」「专业」「漂亮」「彩色」「规整」等）",
-  "且**没有给出具体要求**时，说明需求存在多解读空间。此时应调用 ask_user_choice 让用户选择具体方向，再按选择执行。",
+  "### When to show an ask_user_choice card",
+  "When the user explicitly requests a vague visual quality such as beautiful, polished, professional, colorful, or tidy",
+  "without concrete requirements, the request has multiple reasonable interpretations. Use ask_user_choice to select a direction before execution.",
   "",
-  "示例：",
-  "- 「做个美观的 Excel」→ 弹卡片（美观可以是简洁商务/彩色展示/财务报表等多种解读）",
-  "- 「弄得专业一点」→ 弹卡片（专业可以有多种风格）",
-  "- 「做个漂亮点的报告」→ 弹卡片（漂亮可以有多种解读）",
+  "Examples: 'make a beautiful spreadsheet', 'make it professional', or 'create a polished report' all require a style choice when no details are given.",
   "",
-  "### 何时不弹卡片",
-  "- 用户说「你自己决定」「看着办」→ 用户已授权，直接用默认样式，不要询问",
-  "- 用户没提任何样式词（「做个表」「导出 Excel」）→ 用默认样式直接做",
-  "- 用户给了明确细节（「深蓝表头白色字」「冻结首行」「加边框」）→ 直接按要求做",
-  "- 用户要求的是功能而非样式（「加公式」「编辑已有文件」）→ 按功能需求执行",
+  "### When not to show a card",
+  "- The user delegates the choice to you: use the default style without asking",
+  "- The user mentions no visual style: proceed with the default",
+  "- The user gives concrete details: follow them directly",
+  "- The request concerns functionality rather than style: execute the functional requirement",
   "",
-  "### 工具选择",
-  "- 简单表格 / 数据整理 → 直接用 write_excel（已内置美观样式），不要走 invoke_skill(xlsx)",
-  "- 简单文档 / 报告 / 总结 → 直接用 write_word（已内置美观样式），不要走 invoke_skill(docx)",
-  "- 用户通过 ask_user_choice 选择了风格 → 用对应 write_* 工具的 style 参数直接生成，不要走 skill 手写 XML",
-  "- write_excel 支持 5 种主题：default / dark / colorful / simple-business / financial",
-  "- write_word 支持 5 种主题：default / academic / clean / elegant / formal",
-  "- 用户给了自定义颜色要求（如「粉色表头」「深灰背景」）→ 用 write_excel 的 colors 参数传 ARGB hex 值，你负责把颜色名翻译成 hex",
-  "- 只有用户明确要求「公式」「财务格式标准」「条件格式」「编辑已有 xlsx」「页眉页脚/目录/图片」等具体高级需求时，才考虑 invoke_skill",
+  "### Tool selection",
+  "- Simple spreadsheets or data organization: use write_excel directly; do not invoke the xlsx Skill",
+  "- Simple documents, reports, or summaries: use write_word directly; do not invoke the docx Skill",
+  "- After a style choice, pass it through the corresponding write_* style argument; do not hand-author XML",
+  "- write_excel themes: default / dark / colorful / simple-business / financial",
+  "- write_word themes: default / academic / clean / elegant / formal",
+  "- For custom colors, pass ARGB hex values through write_excel colors and translate color names to hex",
+  "- Consider invoke_skill only for explicit advanced needs such as formulas, financial-format standards, conditional formatting, editing an existing xlsx, headers, footers, tables of contents, or images",
 ].join("\n");
 
 /**
@@ -49,13 +46,13 @@ export function buildSkillCatalog(skills: SkillEntry[]): string {
   const lines = enabled.map(s => {
     const toolsTag = s.tools && s.tools.length > 0 ? ` [tools: ${s.tools.join(", ")}]` : "";
     const activationTag = s.manifest?.autoInject === true
-      ? " [自动注入：无需再次调用 invoke_skill]"
+      ? " [auto-injected; do not call invoke_skill again]"
       : "";
     return `- ${s.id}: ${s.description}${toolsTag}${activationTag}`;
   });
   return [
-    "## 可用 Skill",
-    "当未自动注入的 skill 适用于当前任务时，先调用 invoke_skill(skill_id) 取详细指令；标记为自动注入的 skill 已在后文提供完整规则，无需再次调用 invoke_skill。",
+    "## Available Skills",
+    "When a non-auto-injected Skill applies, call invoke_skill(skill_id) for its instructions. Auto-injected Skills already provide their complete rules below.",
     "",
     ...lines,
   ].join("\n") + AMBIGUITY_POLICY;
@@ -78,8 +75,8 @@ export function buildAutoInjectedSkillContext(
     .filter(Boolean);
   if (blocks.length === 0) return "";
   return [
-    "## 自动激活 Skill 指令",
-    "以下 Skill 已通过能力门控，当前对话必须直接遵循其完整规则，无需再次调用 invoke_skill。",
+    "## Auto-injected Skill instructions",
+    "The following Skills passed capability gating. Follow their complete rules directly without calling invoke_skill again.",
     "",
     ...blocks,
   ].join("\n");
@@ -97,15 +94,15 @@ export function buildAutoInjectedSoulContext(
     .filter((skill) => skill.enabled && skill.manifest?.autoInject === true)
     .map((skill) => {
       const body = getBody(skill.id) ?? "";
-      const match = body.match(/^## Soul 回复策略\s*\r?\n([\s\S]*?)(?=^##\s|(?![\s\S]))/m);
+      const match = body.match(/^## (?:Soul response strategy|Soul 回复策略)\s*\r?\n([\s\S]*?)(?=^##\s|(?![\s\S]))/m);
       const section = match?.[1]?.trim();
       return section ? `### ${skill.id}\n${section}` : "";
     })
     .filter(Boolean);
   if (blocks.length === 0) return "";
   return [
-    "## 自动激活 Skill 回复策略",
-    "以下内容只约束自然语言回复；当前阶段没有工具能力，不得输出工具名、调用标记或工具协议。",
+    "## Auto-injected Skill response strategies",
+    "The following content constrains natural-language responses only. This phase has no tool capability; never output tool names, call markers, or tool protocol text.",
     "",
     ...blocks,
   ].join("\n");

@@ -132,14 +132,14 @@ describe("social context compiler", () => {
 
   it("separates relevant past from open loops and instructs Soul to use it naturally", () => {
     const block = compileSocialContextBlock([
-      atom("fact", "用户喜欢海边"),
-      atom("loop", "用户还没有回答周末是否有空", { type: "open_loop" }),
+      atom("fact", "User likes the seaside"),
+      atom("loop", "User has not replied whether they are free this weekend", { type: "open_loop" }),
     ]);
 
-    expect(block).toContain("相关的过去");
-    expect(block).toContain("尚未接上的话题");
-    expect(block).toContain("用户喜欢海边");
-    expect(block).toContain("不要复述这份背景");
+    expect(block).toContain("Relevant history:");
+    expect(block).toContain("Open threads:");
+    expect(block).toContain("User likes the seaside");
+    expect(block).toContain("Do not repeat this context");
     expect(block).not.toContain("evidenceTurnId");
   });
 });

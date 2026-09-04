@@ -38,11 +38,11 @@ function humanBytes(n: number): string {
 async function executeReadFile(args: Record<string, unknown>): Promise<string> {
   const raw = String(args.path || "").trim();
   const filePath = ensureAbsolute(raw);
-  if (!filePath) return "[错误] path 必须是绝对路径";
+  if (!filePath) return "[Error] path must be absolute";
 
   const stat = safeStat(filePath);
-  if (!stat) return "[错误] 文件不存在或无法访问: " + filePath;
-  if (!stat.isFile()) return "[错误] 不是文件（是目录或其它）: " + filePath;
+  if (!stat) return "[Error] File does not exist or is inaccessible: " + filePath;
+  if (!stat.isFile()) return "[Error] Path is not a file: " + filePath;
 
   const startLine = Math.max(1, Number(args.startLine) || 1);
   const maxLines = Math.max(1, Math.min(2000, Number(args.maxLines) || 500));
@@ -54,7 +54,7 @@ async function executeReadFile(args: Record<string, unknown>): Promise<string> {
     buf = fs.readFileSync(filePath);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    return "[错误] 读取失败: " + msg;
+    return "[Error] Failed to read file: " + msg;
   }
 
   const truncatedSize = buf.length > READ_MAX_BYTES;
@@ -65,7 +65,7 @@ async function executeReadFile(args: Record<string, unknown>): Promise<string> {
   let nullCount = 0;
   for (let i = 0; i < head.length; i++) if (head[i] === 0) nullCount++;
   if (nullCount > head.length * 0.05) {
-    return "[错误] 这看起来是二进制文件，read_file 只支持文本。如果是图片，请改用 read_image。\n" +
+    return "[Error] This appears to be a binary file. read_file supports text only; use read_image for images.\n" +
       "path: " + filePath + "\nsize: " + humanBytes(stat.size);
   }
 
@@ -75,7 +75,7 @@ async function executeReadFile(args: Record<string, unknown>): Promise<string> {
   const sliceLines = lines.slice(startLine - 1, startLine - 1 + maxLines);
 
   const head2 = "path: " + filePath + "\nsize: " + humanBytes(stat.size) +
-    "\ntotal_lines: ~" + total + (truncatedSize ? "  [文件已按 256KB 截断]" : "") +
+    "\ntotal_lines: ~" + total + (truncatedSize ? "  [truncated at 256KB]" : "") +
     "\nshowing: line " + startLine + " ~ " + (startLine + sliceLines.length - 1) + "\n\n";
 
   // 带行号方便 agent 后续精确引用
@@ -89,27 +89,19 @@ async function executeReadFile(args: Record<string, unknown>): Promise<string> {
 
 toolRegistry.register({
   id: "read_file",
-  name: "读取文件",
+  name: "Read file",
   description:
-    "读取本地文本文件（小说、笔记、代码、配置、日志等）。返回带行号的文本内容。" +
-    "文件超过 256KB 会自动截断；可用 startLine/maxLines 翻页。\n\n" +
-    "何时用：\n" +
-    "- 用户消息里出现任何本地文件路径、文件名、扩展名（.txt/.md/.json/.py/.log 等）\n" +
-    "- 用户问'这个文件写了什么''看看 xxx'\n" +
-    "- 需要拿文件实际内容才能回答的问题\n\n" +
-    "不要用于：\n" +
-    "- 凭印象猜内容（绝对不行，必须先 read）\n" +
-    "- 读图片 → read_image\n" +
-    "- 列目录 → list_dir\n\n" +
-    "参数：path (必填，绝对路径)，startLine (可选，默认 1)，maxLines (可选，默认 500)。",
+    "Read a local text file and return line-numbered content. Files larger than 256KB are truncated; use startLine and maxLines to page through content. " +
+    "Use whenever an answer depends on the actual contents of a local file. Use read_image for images and list_dir for directories.\n\n" +
+    "Parameters: path (required absolute path), startLine (optional, default 1), and maxLines (optional, default 500).",
   enabled: true,
   risk: "fs-read",
   inputSchema: {
     type: "object",
     properties: {
-      path: { type: "string", description: "要读的文件绝对路径，例如 'C:\\\\Users\\\\me\\\\notes.txt'" },
-      startLine: { type: "number", description: "起始行号，默认 1" },
-      maxLines: { type: "number", description: "最多读多少行，默认 500，最大 2000" },
+      path: { type: "string", description: "Absolute path of the text file, for example 'C:\\\\Users\\\\me\\\\notes.txt'" },
+      startLine: { type: "number", description: "First line to return; defaults to 1" },
+      maxLines: { type: "number", description: "Maximum lines to return; defaults to 500 and is capped at 2000" },
     },
     required: ["path"],
   },
@@ -121,11 +113,11 @@ toolRegistry.register({
 async function executeListDir(args: Record<string, unknown>): Promise<string> {
   const raw = String(args.path || "").trim();
   const dirPath = ensureAbsolute(raw);
-  if (!dirPath) return "[错误] path 必须是绝对路径";
+  if (!dirPath) return "[Error] path must be absolute";
 
   const stat = safeStat(dirPath);
-  if (!stat) return "[错误] 目录不存在或无法访问: " + dirPath;
-  if (!stat.isDirectory()) return "[错误] 不是目录: " + dirPath;
+  if (!stat) return "[Error] Directory does not exist or is inaccessible: " + dirPath;
+  if (!stat.isDirectory()) return "[Error] Path is not a directory: " + dirPath;
 
   const showHidden = args.showHidden === true;
   const filter = typeof args.filter === "string" ? args.filter.trim() : "";
@@ -136,7 +128,7 @@ async function executeListDir(args: Record<string, unknown>): Promise<string> {
     entries = fs.readdirSync(dirPath, { withFileTypes: true });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    return "[错误] 读取目录失败: " + msg;
+    return "[Error] Failed to read directory: " + msg;
   }
 
   if (!showHidden) {
@@ -161,9 +153,9 @@ async function executeListDir(args: Record<string, unknown>): Promise<string> {
   lines.push("dir: " + dirPath);
   lines.push(
     "count: " + entries.length +
-    (imageCount > 0 ? " (其中图片 " + imageCount + " 张)" : "") +
+    (imageCount > 0 ? " (images: " + imageCount + ")" : "") +
     (filter ? " (filter: " + filter + ")" : "") +
-    (truncated ? " (仅显示前 " + LIST_MAX_ENTRIES + " 项)" : ""),
+    (truncated ? " (showing first " + LIST_MAX_ENTRIES + " entries)" : ""),
   );
   lines.push("");
 
@@ -176,7 +168,7 @@ async function executeListDir(args: Record<string, unknown>): Promise<string> {
       const size = st ? "  " + humanBytes(st.size) : "";
       // 标注文件类型，重点让图片显式可见，模型才能数清"有几张图"
       const ext = path.extname(ent.name).toLowerCase();
-      const tag = IMAGE_EXTS.has(ext) ? "  [图片]" : "";
+      const tag = IMAGE_EXTS.has(ext) ? "  [image]" : "";
       lines.push("[F] " + ent.name + size + tag);
     } else if (ent.isSymbolicLink()) {
       lines.push("[L] " + ent.name);
@@ -189,24 +181,18 @@ async function executeListDir(args: Record<string, unknown>): Promise<string> {
 
 toolRegistry.register({
   id: "list_dir",
-  name: "列出目录",
+  name: "List directory",
   description:
-    "列出某个目录下的子目录和文件。输出会对图片文件标注 [图片]，并在 count 行汇总图片数量。\n\n" +
-    "何时用：\n" +
-    "- 用户问'我那里有什么文件''看看 D:/小说 下面''有几张图片'\n" +
-    "- 用户提到目录名但不知道里面有什么\n" +
-    "- 想确认某个文件是否存在于某个目录\n\n" +
-    "不要用于：\n" +
-    "- 读具体文件内容 → read_file\n" +
-    "- 用户给了完整文件路径 → 直接 read_file\n\n" +
-    "参数：path (必填，绝对路径)，showHidden (可选，是否显示以 . 开头的隐藏项，默认 false)。",
+    "List the files and subdirectories in a directory. Image files are tagged [image], and the count line includes an image total. " +
+    "Use to inspect directory contents or check whether a file exists. Use read_file when a complete file path is already known.\n\n" +
+    "Parameters: path (required absolute path) and showHidden (include dot-prefixed entries; default false).",
   enabled: true,
   risk: "fs-read",
   inputSchema: {
     type: "object",
     properties: {
-      path: { type: "string", description: "要列举的目录绝对路径" },
-      showHidden: { type: "boolean", description: "是否包含隐藏项（以 . 开头），默认 false" },
+      path: { type: "string", description: "Absolute path of the directory to list" },
+      showHidden: { type: "boolean", description: "Include dot-prefixed entries; defaults to false" },
     },
     required: ["path"],
   },
@@ -218,7 +204,7 @@ toolRegistry.register({
 async function executeWriteFile(args: Record<string, unknown>): Promise<string> {
   const raw = String(args.path || "").trim();
   const filePath = ensureAbsolute(raw);
-  if (!filePath) return "[错误] path 必须是绝对路径";
+  if (!filePath) return "[Error] path must be absolute";
 
   const content = typeof args.content === "string" ? args.content : "";
   const append = args.append === true;
@@ -231,7 +217,7 @@ async function executeWriteFile(args: Record<string, unknown>): Promise<string> 
       fs.mkdirSync(path.dirname(filePath), { recursive: true });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      return "[错误] 创建父目录失败: " + msg;
+      return "[Error] Failed to create the parent directory: " + msg;
     }
   }
 
@@ -243,37 +229,30 @@ async function executeWriteFile(args: Record<string, unknown>): Promise<string> 
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    return "[错误] 写入失败: " + msg;
+    return "[Error] Failed to write file: " + msg;
   }
 
   const st = safeStat(filePath);
-  return "[OK] 已" + (append ? "追加" : "写入") + ": " + filePath +
+  return "[OK] " + (append ? "Appended to" : "Wrote") + ": " + filePath +
     (st ? "\nsize: " + humanBytes(st.size) : "");
 }
 
 toolRegistry.register({
   id: "write_file",
-  name: "写入文件",
+  name: "Write file",
   description:
-    "把文本内容写入本地文件，覆盖或追加。会自动创建父目录。\n\n" +
-    "何时用：\n" +
-    "- 用户要保存生成的笔记、改写后的文本、配置\n" +
-    "- 用户要新建文件\n" +
-    "- 需要持久化一段内容到磁盘\n\n" +
-    "不要用于：\n" +
-    "- 修改已有文件的局部内容（用 apply_patch 更安全）\n" +
-    "- 生成 Excel/Word/PDF/Markdown 文档（用对应专用工具）\n" +
-    "- 写入危险系统路径\n\n" +
-    "参数：path (绝对路径)，content (要写的字符串)，append (可选，true=追加，默认 false=覆盖)，createDirs (可选，默认 true)。",
+    "Write or append UTF-8 text to a local file, creating parent directories by default. Use for new files or complete rewrites; " +
+    "use apply_patch for localized edits to existing files and dedicated tools for structured documents.\n\n" +
+    "Parameters: path (absolute path), content, append (default false), and createDirs (default true).",
   enabled: true,
   risk: "fs-write",
   inputSchema: {
     type: "object",
     properties: {
-      path: { type: "string", description: "目标文件绝对路径" },
-      content: { type: "string", description: "要写入的文本内容（UTF-8）" },
-      append: { type: "boolean", description: "true=追加，false=覆盖（默认）" },
-      createDirs: { type: "boolean", description: "是否自动创建父目录，默认 true" },
+      path: { type: "string", description: "Absolute destination path" },
+      content: { type: "string", description: "UTF-8 text to write" },
+      append: { type: "boolean", description: "Append when true; overwrite when false (default)" },
+      createDirs: { type: "boolean", description: "Create missing parent directories; defaults to true" },
     },
     required: ["path", "content"],
   },
@@ -297,13 +276,13 @@ async function executeReadImage(
 ): Promise<string> {
   const raw = String(args.path || "").trim();
   const filePath = ensureAbsolute(raw);
-  if (!filePath) return "[错误] path 必须是绝对路径";
+  if (!filePath) return "[Error] path must be absolute";
 
   const stat = safeStat(filePath);
-  if (!stat) return "[错误] 文件不存在或无法访问: " + filePath;
-  if (!stat.isFile()) return "[错误] 不是文件: " + filePath;
+  if (!stat) return "[Error] File does not exist or is inaccessible: " + filePath;
+  if (!stat.isFile()) return "[Error] Path is not a file: " + filePath;
   if (stat.size > IMAGE_MAX_BYTES) {
-    return "[错误] 图片过大（>" + humanBytes(IMAGE_MAX_BYTES) + "），当前 " + humanBytes(stat.size);
+    return "[Error] Image exceeds the " + humanBytes(IMAGE_MAX_BYTES) + " limit; current size: " + humanBytes(stat.size);
   }
 
   const ext = path.extname(filePath).toLowerCase();
@@ -318,7 +297,7 @@ async function executeReadImage(
   };
   const mime = mimeMap[ext];
   if (!mime) {
-    return "[错误] 不支持的图片格式: " + ext + "（支持 png/jpg/jpeg/gif/webp/bmp/svg）";
+    return "[Error] Unsupported image format: " + ext + " (supported: png, jpg, jpeg, gif, webp, bmp, svg)";
   }
 
   console.log(LOG_PREFIX, "read_image:", filePath, "mime=" + mime, "size=" + humanBytes(stat.size));
@@ -328,13 +307,13 @@ async function executeReadImage(
     buf = fs.readFileSync(filePath);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    return "[错误] 读取失败: " + msg;
+    return "[Error] Failed to read image: " + msg;
   }
 
   // 查视觉模型配置（统一判断入口，不再有调度层门控）
   const visionConfig = loadVisionConfigLazy();
   if (!visionConfig) {
-    return "[错误·配置] 未启用视觉能力。请在「设置 → API 设置 → 视觉模型」配置一个 OpenAI 兼容的视觉模型。";
+    return "[Configuration error] Vision is not enabled. Configure an OpenAI-compatible vision model in Settings → API Settings → Vision Model.";
   }
 
   // 调视觉模型看图，用户问题从 ToolContext 来
@@ -349,26 +328,19 @@ async function executeReadImage(
 
 toolRegistry.register({
   id: "read_image",
-  name: "读取图片",
+  name: "Read image",
   description:
-    "读取本地图片文件，交给视觉模型分析后返回文字描述。支持 png/jpg/jpeg/gif/webp/bmp/svg，最大 5MB。\n\n" +
-    "何时用：\n" +
-    "- 用户提到截图、图片，想知道内容\n" +
-    "- 用户说'看看这张图''图片里是什么'\n" +
-    "- 环境信息里说'当前模型支持查看图片'时\n\n" +
-    "不要用于：\n" +
-    "- 环境信息说'不支持查看图片'时（直接告诉用户看不了，不要调）\n" +
-    "- 读文本文件 → read_file\n" +
-    "- 批量读图（逐张调用，不要一次性塞多张）\n\n" +
-    "若未配置视觉模型会返回错误，届时如实告诉用户看不了。" +
-    "参数：path (必填，绝对路径)。",
+    "Read a local image, analyze it with the configured vision model, and return a text description. " +
+    "Supports png, jpg, jpeg, gif, webp, bmp, and svg up to 5MB. Use read_file for text and call this tool once per image. " +
+    "If vision is not configured, report the configuration error to the user.\n\n" +
+    "Parameter: path (required absolute path).",
   enabled: true,
   risk: "fs-read",
   needsContext: true,
   inputSchema: {
     type: "object",
     properties: {
-      path: { type: "string", description: "图片文件绝对路径" },
+      path: { type: "string", description: "Absolute path of the image file" },
     },
     required: ["path"],
   },
