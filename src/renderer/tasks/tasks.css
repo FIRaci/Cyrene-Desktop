@@ -87,15 +87,16 @@ body {
 .tasks__hint {
   font: var(--rb-text-micro);
   color: var(--rb-text-muted);
-  padding: 3px 9px;
+  padding: 3px 8px;
   border: 1px solid var(--rb-border-soft);
   border-radius: var(--rb-radius-full);
   background: var(--rb-bg-2);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 110px;
-  flex-shrink: 0;
+  max-width: 90px;
+  flex-shrink: 1;
+  min-width: 0;
 }
 
 .tasks__titlebar-actions {

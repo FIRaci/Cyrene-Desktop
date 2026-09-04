@@ -22,6 +22,10 @@ const cyreneApi = {
     ipcRenderer.send(IPC.WINDOW_SET_DRAGGING, isDragging),
   captureFrame: () => ipcRenderer.invoke(IPC.WINDOW_CAPTURE_FRAME),
   getCursorPosition: () => ipcRenderer.invoke(IPC.WINDOW_GET_CURSOR_POSITION),
+  // setPetZoom: fire-and-forget IPC send so the main process resizes the window and
+  // re-broadcasts PET_ZOOM authoritative value. Must be in cyreneApi (not settingsApi)
+  // because the Live2D renderer window calls window.cyrene.setPetZoom from wheel/drag events.
+  setPetZoom: (value: number) => ipcRenderer.send(IPC.SETTINGS_SET_PET_ZOOM, value),
   onPetZoom: (callback: (zoom: number) => void) => {
     const listener = (_e: unknown, zoom: number) => callback(zoom);
     ipcRenderer.on(IPC.PET_ZOOM, listener);

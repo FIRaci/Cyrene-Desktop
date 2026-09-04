@@ -3134,6 +3134,24 @@ function createWindow(): void {
     mainWindow.setIgnoreMouseEvents(true, { forward: true });
   }
 
+  // On Windows, setIgnoreMouseEvents({ forward: true }) forwards pointer events but
+  // NOT wheel/scroll events. To support Alt+wheel zoom, we must synchronously disable
+  // ignore-mouse-events as soon as Alt is held — before the first wheel tick fires.
+  // `before-input-event` fires in main process synchronously for all keyboard input.
+  let altHeldInMain = false;
+  mainWindow.webContents.on("before-input-event", (_event, input) => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    if (input.type === "keyDown" && input.key === "Alt" && !altHeldInMain) {
+      altHeldInMain = true;
+      mainWindow.setIgnoreMouseEvents(false);
+    } else if (input.type === "keyUp" && input.key === "Alt" && altHeldInMain) {
+      altHeldInMain = false;
+      if (!isDev) {
+        mainWindow.setIgnoreMouseEvents(true, { forward: true });
+      }
+    }
+  });
+
   mainWindow.on("hide", () => {
     mainWindow?.webContents.send(IPC.PET_VISIBILITY_CHANGED, false);
   });
@@ -3601,7 +3619,7 @@ function createLogWindow(): void {
 }
 
 function toggleChatWindow(): void {
-  if (chatWindow && !chatWindow.isDestroyed() && chatWindow.isVisible()) {
+  if (chatWindow && !chatWindow.isDestroyed() && (chatWindow.isVisible() || chatWindow.isMinimized())) {
     chatWindow.hide();
   } else {
     createChatWindow();
@@ -3609,7 +3627,7 @@ function toggleChatWindow(): void {
 }
 
 function toggleSidebarWindow(): void {
-  if (sidebarWindow && !sidebarWindow.isDestroyed() && sidebarWindow.isVisible()) {
+  if (sidebarWindow && !sidebarWindow.isDestroyed() && (sidebarWindow.isVisible() || sidebarWindow.isMinimized())) {
     sidebarWindow.hide();
   } else {
     createSidebarWindow();
@@ -3617,7 +3635,7 @@ function toggleSidebarWindow(): void {
 }
 
 function toggleTasksWindow(): void {
-  if (tasksWindow && !tasksWindow.isDestroyed() && tasksWindow.isVisible()) {
+  if (tasksWindow && !tasksWindow.isDestroyed() && (tasksWindow.isVisible() || tasksWindow.isMinimized())) {
     tasksWindow.hide();
   } else {
     createTasksWindow();
@@ -3625,7 +3643,7 @@ function toggleTasksWindow(): void {
 }
 
 function toggleSettingsWindow(): void {
-  if (settingsWindow && !settingsWindow.isDestroyed() && settingsWindow.isVisible()) {
+  if (settingsWindow && !settingsWindow.isDestroyed() && (settingsWindow.isVisible() || settingsWindow.isMinimized())) {
     settingsWindow.hide();
   } else {
     createSettingsWindow();
@@ -3633,12 +3651,13 @@ function toggleSettingsWindow(): void {
 }
 
 function toggleLogWindow(): void {
-  if (logWindow && !logWindow.isDestroyed() && logWindow.isVisible()) {
+  if (logWindow && !logWindow.isDestroyed() && (logWindow.isVisible() || logWindow.isMinimized())) {
     logWindow.hide();
   } else {
     createLogWindow();
   }
 }
+
 
 async function createStickerManagerWindow(): Promise<{ ok: boolean; error?: string }> {
   if (stickerManagerWindow && !stickerManagerWindow.isDestroyed()) {

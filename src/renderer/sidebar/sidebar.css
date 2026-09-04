@@ -315,7 +315,10 @@ body {
   letter-spacing: 0.2px;
   text-shadow: 0 0 8px rgba(236, 72, 153, 0.2);
   line-height: 1.25;
-  word-break: break-word;
+  /* Wrap on spaces first; only break mid-word as last resort */
+  overflow-wrap: break-word;
+  word-break: normal;
+  white-space: normal;
 }
 
 .model-card {
