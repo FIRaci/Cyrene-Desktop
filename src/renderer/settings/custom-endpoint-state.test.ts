@@ -1,11 +1,25 @@
 import { describe, expect, it } from "vitest";
 import {
   CUSTOM_ENDPOINT_PROVIDERS,
+  DEFAULT_LOCAL_ENDPOINT,
   getCustomEndpointMode,
   getCustomEndpointPresentation,
   getCustomEndpointProvider,
   validateCustomEndpointConfig,
 } from "./custom-endpoint-state";
+
+describe("local model defaults", () => {
+  it("targets the installed Ollama OpenAI-compatible endpoint without authentication", () => {
+    expect(DEFAULT_LOCAL_ENDPOINT).toEqual({
+      baseUrl: "http://127.0.0.1:11434/v1",
+      model: "llama3.1:latest",
+    });
+    expect(validateCustomEndpointConfig("local", {
+      ...DEFAULT_LOCAL_ENDPOINT,
+      apiKey: "",
+    })).toBeNull();
+  });
+});
 
 describe("custom endpoint settings state", () => {
   it("uses separate provider keys for cloud and local profiles", () => {
@@ -22,7 +36,7 @@ describe("custom endpoint settings state", () => {
 
   it("presents cloud endpoints as API-key based OpenAI-compatible services", () => {
     expect(getCustomEndpointPresentation("cloud")).toMatchObject({
-      displayName: "自定义云端",
+      displayName: "Custom Cloud",
       apiKeyOptional: false,
       baseUrlPlaceholder: "https://your-provider.example/v1",
       transport: "openai",
@@ -31,7 +45,7 @@ describe("custom endpoint settings state", () => {
 
   it("presents local endpoints with an optional key and localhost example", () => {
     expect(getCustomEndpointPresentation("local")).toMatchObject({
-      displayName: "本地模型",
+      displayName: "Local Model",
       apiKeyOptional: true,
       baseUrlPlaceholder: "http://127.0.0.1:11434/v1",
       transport: "openai",
@@ -51,14 +65,14 @@ describe("custom endpoint settings state", () => {
       baseUrl: "https://proxy.example.com/v1",
       model: "gpt-compatible",
       apiKey: "",
-    })).toBe("请填写 API Key");
+    })).toBe("Please fill in API Key");
   });
 
   it.each([
-    [{ baseUrl: "", model: "qwen3:8b", apiKey: "" }, "请填写 Base URL"],
-    [{ baseUrl: "127.0.0.1:11434", model: "qwen3:8b", apiKey: "" }, "Base URL 必须是完整的 HTTP(S) 地址"],
-    [{ baseUrl: "ftp://127.0.0.1/model", model: "qwen3:8b", apiKey: "" }, "Base URL 必须是完整的 HTTP(S) 地址"],
-    [{ baseUrl: "http://127.0.0.1:11434/v1", model: "", apiKey: "" }, "请填写模型 ID"],
+    [{ baseUrl: "", model: "qwen3:8b", apiKey: "" }, "Please fill in Base URL"],
+    [{ baseUrl: "127.0.0.1:11434", model: "qwen3:8b", apiKey: "" }, "Base URL must be a complete HTTP(S) address"],
+    [{ baseUrl: "ftp://127.0.0.1/model", model: "qwen3:8b", apiKey: "" }, "Base URL must be a complete HTTP(S) address"],
+    [{ baseUrl: "http://127.0.0.1:11434/v1", model: "", apiKey: "" }, "Please fill in Model ID"],
   ])("rejects incomplete local endpoint config %#", (config, message) => {
     expect(validateCustomEndpointConfig("local", config)).toBe(message);
   });

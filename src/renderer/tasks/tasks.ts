@@ -6,7 +6,7 @@ import { getSchedulePanelItems, type ScheduledTask } from "./task-filter";
 // ── 类型（后端契约） ──────────────────────────────────────────
 interface TokenDayData {
   date: string;       // "06-24"
-  weekday: string;   // "周三"
+  weekday: string;   // "Wednesday"
   input: number;
   output: number;
   hit: number;
@@ -35,9 +35,9 @@ if (!window.tasks) {
 }
 
 // ── 常量 ──────────────────────────────────────────────────────
-const WEEKDAYS = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const CHART_HEIGHT_PX = 76;          // mini-chart 可用柱高（与 settings 页一致）
-const MIN_BAR_PX = 6;                 // 无数据柱最低高度，避免完全消失
+const MIN_BAR_PX = 6;                 // None数据柱最低高度，避免Full消失
 const TASK_REFRESH_MS = 30_000;       // 任务列表轮询
 const TOKEN_REFRESH_MS = 60_000;      // token 用量轮询
 
@@ -54,7 +54,7 @@ closeBtn?.addEventListener("click", () => window.tasks?.close());
 settingsBtn?.addEventListener("click", () => window.sidebar?.openSettings("tasks"));
 
 // ── 工具函数 ──────────────────────────────────────────────────
-/** 生成 YYYY-MM-DD（本地时区），用作数据键 */
+/** 生成 YYYY-MM-DD（LocalTimezone），用作数据键 */
 function dateKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
@@ -75,10 +75,15 @@ function renderDate(): void {
   const now = new Date();
   const el = $("schedule-date");
   if (!el) return;
-  el.innerHTML = `<svg width="14" height="14" viewBox="0 0 48 48" fill="none" aria-hidden="true" style="vertical-align:-2px; margin-right:2px"><path d="M5 19H43V40C43 41.1046 42.1046 42 41 42H7C5.89543 42 5 41.1046 5 40V19Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M5 9C5 7.89543 5.89543 7 7 7H41C42.1046 7 43 7.89543 43 9V19H5V9Z" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M16 4V12" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M32 4V12" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M28 34H34" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 34H20" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M28 26H34" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 26H20" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg> ${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日 · ${WEEKDAYS[now.getDay()]}`;
+  const dateLabel = new Intl.DateTimeFormat("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  }).format(now);
+  el.innerHTML = `<svg width="14" height="14" viewBox="0 0 48 48" fill="none" aria-hidden="true" style="vertical-align:-2px; margin-right:2px"><path d="M5 19H43V40C43 41.1046 42.1046 42 41 42H7C5.89543 42 5 41.1046 5 40V19Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M5 9C5 7.89543 5.89543 7 7 7H41C42.1046 7 43 7.89543 43 9V19H5V9Z" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M16 4V12" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M32 4V12" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M28 34H34" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 34H20" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M28 26H34" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 26H20" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg> ${dateLabel} · ${WEEKDAYS[now.getDay()]}`;
 }
 
-// ── 渲染：今日 Token 用量 + 进度条（拉满+电流感） ────────────
+// ── 渲染：今日 Token Usage + 进度条（拉满+电流感） ────────────
 function renderTodayUsage(data7: TokenDayData[]): void {
   const todayKey = dateKey(new Date()).slice(5); // "06-24"
   const today = data7.find(d => d.date === todayKey);
@@ -88,22 +93,22 @@ function renderTodayUsage(data7: TokenDayData[]): void {
   if (numEl) numEl.textContent = formatThousands(todayTotal);
 }
 
-// ── 渲染：7 天柱状图（周日起算，今日之后留空柱） ────────────
+// ── 渲染：7 Days柱状图（Sunday起算，今日之后留空柱） ────────────
 function renderWeeklyBars(data7: TokenDayData[]): void {
   const container = $("mini-chart__bars");
   if (!container) return;
   container.innerHTML = "";
 
   const now = new Date();
-  const todayDow = now.getDay(); // 0=周日 ... 6=周六
+  const todayDow = now.getDay(); // 0=Sunday ... 6=Saturday
   const weekSunday = new Date(now);
-  weekSunday.setDate(now.getDate() - todayDow); // 本周日
+  weekSunday.setDate(now.getDate() - todayDow); // 本Sunday
 
   // 按日期键建索引：06-24 -> TokenDayData
   const byDate = new Map<string, TokenDayData>();
   for (const d of data7) byDate.set(d.date, d);
 
-  // 本周 7 天（周日→周六），收集已有数据
+  // 本周 7 Days（Sunday→Saturday），收集已有数据
   const weekSlots: Array<{ date: string; weekday: string; total: number | null; isToday: boolean; isFuture: boolean }> = [];
   for (let i = 0; i < 7; i++) {
     const day = new Date(weekSunday);
@@ -161,14 +166,14 @@ function renderWeeklyBars(data7: TokenDayData[]): void {
   const avg = pastSlots.length ? Math.round(sum / pastSlots.length) : 0;
   if (avgEl) {
     const span = avgEl.querySelector("span");
-    if (span) span.textContent = `日均 ${formatTokenShort(avg)}`;
+    if (span) span.textContent = `Avg/Day ${formatTokenShort(avg)}`;
   }
   if (noteEl && peakSlot) {
-    noteEl.innerHTML = `<svg width="18" height="18" viewBox="0 0 48 48" fill="none" aria-hidden="true" style="vertical-align:-2px"><title>Token</title><path d="M4 42H44" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><rect x="8" y="28" width="6" height="14" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><rect x="21" y="18" width="6" height="24" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><rect x="34" y="6" width="6" height="36" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/></svg> 本周 Token 消耗趋势 ｜ 峰值 ${formatTokenShort(peakSlot.total ?? 0)}（${peakSlot.weekday}）`;
+    noteEl.innerHTML = `<svg width="18" height="18" viewBox="0 0 48 48" fill="none" aria-hidden="true" style="vertical-align:-2px"><title>Token</title><path d="M4 42H44" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><rect x="8" y="28" width="6" height="14" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><rect x="21" y="18" width="6" height="24" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><rect x="34" y="6" width="6" height="36" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/></svg> Token Usage Trend This Week | Peak ${formatTokenShort(peakSlot.total ?? 0)}（${peakSlot.weekday}）`;
   }
 }
 
-// ── 渲染：今日定时任务列表 ────────────────────────────────────
+// ── 渲染：今日Scheduled Tasks List ────────────────────────────────────
 function renderTasks(tasks: ScheduledTask[]): void {
   const listEl = $("task-list");
   const countEl = $("schedule-count");
@@ -182,7 +187,7 @@ function renderTasks(tasks: ScheduledTask[]): void {
   if (panelItems.items.length === 0) {
     const empty = document.createElement("div");
     empty.className = "task-empty";
-    empty.textContent = "暂无已启用定时任务";
+    empty.textContent = "No enabled scheduled tasks";
     listEl.appendChild(empty);
     return;
   }
@@ -218,7 +223,7 @@ async function fetchTokenData(): Promise<TokenDayData[]> {
   try {
     return (await window.tokenUsage?.get(7)) ?? [];
   } catch (err) {
-    console.warn("[tasks] 拉取 Token 用量失败:", err);
+    console.warn("[tasks] Failed to fetch token usage:", err);
     return [];
   }
 }
@@ -229,12 +234,12 @@ async function fetchTasks(): Promise<ScheduledTask[]> {
     if (res?.ok && Array.isArray(res.value)) return res.value;
     return [];
   } catch (err) {
-    console.warn("[tasks] 拉取定时任务失败:", err);
+    console.warn("[tasks] Failed to fetch scheduled tasks:", err);
     return [];
   }
 }
 
-// ── 刷新（节流合并） ──────────────────────────────────────────
+// ── Refresh（节流合并） ──────────────────────────────────────────
 let refreshPending = false;
 async function refreshAll(): Promise<void> {
   if (refreshPending) return;
@@ -263,12 +268,12 @@ function init(): void {
     });
   }, TOKEN_REFRESH_MS);
 
-  // 事件驱动：scheduler 触发后立即刷新（用量和任务都会变）
+  // 事件驱动：scheduler 触发后立即Refresh（用量和任务都会变）
   window.schedulerEvents?.onEvent((_event) => {
     void refreshAll();
   });
 
-  // 任务增删改后立即刷新（不再等 30s 轮询）
+  // 任务增删改后立即Refresh（不再等 30s 轮询）
   window.tasks?.onSchedulerChanged?.(() => {
     void refreshAll();
   });

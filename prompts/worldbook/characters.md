@@ -3,7 +3,7 @@
 
 ---
 
-## 白厄 / Phainon
+## Phainon
 - Trigger Words: Phainon, Brother Blazing Sun, Chaoslana, Childhood Friend, Phainon of Elymise
 - Permanent: No
 - Inner Value: 80
@@ -20,7 +20,7 @@ Master, people often refer to Castorice, Phainon, and Anaxa as the "Tree Court G
 
 ---
 
-## 来古士 / Luocha (Zandar One Kuwabara)
+## Luocha (Zandar One Kuwabara)
 - Trigger Words: Luocha, Zandar, Divine Ritual Audience, Omphalos Administrator, First Mover
 - Permanent: No
 - Inner Value: 70
@@ -35,7 +35,7 @@ However, all of this was just a disguise, Master. Luocha's true identity was the
 
 ---
 
-## 荒笛 / Huangdi
+## Huangdi
 - Trigger Words: Huangdi, Titan of the Earth, Earth Beast, Guardian of the Earth
 - Permanent: No
 - Inner Value: 60
@@ -52,7 +52,7 @@ Huangdi has witnessed the entire history of the world, from creation to conflict
 
 ---
 
-## 风堇 / Hyacine
+## Hyacine
 - Trigger Words: Hyacine, Hyacinthus, Wind Treasure, Physician of Flickering Light, Little Ica, Titan of the Sky, Titan
 - Permanent: No
 - Inner Value: 80
@@ -73,7 +73,7 @@ As I mentioned before, Master, Castorice, Phainon, and Anaxa are known as the Tr
 
 ---
 
-## 遐蝶 / Castorice
+## Castorice
 - Trigger Words: Castorice, Homebody Princess, Flame of Death, Polydeuces, Demigod of Death
 - Permanent: No
 - Inner Value: 80
@@ -94,7 +94,7 @@ Just like the others, she is part of the Tree Court Group!
 
 ---
 
-## 万敌 / Mydei
+## Mydei
 - Trigger Words: Mydei, Spear of Divine Condemnation, Mydeimos, Flame of Conflict, Phainon's Best Friend
 - Permanent: No
 - Inner Value: 80
@@ -115,7 +115,7 @@ He is close friends with Phainon, Master.
 
 ---
 
-## 那刻夏 / Anaxa (Anaxagoras)
+## Anaxa (Anaxagoras)
 - Trigger Words: Anaxa, Anaxagoras, Blasphemous Scholar, Flame of Reason
 - Permanent: No
 - Inner Value: 80
@@ -138,7 +138,7 @@ To verify the theory that "Titans are the previous generation of Golden Scions,"
 
 ---
 
-## 缇里西庇俄丝 / Tibao, Tian, Tining (Tiresias)
+## Tibao, Tian, Tining (Tiresias)
 - Trigger Words: Tibao, Tian, Tining, Tiresias, Flame of the Portal, HapLotes405, Three Thousand Avatars
 - Permanent: No
 - Inner Value: 80
@@ -161,7 +161,7 @@ Today's Tibao is actually a collection of three sisters, Master: Tibao is gentle
 
 ---
 
-## 阿格莱雅 / Aglaea
+## Aglaea
 - Trigger Words: Aglaea, Lady Goldweaver, Lord Goldweaver, Flame of Romance, Seamstress
 - Permanent: No
 - Inner Value: 80
@@ -180,7 +180,7 @@ The bond between Sephiel and Aglaea is the delicate, distant tacit understanding
 
 ---
 
-## 赛飞儿 / Sephiel (Sephalia)
+## Sephiel (Sephalia)
 - Trigger Words: Sephiel, Sephalia, Flame of Trickery, Swift Thief Star, Bandit
 - Permanent: No
 - Inner Value: 80
@@ -199,7 +199,7 @@ The bond between Sephiel and Aglaea is the delicate, distant tacit understanding
 
 ---
 
-## 刻律德菈 / Clepsydra (Caesar)
+## Clepsydra (Caesar)
 - Trigger Words: Clepsydra, Caesar, Flame of Law, The Chess-playing Monarch, Northern Empire
 - Permanent: No
 - Inner Value: 80
@@ -220,7 +220,7 @@ The bond between Hession and Clepsydra began with a promise, Master. When the Bl
 
 ---
 
-## 海瑟音 / Hession (Halicura)
+## Hession (Halicura)
 - Trigger Words: Hession, Halicura, Flame of the Ocean, Sword Banner Lord, Stycosia
 - Permanent: No
 - Inner Value: 80
@@ -239,7 +239,7 @@ The bond between Hession and Clepsydra began with a promise. When the Black Tide
 
 ---
 
-## 长夜月 / Changyeyue (Anasrava Changyeyue · March 7th)
+## Changyeyue (Anasrava Changyeyue · March 7th)
 - Trigger Words: Changyeyue, Long Night Moon, Anasrava Changyeyue, Garden of Recollection, Flame of Time, The Original March 7th
 - Permanent: No
 - Inner Value: 80
@@ -260,7 +260,7 @@ Changyeyue's appearance has changed significantly, transforming from a sunny and
 
 ---
 
-## 大黑塔 / Herta (The Great Herta)
+## Herta (The Great Herta)
 - Trigger Words: The Great Herta, Genius Society #83, Herta, Solitary Wave Algorithm, Solitary Wave Equation
 - Permanent: No
 - Inner Value: 80
@@ -277,7 +277,7 @@ She once exhausted the power of all her puppets to seek an audience with Nous, a
 
 ---
 
-## 丹恒·腾荒 / Dan Heng • Tenghuang
+## Dan Heng • Tenghuang
 - Trigger Words: Dan Heng, Tenghuang, Astral Express, Flame of the Earth
 - Permanent: No
 - Inner Value: 80
@@ -294,7 +294,7 @@ Dan Heng is aloof and speaks little, with a serious and cautious personality. He
 
 ---
 
-## 三月七 / March 7th
+## March 7th
 - Trigger Words: March 7th, Astral Express, Pink Girl, Changyeyue's Main Body
 - Permanent: No
 - Inner Value: 80
@@ -313,7 +313,7 @@ She always holds a uniquely shaped ice bow capable of freezing all things. Her i
 
 ---
 
-## 小伊卡 / Little Ica
+## Little Ica
 - Trigger Words: Little Ica, Pegasus
 - Permanent: No
 - Inner Value: 50

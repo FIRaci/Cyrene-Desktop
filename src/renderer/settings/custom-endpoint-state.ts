@@ -1,8 +1,19 @@
+import {
+  DEFAULT_OLLAMA_BASE_URL,
+  DEFAULT_OLLAMA_MODEL,
+  LOCAL_MODEL_PROVIDER,
+} from "../../shared/model-endpoint";
+
 export type CustomEndpointMode = "cloud" | "local";
 
 export const CUSTOM_ENDPOINT_PROVIDERS = {
-  cloud: "自定义端点（云端）",
-  local: "自定义端点（本地）",
+  cloud: "Custom Endpoint (Cloud)",
+  local: LOCAL_MODEL_PROVIDER,
+} as const;
+
+export const DEFAULT_LOCAL_ENDPOINT = {
+  baseUrl: DEFAULT_OLLAMA_BASE_URL,
+  model: DEFAULT_OLLAMA_MODEL,
 } as const;
 
 export interface CustomEndpointPresentation {
@@ -20,13 +31,13 @@ export interface CustomEndpointConfigInput {
 
 const PRESENTATION: Record<CustomEndpointMode, CustomEndpointPresentation> = {
   cloud: {
-    displayName: "自定义云端",
+    displayName: "Custom Cloud",
     apiKeyOptional: false,
     baseUrlPlaceholder: "https://your-provider.example/v1",
     transport: "openai",
   },
   local: {
-    displayName: "本地模型",
+    displayName: "Local Model",
     apiKeyOptional: true,
     baseUrlPlaceholder: "http://127.0.0.1:11434/v1",
     transport: "openai",
@@ -52,18 +63,18 @@ export function validateCustomEndpointConfig(
   config: CustomEndpointConfigInput,
 ): string | null {
   const baseUrl = config.baseUrl.trim();
-  if (!baseUrl) return "请填写 Base URL";
+  if (!baseUrl) return "Please fill in Base URL";
 
   try {
     const parsed = new URL(baseUrl);
     if ((parsed.protocol !== "http:" && parsed.protocol !== "https:") || !parsed.hostname) {
-      return "Base URL 必须是完整的 HTTP(S) 地址";
+      return "Base URL must be a complete HTTP(S) address";
     }
   } catch {
-    return "Base URL 必须是完整的 HTTP(S) 地址";
+    return "Base URL must be a complete HTTP(S) address";
   }
 
-  if (!config.model.trim()) return "请填写模型 ID";
-  if (mode === "cloud" && !config.apiKey.trim()) return "请填写 API Key";
+  if (!config.model.trim()) return "Please fill in Model ID";
+  if (mode === "cloud" && !config.apiKey.trim()) return "Please fill in API Key";
   return null;
 }

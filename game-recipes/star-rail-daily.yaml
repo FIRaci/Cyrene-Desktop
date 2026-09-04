@@ -1,17 +1,17 @@
-name: 星穹铁道每日
+name: Honkai Star Rail Daily Routine
 exe: "${exe_path}"
 model: "${vlm_config}"
-# vlm_* 原语默认截图前 settle 3s 等界面稳定，可单步覆盖
+# VLM steps wait three seconds before capture by default; individual steps may override this.
 
 steps:
-  # 1. 启动
+  # 1. Launch
   - launch: "${exe}"
 
-  # 2. 等加载 + 判断更新弹窗
+  # 2. Wait for loading and detect an update dialog
   - wait: 60s
   - vlm_check:
       id: has_update
-      ask: "画面上是否出现了游戏版本更新/下载弹窗？"
+      ask: "Is a game update or download dialog visible on screen?"
   - branch:
       if: "${has_update}"
       then:
@@ -27,61 +27,61 @@ steps:
         - wait: 6s
         - click: center
 
-  # 3. 进主界面 + 领月卡（有则领，无则正常走完两步）
+  # 3. Enter the main screen and claim the monthly-card reward when present
   - wait: 90s
   - click: center
   - wait: 10s
   - click: center
 
-  # 4-5. 开 F3 面板
+  # 4-5. Open the F3 panel
   - key: F3
   - wait: 6s
 
-  # 6-7. 两轮识图推进
+  # 6-7. Advance through two visual targets
   - vlm_click: { ref: f3_target_1 }
   - vlm_click: { ref: f3_target_2 }
 
-  # 8. 加号×3 + 开始挑战（加号位置不变，识别一次连点 3 次）
+  # 8. Press plus three times, then start the challenge
   - vlm_click: { ref: plus_btn, repeat: 3, interval: 1s }
   - vlm_click: { ref: start_challenge_1 }
 
-  # 9. 角色选择
-  - vlm_click: { ref: support_btn }            # 9-1 支援按钮
-  - vlm_select: "支援列表里的第一个角色"        # 9-2 选第一个（布局固定内容变，无参考图）
-  - vlm_click: { ref: confirm_btn }            # 9-3 确认
-  - vlm_click: { ref: start_challenge_2 }      # 9-4 开始挑战
-  - key: V                                     # 进战斗
+  # 9. Select a character
+  - vlm_click: { ref: support_btn }            # 9-1 Support button
+  - vlm_select: "Select the first character in the support list"
+  - vlm_click: { ref: confirm_btn }            # 9-3 Confirm
+  - vlm_click: { ref: start_challenge_2 }      # 9-4 Start challenge
+  - key: V                                     # Enter battle
 
-  # 10. 自动战斗状态比对（当前图 + 开/关两张参考图；refs[0]=开启 [1]=关闭）
+  # 10. Compare auto-battle state; reference 1 is on and reference 2 is off
   - vlm_compare:
       id: auto_battle_state
-      ask: "当前自动战斗是开启还是关闭？参考图1=开启，参考图2=关闭，当前画面匹配哪个？"
+      ask: "Is auto-battle on or off? Reference 1 is on and reference 2 is off. Which reference matches the current screen?"
       refs: [auto_battle_on, auto_battle_off]
   - branch:
-      if: "${auto_battle_state == 1}"          # 关闭 → 按 V 开启
+      if: "${auto_battle_state == 1}"          # Off: press V to enable
       then:
         - key: V
 
-  # 11. 等战斗结束 + 退出副本（5 分钟够）
+  # 11. Wait for battle to finish, then leave the instance
   - wait: 300s
   - vlm_click: { ref: exit_dungeon_btn }
 
-  # 12. 返回 + 重开 F3
+  # 12. Return and reopen F3
   - wait: 10s
   - key: Escape
   - wait: 6s
   - key: F3
 
-  # 13. 领取奖励
-  - vlm_click: { ref: claim_btn, repeat: 3, interval: 2s }   # 13-1 连点×3
-  - vlm_check:                                              # 13-2 500 档位是否高亮
+  # 13. Claim rewards
+  - vlm_click: { ref: claim_btn, repeat: 3, interval: 2s }
+  - vlm_check:
       id: tier_highlighted
-      ask: "画面上方的 500 档位按钮是否处于高亮可领取状态？参考图是高亮时的样子。"
+      ask: "Is the 500-point reward button at the top highlighted and claimable? The reference image shows its highlighted state."
       ref: tier_500_highlight
-  - branch:                                                 # 13-3 高亮则点
+  - branch:                                                 # 13-3 Click when highlighted
       if: "${tier_highlighted}"
       then:
         - vlm_click: { ref: tier_500_btn }
 
-  # 13-4. 退出游戏
+  # 13-4. Exit the game
   - key: "Alt+F4"

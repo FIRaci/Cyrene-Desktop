@@ -26,14 +26,14 @@ describe("custom endpoint API settings UI", () => {
 
   it("ships a local custom endpoint icon", () => {
     expect(icon).toContain("<svg");
-    expect(icon).toContain("<title>自定义端点</title>");
+    expect(icon).toContain("<title>Custom endpoint</title>");
   });
 
   it("includes the support boundary and all requested FAQ topics", () => {
-    expect(source).toContain("本地模型与自定义端点不在官方技术支持范围内");
-    expect(source).toContain("本地模型回复格式异常");
-    expect(source).toContain("MiniMax 思考模式失效");
-    expect(source).toContain("Claude 配置项比其他厂商少");
+    expect(source).toContain("Local models and custom endpoints are not officially supported");
+    expect(source).toContain("Local model response format error");
+    expect(source).toContain("MiniMax Reasoning Mode Failed");
+    expect(source).toContain("Fewer configs for Claude");
   });
 
   it("persists the inactive custom profile together with the active one", () => {

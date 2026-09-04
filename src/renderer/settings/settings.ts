@@ -396,7 +396,7 @@ interface GeneralSettings {
   sidebarVisible: boolean;
   tasksVisible: boolean;
   launchAtLogin: boolean;
-  language: "zh-CN";
+  language: "en-US";
   uiTheme: UiTheme;
   uiFont: UiFont;
   uiIcon: UiIcon;
@@ -672,7 +672,7 @@ if (!window.settings) {
       sidebarVisible: true,
       tasksVisible: true,
       launchAtLogin: false,
-      language: "zh-CN",
+      language: "en-US",
       uiTheme: "classic",
       defaultChatMode: "work",
       currentStyleId: "default",
@@ -890,6 +890,24 @@ const NAV_LABELS: Record<string, { emoji: string; title: string; hint: string }>
 	  disclaimer: { emoji: `<svg width="24" height="24" viewBox="0 0 48 48" fill="none" aria-hidden="true" style="vertical-align:-3px"><title>免责声明</title><rect x="13" y="10" width="28" height="34" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M35 10V4H8C7.44772 4 7 4.44772 7 5V38H13" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 22H33" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 30H33" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>`, title: "免责声明", hint: "使用条款与隐私说明" },
 };
 
+Object.assign(NAV_LABELS, {
+  memory: { ...NAV_LABELS.memory, title: "Memory", hint: "Manage long-term memory and profile data" },
+  chat: { ...NAV_LABELS.chat, title: "Chat", hint: "Manage chat windows and conversations" },
+  user: { ...NAV_LABELS.user, title: "User Info", hint: "Edit your profile" },
+  tasks: { ...NAV_LABELS.tasks, title: "Scheduled Tasks", hint: "Manage reminders and schedules" },
+  skills: { ...NAV_LABELS.skills, title: "Skills", hint: "Manage agent skill instructions" },
+  plugins: { ...NAV_LABELS.plugins, title: "MCP", hint: "Manage integrations and extensions" },
+  preferences: { ...NAV_LABELS.preferences, title: "Preferences", hint: "Configure chat and output behavior" },
+  appearance: { ...NAV_LABELS.appearance, title: "Appearance", hint: "Configure layout, theme, and desktop pet" },
+  general: { ...NAV_LABELS.general, title: "General", hint: "Configure windows, audio, and system behavior" },
+  api: { ...NAV_LABELS.api, title: "API", hint: "Configure model providers and credentials" },
+  cyrene: { ...NAV_LABELS.cyrene, title: "Cyrene", hint: "Configure agent behavior, memory, RAG, and permissions" },
+  tts: { ...NAV_LABELS.tts, title: "TTS", hint: "Configure speech synthesis and reading" },
+  asr: { ...NAV_LABELS.asr, title: "ASR", hint: "Configure speech recognition and calls" },
+  tokens: { ...NAV_LABELS.tokens, title: "Token Usage", hint: "Review model usage statistics" },
+  disclaimer: { ...NAV_LABELS.disclaimer, title: "Disclaimer", hint: "Review terms and privacy information" },
+});
+
 minBtn.addEventListener("click", () => window.settings?.minimize());
 closeBtn.addEventListener("click", () => window.settings?.close());
 
@@ -972,7 +990,7 @@ function applyStickerSizeSelection(value: "small" | "standard" | "large"): void 
   });
 }
 
-function applyLanguageSelection(language: "zh-CN"): void {
+function applyLanguageSelection(language: "en-US"): void {
   languageSelect.querySelectorAll<HTMLButtonElement>(".language-option").forEach((button) => {
     const active = button.dataset.lang === language;
     button.classList.toggle("is-active", active);
@@ -1079,26 +1097,26 @@ function ensureCustomStyleModal(): HTMLElement {
   customStyleOverlay.className = "cy-modal-overlay is-hidden custom-style-overlay";
   customStyleOverlay.innerHTML = [
     '<div class="cy-modal custom-style-modal" role="dialog" aria-modal="true">',
-    '  <div class="cy-modal__head"><span class="cy-modal__icon">🖊️</span><h3 class="cy-modal__title">自定义风格采样</h3></div>',
+    '  <div class="cy-modal__head"><span class="cy-modal__icon">🖊️</span><h3 class="cy-modal__title">Custom Style Sampling</h3></div>',
     '  <hr class="cy-modal__divider">',
     '  <div class="custom-style-modal__section">',
-    '    <div class="custom-style-modal__label">多样性控制</div>',
-    '    <label><input type="radio" name="custom-diversity" value="model-default"> 跟随模型</label>',
+    '    <div class="custom-style-modal__label">Diversity Control</div>',
+    '    <label><input type="radio" name="custom-diversity" value="model-default"> Follow Model Default</label>',
     '    <label><input type="radio" name="custom-diversity" value="temperature"> Temperature</label>',
     '    <label><input type="radio" name="custom-diversity" value="top-p"> Top-P</label>',
     '    <div class="custom-style-modal__value" id="custom-diversity-row"><span id="custom-diversity-label">Temperature</span><input id="custom-diversity-value" type="number" min="0" max="2" step="0.01"></div>',
     '  </div>',
     '  <div class="custom-style-modal__section">',
-    '    <div class="custom-style-modal__label">重复控制</div>',
-    '    <label><input type="radio" name="custom-repetition" value="model-default"> 跟随模型</label>',
-    '    <label><input type="radio" name="custom-repetition" value="light"> 轻度抑制</label>',
-    '    <label><input type="radio" name="custom-repetition" value="medium"> 中度抑制</label>',
-    '    <label><input type="radio" name="custom-repetition" value="strong"> 重度抑制</label>',
+    '    <div class="custom-style-modal__label">Repetition Penalty</div>',
+    '    <label><input type="radio" name="custom-repetition" value="model-default"> Follow Model Default</label>',
+    '    <label><input type="radio" name="custom-repetition" value="light"> Light Suppression</label>',
+    '    <label><input type="radio" name="custom-repetition" value="medium"> Medium Suppression</label>',
+    '    <label><input type="radio" name="custom-repetition" value="strong"> Strong Suppression</label>',
     '  </div>',
     '  <div class="cy-modal__actions">',
-    '    <button type="button" class="ghost-btn" id="custom-style-reset">恢复默认</button>',
-    '    <button type="button" class="ghost-btn" id="custom-style-cancel">取消</button>',
-    '    <button type="button" class="btn-primary" id="custom-style-save">保存</button>',
+    '    <button type="button" class="ghost-btn" id="custom-style-reset">Restore Defaults</button>',
+    '    <button type="button" class="ghost-btn" id="custom-style-cancel">Cancel</button>',
+    '    <button type="button" class="btn-primary" id="custom-style-save">Save</button>',
     '  </div>',
     '</div>',
   ].join("\n");
@@ -1567,7 +1585,7 @@ async function loadGeneralSettings(): Promise<void> {
     void window.settings!.channelsGetStatus()
       .then((status: unknown) => renderProactiveDeliveryAvailability(status as Record<string, { phase?: string }>))
       .catch(() => renderProactiveDeliveryAvailability({}));
-    applyLanguageSelection("zh-CN");
+    applyLanguageSelection("en-US");
     setPreferencesSaveStatus("等待保存");
     setAppearanceSaveStatus("等待保存");
     setGeneralSaveStatus("等待保存");
@@ -2263,9 +2281,9 @@ searchEnabledCheckbox?.addEventListener("change", () => {
   syncSearchConfigVisibility();
   // 开关变化时，若开启则把 searchEngine 从 off 改成第一个有 key 的源（或 bocha）
   if (searchEnabledCheckbox.checked && searchEngineSelect?.value === "off") {
-    searchEngineSelect.value = "bocha";
+    searchEngineSelect.value = "ddg";
     syncSearchEngineRows();
-    void saveSearchField("searchEngine", "bocha");
+    void saveSearchField("searchEngine", "ddg");
   } else {
     void saveSearchField("searchEngine", searchEngineSelect?.value ?? "off");
   }
@@ -2514,30 +2532,30 @@ customEndpointControls?.addEventListener("click", (e) => {
 
 const CUSTOM_ENDPOINT_GUIDE_BODY = [
   '<section class="custom-endpoint-guide-section">',
-  '  <h4>官方云端模型</h4>',
-  '  <p>从列表选择已适配厂商（OpenAI、Claude、Kimi、DeepSeek、MiniMax、智谱 GLM、通义千问、豆包、小米 MiMo），填写对应平台获取的 API Key 即可。Base URL 与推荐模型 ID 已预填。</p>',
-  '  <p class="custom-endpoint-guide-note">同一厂商的不同模型在结构化输出、工具调用和思考模式等能力上可能存在差异，请优先使用列表内的推荐型号。</p>',
+  '  <h4>Official Cloud Models</h4>',
+  '  <p>Select an adapted provider from the list (OpenAI, Claude, Kimi, DeepSeek, MiniMax, Zhipu GLM, Qwen, Doubao, Xiaomi MiMo) and fill in the API Key obtained from the platform. Base URL and recommended model ID are pre-filled.</p>',
+  '  <p class="custom-endpoint-guide-note">Different models from the same provider may differ in structured output, tool calling, and reasoning abilities. Please prioritize using the recommended models in the list.</p>',
   '</section>',
   '<section class="custom-endpoint-guide-section">',
-  '  <h4>自定义端点 <span>高级</span></h4>',
-  '  <p>可接入提供 OpenAI 兼容接口的云端服务、本地推理服务或第三方代理。请自行填写完整 Base URL 和服务实际提供的模型 ID。</p>',
-  '  <div class="custom-endpoint-guide-warning"><strong>本地模型与自定义端点不在官方技术支持范围内。</strong>实际能力取决于推理服务的具体实现，系统不会扫描端口、探测模型或自动升级能力档位。接入第三方代理前，请自行评估隐私和数据安全风险。</div>',
-  '  <p>建议保存后点击“<strong>测试连接</strong>”进行基础验证。连接成功仅表示服务能够响应，不代表结构化输出、工具调用和思考模式一定可用。</p>',
-  '  <p class="custom-endpoint-guide-security">🔒 你的 API Key 仅存储在本地设备，不会上传至昔涟的服务器。</p>',
+  '  <h4>Custom Endpoints <span>Advanced</span></h4>',
+  '  <p>Connect cloud services, local inference services, or third-party proxies that provide OpenAI-compatible APIs. Please fill in the complete Base URL and model ID provided by the service.</p>',
+  '  <div class="custom-endpoint-guide-warning"><strong>Local models and custom endpoints are not officially supported.</strong> Actual capabilities depend on the specific inference service implementation. The system does not scan ports, probe models, or auto-upgrade capability tiers. Assess privacy and data security risks before using third-party proxies.</div>',
+  '  <p>After saving, click "<strong>Test Connection</strong>" for basic verification. Successful connection only indicates that the service responds, not that structured output, tool calling, and reasoning modes are fully functional.</p>',
+  '  <p class="custom-endpoint-guide-security">🔒 Your API Key is only stored locally on your device and will never be uploaded to Cyrene\'s servers.</p>',
   '</section>',
   '<section class="custom-endpoint-guide-section custom-endpoint-faq">',
-  '  <h4>常见问题</h4>',
+  '  <h4>Frequently Asked Questions</h4>',
   '  <details>',
-  '    <summary>本地模型回复格式异常</summary>',
-  '    <p>许多本地推理服务缺少稳定的约束解码或完整协议实现，偶尔输出多余文本、Markdown 围栏或不完整 JSON 属于常见情况。系统会使用本地校验与自动修复兜底；如需更高稳定性，建议选择官方云端模型。</p>',
+  '    <summary>Local model response format error</summary>',
+  '    <p>Many local inference services lack stable constrained decoding or full protocol implementations; occasionally outputting extraneous text, Markdown fences, or incomplete JSON is common. The system uses local validation and automatic repair fallbacks; for higher stability, official cloud models are recommended.</p>',
   '  </details>',
   '  <details>',
-  '    <summary>MiniMax 思考模式失效</summary>',
-  '    <p>MiniMax 在 JSON 模式下不建议同时启用思考。系统会依据已验证的配置自动处理这一冲突，以结构化结果的稳定性为优先。</p>',
+  '    <summary>MiniMax Reasoning Mode Failed</summary>',
+  '    <p>MiniMax does not recommend enabling reasoning while in JSON mode. The system automatically handles this conflict according to verified configurations, prioritizing the stability of structured results.</p>',
   '  </details>',
   '  <details>',
-  '    <summary>Claude 配置项比其他厂商少</summary>',
-  '    <p>Claude 的接口规范与 OpenAI 兼容接口不同，部分参数和结构化输出档位并不适用，因此页面显示的配置项会更少。这属于正常差异，不影响已适配能力的使用。</p>',
+  '    <summary>Fewer configs for Claude</summary>',
+  '    <p>Claude\'s API specification differs from OpenAI-compatible interfaces; certain parameters and structured output tiers do not apply, so fewer configuration items are shown. This is normal and does not affect supported capabilities.</p>',
   '  </details>',
   '</section>',
 ].join("\n");
@@ -2644,7 +2662,7 @@ if (testConnectionBtn) {
       return;
     }
     const apiKey = getApiKeyForRequest();
-    if (!apiKey) { setSaveStatus("请先填写 API Key 再测试", "is-error"); return; }
+    if (!apiKey) { setSaveStatus("Enter an API key before testing.", "is-error"); return; }
     if (!model) { setSaveStatus("请先选择/填写模型再测试", "is-error"); return; }
     setSaveStatus("测试连接中…");
     testConnectionBtn.disabled = true;
@@ -2688,8 +2706,9 @@ testVisionBtn.addEventListener("click", async () => {
   const baseUrl = visionBaseUrlInput.value;
   const apiKey = visionApiKeyInput.value;
   const model = visionModelInput.value;
-  if (!apiKey) { visionTestStatus.textContent = "请先填写 API Key"; return; }
-  if (!model) { visionTestStatus.textContent = "请先填写视觉型号"; return; }
+  const isLocal = !baseUrl || baseUrl.includes("localhost") || baseUrl.includes("127.0.0.1") || baseUrl.includes("::1");
+  if (!apiKey && !isLocal) { visionTestStatus.textContent = "Enter an API key first."; return; }
+  if (!model) { visionTestStatus.textContent = "Enter a vision model first."; return; }
   visionTestStatus.textContent = "测试中…";
   testVisionBtn.disabled = true;
   try {
@@ -2845,7 +2864,7 @@ generalForm.addEventListener("submit", async (e) => {
       sidebarVisible: sidebarVisibleInput.checked,
       tasksVisible: tasksVisibleInput.checked,
       launchAtLogin: launchAtLoginInput.checked,
-      language: "zh-CN",
+      language: "en-US",
     });
     setGeneralSaveStatus("已保存", "is-ok");
   } catch {
@@ -3330,7 +3349,7 @@ function renderChannelStatus(el: HTMLElement | null, phase: string, message?: st
     else if (phase === "config_missing") dot.classList.add("channels-status__dot--config_missing");
     else dot.classList.add("channels-status__dot--offline");
   }
-  if (text) text.textContent = message ?? (phase === "running" ? "运行中" : phase === "starting" ? "启动中" : phase === "config_missing" ? "配置缺失" : phase === "error" ? "错误" : "未启用");
+  if (text) text.textContent = message ?? (phase === "running" ? "Running" : phase === "starting" ? "Starting" : phase === "config_missing" ? "Missing Config" : phase === "error" ? "Error" : "Disabled");
 }
 
 async function loadChannelsPanel(): Promise<void> {
@@ -4316,7 +4335,7 @@ function formatDateTime(timestamp: number): string {
   if (!timestamp) return "暂无时间";
   const date = new Date(timestamp);
   if (Number.isNaN(date.getTime())) return "暂无时间";
-  return date.toLocaleString("zh-CN", {
+  return date.toLocaleString("en-US", {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -5721,6 +5740,22 @@ async function loadTtsConfig(): Promise<void> {
   ttsEl("tts-gptsovits-prompt-text").value = String(ttsConfig.ttsGptsovitsPromptText ?? "");
   (ttsEl("tts-gptsovits-format") as HTMLSelectElement).value =
     ttsConfig.ttsGptsovitsFormat === "mp3" ? "mp3" : "wav";
+  const languageMode = document.getElementById("tts-gptsovits-lang-mode") as HTMLSelectElement | null;
+  if (languageMode) {
+    languageMode.value = ttsConfig.ttsGptsovitsLanguageMode === "original-mandarin"
+      ? "original-mandarin"
+      : "english";
+  }
+  const rvcEnabled = document.getElementById("tts-rvc-enabled") as HTMLInputElement | null;
+  if (rvcEnabled) rvcEnabled.checked = ttsConfig.ttsRvcEnabled === true;
+  const rvcPanel = document.getElementById("tts-rvc-panel");
+  if (rvcPanel) rvcPanel.hidden = ttsConfig.ttsRvcEnabled !== true;
+  const rvcUrl = document.getElementById("tts-rvc-url") as HTMLInputElement | null;
+  if (rvcUrl) rvcUrl.value = String(ttsConfig.ttsRvcBaseUrl ?? "http://localhost:18888");
+  const rvcModel = document.getElementById("tts-rvc-model") as HTMLInputElement | null;
+  if (rvcModel) rvcModel.value = String(ttsConfig.ttsRvcModel ?? "Cyrene (Aiden Dawn)");
+  const rvcPitch = document.getElementById("tts-rvc-pitch") as HTMLInputElement | null;
+  if (rvcPitch) rvcPitch.value = String(ttsConfig.ttsRvcPitch ?? 0);
 
   // 自定义云端
   ttsEl("tts-custom-cloud-url").value = String(ttsConfig.ttsCustomCloudEndpointUrl ?? "");
@@ -5733,7 +5768,7 @@ async function loadTtsConfig(): Promise<void> {
   // 小米 MiMo
   ttsEl("tts-mimo-key").value = String(ttsConfig.ttsMimoKey ?? "");
   ttsEl("tts-mimo-voice-audio").value = String(ttsConfig.ttsMimoVoiceAudioPath ?? "");
-  ttsEl("tts-mimo-style").value = String(ttsConfig.ttsMimoStylePrompt ?? "温柔、自然、略带亲近感，像在轻声陪用户聊天。");
+  ttsEl("tts-mimo-style").value = String(ttsConfig.ttsMimoStylePrompt ?? "Gentle, natural, and warmly conversational.");
 
   // Mossland（UI 骨架已就位，IPC 第二步接通；字段值已写入 ttsConfig 以便保存）
   ttsEl("tts-mossland-key").value = String(ttsConfig.ttsMosslandKey ?? "");
@@ -5773,7 +5808,7 @@ async function saveTtsField(field: string, value: unknown): Promise<void> {
   try {
     await window.tts.saveSettings({ [field]: value });
   } catch (err) {
-    console.warn("[TTS] 保存配置失败:", field, err);
+    console.warn("[TTS] Failed to save settings:", field, err);
   }
 }
 
@@ -5785,10 +5820,10 @@ function playTtsAudio(base64: string, format: "wav" | "mp3" = "mp3"): void {
     const blob = new Blob([bytes], { type: mime });
     const url = URL.createObjectURL(blob);
     const audio = new Audio(url);
-    audio.play().catch((err) => console.warn("[TTS] 播放失败:", err));
+    audio.play().catch((err) => console.warn("[TTS] Playback failed:", err));
     audio.onended = () => URL.revokeObjectURL(url);
   } catch (err) {
-    console.warn("[TTS] 音频解码失败:", err);
+    console.warn("[TTS] Audio decoding failed:", err);
   }
 }
 
@@ -5950,6 +5985,25 @@ for (const [provider, ui] of Object.entries(ttsProviderUi)) {
 (ttsEl("tts-gptsovits-format") as HTMLSelectElement).addEventListener("change", () => {
   void saveTtsField("ttsGptsovitsFormat", (ttsEl("tts-gptsovits-format") as HTMLSelectElement).value as "wav" | "mp3");
 });
+document.getElementById("tts-gptsovits-lang-mode")?.addEventListener("change", () => {
+  const val = (document.getElementById("tts-gptsovits-lang-mode") as HTMLSelectElement).value;
+  void saveTtsField("ttsGptsovitsLanguageMode", val as "english" | "original-mandarin");
+});
+document.getElementById("tts-rvc-enabled")?.addEventListener("change", () => {
+  const checked = (document.getElementById("tts-rvc-enabled") as HTMLInputElement).checked;
+  const panel = document.getElementById("tts-rvc-panel");
+  if (panel) panel.hidden = !checked;
+  void saveTtsField("ttsRvcEnabled", checked);
+});
+document.getElementById("tts-rvc-url")?.addEventListener("change", () => {
+  void saveTtsField("ttsRvcBaseUrl", (document.getElementById("tts-rvc-url") as HTMLInputElement).value.trim());
+});
+document.getElementById("tts-rvc-model")?.addEventListener("change", () => {
+  void saveTtsField("ttsRvcModel", (document.getElementById("tts-rvc-model") as HTMLInputElement).value.trim());
+});
+document.getElementById("tts-rvc-pitch")?.addEventListener("change", () => {
+  void saveTtsField("ttsRvcPitch", Number((document.getElementById("tts-rvc-pitch") as HTMLInputElement).value) || 0);
+});
 
 // 自定义云端格式选择
 (ttsEl("tts-custom-cloud-format") as HTMLSelectElement).addEventListener("change", () => {
@@ -5978,23 +6032,23 @@ document.getElementById("tts-gptsovits-test")?.addEventListener("click", async (
   const refAudioPath = ttsEl("tts-gptsovits-ref-audio").value.trim();
   const promptText = ttsEl("tts-gptsovits-prompt-text").value.trim();
   const format = (ttsEl("tts-gptsovits-format") as HTMLSelectElement).value as "wav" | "mp3";
-  if (!baseUrl) { window.alert("请先填写 GPT-SoVITS API 地址"); return; }
-  if (!refAudioPath) { window.alert("请先选择参考音频文件"); return; }
-  if (!promptText) { window.alert("请先填写参考音频对应的文本"); return; }
+  if (!baseUrl) { window.alert("Enter the GPT-SoVITS API address first."); return; }
+  if (!refAudioPath) { window.alert("Select a reference audio file first."); return; }
+  if (!promptText) { window.alert("Enter the reference audio transcript first."); return; }
 
   const btn = document.getElementById("tts-gptsovits-test") as HTMLButtonElement;
   btn.disabled = true;
-  btn.textContent = "合成中…";
+  btn.textContent = "Synthesizing...";
   try {
     const result = await window.tts.synthesizeGptsovits({
       baseUrl, refAudioPath, promptText, text: TTS_TEST_TEXT, format,
     });
     playTtsAudio(result.base64, result.format);
   } catch (err) {
-    window.alert("测试失败: " + (err instanceof Error ? err.message : String(err)));
+    window.alert("Voice test failed: " + (err instanceof Error ? err.message : String(err)));
   } finally {
     btn.disabled = false;
-    btn.textContent = "🔊 测试发音";
+    btn.textContent = "Test Voice";
   }
 });
 
@@ -6016,7 +6070,7 @@ document.getElementById("tts-custom-cloud-test")?.addEventListener("click", asyn
   const voiceId = ttsEl("tts-custom-cloud-voice").value.trim();
   const format = (ttsEl("tts-custom-cloud-format") as HTMLSelectElement).value as "wav" | "mp3";
   const timeoutMs = Number(ttsEl("tts-custom-cloud-timeout").value) || 30000;
-  if (!endpointUrl) { window.alert("请先填写自定义云端 Endpoint URL"); return; }
+  if (!endpointUrl) { window.alert("Enter the custom cloud endpoint URL first."); return; }
 
   const btn = document.getElementById("tts-custom-cloud-test") as HTMLButtonElement;
   btn.disabled = true;
@@ -6044,7 +6098,7 @@ document.getElementById("tts-mimo-test")?.addEventListener("click", async () => 
   const apiKey = ttsEl("tts-mimo-key").value.trim();
   const voiceAudioPath = ttsEl("tts-mimo-voice-audio").value.trim();
   const stylePrompt = ttsEl("tts-mimo-style").value.trim();
-  if (!apiKey) { window.alert("请先填写小米 MiMo API Key"); return; }
+  if (!apiKey) { window.alert("Enter the Xiaomi MiMo API key first."); return; }
   if (!voiceAudioPath) { window.alert("请先选择昔涟克隆参考音频"); return; }
 
   const btn = document.getElementById("tts-mimo-test") as HTMLButtonElement;
@@ -6114,9 +6168,9 @@ document.getElementById("tts-mossland-test")?.addEventListener("click", async ()
   const text = ttsEl("tts-mossland-text").value.trim();
   const model = (ttsEl("tts-mossland-model") as HTMLSelectElement).value;
   const format = (ttsEl("tts-mossland-format") as HTMLSelectElement).value as "mp3" | "wav" | "pcm";
-  if (!apiKey) { window.alert("请先填写 Mossland API Key"); return; }
-  if (!voiceId) { window.alert("请先填写音色 ID（可从下方拉取列表）"); return; }
-  if (!text) { window.alert("请先填写试听文本"); return; }
+  if (!apiKey) { window.alert("Enter the Mossland API key first."); return; }
+  if (!voiceId) { window.alert("Enter a voice ID or fetch the voice list below."); return; }
+  if (!text) { window.alert("Enter preview text first."); return; }
 
   const btn = document.getElementById("tts-mossland-test") as HTMLButtonElement;
   btn.disabled = true;
@@ -6163,7 +6217,7 @@ document.getElementById("tts-mossland-clone-start")?.addEventListener("click", a
   const filePath = ttsEl("tts-mossland-clone-file").value.trim();
   const name = ttsEl("tts-mossland-clone-name").value.trim();
   const description = ttsEl("tts-mossland-clone-desc").value.trim();
-  if (!apiKey) { window.alert("请先填写 Mossland API Key"); return; }
+  if (!apiKey) { window.alert("Enter the Mossland API key first."); return; }
   if (!filePath) { window.alert("请先选择参考音频"); return; }
 
   setMosslandStatus("正在上传并创建音色…", "loading");
@@ -6186,7 +6240,7 @@ document.getElementById("tts-mossland-clone-start")?.addEventListener("click", a
 document.getElementById("tts-mossland-list-voices")?.addEventListener("click", async () => {
   if (!window.tts) return;
   const apiKey = ttsEl("tts-mossland-key").value.trim();
-  if (!apiKey) { window.alert("请先填写 Mossland API Key"); return; }
+  if (!apiKey) { window.alert("Enter the Mossland API key first."); return; }
 
   setMosslandListStatus("正在拉取音色列表…", "loading");
   try {
@@ -6247,8 +6301,8 @@ document.getElementById("tts-minimax-test")?.addEventListener("click", async () 
   const voiceId = ttsEl("tts-minimax-voice").value.trim();
   const modelSelect = ttsEl("tts-minimax-model") as HTMLSelectElement;
   const model = modelSelect.value === "speech-2.8-hd" ? "speech-2.8-hd" : "speech-2.8-turbo";
-  if (!apiKey) { window.alert("请先填写 MiniMax API Key"); return; }
-  if (!voiceId) { window.alert("请先填写音色 ID（或下方复刻训练）"); return; }
+  if (!apiKey) { window.alert("Enter the MiniMax API key first."); return; }
+  if (!voiceId) { window.alert("Enter a voice ID or train a cloned voice below."); return; }
 
   const btn = document.getElementById("tts-minimax-test") as HTMLButtonElement;
   btn.disabled = true;
@@ -6297,7 +6351,7 @@ document.getElementById("tts-clone-start")?.addEventListener("click", async () =
   const cloneText = ttsEl("tts-clone-text").value.trim();
   const voiceId = ttsEl("tts-clone-voice-id").value.trim();
 
-  if (!apiKey) { window.alert("请先填写 MiniMax API Key"); return; }
+  if (!apiKey) { window.alert("Enter the MiniMax API key first."); return; }
   if (!cloneFile) { window.alert("请选择配音文件"); return; }
   if (!cloneText) { window.alert("请填写复刻文本"); return; }
   if (!voiceId) { window.alert("请填写音色命名"); return; }

@@ -18,12 +18,12 @@ function initOverlay(): void {
     '<div class="cy-modal" role="alertdialog" aria-modal="true">',
     '  <div class="cy-modal__head">',
     '    <span class="cy-modal__icon" id="cy-modal-icon">\u{1F4CC}</span>',
-    '    <h3 class="cy-modal__title" id="cy-modal-title">\u63D0\u793A</h3>',
+    '    <h3 class="cy-modal__title" id="cy-modal-title">Notice</h3>',
     '  </div>',
-    '  <p class="cy-modal__body" id="cy-modal-message">\u786E\u8BA4\u6267\u884C\u6B64\u64CD\u4F5C\u5417\uFF1F</p>',
+    '  <p class="cy-modal__body" id="cy-modal-message">Do you want to continue?</p>',
     '  <div class="cy-modal__actions">',
-    '    <button type="button" class="ghost-btn" id="cy-modal-cancel">\u53D6\u6D88</button>',
-    '    <button type="button" class="btn-primary" id="cy-modal-confirm">\u786E\u5B9A</button>',
+    '    <button type="button" class="ghost-btn" id="cy-modal-cancel">Cancel</button>',
+    '    <button type="button" class="btn-primary" id="cy-modal-confirm">Confirm</button>',
     '  </div>',
     '</div>',
   ].join("\n");
@@ -43,8 +43,8 @@ export function showModal(options: ModalOptions): Promise<boolean> {
   iconEl.textContent = options.icon || "\u{1F4CC}";
   titleEl.textContent = options.title;
   msgEl.textContent = options.message;
-  cancelBtn.textContent = options.cancelText || "\u53D6\u6D88";
-  confirmBtn.textContent = options.confirmText || "\u786E\u5B9A";
+  cancelBtn.textContent = options.cancelText || "Cancel";
+  confirmBtn.textContent = options.confirmText || "Confirm";
 
   overlay.classList.remove("is-hidden");
 
