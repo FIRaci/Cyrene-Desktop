@@ -1,70 +1,64 @@
 # System Architecture
 
-The project ships a comprehensive TypeScript runtime in `src/**`. The root JavaScript companion files are retained for legacy migration reference and lightweight stand-alone desktop companion use.
+## 1. Runtime Boundary
 
-## 1. Shipped Runtime and Legacy References
+Cyrene ships one TypeScript/Electron runtime:
 
-### 1.1. TypeScript Agent Runtime (`src/`)
-- **Role:** The primary packaged runtime handling AI orchestration, task planning (LangGraph), permission control, application tools, and RAG search.
-- **Technology:** TypeScript, Electron backend (`src/main/`), and React/Vite renderer (`src/renderer/`).
-- **Security Policy:** The companion is restricted to observation and services provided by the application: network access, consented screen vision, opt-in system audio media metadata, and registered app tools. Arbitrary shell commands, uncontrolled filesystem writes, and dynamically injected MCP tools are strictly prohibited. This policy is enforced at the Electron main process layer.
+- `src/main/index.ts` compiles to the package main entry.
+- `src/renderer/index.html` compiles to the Live2D pet renderer.
+- `src/renderer/chat/` is the only conversational UI.
+- Status, Tasks, Settings, and other auxiliary windows are created lazily.
 
-### 1.2. JavaScript Companion Runtime (`main.js` & `cyrene_companion.html`)
-- **Role:** Lightweight desktop pet runtime and legacy reference implementation.
-- **Technology:** Vanilla JS, PixiJS, standalone Electron BrowserWindow.
-- **Polling:** PowerShell polling loop to read Win32 active window and audio session metadata without blocking the UI thread.
-- **Boundaries:** All new capabilities and tool integrations route through the TypeScript runtime's permission policies and app-tool boundaries.
+Root `main.js`, `preload.js`, and `cyrene_companion.html` are unshipped migration references. They are not a supported lightweight mode and must not host an independent model, memory, TTS, tool, or capture runtime.
 
-### 1.3. Companion-Safe Capability Policy
-- **Allowed:** Network access required by configured providers; user-consented screen observation; opt-in system-audio media metadata; and explicitly registered app tools.
-- **Denied:** Filesystem writes, arbitrary shell/PowerShell commands, unrestricted process execution, dynamically installed MCP tools, and any renderer-driven permission escalation.
-- **Consent and Revocation:** Owner-authorized companion sessions permit screen observation through producer-bound, revocable capture leases. Audio awareness is metadata-only, enabled by default for new/unconfigured settings under the owner request, and stops/clears immediately when turned off and saved. Raw system audio is never recorded or transcribed.
-- **Enforcement:** Denials are enforced at the main-process policy level, not via prompt instructions alone. Model responses or renderer requests cannot broaden the capability set.
+## 2. Main-Process Responsibilities
 
-## 2. Technology Stack
-- **Core:** Electron.js (Transparent, borderless, click-through desktop overlay).
-- **Backend IPC:** Node.js (Window management, global shortcuts, OS integration).
-- **Live2D Graphics:** PixiJS + Cubism 4 SDK (`pixi-live2d-display`).
-- **AI Engine (LLM):** Ollama running locally (Model: `llama3.1` / `llama3.2-vision`) via REST API `http://localhost:11434/api/chat`.
-- **UI/UX Interface:** HTML5, CSS3, Vanilla JavaScript / TypeScript.
+The main process owns window lifecycle, single-instance enforcement, global shortcuts, system tray, settings and secret stores, provider/tool configuration, permissions, sensory adapters, task services, ASR/TTS/call services, RAG, and the conversation orchestrator.
 
-## 3. Workflow & Processing Logic
+Startup initializes shared services once, then creates the pet and tray. Auxiliary BrowserWindows are created only when the user requests them.
 
-### 3.1. Sensory Perception Loop
-- **Screen Vision:** Producers (chat/hotkey, vision, debug, game-bot) route through `ScreenConsentController`. Authorizations and capture leases are bound per producer with explicit TTL and abort on revocation.
-- **System Audio Awareness:** TypeScript main process reads media metadata via Windows adapters, capturing active app, playback state, track title, and artist name with a 2-second throttle. Data is treated as untrusted context with a TTL.
-- **Time & Weather:** Renderer updates local time and queries weather data at periodic intervals.
-- All sensory data is unified into `SensoryContext` when initiating LLM turns.
+## 3. Renderer Boundary
 
-### 3.2. Idle Thoughts Loop
-- The renderer maintains a `lastInteractionTime` timestamp.
-- Every 30 seconds, if the user has been inactive for $\ge 120$ seconds, the system selects a prompt from `IDLE_PROMPT_POOL` and requests an ambient thought from Ollama.
-- Results are displayed in a floating dialogue bubble without being stored in the primary chat history to preserve context tokens.
+Renderers communicate through the typed preload bridge. Application windows deny uncontrolled navigation and window creation. Privileged handlers validate their sender and payload; renderers cannot elevate permission level or obtain provider secrets directly.
 
-### 3.3. Memory System
-- **Short-term Memory:** `conversationHistory` is bounded to the 20 most recent messages and contains plain text content.
-- **Long-term Memory:** `MemorySystem` manages up to 30 user facts in `localStorage` using a FIFO eviction policy when full.
-- LLM turns extract `new_facts_learned` when new information is shared by the user.
+The desktop pet may request presentation actions or open Chat. It has no independent message-send path and no direct provider/tool authority.
 
-## 4. Performance Optimizations
-- **Ignore Mouse Events:** Electron window uses dynamic `setIgnoreMouseEvents`. When the cursor is outside the character bounding box, clicks pass directly through to underlying Windows applications.
-- **Hardware Acceleration:** Disabled in `main.js` to ensure reliable transparent background rendering across all Windows graphics hardware.
-- **Render Loop:** PixiJS is optimized to minimize DOM reflows during animation playback.
+Pet IPC authenticates the owning pet WebContents/frame. Normal click is petting, movement requires `Alt` + primary-button drag, and resizing requires `Alt` + wheel. Exactly one renderer wheel listener owns resize dispatch.
 
-## 5. JSON Response Contract
-Structured responses from Ollama adhere to the following schema:
-```json
-{
-  "text": "English response text",
-  "expression": "ExpressionName",
-  "motion": "GroupName:Index",
-  "emote": "Kaomoji",
-  "new_facts_learned": []
-}
+## 4. Companion-Safe Capability Policy
+
+- **Allowed:** configured provider network access, explicitly registered application tools, consented screen observation, and opt-in minimized system-audio metadata.
+- **Denied:** arbitrary commands, unrestricted process execution, filesystem mutation, dynamically installed MCP/process tools, renderer-driven permission escalation, and raw system-audio capture.
+- **Screen consent:** capture authorization is producer-bound, time-bounded, and revocable.
+- **Audio awareness:** the adapter exposes bounded application/session/activity metadata only. It cannot return PCM, recordings, transcripts, buffers, or device handles.
+
+These restrictions are enforced in the main process, not by prompt text alone.
+
+## 5. Conversation and Context Flow
+
+```mermaid
+flowchart LR
+    U["User in primary Chat"] --> R["Typed preload and IPC"]
+    R --> M["Electron main"]
+    M --> O["Single orchestrator"]
+    O --> P["Configured provider"]
+    O --> A["Permissioned app tools"]
+    O --> C["Sourced sensory and memory context"]
+    O --> R
 ```
 
-## 6. ASR Language Contract
-Aliyun SpeechTranscriber binds recognition language and models to the configured AppKey. Cyrene sends the AppKey without attaching unsupported `language` or `language_hints` fields to the WebSocket payload.
+Application-authored context is source-labelled and English. The assistant must not claim to see, hear, remember, or complete an action unless the corresponding trusted context or tool result exists.
+
+The local Ollama provider may omit an API key only for an explicit loopback endpoint with a configured model ID. Non-loopback and cloud/legacy profiles remain key-required.
+
+## 6. English and Compatibility Data
+
+Shipped UI, prompts, model context, errors, and tool output are English under automated regression scans. Stable provider keys, raw Live2D asset IDs, legacy multilingual input aliases, licenses, vendor data, and user content may remain non-English internally. User- and model-facing boundaries expose English short names and action aliases.
 
 ## 7. Windows Packaging
-`npm run package:win:dir` builds the Rust native screenshot helper before `electron-builder` packages the application. A Rust toolchain with `cargo` on `PATH` is required.
+
+`npm run package:win:dir` builds and verifies the Rust screenshot helper before electron-builder runs. A Rust toolchain with `cargo` on `PATH` is required.
+
+Current automated evidence is a latest clean run of 232 files/1,766 passing tests, earlier repeated clean runs, a passing production build with 1,100 renderer modules in the current run, two concurrent 6/6 history processes, and a clean diff check. Live loopback Ollama chat and VLM smoke pass; independent vision and Game Bot default to local `qwen2.5vl:7b`. Rust 1.98 and VS 2022 Build Tools are installed, Rust/Cargo and the npm cache are on `D:`, and the screenshot helper built, staged, and was verified successfully. The temporary `X:` mapping is absent and drive `C:` had approximately 8.9 GB free. Final directory packaging and packaged launch were not verified after electron-builder stalled or was interrupted. Hardware qualification therefore remains open.
+
+The pet's thought surface is an activity-status channel only. It may show bounded states such as thinking, tool activity, finishing, or a sanitized failure; model reasoning and raw chain-of-thought never belong in renderer payloads or logs.
