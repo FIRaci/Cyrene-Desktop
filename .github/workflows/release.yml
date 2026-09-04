@@ -1,0 +1,79 @@
+name: Build & Release
+
+on:
+  push:
+    branches: [master]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 24 LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run test suite
+        run: npm test
+
+      - name: Compile production bundles
+        run: npm run build
+
+      - name: Build and verify screenshot helper
+        run: |
+          npm run build:screenshot-helper
+          npm run verify:screenshot-helper resources/bin/cyrene-screenshot.exe
+
+      - name: Package Windows application
+        run: npx electron-builder --win --dir
+
+      - name: Create release archive and update manifest
+        shell: pwsh
+        run: |
+          $pkg = Get-Content package.json | ConvertFrom-Json
+          $version = $pkg.version
+          $archiveName = "Cyrene-Desktop-v$version-windows-x64.zip"
+          Compress-Archive -Path "release/win-unpacked/*" -DestinationPath $archiveName -Force
+          Copy-Item $archiveName "Cyrene-Desktop-windows-x64.zip" -Force
+
+          $manifest = [ordered]@{
+              name        = "Cyrene Desktop"
+              version     = $version
+              buildDate   = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+              commitSha   = $env:GITHUB_SHA
+              archiveFile = "Cyrene-Desktop-windows-x64.zip"
+              downloadUrl = "https://github.com/${{ github.repository }}/releases/latest/download/Cyrene-Desktop-windows-x64.zip"
+          } | ConvertTo-Json -Depth 4
+          Set-Content -Path "update-manifest.json" -Value $manifest -Encoding utf8
+
+          Write-Host "Prepared $archiveName and update-manifest.json for version $version"
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
+        with:
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'latest' }}
+          name: ${{ startsWith(github.ref, 'refs/tags/v') && format('Cyrene Desktop {0}', github.ref_name) || 'Cyrene Desktop Latest Build' }}
+          draft: false
+          prerelease: false
+          files: |
+            Cyrene-Desktop-windows-x64.zip
+            update-manifest.json
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -608,3 +608,9 @@ const gameBotApi = {
 contextBridge.exposeInMainWorld("gameBot", gameBotApi);
 
 exposeMusicApi();
+
+// Auto-Updater API
+const updaterApi = {
+  checkForUpdates: () => ipcRenderer.invoke(IPC.APP_CHECK_FOR_UPDATES),
+};
+contextBridge.exposeInMainWorld("updater", updaterApi);

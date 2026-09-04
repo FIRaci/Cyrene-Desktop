@@ -297,4 +297,8 @@ export const IPC = {
   SCREENSHOT_HOTKEY_CAPTURE_START: "screenshot:hotkey-capture-start",
   SCREENSHOT_HOTKEY_CAPTURE_END: "screenshot:hotkey-capture-end",
   SCREENSHOT_INSTANT_LOOK: "screenshot:instant-look",
+
+  // Auto Updater
+  APP_CHECK_FOR_UPDATES: "app:check-for-updates",
 } as const;
+

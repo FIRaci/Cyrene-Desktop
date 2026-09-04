@@ -6526,3 +6526,33 @@ document.getElementById("tts-clone-info-link")?.addEventListener("click", showCl
 // 初始加载配置
 void loadTtsConfig();
 
+
+// Update checker wiring
+(function setupUpdateChecker() {
+  const checkUpdateBtn = document.getElementById("check-update-btn") as HTMLButtonElement | null;
+  const updateStatusText = document.getElementById("app-update-status-text") as HTMLElement | null;
+
+  checkUpdateBtn?.addEventListener("click", async () => {
+    if (!updateStatusText) return;
+    updateStatusText.textContent = "Checking GitHub Releases...";
+    checkUpdateBtn.disabled = true;
+
+    try {
+      const result = await window.updater?.checkForUpdates();
+      if (result?.hasUpdate) {
+        updateStatusText.textContent = "Update available: v" + result.latestVersion + "!";
+        if (result.downloadUrl) {
+          await window.system?.openExternal(result.downloadUrl);
+        }
+      } else if (result?.error) {
+        updateStatusText.textContent = "Check failed: " + result.error;
+      } else {
+        updateStatusText.textContent = "You are on the latest version (v" + (result?.currentVersion || "0.9.0") + ").";
+      }
+    } catch (err: unknown) {
+      updateStatusText.textContent = "Check failed: " + (err instanceof Error ? err.message : String(err));
+    } finally {
+      checkUpdateBtn.disabled = false;
+    }
+  });
+})();

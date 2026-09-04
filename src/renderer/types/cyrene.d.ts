@@ -16,8 +16,20 @@ declare global {
       onPetZoom: (callback: (zoom: number) => void) => () => void;
       onPetVisibilityChanged: (callback: (visible: boolean) => void) => () => void;
     };
+    updater?: {
+      checkForUpdates: () => Promise<{
+        hasUpdate: boolean;
+        currentVersion: string;
+        latestVersion: string;
+        releaseName?: string;
+        releaseNotes?: string;
+        downloadUrl?: string;
+        error?: string;
+      }>;
+    };
     petCompanion?: {
       onAgentEvent: (callback: (event: import("../live2d/companion-bubbles").PetAgentEvent) => void) => () => void;
     };
   }
 }
+

@@ -1368,6 +1368,11 @@ function normalizeModelSettings(input: Partial<ModelSettings> | null | undefined
       model: typeof input?.model === "string" ? input.model : "",
       apiKey: typeof input?.apiKey === "string" ? input.apiKey : "",
     });
+
+    ipcMain.handle(IPC.APP_CHECK_FOR_UPDATES, async () => {
+      const { checkForAppUpdates } = await import("./updater/auto-updater");
+      return checkForAppUpdates(app.getVersion());
+    });
     // 如果迁移后这一份完全是空的（用户从来没配过），再给个默认 baseUrl/model（便于 UI 第一次显示）
     if (!perProvider[provider].baseUrl) perProvider[provider].baseUrl = DEFAULT_MODEL_SETTINGS.baseUrl;
     if (!perProvider[provider].model) perProvider[provider].model = DEFAULT_MODEL_SETTINGS.model;
@@ -5129,6 +5134,22 @@ app.whenReady().then(async () => {
   );
   void screenshotService.prewarm();
 
+    // Background auto-updater check (silent, non-blocking)
+    setTimeout(async () => {
+      try {
+        const { checkForAppUpdates } = await import("./updater/auto-updater");
+        const result = await checkForAppUpdates(app.getVersion());
+        if (result.hasUpdate) {
+          console.info(`[Cyrene AutoUpdater] New update available: v${result.latestVersion}`);
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send("cyrene:update-available", result);
+          }
+        }
+      } catch (e) {
+        console.warn("[Cyrene AutoUpdater] Silent check skipped:", e);
+      }
+    }, 15_000);
+
   // Cloud Music MCP wiring (MusicService + IPC + 5 Agent tools + shutdown latch)
   const musicPaths = resolveMusicPaths();
   const musicBootstrap = bootstrapMusicService(musicPaths, {
@@ -5870,6 +5891,9 @@ app.on("activate", () => {
     createWindow();
   }
 });
+
+
+
 
 
 
