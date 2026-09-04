@@ -25,25 +25,25 @@ const DEFAULT_TIMEOUT_MS = 30_000;
  */
 const ERROR_CODE_MAP: Record<string, string> = {
   // 4xx
-  missing_required_field: "必填字段缺失，请检查后重试",
-  invalid_field_value: "字段值不合法，请检查后重试",
-  unsupported_response_format: "不支持的音频格式，请使用 mp3 / wav / pcm",
-  invalid_url: "URL 非法",
-  url_not_allowed: "URL 不被允许（仅 HTTPS 公网）",
-  insufficient_credits: "余额不足，请前往控制台充值",
-  authentication_error: "API Key 无效，请检查 Authorization 头",
-  permission_error: "无权限访问，请确认 API Key 是否正确",
-  file_not_found: "文件不存在",
-  voice_not_found: "音色不存在，请重新创建后重试",
-  task_not_found: "任务不存在",
-  rate_limit_exceeded: "请求过于频繁，请稍后再试",
-  concurrency_limit_exceeded: "并发超限，请稍后再试",
-  safety_guardrail_blocked: "内容被安全策略拦截，请修改后重试",
+  missing_required_field: "A required field is missing. Check the request and try again.",
+  invalid_field_value: "A field value is invalid. Check the request and try again.",
+  unsupported_response_format: "Unsupported audio format. Use mp3, wav, or pcm.",
+  invalid_url: "The URL is invalid.",
+  url_not_allowed: "The URL is not allowed; use a public HTTPS URL.",
+  insufficient_credits: "The account has insufficient credits.",
+  authentication_error: "The API key is invalid. Check the Authorization header.",
+  permission_error: "Permission denied. Check the API key permissions.",
+  file_not_found: "The file was not found.",
+  voice_not_found: "The voice was not found. Create it again and retry.",
+  task_not_found: "The task was not found.",
+  rate_limit_exceeded: "Too many requests. Try again later.",
+  concurrency_limit_exceeded: "The concurrency limit was exceeded. Try again later.",
+  safety_guardrail_blocked: "The content was blocked by the safety policy. Revise it and try again.",
   // 5xx
-  internal: "服务内部错误，请稍后重试",
-  upstream: "上游服务异常，请稍后重试",
-  service: "服务暂时不可用，请稍后重试",
-  timeout: "请求超时，请稍后重试",
+  internal: "The service encountered an internal error. Try again later.",
+  upstream: "An upstream service failed. Try again later.",
+  service: "The service is temporarily unavailable. Try again later.",
+  timeout: "The request timed out. Try again later.",
 };
 
 interface MosslandErrorBody {
@@ -64,7 +64,7 @@ interface MosslandErrorBody {
 function buildError(prefix: string, status: number, rawBody: string): Error {
   // HTTP 413：网关层 body 大小限制，服务端没解析 body 就拒了，不会有 JSON 错误体
   if (status === 413) {
-    return new Error(`${prefix}：上传的文件太大，超过了服务端限制（HTTP 413）。请压缩或截短音频后重试。`);
+    return new Error(`${prefix}: The uploaded file exceeds the service limit (HTTP 413). Compress or shorten the audio and try again.`);
   }
   // 尝试解析 JSON 错误体（Mossland 有两种错误格式：同步 code/message，异步 error_code/error_msg）
   let code: string | undefined;
@@ -85,7 +85,7 @@ function buildError(prefix: string, status: number, rawBody: string): Error {
     return new Error(`${prefix}：HTTP ${status} ${rawBody.slice(0, 200)}`);
   }
   const friendly = code && ERROR_CODE_MAP[code];
-  const detail = friendly ?? upstreamMsg ?? `未知错误 (code: ${code ?? "?"})`;
+  const detail = friendly ?? upstreamMsg ?? `Unknown error (code: ${code ?? "?"})`;
   return new Error(`${prefix}：${detail} (HTTP ${status}${code ? `, code: ${code}` : ""})`);
 }
 
@@ -136,9 +136,9 @@ export async function synthesize(opts: MosslandSynthesizeOptions): Promise<Mossl
   const format = opts.format ?? "mp3";
   const model = opts.model ?? "moss-tts";
 
-  if (!opts.apiKey) throw new Error("Mossland 合成失败：缺少 API Key");
-  if (!opts.voiceId) throw new Error("Mossland 合成失败：缺少 voice_id（请先克隆音色）");
-  if (!opts.text) throw new Error("Mossland 合成失败：缺少待合成文本");
+  if (!opts.apiKey) throw new Error("Mossland synthesis failed: API key is required");
+  if (!opts.voiceId) throw new Error("Mossland synthesis failed: voice_id is required; clone a voice first");
+  if (!opts.text) throw new Error("Mossland synthesis failed: synthesis text is required");
 
   // 只传文档里列出的字段；Mossland 严格校验，未知字段直接 400
   const body: Record<string, unknown> = {
@@ -158,14 +158,14 @@ export async function synthesize(opts: MosslandSynthesizeOptions): Promise<Mossl
 
   if (!response.ok) {
     const raw = await response.text();
-    console.error("[Mossland] 合成失败 HTTP", response.status, "body:", raw);
-    throw buildError("Mossland 合成失败", response.status, raw);
+    console.error("[Mossland] Synthesis failed with HTTP", response.status, "body:", raw);
+    throw buildError("Mossland synthesis failed", response.status, raw);
   }
 
   // delivery_method=audio：响应体直接是音频二进制
   const audio = Buffer.from(await response.arrayBuffer());
   if (audio.length === 0) {
-    throw new Error("Mossland 合成失败：服务端返回空音频");
+    throw new Error("Mossland synthesis failed: the service returned empty audio");
   }
   return { audio, format };
 }
@@ -190,9 +190,9 @@ export interface MosslandCloneResult {
  * 字段 audio_sample（必填）+ name（可选）+ description（可选）。
  */
 export async function cloneVoice(opts: MosslandCloneOptions): Promise<MosslandCloneResult> {
-  if (!opts.apiKey) throw new Error("Mossland 克隆失败：缺少 API Key");
+  if (!opts.apiKey) throw new Error("Mossland voice cloning failed: API key is required");
   if (!opts.filePath || !fs.existsSync(opts.filePath)) {
-    throw new Error(`Mossland 克隆失败：参考音频不存在 (${opts.filePath ?? ""})`);
+    throw new Error(`Mossland voice cloning failed: reference audio does not exist (${opts.filePath ?? ""})`);
   }
 
   // 文件名只取扩展名，主体用固定 ASCII 名，避免中文文件名导致 header 编码问题
@@ -243,7 +243,7 @@ export async function cloneVoice(opts: MosslandCloneOptions): Promise<MosslandCl
 
   if (!response.ok) {
     const raw = await response.text();
-    throw buildError("Mossland 克隆失败", response.status, raw);
+    throw buildError("Mossland voice cloning failed", response.status, raw);
   }
 
   const data = (await response.json()) as {
@@ -253,7 +253,7 @@ export async function cloneVoice(opts: MosslandCloneOptions): Promise<MosslandCl
     created_at?: number;
   };
   if (!data.id) {
-    throw new Error("Mossland 克隆失败：服务端未返回 voice_id");
+    throw new Error("Mossland voice cloning failed: the service did not return voice_id");
   }
   return {
     voiceId: data.id,
@@ -280,7 +280,7 @@ export interface MosslandListVoicesResult {
  * Mossland 文档没有 GET /v1/audio/voices/{id}，所以这里只能 list。
  */
 export async function listVoices(opts: { apiKey: string; limit?: number }): Promise<MosslandListVoicesResult> {
-  if (!opts.apiKey) throw new Error("Mossland 拉取音色列表失败：缺少 API Key");
+  if (!opts.apiKey) throw new Error("Failed to list Mossland voices: API key is required");
 
   const limit = opts.limit ?? 50;
   const url = `${BASE_URL}/v1/audio/voices?limit=${limit}`;
@@ -292,7 +292,7 @@ export async function listVoices(opts: { apiKey: string; limit?: number }): Prom
 
   if (!response.ok) {
     const raw = await response.text();
-    throw buildError("Mossland 拉取音色列表失败", response.status, raw);
+    throw buildError("Failed to list Mossland voices", response.status, raw);
   }
 
   const data = (await response.json()) as {
@@ -303,7 +303,7 @@ export async function listVoices(opts: { apiKey: string; limit?: number }): Prom
     if (!v.id) continue;
     voices.push({
       id: v.id,
-      name: v.name ?? "(未命名)",
+      name: v.name ?? "(unnamed)",
       createdAt: typeof v.created_at === "number" ? v.created_at : 0,
     });
   }

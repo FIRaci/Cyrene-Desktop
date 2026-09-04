@@ -2,12 +2,17 @@
 
 export type TtsEngine = "off" | "minimax" | "gptsovits" | "custom-cloud" | "mimo" | "mossland";
 
+export type GptsovitsLanguageMode = "english" | "original-mandarin";
+
 /** GPT-SoVITS 合成请求（渲染端 → 主进程 IPC payload）。 */
 export interface GptsovitsSynthesizeRequest {
   baseUrl: string;             // 形如 "http://localhost:9880"，不含路径
   refAudioPath: string;        // 参考音频绝对路径
   promptText: string;          // 参考音频对应的文本
   text: string;                // 待合成文本
+  languageMode?: GptsovitsLanguageMode;
+  textLang?: "en" | "zh";
+  promptLang?: "en" | "zh";
   speed?: number;              // 0.5~2，默认 1
   format?: "wav" | "mp3";      // 默认 wav
 }
@@ -79,3 +84,44 @@ export interface TtsSynthesizeResult {
   cached: boolean;             // 是否命中缓存
   format: "wav" | "mp3" | "pcm"; // 实际返回的音频格式；mossland 可能是 pcm
 }
+
+/** Canonical list of allowed GeneralSettings mutation keys through the TTS IPC channel. */
+export const ALLOWED_TTS_SETTING_KEYS = [
+  "ttsEngine",
+  "ttsAutoRead",
+  "ttsSpeed",
+  "ttsVolume",
+  "ttsMinimaxKey",
+  "ttsMinimaxVoiceId",
+  "ttsMinimaxModel",
+  "ttsStreaming",
+  "ttsGptsovitsBaseUrl",
+  "ttsGptsovitsRefAudioPath",
+  "ttsGptsovitsPromptText",
+  "ttsGptsovitsFormat",
+  "ttsGptsovitsLanguageMode",
+  "ttsRvcEnabled",
+  "ttsRvcBaseUrl",
+  "ttsRvcModel",
+  "ttsRvcPitch",
+  "ttsRvcIndexRate",
+  "ttsCustomCloudEndpointUrl",
+  "ttsCustomCloudApiKey",
+  "ttsCustomCloudVoiceId",
+  "ttsCustomCloudFormat",
+  "ttsCustomCloudTimeoutMs",
+  "ttsMimoKey",
+  "ttsMimoVoiceAudioPath",
+  "ttsMimoStylePrompt",
+  "ttsMosslandKey",
+  "ttsMosslandVoiceId",
+  "ttsMosslandModel",
+  "ttsMosslandTestText",
+  "ttsMosslandFormat",
+  "searchMinimaxKey",
+  "searchEngine",
+  "playwrightMcpEnabled",
+  "proactiveChatMode",
+] as const;
+
+export type TtsSettingKey = typeof ALLOWED_TTS_SETTING_KEYS[number];

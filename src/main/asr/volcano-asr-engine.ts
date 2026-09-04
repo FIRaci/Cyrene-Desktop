@@ -271,7 +271,7 @@ export class VolcanoAsrStream {
     const resp = await fetch(url, { signal });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data = await resp.json() as { Token?: { Id?: string }; errmsg?: string };
-    if (!data.Token?.Id) throw new Error(data.errmsg || "token 获取失败");
+    if (!data.Token?.Id) throw new Error(data.errmsg || "Failed to obtain an authentication token");
     return data.Token.Id;
   }
 }

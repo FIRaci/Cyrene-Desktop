@@ -47,8 +47,8 @@ export async function synthesize(opts: CustomCloudSynthesizeOptions): Promise<Cu
     try { opts.debugLog?.({ requestId, ts: new Date().toISOString(), ...entry }); } catch { /* ignore */ }
   };
 
-  if (!endpointUrl) throw new Error("缺少自定义云端 TTS 地址");
-  if (!text) throw new Error("缺少合成文本");
+  if (!endpointUrl) throw new Error("Custom cloud TTS URL is required");
+  if (!text) throw new Error("Synthesis text is required");
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -66,9 +66,11 @@ export async function synthesize(opts: CustomCloudSynthesizeOptions): Promise<Cu
     timeoutMs,
   });
 
-  let resp: Response;
+  let audio: Buffer;
+  let resultFormat: "mp3" | "wav" | "pcm";
+
   try {
-    resp = await fetch(endpointUrl, {
+    const resp = await fetch(endpointUrl, {
       method: "POST",
       headers,
       body: JSON.stringify({
@@ -80,44 +82,62 @@ export async function synthesize(opts: CustomCloudSynthesizeOptions): Promise<Cu
       }),
       signal: controller.signal,
     });
+
+    if (!resp.ok) {
+      const preview = (await resp.text().catch(() => "")).slice(0, 200);
+      log({ phase: "error", status: resp.status, bodyPreview: preview, durationMs: Date.now() - startedAt });
+      throw new Error(`Custom cloud TTS synthesis failed: ${resp.status} ${preview}`.trim());
+    }
+
+    const contentType = resp.headers.get("Content-Type") ?? "";
+    resultFormat = guessFormatFromContentType(contentType, format);
+
+    const contentLengthHeader = Number(resp.headers.get("Content-Length"));
+    if (contentLengthHeader && contentLengthHeader > 35 * 1024 * 1024) {
+      throw new Error("Custom cloud TTS response Content-Length exceeds 35MB limit");
+    }
+
+    if (isJsonContentType(contentType)) {
+      const rawText = await resp.text();
+      if (rawText.length > 35 * 1024 * 1024) {
+        throw new Error("Custom cloud TTS JSON text exceeds 35MB limit");
+      }
+      const data = JSON.parse(rawText) as {
+        audioBase64?: unknown;
+        format?: unknown;
+      };
+      if (typeof data.audioBase64 !== "string" || !data.audioBase64.trim()) {
+        throw new Error("Custom cloud TTS response did not contain audioBase64");
+      }
+      // Reject oversized base64 payload (>35MB chars = ~25MB binary) before allocating Buffer
+      if (data.audioBase64.length > 35 * 1024 * 1024) {
+        throw new Error("Custom cloud TTS response base64 exceeds 25MB safety limit");
+      }
+      audio = Buffer.from(data.audioBase64, "base64");
+      if (audio.length > 25 * 1024 * 1024) {
+        throw new Error("Custom cloud TTS response audio exceeds 25MB safety limit");
+      }
+      resultFormat = normalizeFormat(data.format, format);
+    } else {
+      const arrayBuf = await resp.arrayBuffer();
+      if (arrayBuf.byteLength > 25 * 1024 * 1024) {
+        throw new Error("Custom cloud TTS response exceeds 25MB safety limit");
+      }
+      audio = Buffer.from(arrayBuf);
+    }
   } catch (err) {
-    clearTimeout(timer);
     if (err instanceof Error && err.name === "AbortError") {
-      log({ phase: "error", error: `合成超时（${timeoutMs}ms）`, durationMs: Date.now() - startedAt });
-      throw new Error(`自定义云端 TTS 合成超时（${timeoutMs}ms）`);
+      log({ phase: "error", error: `Synthesis timed out (${timeoutMs}ms)`, durationMs: Date.now() - startedAt });
+      throw new Error(`Custom cloud TTS synthesis timed out (${timeoutMs}ms)`);
     }
     log({ phase: "error", error: err instanceof Error ? err.message : String(err), durationMs: Date.now() - startedAt });
-    throw new Error(`自定义云端 TTS 请求失败: ${err instanceof Error ? err.message : String(err)}`);
+    throw err instanceof Error ? err : new Error(String(err));
   } finally {
     clearTimeout(timer);
   }
 
-  if (!resp.ok) {
-    const preview = (await resp.text().catch(() => "")).slice(0, 200);
-    log({ phase: "error", status: resp.status, bodyPreview: preview, durationMs: Date.now() - startedAt });
-    throw new Error(`自定义云端 TTS 合成失败: ${resp.status} ${preview}`.trim());
-  }
-
-  const contentType = resp.headers.get("Content-Type") ?? "";
-  let audio: Buffer;
-  let resultFormat = guessFormatFromContentType(contentType, format);
-
-  if (isJsonContentType(contentType)) {
-    const data = (await resp.json()) as {
-      audioBase64?: unknown;
-      format?: unknown;
-    };
-    if (typeof data.audioBase64 !== "string" || !data.audioBase64.trim()) {
-      throw new Error("自定义云端 TTS 响应缺少 audioBase64");
-    }
-    audio = Buffer.from(data.audioBase64, "base64");
-    resultFormat = normalizeFormat(data.format, format);
-  } else {
-    audio = Buffer.from(await resp.arrayBuffer());
-  }
-
   if (audio.length === 0) {
-    throw new Error("自定义云端 TTS 返回空音频");
+    throw new Error("Custom cloud TTS returned empty audio");
   }
 
   log({
@@ -127,5 +147,5 @@ export async function synthesize(opts: CustomCloudSynthesizeOptions): Promise<Cu
     format: resultFormat,
   });
 
-  return { audio, format: resultFormat };
+  return { audio, format: resultFormat as "wav" | "mp3" };
 }

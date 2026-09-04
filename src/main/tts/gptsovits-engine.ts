@@ -8,6 +8,8 @@ export interface GptsovitsSynthesizeOptions {
   refAudioPath: string;     // 参考音频绝对路径
   promptText: string;      // 参考音频对应的文本
   text: string;             // 待合成文本
+  textLang?: "en" | "zh";
+  promptLang?: "en" | "zh";
   speed?: number;           // 0.5~2，默认 1
   format?: "wav" | "mp3";   // 默认 wav
   timeoutMs?: number;      // 默认 60000（本地推理可能较慢）
@@ -39,12 +41,12 @@ export async function synthesize(opts: GptsovitsSynthesizeOptions): Promise<Gpts
   };
 
   // 1) 输入校验
-  if (!opts.baseUrl) throw new Error("缺少 GPT-SoVITS API 地址");
-  if (!opts.refAudioPath) throw new Error("缺少参考音频路径");
-  if (!opts.promptText) throw new Error("缺少参考音频对应的文本");
-  if (!opts.text) throw new Error("缺少合成文本");
+  if (!opts.baseUrl) throw new Error("GPT-SoVITS API URL is required");
+  if (!opts.refAudioPath) throw new Error("Reference audio path is required");
+  if (!opts.promptText) throw new Error("Reference audio transcript is required");
+  if (!opts.text) throw new Error("Synthesis text is required");
   if (!fs.existsSync(opts.refAudioPath)) {
-    throw new Error(`参考音频文件不存在: ${opts.refAudioPath}`);
+    throw new Error(`Reference audio file does not exist: ${opts.refAudioPath}`);
   }
 
   // 2) 构造 JSON body（裸对象，不包 data）
@@ -52,10 +54,10 @@ export async function synthesize(opts: GptsovitsSynthesizeOptions): Promise<Gpts
   // 必需字段：text / text_lang / ref_audio_path / prompt_lang
   const body = JSON.stringify({
     text: opts.text,
-    text_lang: "zh",
+    text_lang: opts.textLang ?? "en",
     ref_audio_path: opts.refAudioPath,
     prompt_text: opts.promptText,
-    prompt_lang: "zh",
+    prompt_lang: opts.promptLang ?? "en",
     speed_factor: opts.speed ?? 1,
     streaming_mode: false,
     media_type: format,
@@ -72,44 +74,47 @@ export async function synthesize(opts: GptsovitsSynthesizeOptions): Promise<Gpts
     format,
   });
 
-  // 3) 发请求 + 超时控制
+  // 3) 发请求 + 全程超时控制与缓冲保护
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-  let resp: Response;
+  let audio: Buffer;
   try {
-    resp = await fetch(url, {
+    const resp = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body,
       signal: controller.signal,
     });
+
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => "");
+      const preview = text.slice(0, 200);
+      log({ phase: "error", status: resp.status, bodyPreview: preview, durationMs: Date.now() - startedAt });
+      throw new Error(`GPT-SoVITS synthesis failed: ${resp.status} ${preview}`);
+    }
+
+    const arrayBuf = await resp.arrayBuffer();
+    if (arrayBuf.byteLength > 25 * 1024 * 1024) {
+      throw new Error("GPT-SoVITS audio response exceeds 25MB safety limit");
+    }
+    audio = Buffer.from(arrayBuf);
   } catch (err) {
-    clearTimeout(timer);
     if (err instanceof Error && err.name === "AbortError") {
-      log({ phase: "error", error: `合成超时（${timeoutMs}ms）`, durationMs: Date.now() - startedAt });
-      throw new Error(`GPT-SoVITS 合成超时（${timeoutMs}ms），检查服务是否在跑`);
+      log({ phase: "error", error: `Synthesis timed out (${timeoutMs}ms)`, durationMs: Date.now() - startedAt });
+      throw new Error(`GPT-SoVITS synthesis timed out (${timeoutMs}ms); check whether the service is running`);
     }
     log({ phase: "error", error: err instanceof Error ? err.message : String(err), durationMs: Date.now() - startedAt });
-    throw new Error(`GPT-SoVITS 请求失败: ${err instanceof Error ? err.message : String(err)}`);
+    throw err instanceof Error ? err : new Error(String(err));
+  } finally {
+    clearTimeout(timer);
   }
-  clearTimeout(timer);
-
-  // 4) 响应处理
-  if (!resp.ok) {
-    const text = await resp.text().catch(() => "");
-    const preview = text.slice(0, 200);
-    log({ phase: "error", status: resp.status, bodyPreview: preview, durationMs: Date.now() - startedAt });
-    throw new Error(`GPT-SoVITS 合成失败: ${resp.status} ${preview}`);
-  }
-
-  const audio = Buffer.from(await resp.arrayBuffer());
 
   // 校验 magic bytes：wav 以 "RIFF" 开头，mp3 以 ID3 或 0xFF 0xFB 开头
   const isWav = audio.slice(0, 4).toString("ascii") === "RIFF";
   const isMp3 = audio[0] === 0x49 /* I (ID3) */ || audio[0] === 0xff;
   if (format === "wav" && !isWav && !isMp3) {
-    log({ phase: "warn", message: "期望 wav 但返回的不是 RIFF 头", firstBytes: audio.slice(0, 4).toString("hex") });
+    log({ phase: "warn", message: "Expected WAV audio but the response did not have a RIFF header", firstBytes: audio.slice(0, 4).toString("hex") });
   }
 
   log({

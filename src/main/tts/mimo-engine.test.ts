@@ -17,11 +17,11 @@ function writeTempVoiceFile(name: string, content: string): string {
 
 describe("mimo-engine synthesize", () => {
   it("rejects missing apiKey", async () => {
-    await expect(synthesize({ apiKey: "", text: "hello" })).rejects.toThrow(/MiMo API Key/);
+    await expect(synthesize({ apiKey: "", text: "hello" })).rejects.toThrow(/MiMo API key/);
   });
 
   it("rejects missing text", async () => {
-    await expect(synthesize({ apiKey: "k", text: "" })).rejects.toThrow(/合成文本/);
+    await expect(synthesize({ apiKey: "k", text: "" })).rejects.toThrow(/Synthesis text/);
   });
 
   it("sends Xiaomi MiMo voiceclone payload with the selected Cyrene voice sample", async () => {
@@ -71,7 +71,7 @@ describe("mimo-engine synthesize", () => {
 
   it("rejects missing voice sample path", async () => {
     await expect(synthesize({ apiKey: "k", text: "hello", stylePrompt: "  " }))
-      .rejects.toThrow(/克隆音频/);
+      .rejects.toThrow(/voice-clone audio/);
   });
 
   it("omits empty style prompts", async () => {

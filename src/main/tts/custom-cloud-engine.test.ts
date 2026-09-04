@@ -7,11 +7,11 @@ afterEach(() => {
 
 describe("custom-cloud-engine synthesize", () => {
   it("rejects missing endpointUrl", async () => {
-    await expect(synthesize({ endpointUrl: "", text: "hello" })).rejects.toThrow(/自定义云端 TTS 地址/);
+    await expect(synthesize({ endpointUrl: "", text: "hello" })).rejects.toThrow(/Custom cloud TTS URL/);
   });
 
   it("rejects missing text", async () => {
-    await expect(synthesize({ endpointUrl: "https://tts.example.com", text: "" })).rejects.toThrow(/合成文本/);
+    await expect(synthesize({ endpointUrl: "https://tts.example.com", text: "" })).rejects.toThrow(/Synthesis text/);
   });
 
   it("parses binary audio responses", async () => {

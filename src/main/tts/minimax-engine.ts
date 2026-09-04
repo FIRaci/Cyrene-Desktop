@@ -80,7 +80,7 @@ export async function uploadFile(
   };
 
   if (data.base_resp?.status_code !== 0 || !data.file) {
-    throw new Error(`上传失败: ${data.base_resp?.status_msg ?? "未知错误"} (code: ${data.base_resp?.status_code})`);
+    throw new Error(`Upload failed: ${data.base_resp?.status_msg ?? "Unknown error"} (code: ${data.base_resp?.status_code})`);
   }
 
   return {
@@ -144,7 +144,7 @@ export async function cloneVoice(opts: CloneVoiceOptions): Promise<CloneVoiceRes
   };
 
   if (data.base_resp?.status_code !== 0) {
-    throw new Error(`复刻失败: ${data.base_resp?.status_msg ?? "未知错误"} (code: ${data.base_resp?.status_code})`);
+    throw new Error(`Voice cloning failed: ${data.base_resp?.status_msg ?? "Unknown error"} (code: ${data.base_resp?.status_code})`);
   }
 
   return {
@@ -223,8 +223,8 @@ export async function synthesize(opts: SynthesizeOptions): Promise<Buffer> {
       if (!resolved) {
         resolved = true;
         try { ws.close(); } catch { /* ignore */ }
-        log({ phase: "error", error: "语音合成超时（30秒）", durationMs: Date.now() - startedAt });
-        reject(new Error("语音合成超时（30秒）"));
+        log({ phase: "error", error: "Speech synthesis timed out (30 seconds)", durationMs: Date.now() - startedAt });
+        reject(new Error("Speech synthesis timed out (30 seconds)"));
       }
     }, 30000);
 
@@ -320,7 +320,7 @@ export async function synthesize(opts: SynthesizeOptions): Promise<Buffer> {
             clearTimeout(timeout);
             ws.close();
             log({ phase: "error", base_resp: msg.base_resp, durationMs: Date.now() - startedAt });
-            reject(new Error(`合成失败: ${msg.base_resp.status_msg} (code: ${msg.base_resp.status_code})`));
+            reject(new Error(`Synthesis failed: ${msg.base_resp.status_msg} (code: ${msg.base_resp.status_code})`));
           }
         }
       } catch (err) {
@@ -333,8 +333,8 @@ export async function synthesize(opts: SynthesizeOptions): Promise<Buffer> {
       if (!resolved) {
         resolved = true;
         clearTimeout(timeout);
-        log({ phase: "error", error: `WebSocket 连接失败: ${err.message}`, durationMs: Date.now() - startedAt });
-        reject(new Error(`WebSocket 连接失败: ${err.message}`));
+        log({ phase: "error", error: `WebSocket connection failed: ${err.message}`, durationMs: Date.now() - startedAt });
+        reject(new Error(`WebSocket connection failed: ${err.message}`));
       }
     });
 
@@ -349,8 +349,8 @@ export async function synthesize(opts: SynthesizeOptions): Promise<Buffer> {
           log({ phase: "response.close_with_audio", audioChunkCount, audioHexChars, audioBytes: audioBuffer.length });
           resolve(audioBuffer);
         } else {
-          log({ phase: "error", error: "连接已关闭，未收到音频数据", durationMs: Date.now() - startedAt });
-          reject(new Error("连接已关闭，未收到音频数据"));
+          log({ phase: "error", error: "The connection closed before audio data was received", durationMs: Date.now() - startedAt });
+          reject(new Error("The connection closed before audio data was received"));
         }
       }
     });

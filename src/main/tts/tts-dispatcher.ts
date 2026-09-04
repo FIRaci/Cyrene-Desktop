@@ -20,6 +20,8 @@ export interface SynthesizeByEnginePayload {
   baseUrl?: string;
   refAudioPath?: string;
   promptText?: string;
+  textLang?: "en" | "zh";
+  promptLang?: "en" | "zh";
   format?: "wav" | "mp3";
   // custom-cloud 专用
   endpointUrl?: string;
@@ -47,7 +49,7 @@ export async function synthesizeByEngine(
 ): Promise<SynthesizeByEngineResult> {
   if (engine === "minimax") {
     if (!payload.apiKey || !payload.voiceId) {
-      throw new Error("MiniMax TTS 未配置 apiKey/voiceId");
+      throw new Error("MiniMax TTS is missing apiKey/voiceId");
     }
     const audio = await minimaxSynthesize({
       apiKey: payload.apiKey,
@@ -63,13 +65,15 @@ export async function synthesizeByEngine(
 
   if (engine === "gptsovits") {
     if (!payload.baseUrl || !payload.refAudioPath || !payload.promptText) {
-      throw new Error("GPT-SoVITS TTS 未配置 baseUrl/refAudioPath/promptText");
+      throw new Error("GPT-SoVITS TTS is missing baseUrl/refAudioPath/promptText");
     }
     const result = await gptsovitsSynthesize({
       baseUrl: payload.baseUrl,
       refAudioPath: payload.refAudioPath,
       promptText: payload.promptText,
       text: payload.text,
+      textLang: payload.textLang,
+      promptLang: payload.promptLang,
       speed: payload.speed,
       format: payload.format ?? "wav",
     });
@@ -78,7 +82,7 @@ export async function synthesizeByEngine(
 
   if (engine === "custom-cloud") {
     if (!payload.endpointUrl) {
-      throw new Error("自定义云端 TTS 未配置 endpointUrl");
+      throw new Error("Custom cloud TTS is missing endpointUrl");
     }
     const result = await customCloudSynthesize({
       endpointUrl: payload.endpointUrl,
@@ -95,7 +99,7 @@ export async function synthesizeByEngine(
 
   if (engine === "mimo") {
     if (!payload.apiKey || !payload.voiceAudioPath) {
-      throw new Error("MiMo TTS 未配置 apiKey/克隆音频");
+      throw new Error("MiMo TTS is missing apiKey/voiceAudioPath");
     }
     const result = await mimoSynthesize({
       apiKey: payload.apiKey,
@@ -109,7 +113,7 @@ export async function synthesizeByEngine(
 
   if (engine === "mossland") {
     if (!payload.apiKey || !payload.voiceId) {
-      throw new Error("Mossland TTS 未配置 apiKey/voiceId");
+      throw new Error("Mossland TTS is missing apiKey/voiceId");
     }
     const format = payload.mosslandFormat ?? "mp3";
     const result = await mosslandSynthesize({
@@ -124,5 +128,5 @@ export async function synthesizeByEngine(
     return { audio: result.audio, format: result.format };
   }
 
-  throw new Error(`TTS 引擎未启用（engine=${engine}）`);
+  throw new Error(`TTS engine is not enabled (engine=${engine})`);
 }
