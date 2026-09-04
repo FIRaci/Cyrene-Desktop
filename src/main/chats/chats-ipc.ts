@@ -18,6 +18,8 @@ import { IPC } from "../../shared/ipc-channels";
 import type { ChatMessage } from "../../shared/chat-types";
 import * as chatsStore from "./chats-store";
 
+const { isValidSessionId } = chatsStore;
+
 function broadcastChanged(senderWebContents?: WebContents | null): void {
   for (const win of BrowserWindow.getAllWindows()) {
     if (win.isDestroyed()) continue;
@@ -36,9 +38,9 @@ export function registerChatsIpc(): void {
 
   ipcMain.handle(IPC.CHATS_LIST, () => chatsStore.listSessions());
 
-  ipcMain.handle(IPC.CHATS_GET, (_event, id: string) => chatsStore.getSession(id));
+  ipcMain.handle(IPC.CHATS_GET, (_event, id: string) => isValidSessionId(id) ? chatsStore.getSession(id) : null);
   ipcMain.handle(IPC.CHATS_GET_PAGE, (_event, payload: { id: string; before?: number | null; limit?: number }) => {
-    if (!payload?.id) return null;
+    if (!payload || !isValidSessionId(payload.id)) return null;
     return chatsStore.getSessionPage(payload.id, payload.before ?? null, payload.limit ?? 80);
   });
 
@@ -60,7 +62,7 @@ export function registerChatsIpc(): void {
   ipcMain.handle(
     IPC.CHATS_APPEND,
     (event, payload: { id: string; message: ChatMessage }) => {
-      if (!payload || !payload.id || !payload.message) return null;
+      if (!payload || !isValidSessionId(payload.id) || !payload.message) return null;
       const session = chatsStore.appendMessage(payload.id, payload.message);
       if (session) broadcastChanged(event.sender);
       return session;
@@ -70,7 +72,7 @@ export function registerChatsIpc(): void {
   ipcMain.handle(
     IPC.CHATS_REPLACE_MESSAGES,
     (event, payload: { id: string; messages: ChatMessage[] }) => {
-      if (!payload || !payload.id || !Array.isArray(payload.messages)) return null;
+      if (!payload || !isValidSessionId(payload.id) || !Array.isArray(payload.messages)) return null;
       const session = chatsStore.replaceMessages(payload.id, payload.messages);
       if (session) broadcastChanged(event.sender);
       return session;
@@ -79,7 +81,7 @@ export function registerChatsIpc(): void {
   ipcMain.handle(
     IPC.CHATS_REPLACE_TAIL,
     (event, payload: { id: string; startIndex: number; messages: ChatMessage[] }) => {
-      if (!payload?.id || !Array.isArray(payload.messages)) return null;
+      if (!payload || !isValidSessionId(payload.id) || !Array.isArray(payload.messages)) return null;
       const session = chatsStore.replaceMessagesTail(payload.id, payload.startIndex, payload.messages);
       if (session) broadcastChanged(event.sender);
       return session;
@@ -89,7 +91,7 @@ export function registerChatsIpc(): void {
   ipcMain.handle(
     IPC.CHATS_RENAME,
     (event, payload: { id: string; title: string }) => {
-      if (!payload || !payload.id) return null;
+      if (!payload || !isValidSessionId(payload.id)) return null;
       const session = chatsStore.renameSession(payload.id, payload.title ?? "");
       if (session) broadcastChanged(event.sender);
       return session;

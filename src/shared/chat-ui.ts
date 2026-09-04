@@ -1,8 +1,7 @@
-// 聊天会话列表 UI 层共享代码（settings 💬面板 + chat 窗口侧栏 都用）。
+// Shared presentation helpers for chat session lists in Settings and Chat.
 //
-// 这里只放纯展示相关的类型/常量/纯函数——不涉及任何 DOM 构建，
-// 因为两个入口的 DOM 结构和交互不同（settings=跨窗口openInChatWindow，
-// chat=本地loadSessionIntoUI），各自 build，但时间格式化/类型/默认标签统一。
+// Keep only presentation types, constants, and pure functions here. Each entry
+// point builds its own DOM and interactions, while sharing time and label rules.
 
 export interface ChatSessionMetaUI {
   id: string;
@@ -14,19 +13,19 @@ export interface ChatSessionMetaUI {
   purpose?: "proactive-chat";
 }
 
-// 默认 identity 显示名（职位面板未做，所有会话先用这个）
+// Default identity label until identity-specific presentation is available.
 
-// 微信式相对时间：刚刚 / N 分钟前 / 今天 HH:mm / 昨天 HH:mm / N 天前 / MM-DD / YYYY-MM-DD
+// Compact relative time: now, minutes, today/yesterday, days, or a date.
 export function formatChatRelativeTime(at: number): string {
   const now = Date.now();
   const diff = now - at;
   if (diff < 0) {
-    // 极少见的时钟回拨：直接降级到绝对时间
+    // If the clock moved backwards, fall back to an absolute time.
     const d = new Date(at);
     return `${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   }
-  if (diff < 60_000) return "刚刚";
-  if (diff < 60 * 60_000) return Math.floor(diff / 60_000) + " 分钟前";
+  if (diff < 60_000) return "Just now";
+  if (diff < 60 * 60_000) return Math.floor(diff / 60_000) + " min ago";
 
   const target = new Date(at);
   const today = new Date();
@@ -35,9 +34,9 @@ export function formatChatRelativeTime(at: number): string {
 
   const hh = String(target.getHours()).padStart(2, "0");
   const mm = String(target.getMinutes()).padStart(2, "0");
-  if (dayDiff === 0) return `今天 ${hh}:${mm}`;
-  if (dayDiff === 1) return `昨天 ${hh}:${mm}`;
-  if (dayDiff < 7) return `${dayDiff} 天前`;
+  if (dayDiff === 0) return `Today ${hh}:${mm}`;
+  if (dayDiff === 1) return `Yesterday ${hh}:${mm}`;
+  if (dayDiff < 7) return `${dayDiff} days ago`;
 
   const sameYear = target.getFullYear() === today.getFullYear();
   const md = `${String(target.getMonth() + 1).padStart(2, "0")}-${String(target.getDate()).padStart(2, "0")}`;

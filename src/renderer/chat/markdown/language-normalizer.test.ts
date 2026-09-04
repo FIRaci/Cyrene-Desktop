@@ -75,12 +75,12 @@ describe("language-normalizer", () => {
       expect(getLanguageDisplayName("bash")).toBe("Bash");
       expect(getLanguageDisplayName("batch")).toBe("CMD / Batch");
       expect(getLanguageDisplayName("json")).toBe("JSON");
-      expect(getLanguageDisplayName("text")).toBe("代码");
+      expect(getLanguageDisplayName("text")).toBe("Code");
     });
 
-    test("returns 代码 for unknown language", () => {
-      expect(getLanguageDisplayName("rust")).toBe("代码");
-      expect(getLanguageDisplayName("unknown")).toBe("代码");
+    test("returns Code for unknown language", () => {
+      expect(getLanguageDisplayName("rust")).toBe("Code");
+      expect(getLanguageDisplayName("unknown")).toBe("Code");
     });
   });
 });

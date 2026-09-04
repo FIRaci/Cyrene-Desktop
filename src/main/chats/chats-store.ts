@@ -74,8 +74,21 @@ function persistIndex(): void {
   atomicWriteJson(indexPath, indexCache);
 }
 
+const SAFE_SESSION_ID_REGEX = /^[a-zA-Z0-9_-]{1,64}$/;
+
+export function isValidSessionId(id: unknown): id is string {
+  return typeof id === "string" && SAFE_SESSION_ID_REGEX.test(id);
+}
+
 function sessionPath(id: string): string {
-  return path.join(sessionsDir, id + ".json");
+  if (!isValidSessionId(id)) {
+    throw new Error(`Invalid session ID: ${String(id)}`);
+  }
+  const resolved = path.resolve(sessionsDir, id + ".json");
+  if (!resolved.startsWith(path.resolve(sessionsDir))) {
+    throw new Error(`Path traversal detected for session ID: ${id}`);
+  }
+  return resolved;
 }
 
 function readSessionFile(id: string): ChatSession | null {

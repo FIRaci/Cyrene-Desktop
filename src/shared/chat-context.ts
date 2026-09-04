@@ -6,7 +6,7 @@ export interface TurnModelContextInput {
 }
 
 export const USER_ANNOTATION_NOTICE =
-  "这张图片包含用户主动添加的视觉标注。标注区域代表用户希望你重点关注的内容，但不表示该区域一定存在错误。请识别这些标注，并结合整张图片和用户文字回答。";
+  "This image contains visual annotations added by the user. The marked regions indicate what deserves attention, not necessarily an error. Identify the annotations and answer using the full image and the user's message.";
 
 export function userAnnotationNotice(hasAnnotations: boolean): string | undefined {
   return hasAnnotations ? USER_ANNOTATION_NOTICE : undefined;
@@ -16,23 +16,23 @@ export function buildTurnModelContext(input: TurnModelContextInput): string | un
   const contextParts: string[] = [];
 
   if (input.fileHints?.length) {
-    contextParts.push("【本轮文件】\n" + input.fileHints.join("\n"));
+    contextParts.push("[FILES FOR THIS TURN]\n" + input.fileHints.join("\n"));
   }
 
   if (input.documentContextLines?.length) {
-    contextParts.push("【文档内容】\n" + input.documentContextLines.join("\n\n"));
+    contextParts.push("[DOCUMENT CONTENT]\n" + input.documentContextLines.join("\n\n"));
   }
 
   if (input.imageCaptionLines?.length) {
     contextParts.push(
-      "【图片视觉信息】\n以下内容是视觉模型对用户本轮图片的观察结果，请将其视为你已经看到的图片内容；如果某张图分析失败，请不要编造。\n" +
+      "[IMAGE VISION CONTEXT]\nThe following observations come from the vision model for images in this turn. Treat successful observations as visible image content and never invent details for a failed analysis.\n" +
       input.imageCaptionLines.join("\n"),
     );
   }
 
   if (input.directImageLines?.length) {
     contextParts.push(
-      "【图片附件】\n以下图片已随本轮消息直接发送给主模型，请直接结合图片内容回答。\n" +
+      "[IMAGE ATTACHMENTS]\nThe following images were sent directly to the primary model with this turn. Answer using their visible content.\n" +
       input.directImageLines.join("\n"),
     );
   }

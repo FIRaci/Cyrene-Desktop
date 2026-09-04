@@ -1269,7 +1269,7 @@ body {
 
 /* Drag & drop visual feedback */
 .chat--drag-over::after {
-  content: "📂 松开放入文件";
+  content: "📂 Drop files here";
   position: absolute;
   inset: 0;
   display: grid;

@@ -128,7 +128,7 @@ export function createStreamingMarkdownSession(
       try {
         blocks = parseStreamingBlocks(md, raw);
       } catch (parseErr) {
-        console.error("[streaming-session] parseStreamingBlocks 失败:", parseErr);
+      console.error("[streaming-session] parseStreamingBlocks failed:", parseErr);
         renderFailureCount++;
         checkDegraded();
         // 降级：只更新 activeRoot（不含已 committed 的部分，避免重复）
@@ -166,7 +166,7 @@ export function createStreamingMarkdownSession(
 
       followScroll();
     } catch (err) {
-      console.error("[streaming-session] doRender 失败:", err);
+      console.error("[streaming-session] doRender failed:", err);
       renderFailureCount++;
       checkDegraded();
 
@@ -184,7 +184,7 @@ export function createStreamingMarkdownSession(
   function checkDegraded(): void {
     if (renderFailureCount >= 3 && !degraded) {
       degraded = true;
-      console.warn("[streaming-session] 连续渲染失败 3 次，进入降级模式");
+        console.warn("[streaming-session] Rendering failed three times; entering fallback mode");
       // 清空 stableRoot，用完整 raw 作为 textContent
       stableRoot.innerHTML = "";
       activeRoot.textContent = raw;

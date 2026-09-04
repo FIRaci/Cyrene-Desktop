@@ -5,17 +5,17 @@
  *   raw markdown
  *   -> markdown-it 解析（html:false, linkify, breaks:false）
  *   -> KaTeX 插件处理公式（行内 $...$ / 块级 $$...$$）
- *   -> fenced code 自定义 renderer -> Shiki codeToHtml
+ *   -> fenced code Custom renderer -> Shiki codeToHtml
  *   -> DOMPurify 净化
  *   -> 返回 MarkdownRenderResult
  *
  * 降级策略：
- *   - 单个 Shiki 代码块失败：只降级该代码块，不影响整条消息
- *   - KaTeX 解析失败：显示原始 LaTeX 文本（throwOnError:false），不丢失内容
+ *   - 单个 Shiki 代码块Failed：只降级该代码块，不影响整条消息
+ *   - KaTeX 解析Failed：显示原始 LaTeX 文本（throwOnError:false），不丢失内容
  *   - markdown-it 整体异常：返回 { mode:"text", content: raw }
  *   - DOMPurify 整体异常：返回 { mode:"text", content: raw }
  *
- * HTML 所有权：
+ * HTML All权：
  *   - .code-block wrapper + header 由本模块生成
  *   - Shiki 返回的 <pre class="shiki"> 放在 .code-block__code 内
  *   - fallback 代码先转义再拼入 HTML
@@ -30,7 +30,7 @@ import type { MarkdownRenderResult } from "./types";
 
 // ── markdown-it 实例（模块级单例） ──────────────────────────
 
-/** 获取 markdown-it 实例（供 streaming session 使用） */
+/** 获取 markdown-it 实例（供 streaming session Use） */
 export function getMd(): MarkdownIt { return md; }
 
 const md: MarkdownIt = new MarkdownIt({
@@ -41,10 +41,10 @@ const md: MarkdownIt = new MarkdownIt({
 });
 
 // KaTeX 插件：处理行内 $...$ 和块级 $$...$$ 公式
-// throwOnError:false -> 无效 LaTeX 显示原始文本，不崩溃
+// throwOnError:false -> None效 LaTeX 显示原始文本，不崩溃
 md.use(katexPlugin, { throwOnError: false });
 
-// ── 链接安全：自定义 link_open renderer ────────────────────
+// ── 链接安全：Custom link_open renderer ────────────────────
 
 /**
  * 判断 href 是否安全。拒绝 javascript: / data: / vbscript: / file: 等危险协议。
@@ -60,7 +60,7 @@ function isAllowedHref(href: string): boolean {
   return false;
 }
 
-// 保存默认 link_open renderer
+// 保存Default link_open renderer
 const defaultLinkOpenRenderer = md.renderer.rules.link_open
   || function (tokens: MarkdownIt.Token[], idx: number, options, env, self) {
     return self.renderToken(tokens, idx, options);
@@ -83,7 +83,7 @@ md.renderer.rules.link_open = function (tokens, idx, options, env, self) {
   return defaultLinkOpenRenderer(tokens, idx, options, env, self);
 };
 
-// ── fenced code 自定义 renderer ──────────────────────────────
+// ── fenced code Custom renderer ──────────────────────────────
 
 const defaultFenceRenderer = md.renderer.rules.fence
   || function (tokens: MarkdownIt.Token[], idx: number, options, env, self) {
@@ -98,7 +98,7 @@ md.renderer.rules.fence = function (tokens, idx, options, env, self) {
   const lang = normalizeLang(rawLang);
   const displayName = getLanguageDisplayName(lang);
 
-  // 调用 Shiki 同步高亮（未就绪/失败返回 fallback <pre class="shiki">）
+  // 调用 Shiki 同步高亮（未就绪/Failed返回 fallback <pre class="shiki">）
   const highlightedHtml = codeToHtml(code, rawLang);
 
   // 生成 .code-block wrapper + header
@@ -107,15 +107,15 @@ md.renderer.rules.fence = function (tokens, idx, options, env, self) {
     `<div class="code-block" data-language="${lang}">` +
     `<header class="code-block__header">` +
     `<span class="code-block__language">${displayName}</span>` +
-    `<button type="button" class="code-block__copy" title="复制代码">复制</button>` +
+    `<button type="button" class="code-block__copy" title="Copy Code">Copy</button>` +
     `</header>` +
     `<div class="code-block__code">${highlightedHtml}</div>` +
     `</div>`
   );
 };
 
-// ── 块级数学公式自定义 renderer ────────────────────────────
-// 默认 KaTeX 输出 <div class="katex-display">...</div>
+// ── 块级数学公式Custom renderer ────────────────────────────
+// Default KaTeX 输出 <div class="katex-display">...</div>
 // 包裹成 <div class="math-block"><div class="math-block__scroll">...</div></div>
 // 外层负责 margin 和自然高度，内层只负责横向滚动
 // 避免 overflow-x:auto + overflow-y:visible 冲突导致的纵向裁切
@@ -161,7 +161,7 @@ const CACHE_LIMIT = 200;
 // ── DOMPurify 白名单 ─────────────────────────────────────
 // Shiki 生成：span, pre, code, style(内联 class)
 // KaTeX 生成：span, math, semantics, mi, mo, mn, mrow 等
-// 自定义：div(.code-block), button(复制), details/summary(折叠)
+// Custom：div(.code-block), button(复制), details/summary(折叠)
 
 const ALLOWED_TAGS = [
   // 基础 Markdown
@@ -170,7 +170,7 @@ const ALLOWED_TAGS = [
   "h1", "h2", "h3", "h4", "h5", "h6",
   "ul", "ol", "li",
   "table", "thead", "tbody", "tr", "th", "td",
-  // 代码块自定义
+  // 代码块Custom
   "div", "span", "button", "details", "summary",
   // KaTeX（math 标签由 KaTeX 输出）
   "math", "semantics", "mrow", "mi", "mo", "mn", "msup", "msub",
@@ -185,7 +185,7 @@ const ALLOWED_ATTRS = [
   "class", "id", "title", "aria-label", "aria-hidden", "role",
   // 链接
   "href", "target", "rel",
-  // 图片
+  // Image
   "src", "alt", "width", "height",
   // 代码块
   "data-code", "data-lang",
@@ -218,7 +218,7 @@ if (typeof DOMPurify.addHook === "function") {
     if (typeof el.closest === "function" && el.closest(TRUSTED_STYLE_ROOTS)) {
       return; // 保留
     }
-    data.keepAttr = false; // 删除
+    data.keepAttr = false; // Delete
   });
 }
 
@@ -238,7 +238,7 @@ function cacheGet(key: string): MarkdownRenderResult | undefined {
 
 function cacheSet(key: string, val: MarkdownRenderResult): void {
   if (htmlCache.size >= CACHE_LIMIT) {
-    // 删除最旧的
+    // Delete最旧的
     const oldest = htmlCache.keys().next().value;
     if (oldest !== undefined) htmlCache.delete(oldest);
   }
@@ -261,7 +261,7 @@ function renderEscapedPlainText(raw: string): MarkdownRenderResult {
  *
  * 返回判别联合 MarkdownRenderResult：
  * - { mode: "html", content }: 渲染成功，content 是 DOMPurify 净化后的 HTML
- * - { mode: "text", content }: 渲染失败，content 是原始 markdown，调用方走 textContent
+ * - { mode: "text", content }: 渲染Failed，content 是原始 markdown，调用方走 textContent
  */
 export function renderMarkdown(raw: string): MarkdownRenderResult {
   if (!raw || !raw.trim()) {
@@ -270,7 +270,7 @@ export function renderMarkdown(raw: string): MarkdownRenderResult {
 
   // ── 长度保护 ──
   const text = raw.length > MESSAGE_CHAR_LIMIT
-    ? raw.slice(0, MESSAGE_CHAR_LIMIT) + "\n\n[消息过长，已截断]"
+    ? raw.slice(0, MESSAGE_CHAR_LIMIT) + "\n\n[Message too long; truncated]"
     : raw;
 
   // 超长文本降级：不跑 markdown-it，直接转义
@@ -290,7 +290,7 @@ export function renderMarkdown(raw: string): MarkdownRenderResult {
   try {
     html = md.render(text);
   } catch (err) {
-    console.warn("[markdown] markdown-it 解析失败，降级纯文本:", err);
+    console.warn("[markdown] markdown-it parse failed, fallback to text:", err);
     return renderEscapedPlainText(text);
   }
 
@@ -305,7 +305,7 @@ export function renderMarkdown(raw: string): MarkdownRenderResult {
       ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto|tel):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i,
     });
   } catch (err) {
-    console.warn("[markdown] DOMPurify 净化失败，降级纯文本:", err);
+    console.warn("[markdown] DOMPurify sanitize failed, fallback to text:", err);
     return renderEscapedPlainText(text);
   }
 

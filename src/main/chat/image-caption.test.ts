@@ -10,18 +10,19 @@ import {
 } from "./image-caption";
 
 describe("validateCaptionImagePath", () => {
-  it("只在用户做过标注时增强视觉提示", () => {
+  it("adds an English annotation notice only when the user annotated the image", () => {
     expect(buildImageCaptionPrompt(false)).toBe(IMAGE_CAPTION_PROMPT);
-    expect(buildImageCaptionPrompt(true)).toContain("用户主动添加");
+    expect(buildImageCaptionPrompt(true)).toContain("visual annotations added by the user");
+    expect(buildImageCaptionPrompt(true)).not.toMatch(/[\u3400-\u9fff]/u);
   });
 
-  it("拒绝非字符串 filePath", () => {
-    expect(validateCaptionImagePath(123)).toEqual({ ok: false, error: "filePath 必须是 string" });
+  it("rejects a non-string filePath in English", () => {
+    expect(validateCaptionImagePath(123)).toEqual({ ok: false, error: "filePath must be a string" });
   });
 
   it("拒绝不存在的图片文件", () => {
     const missing = path.join(os.tmpdir(), "cyrene-missing-image.png");
-    expect(validateCaptionImagePath(missing)).toEqual({ ok: false, error: "文件不存在" });
+    expect(validateCaptionImagePath(missing)).toEqual({ ok: false, error: "File does not exist" });
   });
 
   it("拒绝非图片扩展名", () => {
@@ -29,7 +30,7 @@ describe("validateCaptionImagePath", () => {
     try {
       const fp = path.join(tmpDir, "note.txt");
       fs.writeFileSync(fp, "hello");
-      expect(validateCaptionImagePath(fp)).toEqual({ ok: false, error: "只支持图片文件" });
+      expect(validateCaptionImagePath(fp)).toEqual({ ok: false, error: "Only image files are supported" });
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
@@ -40,7 +41,7 @@ describe("validateCaptionImagePath", () => {
     try {
       const fp = path.join(tmpDir, "large.png");
       fs.writeFileSync(fp, Buffer.alloc(IMAGE_CAPTION_MAX_BYTES + 1));
-      expect(validateCaptionImagePath(fp)).toEqual({ ok: false, error: "图片不能超过 20MB" });
+      expect(validateCaptionImagePath(fp)).toEqual({ ok: false, error: "Image must not exceed 20 MB" });
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }

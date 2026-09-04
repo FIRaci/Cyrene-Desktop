@@ -26,10 +26,10 @@ describe("buildTurnModelContext", () => {
     expect(buildTurnModelContext({})).toBeUndefined();
   });
 
-  it("只为带标注截图返回明确但不猜位置的提醒", () => {
+  it("adds a clear annotation notice without guessing a location", () => {
     expect(userAnnotationNotice(false)).toBeUndefined();
     expect(userAnnotationNotice(true)).toBe(USER_ANNOTATION_NOTICE);
-    expect(USER_ANNOTATION_NOTICE).toContain("用户主动添加");
-    expect(USER_ANNOTATION_NOTICE).not.toContain("右上");
+    expect(USER_ANNOTATION_NOTICE).toContain("annotations added by the user");
+    expect(USER_ANNOTATION_NOTICE).not.toContain("top-right");
   });
 });

@@ -104,7 +104,7 @@ function formatDuration(ms: number): string {
   const totalMinutes = Math.floor(ms / ONE_MINUTE_MS);
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
-  return minutes > 0 ? `约 ${hours} 小时 ${minutes} 分钟` : `约 ${hours} 小时`;
+  return minutes > 0 ? `about ${hours} hours ${minutes} minutes` : `about ${hours} hours`;
 }
 
 function hasTimestampedMessages(messages: ChatContextMessage[]): boolean {
@@ -114,9 +114,9 @@ function hasTimestampedMessages(messages: ChatContextMessage[]): boolean {
 function buildTimestampUseRule(messages: ChatContextMessage[]): string {
   if (!hasTimestampedMessages(messages)) return "";
   return [
-    "[时间戳使用规则]",
-    "历史消息开头的方括号时间是系统提供的元数据，只用于理解对话顺序和连续性。",
-    "不要复述、引用或输出这些方括号时间标签；回复应只包含你要对用户说的话。",
+    "[TIMESTAMP_USAGE_RULES]",
+    "Bracketed timestamps at the start of earlier messages are system-provided metadata. Use them only to understand conversation order and continuity.",
+    "Do not repeat, quote, or output these bracketed timestamp labels. Your response must contain only what you want to say to the user.",
   ].join("\n");
 }
 
@@ -146,10 +146,10 @@ function buildGapNotice(messages: ChatContextMessage[], timezone: string): strin
   if (gapMs < ONE_HOUR_MS) return "";
 
   return [
-    "[对话时间信息]",
-    `当前时间：${formatLocalTime(latestUser.at, timezone)}`,
-    `距离上一条有效聊天消息：${formatDuration(gapMs)}`,
-    "仅用于理解对话连续性；除非与当前语境有关，否则不要主动提及时间间隔，也不要复述本段内容。",
+    "[CONVERSATION_TIME_CONTEXT]",
+    `Current time: ${formatLocalTime(latestUser.at, timezone)}`,
+    `Time since the previous valid chat message: ${formatDuration(gapMs)}`,
+    "Use this only to understand conversation continuity. Do not mention the time gap unless it is relevant, and do not repeat this context block.",
   ].join("\n");
 }
 

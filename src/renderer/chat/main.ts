@@ -105,6 +105,7 @@ interface ChatApi {
     getGeneralSettings?: () => Promise<{ defaultChatMode?: DefaultChatMode; segmentedOutputMode?: "all" | "chat" | "off"; currentStyleId?: StyleId }>;
     getEnabledStickers?: () => Promise<Array<{ id: string; src: string; description?: string }>>;
     startScreenshot: () => Promise<{ ok: boolean; reason?: string }>;
+    instantScreenLook?: () => Promise<ScreenshotInsertPayload | null>;
     onScreenshotInsert: (callback: (data: ScreenshotInsertPayload) => void) => () => void;
     saveScreenshotTemp: (base64: string, mime: string) => Promise<{ filePath: string }>;
   }
@@ -131,7 +132,7 @@ const SPEAK_ICON_ACTIVE = `<svg class="msg__speak-icon msg__speak-icon--active" 
 </svg>`;
 
 /* ===== 复制按钮 SVG =====
-   静态版两个重叠方框（标准复制图标），复制成功版换成对勾 + 文案"已复制"。 */
+   静态版两个重叠方框（Standard复制图标），复制成功版换成对勾 + 文案"Copied"。 */
 const COPY_ICON_IDLE = `<svg class="msg__copy-icon msg__copy-icon--idle" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
   <rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" stroke-width="1.6" fill="none"/>
   <path d="M5 15V5a2 2 0 0 1 2-2h10" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
@@ -159,7 +160,7 @@ interface SchedulerEventsApi {
   onEvent: (callback: (event: unknown) => void) => () => void;
 }
 
-/** 用户选择卡片 API（window.choice）。卡片展示走 AGUI_EVENT CUSTOM，resolve 走独立 IPC。 */
+/** 用户Select卡片 API（window.choice）。卡片展示走 AGUI_EVENT CUSTOM，resolve 走独立 IPC。 */
 interface ChoiceApi {
   resolve: (id: string, value: unknown) => Promise<unknown>;
 }
@@ -172,7 +173,7 @@ interface ChatMusicApi {
   }>;
 }
 
-/** AG-UI BaseEvent 的最小本地类型（只取我们关心的字段）。 */
+/** AG-UI BaseEvent 的最小Local类型（只取我们关心的字段）。 */
 interface AguiBaseEvent {
   type: string;
   messageId?: string;
@@ -183,7 +184,7 @@ interface AguiBaseEvent {
   content?: string;
   error?: string;
   message?: string;  // RUN_ERROR 的规范字段（upstream RunErrorEvent.message）
-  code?: string;     // 结构化错误码（AgentRuntimeError.code）
+  code?: string;     // 结构化Error码（AgentRuntimeError.code）
   stepName?: string;
   runId?: string;
   threadId?: string;
@@ -194,7 +195,7 @@ interface AguiBaseEvent {
 }
 
 /**
- * 渲染端 Agent 错误。携带结构化 code，用于在 failRun reject 和 catch 之间传递。
+ * 渲染端 Agent Error。携带结构化 code，用于在 failRun reject 和 catch 之间传递。
  * 与主进程的 AgentRuntimeError 对应，但这里是纯 renderer 类。
  */
 class AgentRenderError extends Error {
@@ -271,11 +272,11 @@ const messagesEl = document.getElementById("messages") as HTMLElement;
 initMarkdownRenderer();
 initCodeBlockController(messagesEl);
 
-// ── 历史消息渐进渲染队列 ────────────────────────────────────
+// ── History消息渐进渲染队列 ────────────────────────────────────
 // render() 先同步创建纯文本占位，标记 data-md-pending，
 // 队列用 requestIdleCallback 渐进升级为 Markdown HTML。
 
-/** 存储所有助手 bubble 的原始 markdown 文本（WeakMap 防 DOM 回收后泄漏） */
+/** 存储All助手 bubble 的原始 markdown 文本（WeakMap 防 DOM 回收后泄漏） */
 const bubbleRawText = new WeakMap<HTMLElement, string>();
 /** 向后兼容：pendingMarkdownText 指向同一个 WeakMap */
 const pendingMarkdownText = bubbleRawText;
@@ -287,7 +288,7 @@ let historyIdleId: number | null = null;
 const HISTORY_MAX_BATCH = 3;
 const HISTORY_MIN_REMAINING_MS = 4;
 
-/** 取消当前队列，递增 generation */
+/** Cancel当前队列，递增 generation */
 function cancelHistoryRender(): void {
   renderGeneration++;
   if (historyIdleId !== null) {
@@ -296,14 +297,14 @@ function cancelHistoryRender(): void {
   }
 }
 
-/** 调度历史消息渐进渲染（在 render() 后调用） */
+/** 调度History消息渐进渲染（在 render() 后调用） */
 function scheduleHistoryRender(): void {
   cancelHistoryRender();
   const gen = renderGeneration;
 
   const processBatch = (deadline?: IdleDeadline): void => {
     historyIdleId = null;
-    if (gen !== renderGeneration) return; // 已被取消
+    if (gen !== renderGeneration) return; // 已被Cancel
 
     const pendingBubbles = messagesEl.querySelectorAll<HTMLElement>("[data-md-pending='true']");
     if (pendingBubbles.length === 0) return;
@@ -312,7 +313,7 @@ function scheduleHistoryRender(): void {
     const hasDeadline = !!deadline;
 
     for (const bubble of pendingBubbles) {
-      if (gen !== renderGeneration) return; // 已被取消
+      if (gen !== renderGeneration) return; // 已被Cancel
       if (!bubble.isConnected) continue;
 
       const text = pendingMarkdownText.get(bubble);
@@ -324,7 +325,7 @@ function scheduleHistoryRender(): void {
       const result = renderMarkdown(text);
       if (result.mode === "html") {
         bubble.removeAttribute("data-md-mode");
-        // 原子替换：先在内存中构建 DOM，再一次性替换，避免清空→等待→插入导致的闪烁
+        // 原子替换：先在内存中构建 DOM，再一次性替换，避免Clear→等待→插入导致的闪烁
         const prevHeight = bubble.getBoundingClientRect().height;
         const tpl = document.createElement("template");
         tpl.innerHTML = result.content;
@@ -339,7 +340,7 @@ function scheduleHistoryRender(): void {
       pendingMarkdownText.delete(bubble);
       processed++;
 
-      // 时间预算：有 deadline 时检查剩余时间，无 deadline 时按数量限制
+      // 时间预算：有 deadline 时检查剩余时间，None deadline 时按数量限制
       if (processed >= HISTORY_MAX_BATCH) break;
       if (hasDeadline && deadline!.timeRemaining() < HISTORY_MIN_REMAINING_MS) break;
     }
@@ -360,15 +361,15 @@ function scheduleHistoryRender(): void {
 }
 
 /**
- * 主题切换时刷新已完成助手消息的 Markdown 渲染（Shiki 主题更新）。
- * 不调用全局 render()，避免销毁流式 session DOM。
+ * 主题切换时Refresh已Completed助手消息的 Markdown 渲染（Shiki 主题更新）。
+ * 不调用Global render()，避免销毁流式 session DOM。
  * 流式 session 中的已稳定代码块暂保留旧主题（方案 B），终态自动切换。
  */
 function refreshMarkdownTheme(): void {
-  // 取消旧队列
+  // Cancel旧队列
   cancelHistoryRender();
 
-  // 找到所有助手消息气泡，标记为 pending 重新渲染
+  // FoundAll助手消息气泡，标记为 pending 重新渲染
   const assistantBubbles = messagesEl.querySelectorAll<HTMLElement>(".msg--model .msg__bubble");
   for (const bubble of assistantBubbles) {
     const text = bubbleRawText.get(bubble);
@@ -408,8 +409,8 @@ const LEGACY_STORAGE_KEY = "cyrene.chat.history.v1";
  * Avatar source per role. Empty string = use the gradient placeholder
  * baked into the CSS background of `.msg--user .msg__avatar`.
  *
- * Model side: 昔涟的 PNG，由 CSS border-radius: 50% 自动裁圆。
- * User side: 暂留空，等设置页里上传用户头像后再把 user 改成 file:// 或 data: URL。
+ * Model side: Cyrene的 PNG，由 CSS border-radius: 50% 自动裁圆。
+ * User side: 暂留空，等Settings页里上传用户头像后再把 user 改成 file:// 或 data: URL。
  */
 const AVATAR_SRC: Record<Role, string> = {
   model: resolveAsset("avatars/cyrene-avatar.png"),
@@ -509,7 +510,7 @@ function getStickerSrc(id: string): string | undefined {
 }
 
 // 多会话改造：messages 是当前活跃 session 的消息数组（启动时为空，由 bootstrap 填充）。
-// currentSessionId 是当前正在显示的会话 id，所有持久化操作都基于它。
+// currentSessionId 是当前正在显示的会话 id，All持久化操作都基于它。
 // 启动期间 currentSessionId 为 null，发送按钮通过 sending 标志兜底（bootstrap 极快）。
 const messages: Message[] = [];
 let currentSessionId: string | null = null;
@@ -519,8 +520,8 @@ const CHAT_WINDOW_SIZE = 100;
 let currentModelConfig: ModelConfig | null = null;
 
 function formatModelHint(config: ModelConfig | null): string {
-  if (!config || !config.connected) return "模型未连接";
-  return `${config.model} 已连接`;
+  if (!config || !config.connected) return "Model disconnected";
+  return `${config.model} Connected`;
 }
 
 function applyModelConfig(config: ModelConfig | null): void {
@@ -550,10 +551,10 @@ async function initModelConfig(): Promise<void> {
 }
 
 // ── 多会话存储桥接 ───────────────────────────────────────────
-// 旧版聊天记录从 localStorage 一次性迁移到主进程 chats 存储，之后整窗口
-// 所有读写都走 IPC（window.chatStore）。所有 saveHistory 调用点改成
+// 旧版Chat记录从 localStorage 一次性迁移到主进程 chats 存储，之后整窗口
+// All读写都走 IPC（window.chatStore）。All saveHistory 调用点改成
 // saveSession，本质是把 messages 全量回写当前 session 文件。
-// 会话元数据类型用 shared 的 ChatSessionMetaUI（跟设置面板共用）。
+// 会话元数据类型用 shared 的 ChatSessionMetaUI（跟Settings面板共用）。
 
 interface ChatStoreSession {
   id: string;
@@ -632,7 +633,7 @@ async function saveSession(): Promise<void> {
   try {
     await window.chatStore.replaceTail(currentSessionId, sessionTailStart, toPersistableMessages(messages));
   } catch (err) {
-    console.warn("[Cyrene Chat] saveSession 失败:", err);
+    console.warn("[Cyrene Chat] saveSession failed:", err);
   }
 }
 
@@ -654,10 +655,10 @@ function loadSessionIntoUI(session: ChatStoreSession): void {
       musicCard: m.musicCard,
     });
   }
-  // 上报活跃 sessionId（设置面板"删除当前会话"差异化提示用）
+  // 上报活跃 sessionId（Settings面板"Delete当前会话"差异化Notice用）
   void window.chatStore?.setActiveSession(session.id);
   render();
-  // 切换会话后刷新侧栏列表的活跃高亮
+  // 切换会话后Refresh侧栏列表的活跃高亮
   void renderRailList();
 }
 
@@ -681,9 +682,9 @@ async function loadEarlierMessages(): Promise<void> {
 }
 
 // ── 会话侧栏（点左上角 loader 展开）──
-// 精简版：+新对话 / 列表点击切换 / 活跃高亮。改名删除留设置面板。
+// 精简版：+New Chat / 列表点击切换 / 活跃高亮。改名Delete留Settings面板。
 // 渲染逻辑跟 settings.ts 的 renderChatSessions 同源（复用 shared 的格式化函数），
-// 但点击行为不同：这里是本地 loadSessionIntoUI，不走跨窗口 IPC，更快。
+// 但点击行为不同：这里是Local loadSessionIntoUI，不走跨窗口 IPC，更快。
 
 const unreadProactiveSessionIds = new Set<string>();
 const seenSessionUpdatedAt = new Map<string, number>();
@@ -695,7 +696,7 @@ async function renderRailList(): Promise<void> {
   try {
     sessions = await window.chatStore.list();
   } catch (err) {
-    console.warn("[Cyrene Chat] 侧栏加载会话列表失败:", err);
+    console.warn("[Cyrene Chat] Sidebar load sessions failed:", err);
   }
 
   chatRailList.innerHTML = "";
@@ -719,7 +720,7 @@ function buildRailItem(session: ChatSessionMetaUI): HTMLLIElement {
 
   const titleEl = document.createElement("div");
   titleEl.className = "chat__rail-title";
-  titleEl.textContent = session.title || "新对话";
+  titleEl.textContent = session.title || "New Chat";
   if (unreadProactiveSessionIds.has(session.id)) titleEl.textContent = `● ${titleEl.textContent}`;
 
   const metaEl = document.createElement("div");
@@ -732,8 +733,12 @@ function buildRailItem(session: ChatSessionMetaUI): HTMLLIElement {
 
   metaEl.appendChild(timeEl);
 
-  // 点击列表项 = 本地切换会话（不走跨窗口 IPC，比设置面板还快）
+  // 点击列表项 = Local切换会话（不走跨窗口 IPC，比Settings面板还快）
   li.addEventListener("click", async () => {
+    if (sending) {
+      announceScreenshotStatus("Cyrene is still replying. Please wait or stop generation first.");
+      return;
+    }
     if (session.id === currentSessionId) return;
     await loadSessionTailIntoUI(session.id);
   });
@@ -747,12 +752,16 @@ function buildRailItem(session: ChatSessionMetaUI): HTMLLIElement {
 chatStatusBtn?.addEventListener("click", () => {
   if (!chatRail) return;
   chatRail.toggleAttribute("hidden");
-  // 首次展开时拉一次列表（后续由 onChanged 持续刷新）
+  // 首次展开时拉一次列表（后续由 onChanged 持续Refresh）
   if (!chatRail.hidden) void renderRailList();
 });
 
-// +新对话
+// +New Chat
 chatRailNew?.addEventListener("click", async () => {
+  if (sending) {
+    announceScreenshotStatus("Cyrene is still replying. Please wait or stop generation first.");
+    return;
+  }
   if (!window.chatStore) return;
   try {
     const session = await window.chatStore.create({ identityId: null });
@@ -761,12 +770,12 @@ chatRailNew?.addEventListener("click", async () => {
       if (full) loadSessionIntoUI(full as ChatStoreSession);
     }
   } catch (err) {
-    console.warn("[Cyrene Chat] 新建会话失败:", err);
+    console.warn("[Cyrene Chat] Create session failed:", err);
   }
 });
 
 // 一次性迁移：检测老 localStorage 数据 → 包成 session → 删 key。
-// 失败/没数据时静默 no-op，不影响后续 bootstrap。
+// Failed/没数据时静默 no-op，不影响后续 bootstrap。
 async function maybeMigrateLegacy(): Promise<void> {
   const raw = localStorage.getItem(LEGACY_STORAGE_KEY);
   if (!raw) return;
@@ -783,22 +792,24 @@ async function maybeMigrateLegacy(): Promise<void> {
       localStorage.removeItem(LEGACY_STORAGE_KEY);
       return;
     }
-    await window.chatStore?.migrateLegacy(normalized);
+    const migrated = await window.chatStore?.migrateLegacy(normalized);
+    if (migrated) {
+      localStorage.removeItem(LEGACY_STORAGE_KEY);
+    }
   } catch (err) {
-    console.warn("[Cyrene Chat] 旧 localStorage 迁移失败:", err);
-  } finally {
-    // 不管成功失败都清掉，避免每次启动都尝试迁移
-    localStorage.removeItem(LEGACY_STORAGE_KEY);
+    console.warn("[Cyrene Chat] Legacy localStorage migration failed:", err);
   }
 }
 
 // 启动流程：迁移老数据 → 决定加载哪个 session → render
 async function bootstrap(): Promise<void> {
-  if (!window.chatStore) {
-    console.warn("[Cyrene Chat] chatStore IPC 未就绪——可能是 preload 未加载");
-    render();
-    return;
-  }
+  try {
+    if (!window.chatStore) {
+      console.warn("[Cyrene Chat] chatStore IPC not ready - preload might not be loaded");
+      currentSessionId = "fallback-session-" + Date.now();
+      render();
+      return;
+    }
 
   await maybeMigrateLegacy();
 
@@ -824,6 +835,13 @@ async function bootstrap(): Promise<void> {
     sessionTailStart = 0;
     loadSessionIntoUI(session);
   }
+  } catch (err) {
+    console.error("[Cyrene Chat] Bootstrap failed, recovering fallback session:", err);
+    if (!currentSessionId) {
+      currentSessionId = "fallback-session-" + Date.now();
+    }
+    render();
+  }
 }
 
 function formatTime(at: number): string {
@@ -833,7 +851,7 @@ function formatTime(at: number): string {
   return `${hh}:${mm}`;
 }
 
-/** 渲染 Task Plan 进度卡（只读浮动面板，可拖动）。 */
+/** 渲染 Task Plan 进度卡（Read-only浮动面板，可拖动）。 */
 interface PlanStepSnapshot {
   stepId: string;
   objective: string;
@@ -944,8 +962,8 @@ function renderPlanCard(snapshot: PlanSnapshot): void {
   card.classList.remove("plan-card--fading");
 
   const statusLabels: Record<string, string> = {
-    running: "执行中", completed: "完成", failed: "失败", cancelled: "已取消",
-    awaiting_user: "等待用户", paused: "已暂停",
+    running: "Executing", completed: "Completed", failed: "Failed", cancelled: "Cancelled",
+    awaiting_user: "Waiting for User", paused: "Paused",
   };
   const statusLabel = statusLabels[snapshot.planStatus] ?? snapshot.planStatus;
   const badgeClass = snapshot.planStatus === "running" ? "running"
@@ -972,7 +990,7 @@ function renderPlanCard(snapshot: PlanSnapshot): void {
   }).join("");
 
   const footerHtml = snapshot.replanCount > 0
-    ? `<div class="plan-card__footer">重规划 ${snapshot.replanCount} 次</div>`
+    ? `<div class="plan-card__footer">Re-planned ${snapshot.replanCount} times</div>`
     : "";
 
   card.innerHTML = `
@@ -996,7 +1014,7 @@ function renderPlanCard(snapshot: PlanSnapshot): void {
 function startPlanCardFadeIfTerminal(card: HTMLElement): void {
   const snapshot = (card.querySelector(".plan-card__badge")?.textContent ?? "");
   if (!TERMINAL_STATUSES.some(s => {
-    const labels: Record<string, string> = { completed: "完成", failed: "失败", cancelled: "已取消" };
+    const labels: Record<string, string> = { completed: "Completed", failed: "Failed", cancelled: "Cancelled" };
     return labels[s] === snapshot;
   })) return;
   if (planCardFadeTimer) clearTimeout(planCardFadeTimer);
@@ -1036,9 +1054,9 @@ function renderTodoPanel(state: TodoState | null): void {
   const checkIcon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" style="width:0.75rem;height:0.75rem"><path fill-rule="evenodd" d="M12.416 3.376a.75.75 0 0 1 .208 1.04l-5 7.5a.75.75 0 0 1-1.154.114l-3-3a.75.75 0 0 1 1.06-1.06l2.353 2.353 4.493-6.74a.75.75 0 0 1 1.04-.207Z" clip-rule="evenodd"/></svg>`;
 
   const priorityBadge = (p: string): string => {
-    if (p === "high") return `<span class="todo-badge todo-badge--high">高优先级</span>`;
-    if (p === "medium") return `<span class="todo-badge todo-badge--medium">中优先级</span>`;
-    if (p === "low") return `<span class="todo-badge todo-badge--low">低优先级</span>`;
+    if (p === "high") return `<span class="todo-badge todo-badge--high">High Priority</span>`;
+    if (p === "medium") return `<span class="todo-badge todo-badge--medium">Medium Priority</span>`;
+    if (p === "low") return `<span class="todo-badge todo-badge--low">Low Priority</span>`;
     return "";
   };
 
@@ -1054,8 +1072,8 @@ function renderTodoPanel(state: TodoState | null): void {
   panel.innerHTML = `
     <div class="todo-panel__header">
       <div>
-        <div class="todo-panel__title">📋 任务进度</div>
-        <div class="todo-panel__count">${done}/${total} 已完成</div>
+        <div class="todo-panel__title">📋 Task progress</div>
+        <div class="todo-panel__count">${done}/${total} completed</div>
       </div>
       <span class="todo-panel__toggle">${wasCollapsed ? "▸" : "▾"}</span>
     </div>
@@ -1100,7 +1118,7 @@ function escapeHtml(s: string): string {
   }[c]!));
 }
 
-/** 构建用户选择卡片 DOM 元素（歧义消解器），插入聊天流让用户选选项。 */
+/** 构建用户Select卡片 DOM 元素（歧义消解器），插入Chat流让用户选选项。 */
 function buildChoiceCardEl(data: {
   id: string;
   question: string;
@@ -1111,7 +1129,7 @@ function buildChoiceCardEl(data: {
   card.className = "choice-card";
   card.dataset.choiceId = data.id;
 
-  // 标题
+  // Title
   const title = document.createElement("div");
   title.className = "choice-card__title";
   title.textContent = data.question;
@@ -1139,7 +1157,7 @@ function buildChoiceCardEl(data: {
     }
 
     btn.addEventListener("click", () => {
-      // 标记已选，禁用所有按钮
+      // 标记已选，禁用All按钮
       card.classList.add("choice-card--resolved");
       card.querySelectorAll<HTMLButtonElement>(".choice-card__option").forEach(b => b.disabled = true);
       btn.classList.add("choice-card__option--selected");
@@ -1149,7 +1167,7 @@ function buildChoiceCardEl(data: {
   }
   card.appendChild(list);
 
-  // 自定义输入
+  // Custom输入
   const customWrap = document.createElement("div");
   customWrap.className = "choice-card__custom";
   const customInput = document.createElement("input");
@@ -1191,7 +1209,7 @@ function isAskClarificationCard(value: unknown): value is AskClarificationCard &
   );
 }
 
-/** Ask Soul 多字段澄清卡片。按钮只负责选择，统一由底部确认按钮结构化提交。 */
+/** Ask Soul 多字段澄清卡片。按钮只负责Select，统一由底部确认按钮结构化提交。 */
 function buildAskClarificationCardEl(
   data: AskClarificationCard & { id: string },
 ): HTMLElement {
@@ -1230,7 +1248,7 @@ function buildAskClarificationCardEl(
       const input = document.createElement("input");
       input.type = "text";
       input.className = "choice-card__custom-input";
-      input.placeholder = question.freeTextPlaceholder || "请填写你的具体要求";
+      input.placeholder = question.freeTextPlaceholder || "Please specify your requirements";
       state.customInput = input;
       section.appendChild(input);
     } else {
@@ -1334,7 +1352,7 @@ function buildAskClarificationCardEl(
   return card;
 }
 
-/** 构建权限审批卡片 DOM 元素（per-action 档位下工具调用前弹出）。 */
+/** 构建权限Approval卡片 DOM 元素（per-action 档位下工具调用前弹出）。 */
 function buildApprovalCardEl(req: {
   id: string;
   toolId: string;
@@ -1347,7 +1365,7 @@ function buildApprovalCardEl(req: {
   card.className = "approval-card";
   card.dataset.approvalId = req.id;
 
-  // 标题（带工具名 + 风险标签）
+  // Title（带工具名 + 风险标签）
   const title = document.createElement("div");
   title.className = "approval-card__title";
   const toolSpan = document.createElement("span");
@@ -1411,17 +1429,18 @@ function buildApprovalCardEl(req: {
   actions.appendChild(allowBtn);
   card.appendChild(actions);
 
-  // 提示行（60 秒超时）
+  // Notice行（60 秒超时）
   const note = document.createElement("div");
   note.className = "approval-card__note";
   note.textContent = "Auto-denies in 60s if not acted on";
   card.appendChild(note);
 
-  // 倒计时更新（每秒刷新）
+  // 倒计时更新（每秒Refresh）
   let remaining = 60;
   const tick = setInterval(() => {
     remaining -= 1;
     if (remaining <= 0) {
+      pendingPermissionRequests.delete(req.id);
       note.textContent = "Timed out, automatically denied";
       clearInterval(tick);
       return;
@@ -1430,6 +1449,7 @@ function buildApprovalCardEl(req: {
   }, 1000);
 
   const resolve = (allowed: boolean) => {
+    pendingPermissionRequests.delete(req.id);
     clearInterval(tick);
     if (!card.isConnected) return;
     card.classList.add(allowed ? "approval-card--allowed" : "approval-card--denied");
@@ -1445,16 +1465,17 @@ function buildApprovalCardEl(req: {
   return card;
 }
 
-/** 中文天气描述 → CSS 插画类别（5 种：weather-clear / cloudy / rain / snow / thunder）。 */
+/** Map English and legacy Chinese weather descriptions to illustration classes. */
 function weatherIllustrationClass(text: string): string {
-  if (/雷/.test(text)) return "weather-thunder";
-  if (/大雪|暴雪|中雪|小雪|阵雪|雪/.test(text)) return "weather-snow";
-  if (/大雨|暴雨|中雨|小雨|阵雨|强阵雨|冻雨|雨/.test(text)) return "weather-rain";
-  if (/晴/.test(text)) return "weather-clear";
-  return "weather-cloudy"; // 多云、阴、雾、霾、扬沙等兜底
+  // Unicode escapes retain multilingual weather matching without leaking localized UI copy.
+  if (/thunder|\u96f7/i.test(text)) return "weather-thunder";
+  if (/snow|\u96ea/i.test(text)) return "weather-snow";
+  if (/rain|drizzle|shower|\u96e8/i.test(text)) return "weather-rain";
+  if (/clear|sunny|\u6674/i.test(text)) return "weather-clear";
+  return "weather-cloudy";
 }
 
-/** SVG 内联图标映射（与 HTML 参考设计完全一致）。 */
+/** SVG 内联图标映射（与 HTML 参考设计Full一致）。 */
 const W_SVG = {
   humidity: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.7s6.5 7 6.5 11.3a6.5 6.5 0 0 1-13 0C5.5 9.7 12 2.7 12 2.7z"/></svg>`,
   wind: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></svg>`,
@@ -1470,7 +1491,11 @@ function buildWeatherCardEl(data: Record<string, unknown>): HTMLElement {
   card.className = "weather-card";
 
   const now = new Date();
-  const dateStr = `${now.getMonth() + 1}月${now.getDate()}日 周${"日一二三四五六"[now.getDay()]}`;
+  const dateStr = new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    weekday: "short",
+  }).format(now);
   const timeStr = formatTime(Date.now());
 
   const temp = Number(data.temp ?? 0);
@@ -1523,7 +1548,7 @@ function buildWeatherCardEl(data: Record<string, unknown>): HTMLElement {
     const dateLabel = escapeHtml(String(d.date ?? ""));
     const fcIllClass = weatherIllustrationClass(textDay);
     // 简化插画：只用 emoji 代替，避免预报行太占空间
-    const fcIcon = textDay.includes("雷") ? "⛈️" : textDay.includes("雪") ? "❄️" : textDay.includes("雨") ? "🌧️" : textDay.includes("晴") ? "☀️" : "⛅";
+    const fcIcon = textDay.includes("Thunder") ? "⛈️" : textDay.includes("Snow") ? "❄️" : textDay.includes("Rain") ? "🌧️" : textDay.includes("Clear") ? "☀️" : "⛅";
     return `<div class="forecast-row">
       <span class="forecast-date">${dateLabel} ${weekDay}</span>
       <span class="forecast-icon">${fcIcon}</span>
@@ -1782,7 +1807,7 @@ function appendBubbleForMessage(messageId: string): HTMLElement | null {
 }
 
 /**
- * 终态升级：将流式气泡替换为终态 Markdown HTML，不走全局 render()。
+ * 终态升级：将流式气泡替换为终态 Markdown HTML，不走Global render()。
  * - 原子替换（内存构建 → replaceChildren）
  * - 滚动：只在用户接近底部时滚到底部
  * - 升级后标记 has-rich-content（含表格/代码块/公式时固定宽度）
@@ -1945,8 +1970,8 @@ function hideTransientStatus(): void {
 }
 
 function render(preserveScroll = false): void {
-  // 空态：当前会话还没有消息时（新建/全清）显示"昔涟期待与你聊天哦 ✨"占位
-  // thinking 状态（昔涟主动开场/流式回复中）也算有消息，胶囊应立即消失
+  // 空态：当前会话还没有消息时（新建/全清）显示"Cyrene期待与你Chat哦 ✨"占位
+  // thinking 状态（Cyrene主动开场/流式回复中）也算有消息，胶囊应立即消失
   const emptyEl = document.getElementById("chat-empty");
   const hasMessages = messages.some((m) =>
     m.content.trim()
@@ -1965,6 +1990,10 @@ function render(preserveScroll = false): void {
     loadEarlier.textContent = "Load earlier messages";
     loadEarlier.addEventListener("click", () => void loadEarlierMessages());
     messagesEl.appendChild(loadEarlier);
+  }
+  for (const req of pendingPermissionRequests.values()) {
+    const card = buildApprovalCardEl(req);
+    messagesEl.appendChild(card);
   }
   for (const m of messages) {
     const row = document.createElement("div");
@@ -2012,7 +2041,7 @@ function render(preserveScroll = false): void {
             // 流式期：纯文本，由 StreamingMarkdownSession 管理后续 DOM
             bubble.textContent = text;
           } else {
-            // 终态：先放纯文本占位，标记为 pending，由历史渐进队列升级为 Markdown
+            // 终态：先放纯文本占位，标记为 pending，由History渐进队列升级为 Markdown
             bubble.textContent = text;
             bubble.dataset.mdPending = "true";
           }
@@ -2037,8 +2066,8 @@ function render(preserveScroll = false): void {
         sticker.src = stickerSrc;
         sticker.alt = m.role === "user" ? "User sticker" : "Cyrene sticker";
         sticker.draggable = false;
-        // <img> 高度异步加载，render() 末尾的滚动会在图片撑开前就执行，
-        // 导致 sticker 底部被输入框挡住。加载完成后再补一次滚到底。
+        // <img> 高度异步加载，render() 末尾的滚动会在Image撑开前就执行，
+        // 导致 sticker 底部被输入框挡住。加载Completed后再补一次滚到底。
         sticker.addEventListener("load", () => {
           messagesEl.scrollTop = messagesEl.scrollHeight;
         });
@@ -2096,7 +2125,7 @@ function render(preserveScroll = false): void {
         if (!text) return;
         void copyTextToClipboard(text).then((ok) => {
           if (!ok) return;
-          // 视觉反馈：切到对勾 + 文案"已复制"，1.5s 后复原
+          // 视觉反馈：切到对勾 + 文案"Copied"，1.5s 后复原
           copyBtn.classList.add("is-copied");
           copyBtn.innerHTML = COPY_ICON_DONE;
           const label = document.createElement("span");
@@ -2129,7 +2158,7 @@ function render(preserveScroll = false): void {
 
   if (!preserveScroll) messagesEl.scrollTop = messagesEl.scrollHeight;
 
-  // 历史消息渐进渲染：纯文本占位 -> Markdown HTML
+  // History消息渐进渲染：纯文本占位 -> Markdown HTML
   scheduleHistoryRender();
 }
 
@@ -2233,7 +2262,7 @@ function installSchedulerEventListener(): void {
 
 // ── TTS 朗读 ──
 // 从主进程加载 TTS 配置，按当前引擎调用合成并播放。
-// 自动朗读（回复完成后触发）和手动 🔊 按钮共用此函数。
+// 自动朗读（回复Completed后触发）和手动 🔊 按钮共用此函数。
 
 const TEXT_MODE_MOUTH_DURATION_MS = 8000;
 const AUDIO_MOUTH_DELAY_MS = 800;
@@ -2252,13 +2281,13 @@ interface TtsSettings {
   ttsGptsovitsRefAudioPath: string;
   ttsGptsovitsPromptText: string;
   ttsGptsovitsFormat: "wav" | "mp3";
-  // 自定义云端
+  // Custom Cloud
   ttsCustomCloudEndpointUrl: string;
   ttsCustomCloudApiKey: string;
   ttsCustomCloudVoiceId: string;
   ttsCustomCloudFormat: "wav" | "mp3";
   ttsCustomCloudTimeoutMs: number;
-  // 小米 MiMo
+  // Xiaomi MiMo
   ttsMimoKey: string;
   ttsMimoVoiceAudioPath: string;
   ttsMimoStylePrompt: string;
@@ -2266,7 +2295,7 @@ interface TtsSettings {
   ttsMosslandKey: string;
   ttsMosslandVoiceId: string;
   ttsMosslandModel: string;
-  // MiniMax 流式播放
+  // MiniMax Streaming Playback
   ttsStreaming: boolean;
 }
 
@@ -2286,13 +2315,13 @@ interface TtsApi {
     speed?: number; format?: "wav" | "mp3";
     expectedCacheKey?: string;
   }) => Promise<{ base64: string; cacheKey: string; cached: boolean; format: "wav" | "mp3" }>;
-  // 自定义云端（返回 base64 + cacheKey + cached + format）
+  // Custom Cloud（返回 base64 + cacheKey + cached + format）
   synthesizeCachedCustomCloud: (payload: {
     endpointUrl: string; apiKey?: string; voiceId?: string; text: string;
     speed?: number; volume?: number; format?: "wav" | "mp3"; timeoutMs?: number;
     expectedCacheKey?: string;
   }) => Promise<{ base64: string; cacheKey: string; cached: boolean; format: "wav" | "mp3" }>;
-  // 小米 MiMo（返回 base64 + cacheKey + cached + format）
+  // Xiaomi MiMo（返回 base64 + cacheKey + cached + format）
   synthesizeCachedMimo: (payload: {
     apiKey: string; voiceAudioPath?: string; text: string; stylePrompt?: string;
     expectedCacheKey?: string;
@@ -2321,7 +2350,7 @@ declare global {
   }
 }
 
-// 当前正在播放的 TTS 音频实例（全局唯一）。点新朗读前先停这个，避免重叠。
+// 当前正在播放的 TTS 音频实例（Global唯一）。点新朗读前先停这个，避免重叠。
 let currentTtsAudio: HTMLAudioElement | null = null;
 let currentTtsObjectUrl: string | null = null;
 // 当前正在朗读的消息 ID，用于给对应消息 row 加 .is-speaking class 并切换喇叭图标。
@@ -2331,7 +2360,7 @@ let speechToken = 0;
 let textMouthStarted = false;
 let ttsPlaybackSequence = 0;
 
-/** 复制文本到剪贴板，优先用现代 Clipboard API，失败时回落到 textarea+execCommand。 */
+/** 复制文本到剪贴板，优先用现代 Clipboard API，Failed时回落到 textarea+execCommand。 */
 async function copyTextToClipboard(text: string): Promise<boolean> {
   try {
     if (navigator.clipboard?.writeText) {
@@ -2339,9 +2368,9 @@ async function copyTextToClipboard(text: string): Promise<boolean> {
       return true;
     }
   } catch {
-    // 权限被拒或无 clipboard 上下文，回落到下面
+    // 权限被拒或None clipboard 上下文，回落到下面
   }
-  // Fallback：临时 textarea + execCommand('copy')。旧浏览器/无焦点时也能用。
+  // Fallback：临时 textarea + execCommand('copy')。旧浏览器/None焦点时也能用。
   const ta = document.createElement("textarea");
   ta.value = text;
   ta.setAttribute("readonly", "");
@@ -2365,7 +2394,7 @@ function nextSpeechToken(): number {
   return speechToken;
 }
 
-/** 把正在播放的喇叭按钮切回静态 SVG，所有其他按钮恢复正常。 */
+/** 把正在播放的喇叭按钮切回静态 SVG，All其他按钮恢复正常。 */
 function syncSpeakingUi(): void {
   const prevId = currentSpeakingMsgId;
   document.querySelectorAll(".msg.is-speaking").forEach((el) => {
@@ -2383,7 +2412,7 @@ function syncSpeakingUi(): void {
   if (btn) btn.innerHTML = SPEAK_ICON_ACTIVE;
 }
 
-/** 在开始朗读某条消息前调用：清掉旧的、设上新的，并刷新 UI。 */
+/** 在开始朗读某条消息前调用：清掉旧的、设上新的，并Refresh UI。 */
 function setSpeakingMsgId(id: string | null): void {
   currentSpeakingMsgId = id;
   syncSpeakingUi();
@@ -2455,7 +2484,7 @@ async function loadTtsSettings(): Promise<TtsSettings | null> {
   }
 }
 
-// 每次朗读前重新读取设置，确保设置页刚改的模型/音量/自动朗读开关即时生效。
+// 每次朗读前重新读取Settings，确保Settings页刚改的模型/Volume/自动朗读开关即时生效。
 function waitForAudioMetadata(audio: HTMLAudioElement): Promise<number | null> {
   return new Promise((resolve) => {
     if (Number.isFinite(audio.duration) && audio.duration > 0) {
@@ -2537,8 +2566,8 @@ function playTtsBase64(
 }
 
 /**
- * 流式播放 MiniMax TTS（MediaSource + SourceBuffer 边收边播）。
- * 返回 cacheKey（供回写消息）。失败时 fallback 到完整合成。
+ * Streaming Playback MiniMax TTS（MediaSource + SourceBuffer 边收边播）。
+ * 返回 cacheKey（供回写消息）。Failed时 fallback 到完整合成。
  */
 async function streamAndPlayCached(
   settings: TtsSettings,
@@ -2617,12 +2646,12 @@ async function streamAndPlayCached(
       if (!startedPlayback && sourceBuffer && sourceBuffer.buffered.length > 0 && audioEl && audioEl.paused) {
         startedPlayback = true;
         void audioEl.play().then(() => {
-          console.log(`[TTS-Stream] play() 开始 +${Math.round(performance.now() - t0)}ms`);
+          console.log(`[TTS-Stream] play() starts +${Math.round(performance.now() - t0)}ms`);
           if (speechToken !== token) return;
           const estDurationMs = Math.max(2000, Array.from(text).length * 180);
           window.live2dSpeech?.startMouth(estDurationMs);
         }).catch((err) => {
-          console.warn("[TTS-Stream] play 失败:", err);
+          console.warn("[TTS-Stream] play failed:", err);
           markPlaybackEnded();
         });
       }
@@ -2652,7 +2681,7 @@ async function streamAndPlayCached(
       format: "mp3",
       expectedCacheKey: existing?.ttsCacheKey,
     });
-    console.log(`[TTS-Stream] streamStart 返回 +${Math.round(performance.now() - t0)}ms started=${startResult.started} cached=${startResult.cached}`);
+    console.log(`[TTS-Stream] streamStart returns +${Math.round(performance.now() - t0)}ms started=${startResult.started} cached=${startResult.cached}`);
 
     // 注册监听（只注册一次）
     let firstChunkAt = 0;
@@ -2660,7 +2689,7 @@ async function streamAndPlayCached(
       if (speechToken !== token) return;
       if (!firstChunkAt) {
         firstChunkAt = performance.now();
-        console.log(`[TTS-Stream] 第一个 chunk +${Math.round(firstChunkAt - t0)}ms`);
+        console.log(`[TTS-Stream] First chunk +${Math.round(firstChunkAt - t0)}ms`);
       }
       const bytes = Uint8Array.from(atob(payload.base64), (c) => c.charCodeAt(0));
       if (queuedAudioBytes + bytes.byteLength > maxQueuedAudioBytes) {
@@ -2685,7 +2714,7 @@ async function streamAndPlayCached(
       try { mediaSource?.endOfStream(); } catch { /* */ }
     });
 
-    // 设置 MediaSource + Audio
+    // Settings MediaSource + Audio
     mediaSource = new MediaSource();
     const url = URL.createObjectURL(mediaSource);
     audioEl = new Audio(url);
@@ -2705,10 +2734,10 @@ async function streamAndPlayCached(
       try {
         sourceBuffer = mediaSource!.addSourceBuffer("audio/mpeg");
         sourceBuffer.mode = "sequence";
-        console.log(`[TTS-Stream] sourceBuffer 创建成功`);
+        console.log(`[TTS-Stream] sourceBuffer created successfully`);
         // 不立即 play——等轮询里第一块 append 成功（buffered.length>0）再 play
       } catch (err) {
-        console.warn("[TTS-Stream] SourceBuffer 创建失败:", err);
+        console.warn("[TTS-Stream] SourceBuffer creation failed:", err);
       }
     });
 
@@ -2828,7 +2857,7 @@ async function synthesizeAndPlayCached(
         }
       }
     } catch {
-      // 缓存读取失败，继续走正常合成流程
+      // 缓存读取Failed，继续走正常合成流程
     }
   }
 
@@ -2838,7 +2867,7 @@ async function synthesizeAndPlayCached(
       console.warn("[TTS] Missing apiKey or voiceId, cannot synthesize new audio");
       return null;
     }
-    // 流式优先（默认开）：边合成边播，首字延迟低；失败 fallback 完整合成
+    // 流式优先（Default开）：边合成边播，首字延迟低；Failed fallback 完整合成
     if (settings.ttsStreaming) {
       const stream = await streamAndPlayCached(settings, text, existing);
       if (stream) return stream;
@@ -2963,7 +2992,7 @@ async function speakMessage(message: Message): Promise<void> {
   stopLive2dMouth();
   window.live2dSpeech?.prepare();
   // 立即切 UI：不等合成，让用户能马上看到按钮进入播放态。
-  // playTtsBase64 真正开始播时会再次 setSpeakingMsgId（幂等）；如果合成失败下面 catch 里复位。
+  // playTtsBase64 真正开始播时会再次 setSpeakingMsgId（幂等）；如果合成Failed下面 catch 里复位。
   setSpeakingMsgId(message.id);
   try {
     const cache = await synthesizeAndPlayCached(message.content, message, message.id);
@@ -2971,7 +3000,7 @@ async function speakMessage(message: Message): Promise<void> {
       message.ttsCacheKey = cache.cacheKey;
       void saveSession();
     } else if (currentSpeakingMsgId === message.id) {
-      // 合成失败（引擎关 / 配置缺失 / 网络报错）→ 复位 UI
+      // 合成Failed（引擎关 / Missing Config / 网络报错）→ 复位 UI
       console.warn("[TTS] Synthesis failed, resetting speaker button");
       setSpeakingMsgId(null);
     }
@@ -2981,7 +3010,7 @@ async function speakMessage(message: Message): Promise<void> {
   }
 }
 
-// 自动朗读：检查引擎是否开启 + autoRead 开关，满足条件才朗读
+// 自动朗读：检查引擎是否On + autoRead 开关，满足条件才朗读
 async function autoSpeakIfEnabled(text: string): Promise<{ cacheKey: string } | null> {
   const settings = await loadTtsSettings();
   if (!settings || settings.ttsEngine === "off" || !settings.ttsAutoRead) return null;
@@ -3066,7 +3095,7 @@ function autosize(): void {
   inputEl.style.height = Math.min(inputEl.scrollHeight, 160) + "px";
 }
 
-// ── 表情包选择器 ──
+// ── 表情包Select器 ──
 
 let enabledStickers: Array<{ id: string; src: string; description?: string }> = [];
 
@@ -3164,7 +3193,7 @@ function buildModelMessages(): Array<{ role: "user" | "model"; content: string; 
     }));
 }
 
-/** 文档全文、RAG 片段和图片 caption 只服务于当前请求，不能随历史常驻。 */
+/** 文档全文、RAG 片段和Image caption 只服务于当前请求，不能随HistoryResident。 */
 function clearModelContexts(): boolean {
   let changed = false;
   for (const message of messages) {
@@ -3188,7 +3217,7 @@ function getCurrentStyleId(): StyleId {
 
 let sending = false;
 
-// 发送期间到达的 proactive-chat 外部变更（如昔涟又发了一条主动消息）不立刻重载，
+// 发送期间到达的 proactive-chat 外部变更（如Cyrene又发了一条主动消息）不立刻重载，
 // 否则会清掉 transient 思考消息 / 冲掉刚落库的回复。记下 sessionId，等发送结束、
 // 最终 saveSession 落盘后再 flush 重载。
 let pendingProactiveReloadId: string | null = null;
@@ -3201,7 +3230,7 @@ let pendingProactiveReloadId: string | null = null;
  * 是已落库的回复，不会把它冲掉。
  *
  * 已知限制：若外部主动消息在用户 saveSession 之前 append，replaceMessagesTail
- * 会用本地视图覆盖它（写冲突）。当前无调度器触发 evaluateCandidate，外部主动消息
+ * 会用Local视图覆盖它（写冲突）。当前None调度器触发 evaluateCandidate，外部主动消息
  * 不会在发送期间产生，此限制暂不构成实际问题；未来接入调度器时需把 saveSession
  * 改成 merge-aware。
  */
@@ -3217,8 +3246,8 @@ async function flushPendingProactiveReload(): Promise<void> {
 
 // ── 快捷预设胶囊 ──────────────────────────────────────────
 // 空对话时在 empty-state 下方显示的半透明胶囊，点击后：
-// - fill 模式：预设提示词填入输入框，用户修改后发送
-// - chat 模式：昔涟主动开口（注入隐藏种子消息触发 agent）
+// - fill 模式：预设Prompt填入输入框，用户修改后发送
+// - chat 模式：Cyrene主动开口（注入隐藏种子消息触发 agent）
 
 interface QuickPreset {
   id: string;
@@ -3272,14 +3301,14 @@ function onPresetClick(preset: QuickPreset): void {
 }
 
 /**
- * 「和昔涟聊天」胶囊：让昔涟主动开口。
+ * 「和CyreneChat」胶囊：让Cyrene主动开口。
  * 注入隐藏种子消息触发 agent（不推入 messages 数组、不渲染），
  * 复用现有 AG-UI 流式回复机制。
  */
 async function triggerCyreneGreeting(): Promise<void> {
   if (sending || !currentSessionId) return;
 
-  // 立即隐藏空态（胶囊），不等 refreshModelConfig 异步完成
+  // 立即隐藏空态（胶囊），不等 refreshModelConfig 异步Completed
   const emptyEl = document.getElementById("chat-empty");
   if (emptyEl) emptyEl.setAttribute("hidden", "");
 
@@ -3459,7 +3488,7 @@ async function triggerCyreneGreeting(): Promise<void> {
       }
     });
 
-    // 种子消息：不推入 messages 数组、不渲染，只作为 agent 输入触发昔涟主动开口
+    // 种子消息：不推入 messages 数组、不渲染，只作为 agent 输入触发Cyrene主动开口
     const ack = await window.agui!.run({
       messages: [{ role: "user", content: "[internal] The user clicked 'Chat with Cyrene'. Please initiate a friendly greeting to start the conversation naturally." }],
       styleId: getCurrentStyleId(),
@@ -3526,7 +3555,6 @@ async function triggerCyreneGreeting(): Promise<void> {
       });
     }
     void saveSession();
-    // 错误时也用单气泡升级，不走全量 render()
     finalizeStreamingBubble(streamMsgId, userMessage);
   } finally {
     sending = false;
@@ -3540,12 +3568,22 @@ async function triggerCyreneGreeting(): Promise<void> {
 async function send(): Promise<void> {
   const text = inputEl.value.trim();
   if ((!text && attachedFiles.length === 0) || sending) return;
-  // bootstrap 极快但理论上仍有竞态：currentSessionId 为 null 时消息无处可存，
-  // 直接拦截避免丢失。正常情况下 bootstrap 会在用户首次按键前完成。
   if (!currentSessionId) {
-    console.warn("[Cyrene Chat] Session not yet initialized, send ignored");
-    return;
+    console.warn("[Cyrene Chat] Session not yet initialized, creating emergency session");
+    try {
+      if (window.chatStore) {
+        const created = await window.chatStore.create({ identityId: null });
+        currentSessionId = created.id;
+      } else {
+        currentSessionId = "emergency-" + Date.now();
+      }
+    } catch {
+      currentSessionId = "emergency-" + Date.now();
+    }
   }
+  const runSessionId = currentSessionId;
+  let runMessages = messages;
+  const runTailStart = sessionTailStart;
 
   sending = true;
   sendBtn.disabled = true;
@@ -3819,6 +3857,10 @@ async function send(): Promise<void> {
     streamMsgId = String(Date.now() + 1);
     const streamMsg = { id: streamMsgId, role: "model", content: "", at: Date.now(), thinking: true, transient: true };
     messages.push(streamMsg);
+    // Capture the complete turn only after both the user and assistant placeholder exist.
+    // The message objects remain shared with the visible session while the array itself
+    // cannot be replaced by a later session load.
+    runMessages = [...messages];
     render();
 
     let streamContent = "";
@@ -3841,7 +3883,7 @@ async function send(): Promise<void> {
     });
 
     // AG-UI 事件流：订阅 window.agui.onEvent，按事件类型渲染
-    // 主进程在 FC 完成后瞬间把所有 delta 发完，渲染端用"回放队列"按固定节奏逐字显示，
+    // 主进程在 FC Completed后瞬间把All delta 发完，渲染端用"回放队列"按固定节奏逐字显示，
     // 营造真流式感。流式中的气泡用增量 span 追加 + CSS 渐显，不调 render() 全量重建。
     const deltaQueue: string[] = [];
     let streamSession: StreamingMarkdownSession | null = null;
@@ -3850,7 +3892,7 @@ async function send(): Promise<void> {
     let startNextStreamingBubble = false;
     let streamingBubbleCount = 1;
     const allowStreamingBubbleSplit = shouldSegmentAssistantReply(isChatMode() ? "chat" : "work", segmentedOutputMode);
-    /** 找到当前流式消息的气泡 DOM（TEXT_MESSAGE_START 时 render 过一次，带 data-msg-id）。 */
+    /** Found当前流式消息的气泡 DOM（TEXT_MESSAGE_START 时 render 过一次，带 data-msg-id）。 */
     const getStreamingBubble = (): HTMLElement | null => {
       return getLastBubbleForMessage(streamMsgId);
     };
@@ -3897,7 +3939,7 @@ async function send(): Promise<void> {
     const offEvent = registerAguiListener((rawEvent) => {
       try {
         const event = rawEvent as AguiBaseEvent;
-        const msg = messages.find(m => m.id === streamMsgId);
+        const msg = runMessages.find(m => m.id === streamMsgId);
         switch (event.type) {
           case "TOOL_CALL_START": {
             // 工具调用开始：在 thinking 气泡里显示"🔧 调用中：xxx"，替换三个点
@@ -3921,7 +3963,7 @@ async function send(): Promise<void> {
             break;
           }
           case "TOOL_CALL_END": {
-            // 工具调用完成：把"调用中"改成"完成"，淡出准备让位给文字
+            // 工具调用Completed：把"调用中"改成"Completed"，淡出准备让位给文字
             const bubble = getStreamingBubble();
             if (bubble) {
               const tip = bubble.querySelector(".msg__tool-tip");
@@ -3935,7 +3977,7 @@ async function send(): Promise<void> {
           }
           case "TEXT_MESSAGE_START":
             // 切换 thinking 点 → 空气泡，render 一次建立 DOM（带 data-msg-id）
-            // 工具提示（若有）会被 render 重建清掉，自然过渡到文字
+            // 工具Notice（若有）会被 render 重建清掉，自然过渡到文字
             if (msg) { msg.thinking = false; render(); }
             break;
           case "TEXT_MESSAGE_CONTENT":
@@ -3963,7 +4005,7 @@ async function send(): Promise<void> {
             }
             break;
           case "CUSTOM":
-            // 主进程发的自定义事件：sticker / 天气卡片 / 任务清单 / 选择卡片
+            // 主进程发的Custom事件：sticker / 天气卡片 / 任务清单 / Select卡片
             if (event.name === "cyrene.sticker") {
               sticker = (event.value as StickerId | null) ?? null;
             } else if (event.name === "cyrene.weather") {
@@ -3975,7 +4017,7 @@ async function send(): Promise<void> {
             } else if (event.name === "cyrene.todos") {
               renderTodoPanel(event.value as TodoState | null);
             } else if (event.name === "cyrene.choice") {
-              // 选择卡片：立即插入聊天流（不等 runDone，因为要即时交互）
+              // Select卡片：立即插入Chat流（不等 runDone，因为要即时交互）
               const choiceData = event.value;
               const card = isAskClarificationCard(choiceData)
                 ? buildAskClarificationCardEl(choiceData)
@@ -4009,7 +4051,7 @@ async function send(): Promise<void> {
     });
 
     // invoke 只确认"已发起"，不等 Observable 结束。
-    // 真正的完成由事件流 RUN_FINISHED/RUN_ERROR 驱动（await runDone）。
+    // 真正的Completed由事件流 RUN_FINISHED/RUN_ERROR 驱动（await runDone）。
     const modelMessages = buildModelMessages();
     const ack = await window.agui!.run({
       messages: modelMessages,
@@ -4017,27 +4059,41 @@ async function send(): Promise<void> {
       assistantTurnId: streamMsgId,
       styleId: getCurrentStyleId(),
       executionMode: isChatMode() ? "chat" : "work",
-      sessionId: currentSessionId || undefined,
+      sessionId: runSessionId || undefined,
       imageAttachments: directImageAttachments.length > 0 ? directImageAttachments : undefined,
     });
     if (!ack.success) {
-      offEvent();
       throw new Error(ack.error || "Failed to initiate model request");
     }
-    if (clearModelContexts()) void saveSession();
-
-    // 等事件流终态
-    await runDone;
-    offEvent();
-
-    // flush + dispose 流式 Markdown session（终态 finalizeStreamingBubble 会原子替换）
-    if (streamSession) {
-      streamSession.flush();
-      streamSession.dispose();
-      streamSession = null;
+    if (clearModelContexts() && runSessionId && window.chatStore) {
+      void window.chatStore.replaceTail(runSessionId, runTailStart, toPersistableMessages(runMessages));
     }
 
-    const msg = messages.find(m => m.id === streamMsgId);
+    // AG-UI watchdog timer (180s) to prevent indefinite hang if completion events drop
+    let watchdogTimer: any = null;
+    const watchdogPromise = new Promise<never>((_, reject) => {
+      watchdogTimer = setTimeout(() => {
+        reject(new Error("Stream connection timed out waiting for completion signal (180s watchdog)"));
+        void window.agui?.cancel?.().catch((cancelErr) => {
+          console.warn("[Cyrene Chat] Failed to cancel AG-UI run on watchdog timeout:", cancelErr);
+        });
+      }, 180000);
+    });
+
+    try {
+      await Promise.race([runDone, watchdogPromise]);
+    } finally {
+      if (watchdogTimer) clearTimeout(watchdogTimer);
+      offEvent();
+      if (playbackTimer !== null) { clearInterval(playbackTimer); playbackTimer = null; }
+      if (streamSession) {
+        streamSession.flush();
+        streamSession.dispose();
+        streamSession = null;
+      }
+    }
+
+    const msg = runMessages.find(m => m.id === streamMsgId);
     if (msg) {
       msg.thinking = false;
       msg.transient = false;
@@ -4045,18 +4101,24 @@ async function send(): Promise<void> {
       msg.sticker = sticker;
       msg.musicCard = pendingMusicCard ?? undefined;
     }
-    void saveSession();
+    if (runSessionId && window.chatStore) {
+      void window.chatStore.replaceTail(runSessionId, runTailStart, toPersistableMessages(runMessages));
+    }
     const finishedMsgId = streamMsgId;
     void pendingTtsCachePromise?.then((cache) => {
       if (!cache) return;
-      const latestMsg = messages.find(m => m.id === finishedMsgId);
+      const latestMsg = runMessages.find(m => m.id === finishedMsgId);
       if (!latestMsg) return;
       latestMsg.ttsCacheKey = cache.cacheKey;
-      void saveSession();
+      if (runSessionId && window.chatStore) {
+        void window.chatStore.replaceTail(runSessionId, runTailStart, toPersistableMessages(runMessages));
+      }
     });
 
-    // 终态：只升级当前流式气泡的 Markdown，不调 render() 全量重建
-    finalizeStreamingBubble(streamMsgId, streamContent);
+    // DOM isolation: only update visible stream bubble if still viewing this exact session
+    if (currentSessionId === runSessionId) {
+      finalizeStreamingBubble(streamMsgId, streamContent);
+    }
 
     // 天气卡片追加到末尾（模型回复之后）
     if (pendingWeatherCard) {
@@ -4071,22 +4133,26 @@ async function send(): Promise<void> {
     const message = err instanceof Error ? err.message : "Model request failed";
     const code = err instanceof AgentRenderError ? err.code : undefined;
     const userMessage = classifyAgentError(code, message);
-    const msg = messages.find(m => m.id === streamMsgId);
+    const msg = runMessages.find(m => m.id === streamMsgId);
     if (msg) {
       msg.thinking = false;
       msg.transient = false;
       msg.content = userMessage;
     } else {
-      messages.push({
+      runMessages.push({
         id: String(Date.now() + 2),
         role: "model",
         content: userMessage,
         at: Date.now(),
       });
     }
-    void saveSession();
-    // 错误时也用单气泡升级，不走全量 render()
-    finalizeStreamingBubble(streamMsgId, userMessage);
+    if (runSessionId && window.chatStore) {
+      void window.chatStore.replaceTail(runSessionId, runTailStart, toPersistableMessages(runMessages));
+    }
+    // Error时也用单气泡升级，不走全量 render()
+    if (currentSessionId === runSessionId) {
+      finalizeStreamingBubble(streamMsgId, userMessage);
+    }
   } finally {
     sending = false;
     sendBtn.disabled = false;
@@ -4095,13 +4161,26 @@ async function send(): Promise<void> {
     void flushPendingProactiveReload();
   }
 }
-function clearChat(): void {
+async function clearChat(): Promise<void> {
   if (sending) return;
-  if (messages.length === 0) return;
+  if (messages.length === 0 && sessionTailStart === 0) return;
   const ok = window.confirm("Clear current conversation?");
   if (!ok) return;
+  if (currentSessionId && window.chatStore) {
+    try {
+      const success = await window.chatStore.replaceTail(currentSessionId, 0, []);
+      if (!success) {
+        alert("Failed to clear chat on disk. Storage operation was unsuccessful.");
+        return;
+      }
+    } catch (err) {
+      console.warn("[Cyrene Chat] clearChat failed:", err);
+      alert("Failed to clear chat on disk. Please try again.");
+      return;
+    }
+  }
   messages.length = 0;
-  void saveSession();
+  sessionTailStart = 0;
   render();
 }
 
@@ -4203,7 +4282,7 @@ async function ingestDroppedFiles(files: File[]): Promise<void> {
 
 /* ===== Screenshot ===== */
 
-/** 统一插入图片附件（粘贴和截图按钮共用） */
+/** 统一插入Image附件（粘贴和截图按钮共用） */
 async function insertImageAttachment(input: {
   base64?: string;
   mime: string;
@@ -4261,7 +4340,7 @@ screenshotBtn?.addEventListener("click", async () => {
   }
 });
 
-// 按钮模式回调：主进程裁剪完直接发图片过来
+// 按钮模式回调：主进程裁剪完直接发Image过来
 window.chat?.onScreenshotInsert?.((data) => {
   void insertImageAttachment({
     mime: data.mime,
@@ -4273,8 +4352,54 @@ window.chat?.onScreenshotInsert?.((data) => {
   announceScreenshotStatus("Screenshot attached and ready to send.");
   screenshotBtn?.focus();
 });
+const cowatchBtn = document.getElementById("cowatch-btn") as HTMLButtonElement | null;
 
-// 粘贴监听：检测剪贴板图片 -> 插入附件（热键模式：Alt+Shift+S 截图后 Ctrl+V）
+async function triggerCoWatch(): Promise<void> {
+  if (!window.chat || cowatchBtn?.disabled) return;
+  if (cowatchBtn) {
+    cowatchBtn.disabled = true;
+    cowatchBtn.setAttribute("aria-busy", "true");
+  }
+  announceScreenshotStatus("Capturing screen for co-watching...");
+  try {
+    const data = await window.chat.instantScreenLook?.();
+    if (data?.filePath) {
+      await insertImageAttachment({
+        mime: data.mime,
+        filePath: data.filePath,
+        previewUrl: data.previewUrl,
+        hasAnnotations: false,
+        name: `CoWatch_${Date.now()}.png`,
+      });
+      if (input && !input.value.trim()) {
+        input.value = "Cyrene, look at what I'm watching on my screen right now! React to this scene with me (the characters, expressions, subtitles, and what's happening) as my companion!";
+      }
+      announceScreenshotStatus("Co-watch screen captured! Sending to Cyrene...");
+      composer?.requestSubmit();
+    }
+  } catch (err) {
+    console.error("[CoWatch] Instant capture failed:", err);
+    announceScreenshotStatus("Co-watch capture failed. Please try again.");
+  } finally {
+    if (cowatchBtn) {
+      cowatchBtn.disabled = false;
+      cowatchBtn.removeAttribute("aria-busy");
+      cowatchBtn.focus();
+    }
+  }
+}
+
+cowatchBtn?.addEventListener("click", () => void triggerCoWatch());
+
+window.addEventListener("keydown", (e) => {
+  if (e.altKey && !e.ctrlKey && !e.shiftKey && (e.key === "w" || e.key === "W")) {
+    e.preventDefault();
+    void triggerCoWatch();
+  }
+});
+
+
+// 粘贴监听：检测剪贴板Image -> 插入附件（热键模式：Alt+Shift+S 截图后 Ctrl+V）
 document.addEventListener("paste", async (e) => {
   const items = e.clipboardData?.items;
   if (!items) return;
@@ -4295,7 +4420,7 @@ document.addEventListener("paste", async (e) => {
         }
       };
       reader.readAsDataURL(blob);
-      break; // 只处理第一张图片
+      break; // 只处理第一张Image
     }
   }
 });
@@ -4454,7 +4579,7 @@ clearBtn.addEventListener("click", clearChat);
       // 填充下拉项
       const menu = menus["reasoning-dropdown"];
       if (!menu) return;
-      // 保留 dm-title，清空后续所有 dm-opt
+      // 保留 dm-title，Clear后续All dm-opt
       const title = menu.querySelector(".dm-title");
       menu.replaceChildren();
       if (title) menu.appendChild(title);
@@ -4506,7 +4631,7 @@ clearBtn.addEventListener("click", clearChat);
       }
       reasoningDropdownActive = true;
     } catch {
-      // 失败安全占位（用户修正 #4）：塞入 disabled "跟随模型"
+      // Failed安全占位（用户修正 #4）：塞入 disabled "跟随模型"
       reasoningDropdownDisabled = true;
       reasoningDropdownActive = false;
       const menu = menus["reasoning-dropdown"];
@@ -4654,7 +4779,7 @@ if (particlesCtx) {
 
 
 // 启动：迁移老 localStorage → 选会话 → render
-// 先把用户贴纸目录拉到内存，再 bootstrap 渲染历史消息——否则首屏里
+// 先把用户贴纸目录拉到内存，再 bootstrap 渲染History消息——否则首屏里
 // 纯贴纸消息（气泡已隐藏）会因 enabledStickers 还没加载而渲染成空白。
 void (async () => {
   await loadEnabledStickers();
@@ -4674,19 +4799,24 @@ window.addEventListener("beforeunload", () => {
   window.removeEventListener("resize", resizeParticles);
 });
 
-// main → renderer：权限审批请求（per-action 档位下工具调用前）
-// 插入一张审批卡片到聊天流；用户点同意/拒绝后回传给主进程。
+// Preserved pending permission requests across render() calls
+const pendingPermissionRequests = new Map<string, any>();
+
 window.settings?.onPermissionApprovalRequest?.((req) => {
   console.log("[Cyrene/Chat] permission approval request:", req.id, req.toolId);
+  pendingPermissionRequests.set(req.id, req);
   const card = buildApprovalCardEl(req);
   messagesEl.appendChild(card);
-  // 滚动到底部让用户看到
   messagesEl.scrollTop = messagesEl.scrollHeight;
 });
 
-// main → renderer：设置面板点列表/新对话时，让窗口切到指定 session
+// main → renderer：Settings面板点列表/New Chat时，让窗口切到指定 session
 window.chatStore?.onSwitchSession(async (sessionId) => {
   if (!window.chatStore) return;
+  if (sending) {
+    console.warn("[Cyrene Chat] Session switch deferred: active generation in progress");
+    return;
+  }
   if (sessionId === currentSessionId) return;
   const session = await window.chatStore.get(sessionId);
   if (session) loadSessionIntoUI(session);
@@ -4694,7 +4824,7 @@ window.chatStore?.onSwitchSession(async (sessionId) => {
 
 // 任意会话变动后 main 广播——两种处理：
 // 1. 当前活跃会话被外部删了 → fallback 到最新一条 / 自动建新
-// 2. 侧栏展开时刷新列表（别的窗口新建/改名/删除都会触发）
+// 2. 侧栏展开时Refresh列表（别的窗口新建/改名/Delete都会触发）
 window.chatStore?.onChanged(async () => {
   if (!window.chatStore || !currentSessionId) return;
   const sessions = await window.chatStore.list();
@@ -4704,7 +4834,7 @@ window.chatStore?.onChanged(async () => {
       unreadProactiveSessionIds.add(session.id);
     }
   }
-  // 标记未读后再刷新，确保红点在本次变更中立即出现。
+  // 标记未读后再Refresh，确保红点在本次变更中立即出现。
   if (chatRail && !chatRail.hidden) void renderRailList();
   const stillExists = await window.chatStore.get(currentSessionId);
   if (stillExists) {
@@ -4722,7 +4852,7 @@ window.chatStore?.onChanged(async () => {
     }
     return;
   }
-  // 当前会话已被外部删除：fallback 到最新一条 / 自动建新
+  // 当前会话已被外部Delete：fallback 到最新一条 / 自动建新
   const list = sessions;
   let next: ChatStoreSession | null = null;
   if (list.length > 0) next = await window.chatStore.get(list[0].id);

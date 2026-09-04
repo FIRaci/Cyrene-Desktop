@@ -56,7 +56,7 @@ export function createStreamingRenderScheduler(options: SchedulerOptions): Strea
     try {
       options.render();
     } catch (err) {
-      console.error("[streaming-scheduler] render 回调失败:", err);
+      console.error("[streaming-scheduler] render callback failed:", err);
     }
   };
 

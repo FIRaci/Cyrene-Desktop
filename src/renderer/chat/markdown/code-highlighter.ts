@@ -58,7 +58,7 @@ export function initHighlighter(): Promise<Highlighter> {
       highlighter = h;
     })
     .catch((err) => {
-      console.error("[Shiki] 初始化失败:", err);
+      console.error("[Shiki] initialization failed:", err);
       highlighterPromise = null; // 允许重试
     });
 
@@ -94,7 +94,7 @@ export function codeToHtml(code: string, rawLang: string | undefined): string {
     const theme = getCurrentThemeName();
     return highlighter.codeToHtml(code, { lang, theme });
   } catch (err) {
-    console.warn("[Shiki] codeToHtml 失败，降级为纯文本:", err);
+    console.warn("[Shiki] codeToHtml failed; falling back to plain text:", err);
     return fallbackCodeHtml(code);
   }
 }

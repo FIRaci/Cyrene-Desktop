@@ -92,7 +92,7 @@ const DISPLAY_NAMES: Record<string, string> = {
   html: "HTML",
   css: "CSS",
   sql: "SQL",
-  text: "代码",
+  text: "Code",
 };
 
 /**
@@ -110,5 +110,5 @@ export function normalizeLang(input: string | undefined): string {
  * 获取语言的显示名。输入应为 normalizeLang 的返回值。
  */
 export function getLanguageDisplayName(lang: string): string {
-  return DISPLAY_NAMES[lang] ?? "代码";
+  return DISPLAY_NAMES[lang] ?? "Code";
 }
