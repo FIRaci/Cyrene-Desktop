@@ -250,6 +250,36 @@ try {
   console.warn("[Cyrene] Failed to bind custom userData dir:", err);
 }
 
+
+function logFatalProcessError(type: string, error: unknown): void {
+  try {
+    const message = error instanceof Error ? error.stack || error.message : String(error);
+    const logDir = path.join(app.getPath("userData"), "logs");
+    if (!fs.existsSync(logDir)) {
+      fs.mkdirSync(logDir, { recursive: true });
+    }
+    const logFile = path.join(logDir, "fatal-error.log");
+    fs.appendFileSync(logFile, `[${new Date().toISOString()}] [${type}] ${message}\n`);
+    console.error(`[Cyrene ${type}]`, error);
+  } catch { /* best effort */ }
+}
+
+process.on("uncaughtException", (error) => {
+  logFatalProcessError("uncaughtException", error);
+  if (app.isPackaged) {
+    try {
+      dialog.showErrorBox(
+        "Cyrene - Unexpected Error",
+        `An unexpected error occurred in Cyrene:\n\n${error instanceof Error ? error.message : String(error)}`
+      );
+    } catch { /* ignore */ }
+  }
+});
+
+process.on("unhandledRejection", (reason) => {
+  logFatalProcessError("unhandledRejection", reason);
+});
+
 configureDocumentIndexQueue(runDocumentIndexJob);
 
 async function reconcileUserMemoryIndex(): Promise<void> {
@@ -278,6 +308,25 @@ let tasksWindow: BrowserWindow | null = null;
 let settingsWindow: BrowserWindow | null = null;
 let stickerManagerWindow: BrowserWindow | null = null;
 let callWindow: BrowserWindow | null = null;
+
+const gotTheLock = app.requestSingleInstanceLock();
+if (!gotTheLock) {
+  app.quit();
+  process.exit(0);
+}
+
+app.on("second-instance", () => {
+  if (chatWindow && !chatWindow.isDestroyed()) {
+    if (chatWindow.isMinimized()) chatWindow.restore();
+    chatWindow.show();
+    chatWindow.focus();
+  } else {
+    createChatWindow();
+  }
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    if (!mainWindow.isVisible()) mainWindow.show();
+  }
+});
 let schedulerEngine: SchedulerEngine | null = null;
 let screenshotService: ScreenshotService | null = null;
 // The owner selected persistent screen observation for this trusted local app.
@@ -3231,6 +3280,7 @@ function createWindow(): void {
 
 function createChatWindow(sessionId?: string): void {
   if (chatWindow && !chatWindow.isDestroyed()) {
+    if (chatWindow.isMinimized()) chatWindow.restore();
     chatWindow.show();
     chatWindow.focus();
     // 窗口已存在：通过事件让渲染进程切到目标会话（不重 load）
@@ -3280,7 +3330,16 @@ function createChatWindow(sessionId?: string): void {
 
   chatWindow.once("ready-to-show", () => {
     chatWindow?.show();
+    chatWindow?.focus();
   });
+
+  // Fallback: Ensure chat window shows even if ready-to-show is delayed
+  setTimeout(() => {
+    if (chatWindow && !chatWindow.isDestroyed() && !chatWindow.isVisible()) {
+      chatWindow.show();
+      chatWindow.focus();
+    }
+  }, 1500);
 
   chatWindow.on("closed", () => {
     chatWindow = null;
@@ -3581,36 +3640,59 @@ function createCallWindow(): void {
   setCallWindow(callWindow);
 }
 
+function getTrayIcon(): Electron.NativeImage {
+  const icoPath = path.join(__dirname, "..", "..", "..", "assets", "tray-icon.ico");
+  if (fs.existsSync(icoPath)) {
+    const ico = nativeImage.createFromPath(icoPath);
+    if (!ico.isEmpty()) return ico;
+  }
+  const appIcon = nativeImage.createFromPath(getCurrentAppIconPath());
+  if (!appIcon.isEmpty()) {
+    return appIcon.resize({ width: 16, height: 16 });
+  }
+  return appIcon;
+}
+
 function createTray(): void {
-  const icon = nativeImage.createFromPath(getCurrentAppIconPath());
-  tray = new Tray(icon);
+  try {
+    const icon = getTrayIcon();
+    tray = new Tray(icon);
 
-  const contextMenu = Menu.buildFromTemplate([
-    {
-      label: "Open Status",
-      click: () => { createSidebarWindow(); },
-    },
-    {
-      label: "Settings",
-      click: () => { createSettingsWindow(); },
-    },
-    {
-      label: "Show/Hide Pet",
-      click: () => {
-        if (mainWindow) {
-          mainWindow.isVisible() ? mainWindow.hide() : mainWindow.show();
-        }
+    const contextMenu = Menu.buildFromTemplate([
+      {
+        label: "Open Chat",
+        click: () => { createChatWindow(); },
       },
-    },
-    { type: "separator" },
-    {
-      label: "Quit",
-      click: () => { app.quit(); },
-    },
-  ]);
+      {
+        label: "Open Status",
+        click: () => { createSidebarWindow(); },
+      },
+      {
+        label: "Settings",
+        click: () => { createSettingsWindow(); },
+      },
+      {
+        label: "Show/Hide Pet",
+        click: () => {
+          if (mainWindow) {
+            mainWindow.isVisible() ? mainWindow.hide() : mainWindow.show();
+          }
+        },
+      },
+      { type: "separator" },
+      {
+        label: "Quit",
+        click: () => { app.quit(); },
+      },
+    ]);
 
-  tray.setToolTip("Cyrene");
-  tray.setContextMenu(contextMenu);
+    tray.setToolTip("Cyrene");
+    tray.setContextMenu(contextMenu);
+    tray.on("click", () => { createChatWindow(); });
+    tray.on("double-click", () => { createChatWindow(); });
+  } catch (err) {
+    console.warn("[Cyrene] Failed to initialize tray:", err);
+  }
 }
 
 function applyUiIcon(iconSetting: UiIcon): void {
@@ -4391,21 +4473,7 @@ ipcMain.handle(IPC.EMBEDDING_DELETE, async (_event, payload: unknown) => {
   }
 });
 
-const gotTheLock = app.requestSingleInstanceLock();
-if (!gotTheLock) {
-  app.quit();
-} else {
-  app.on("second-instance", () => {
-    if (chatWindow && !chatWindow.isDestroyed()) {
-      if (chatWindow.isMinimized()) chatWindow.restore();
-      chatWindow.focus();
-    } else if (mainWindow && !mainWindow.isDestroyed()) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.show();
-      mainWindow.focus();
-    }
-  });
-}
+
 
 // 注册本地用户资源协议（表情包图片与用户导入的字体）
 // 必须在 app.ready 之前调用
@@ -4417,7 +4485,19 @@ protocol.registerSchemesAsPrivileged([
 app.whenReady().then(async () => {
   console.info("[Cyrene] App is ready, initializing...");
   
-  // Register global shortcut
+  // Register global shortcuts
+  globalShortcut.register("Alt+1", () => {
+    createChatWindow();
+  });
+  globalShortcut.register("Alt+2", () => {
+    createSidebarWindow();
+  });
+  globalShortcut.register("Alt+3", () => {
+    createTasksWindow();
+  });
+  globalShortcut.register("Alt+S", () => {
+    createSettingsWindow();
+  });
   globalShortcut.register('Alt+C', () => {
       const win = mainWindow;
       if (win) {
@@ -5654,9 +5734,10 @@ app.whenReady().then(async () => {
 
   const generalSettings = loadGeneralSettings();
   createWindow();
+  createChatWindow();
 
-  // Only the modern Live2D pet and tray are created on startup. Auxiliary
-  // windows remain lazy and are summoned via shortcuts or the tray.
+  // Create Live2D pet and primary chat window on startup; auxiliary windows
+  // remain lazy and are summoned via shortcuts or the tray.
   createTray();
   // 权限模块初始化：必须在 createWindow 之后但任意工具调用之前
   initPermissionFromDisk();
