@@ -15,10 +15,10 @@ const LOG_PREFIX = "[Permission]";
 export type AgentFileAccessLevel = "read-only" | "scoped" | "per-action" | "full";
 
 export const ACCESS_LEVEL_LABEL: Record<AgentFileAccessLevel, string> = {
-  "read-only": "只读",
-  "scoped": "指定目录",
-  "per-action": "每次审批",
-  "full": "完全访问",
+  "read-only": "Read only",
+  "scoped": "Selected folder",
+  "per-action": "Ask each time",
+  "full": "Full access",
 };
 
 // 工具危险等级：决定该工具在哪些档位下可用
@@ -234,7 +234,7 @@ export function registerPermissionIpc(options: PermissionIpcOptions = {}): void 
       return { ok: false, error: "Permission level changes are only allowed from the trusted settings UI." };
     }
     if (!isValidLevel(level)) {
-      return { ok: false, error: "无效的档位: " + String(level) };
+      return { ok: false, error: "Invalid permission level: " + String(level) };
     }
     if (level !== COMPANION_LEVEL) {
       return { ok: false, error: "Cyrene is locked to observation and app-provided tools; file writes and command execution are disabled." };

@@ -68,8 +68,9 @@ const chatApi = {
   getGeneralSettings: () => ipcRenderer.invoke(IPC.SETTINGS_GET_GENERAL),
   getReasoningState: () => ipcRenderer.invoke(IPC.CHAT_GET_REASONING_STATE),
   setReasoning: (payload: { providerKey: string; preference: unknown }) => ipcRenderer.invoke(IPC.CHAT_SET_REASONING, payload),
-  // 截图
+  // 截图 & Co-Watching
   startScreenshot: () => ipcRenderer.invoke(IPC.SCREENSHOT_START),
+  instantScreenLook: () => ipcRenderer.invoke(IPC.SCREENSHOT_INSTANT_LOOK) as Promise<ScreenshotInsertPayload | null>,
   onScreenshotInsert: (
     callback: (data: ScreenshotInsertPayload) => void,
   ) => {
