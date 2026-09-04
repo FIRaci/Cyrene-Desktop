@@ -210,11 +210,32 @@ class AgentRenderError extends Error {
 
 /** Translate Agent runtime errors to user-facing messages based on structured error codes. */
 function classifyAgentError(code: string | undefined, message: string): string {
+  // Strip internal Electron IPC wrappers if present
+  const cleanMessage = message.replace(/^Error invoking remote method '[^']+':\s*(Error:\s*)?/i, "").trim();
+
+  if (
+    cleanMessage.includes("API Key") ||
+    cleanMessage.includes("API key") ||
+    cleanMessage.includes("No API key") ||
+    cleanMessage.includes("还没有填写") ||
+    cleanMessage.includes("apiKey")
+  ) {
+    return "🌸 **Cyrene is waiting for your API Key!**\n\nPlease open **Settings** (shortcut: `Alt+S`) to configure your model provider and API key to start chatting.";
+  }
+
+  if (
+    cleanMessage.includes("No model") ||
+    cleanMessage.includes("No model endpoint") ||
+    cleanMessage.includes("未配置")
+  ) {
+    return "🌸 **Model not configured yet!**\n\nPlease open **Settings** (shortcut: `Alt+S`) to select a model provider and enter the endpoint.";
+  }
+
   if (code === "E_AGENT_NO_PROGRESS") return "Task execution could not proceed. Please try again.";
   if (code === "E_AGENT_GRAPH_ITERATION_LIMIT") return "Agent execution reached the iteration limit.";
-  if (code === "E_MODEL_REQUEST_FAILED") return "Failed to connect to model: " + message;
+  if (code === "E_MODEL_REQUEST_FAILED") return "Failed to connect to model: " + cleanMessage;
   if (code === "E_ACTION_GATE_PROTOCOL") return "Decision protocol parsing failed. Please try again.";
-  return message;
+  return cleanMessage || "Model request failed. Please try again.";
 }
 
 /** 文件摄入结果（与 main 侧 file-ingest.ts 的 Attachment 对齐）。 */

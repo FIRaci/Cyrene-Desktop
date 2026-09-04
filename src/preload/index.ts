@@ -32,6 +32,7 @@ const cyreneApi = {
     ipcRenderer.on(IPC.PET_VISIBILITY_CHANGED, listener);
     return () => ipcRenderer.off(IPC.PET_VISIBILITY_CHANGED, listener);
   },
+  showContextMenu: () => ipcRenderer.send(IPC.PET_SHOW_CONTEXT_MENU),
 };
 
 const chatApi = {
@@ -614,3 +615,17 @@ const updaterApi = {
   checkForUpdates: () => ipcRenderer.invoke(IPC.APP_CHECK_FOR_UPDATES),
 };
 contextBridge.exposeInMainWorld("updater", updaterApi);
+
+// Response & Activity Log API (Alt+4)
+const activityLogApi = {
+  getEntries: () => ipcRenderer.invoke(IPC.LOG_GET_ENTRIES),
+  onEntry: (callback: (entry: unknown) => void) => {
+    const listener = (_e: unknown, entry: unknown) => callback(entry);
+    ipcRenderer.on(IPC.LOG_ENTRY, listener);
+    return () => ipcRenderer.off(IPC.LOG_ENTRY, listener);
+  },
+  minimize: () => ipcRenderer.send(IPC.LOG_MINIMIZE),
+  close: () => ipcRenderer.send(IPC.LOG_CLOSE),
+};
+contextBridge.exposeInMainWorld("activityLog", activityLogApi);
+

@@ -92,6 +92,10 @@ body {
   border-radius: var(--rb-radius-full);
   background: var(--rb-bg-2);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 110px;
+  flex-shrink: 0;
 }
 
 .tasks__titlebar-actions {

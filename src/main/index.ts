@@ -308,6 +308,40 @@ let tasksWindow: BrowserWindow | null = null;
 let settingsWindow: BrowserWindow | null = null;
 let stickerManagerWindow: BrowserWindow | null = null;
 let callWindow: BrowserWindow | null = null;
+let logWindow: BrowserWindow | null = null;
+
+interface ActivityLogItem {
+  timestamp: number;
+  type: "user" | "reasoning" | "response" | "tool" | "error" | "system";
+  text: string;
+  meta?: unknown;
+}
+
+const activityLogBuffer: ActivityLogItem[] = [];
+
+function pushActivityLog(
+  type: ActivityLogItem["type"],
+  text: string,
+  meta?: unknown,
+): void {
+  const item: ActivityLogItem = {
+    timestamp: Date.now(),
+    type,
+    text,
+    meta,
+  };
+  activityLogBuffer.push(item);
+  if (activityLogBuffer.length > 500) {
+    activityLogBuffer.shift();
+  }
+  if (logWindow && !logWindow.isDestroyed()) {
+    try {
+      logWindow.webContents.send(IPC.LOG_ENTRY, item);
+    } catch {
+      // ignore
+    }
+  }
+}
 
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
@@ -1998,8 +2032,8 @@ function computeLayout(): {
   const { workArea } = display;
   const panels = [
     { width: 1280, height: 760 }, // chat
-    { width: 320, height: 760 },  // sidebar
-    { width: 320, height: 760 },  // tasks
+    { width: 360, height: 760 },  // sidebar
+    { width: 360, height: 760 },  // tasks
   ];
   const [chatPos, sidebarPos, tasksPos] = computePanelLayout(workArea, panels, 8);
   return { chat: chatPos, sidebar: sidebarPos, tasks: tasksPos };
@@ -3364,9 +3398,9 @@ function createSidebarWindow(): void {
   sidebarWindow = new BrowserWindow({
     x: layout.sidebar.x,
     y: layout.sidebar.y,
-    width: 320,
+    width: 360,
     height: 760,
-    minWidth: 56,
+    minWidth: 320,
     minHeight: 540,
     title: "Cyrene · Status",
     icon: getCurrentAppIconPath(),
@@ -3414,8 +3448,9 @@ function createTasksWindow(): void {
   tasksWindow = new BrowserWindow({
     x: layout.tasks.x,
     y: layout.tasks.y,
-    width: 320,
+    width: 360,
     height: 760,
+    minWidth: 320,
     minHeight: 540,
     title: "Cyrene · Today's Schedule",
     icon: getCurrentAppIconPath(),
@@ -3510,6 +3545,101 @@ function createSettingsWindow(section?: string): void {
     settingsWindow = null;
   });
 }
+
+function createLogWindow(): void {
+  if (logWindow && !logWindow.isDestroyed()) {
+    if (logWindow.isMinimized()) logWindow.restore();
+    logWindow.show();
+    logWindow.focus();
+    return;
+  }
+
+  const display = screen.getPrimaryDisplay();
+  const { x: dx, y: dy, width: dw, height: dh } = display.workArea;
+  const width = 860;
+  const height = 640;
+  logWindow = new BrowserWindow({
+    x: dx + Math.max(0, Math.floor((dw - width) / 2)),
+    y: dy + Math.max(0, Math.floor((dh - height) / 2)),
+    width,
+    height,
+    minWidth: 600,
+    minHeight: 400,
+    title: "Cyrene · Response & Activity Log",
+    icon: getCurrentAppIconPath(),
+    backgroundColor: "#00000000",
+    autoHideMenuBar: true,
+    show: false,
+    frame: false,
+    transparent: true,
+    resizable: true,
+    webPreferences: {
+      preload: path.join(__dirname, "..", "..", "preload", "preload", "index.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+    },
+  });
+
+  attachExternalLinkHandler(logWindow);
+
+  if (isDev) {
+    logWindow.loadURL("http://localhost:5173/log/");
+  } else {
+    logWindow.loadFile(
+      path.join(__dirname, "..", "..", "renderer", "log", "index.html")
+    );
+  }
+
+  logWindow.once("ready-to-show", () => {
+    logWindow?.show();
+  });
+
+  logWindow.on("closed", () => {
+    logWindow = null;
+  });
+}
+
+function toggleChatWindow(): void {
+  if (chatWindow && !chatWindow.isDestroyed() && chatWindow.isVisible()) {
+    chatWindow.hide();
+  } else {
+    createChatWindow();
+  }
+}
+
+function toggleSidebarWindow(): void {
+  if (sidebarWindow && !sidebarWindow.isDestroyed() && sidebarWindow.isVisible()) {
+    sidebarWindow.hide();
+  } else {
+    createSidebarWindow();
+  }
+}
+
+function toggleTasksWindow(): void {
+  if (tasksWindow && !tasksWindow.isDestroyed() && tasksWindow.isVisible()) {
+    tasksWindow.hide();
+  } else {
+    createTasksWindow();
+  }
+}
+
+function toggleSettingsWindow(): void {
+  if (settingsWindow && !settingsWindow.isDestroyed() && settingsWindow.isVisible()) {
+    settingsWindow.hide();
+  } else {
+    createSettingsWindow();
+  }
+}
+
+function toggleLogWindow(): void {
+  if (logWindow && !logWindow.isDestroyed() && logWindow.isVisible()) {
+    logWindow.hide();
+  } else {
+    createLogWindow();
+  }
+}
+
 async function createStickerManagerWindow(): Promise<{ ok: boolean; error?: string }> {
   if (stickerManagerWindow && !stickerManagerWindow.isDestroyed()) {
     stickerManagerWindow.show();
@@ -3660,19 +3790,27 @@ function createTray(): void {
 
     const contextMenu = Menu.buildFromTemplate([
       {
-        label: "Open Chat",
-        click: () => { createChatWindow(); },
+        label: "Open Chat (Alt+1)",
+        click: () => { toggleChatWindow(); },
       },
       {
-        label: "Open Status",
-        click: () => { createSidebarWindow(); },
+        label: "Open Status (Alt+2)",
+        click: () => { toggleSidebarWindow(); },
       },
       {
-        label: "Settings",
-        click: () => { createSettingsWindow(); },
+        label: "Today's Schedule (Alt+3)",
+        click: () => { toggleTasksWindow(); },
       },
       {
-        label: "Show/Hide Pet",
+        label: "Response Log (Alt+4)",
+        click: () => { toggleLogWindow(); },
+      },
+      {
+        label: "Settings (Alt+S)",
+        click: () => { toggleSettingsWindow(); },
+      },
+      {
+        label: "Show/Hide Pet (Alt+C)",
         click: () => {
           if (mainWindow) {
             mainWindow.isVisible() ? mainWindow.hide() : mainWindow.show();
@@ -3688,8 +3826,8 @@ function createTray(): void {
 
     tray.setToolTip("Cyrene");
     tray.setContextMenu(contextMenu);
-    tray.on("click", () => { createChatWindow(); });
-    tray.on("double-click", () => { createChatWindow(); });
+    tray.on("click", () => { toggleChatWindow(); });
+    tray.on("double-click", () => { toggleChatWindow(); });
   } catch (err) {
     console.warn("[Cyrene] Failed to initialize tray:", err);
   }
@@ -3702,7 +3840,7 @@ function applyUiIcon(iconSetting: UiIcon): void {
     return;
   }
   tray?.setImage(icon);
-  for (const win of [mainWindow, chatWindow, sidebarWindow, tasksWindow, settingsWindow, stickerManagerWindow, callWindow]) {
+  for (const win of [mainWindow, chatWindow, sidebarWindow, tasksWindow, settingsWindow, logWindow, stickerManagerWindow, callWindow]) {
     if (win && !win.isDestroyed()) win.setIcon(icon);
   }
 }
@@ -3806,6 +3944,114 @@ ipcMain.handle(IPC.WINDOW_CAPTURE_FRAME, async (event) => {
 ipcMain.handle(IPC.WINDOW_GET_CURSOR_POSITION, (event) => {
   if (!isPetMainFrame(event) || !authorizePetControlSender(event.sender.id, currentPetSenderId())) return null;
   return screen.getCursorScreenPoint();
+});
+
+ipcMain.on(IPC.PET_SHOW_CONTEXT_MENU, (event) => {
+  const menu = Menu.buildFromTemplate([
+    {
+      label: "💬 Chat with Cyrene (Alt+1)",
+      click: () => toggleChatWindow(),
+    },
+    {
+      label: "📊 Status Panel (Alt+2)",
+      click: () => toggleSidebarWindow(),
+    },
+    {
+      label: "📋 Today's Schedule (Alt+3)",
+      click: () => toggleTasksWindow(),
+    },
+    {
+      label: "📜 Response & Activity Log (Alt+4)",
+      click: () => toggleLogWindow(),
+    },
+    {
+      label: "⚙️ Settings (Alt+S)",
+      click: () => toggleSettingsWindow(),
+    },
+    { type: "separator" },
+    {
+      label: "🎭 Expressions & Motions",
+      submenu: [
+        {
+          label: "😊 Smile (笑一笑吧~)",
+          click: () => sendToLive2DWindow(IPC.LIVE2D_PLAY_ACTION, { kind: "motion", group: "动作#6", motionName: "笑一笑吧~" }),
+        },
+        {
+          label: "😉 Playful Wink (Wink~)",
+          click: () => sendToLive2DWindow(IPC.LIVE2D_PLAY_ACTION, { kind: "motion", group: "动作#6", motionName: "Wink~" }),
+        },
+        {
+          label: "🥺 Act Cute (我可爱吧~)",
+          click: () => sendToLive2DWindow(IPC.LIVE2D_PLAY_ACTION, { kind: "motion", group: "动作#6", motionName: "我可爱吧~" }),
+        },
+        {
+          label: "✨ Sparkle (闪耀)",
+          click: () => sendToLive2DWindow(IPC.LIVE2D_PLAY_ACTION, { kind: "expression", name: "闪耀" }),
+        },
+        {
+          label: "⭐ Starry Eyes (星星眼)",
+          click: () => sendToLive2DWindow(IPC.LIVE2D_PLAY_ACTION, { kind: "expression", name: "星星眼" }),
+        },
+        {
+          label: "🕶️ Sunglasses (墨镜)",
+          click: () => sendToLive2DWindow(IPC.LIVE2D_PLAY_ACTION, { kind: "expression", name: "墨镜" }),
+        },
+        {
+          label: "❓ Question Mark (问号)",
+          click: () => sendToLive2DWindow(IPC.LIVE2D_PLAY_ACTION, { kind: "expression", name: "问号" }),
+        },
+        {
+          label: "🌀 Dizzy Eyes (圈圈眼)",
+          click: () => sendToLive2DWindow(IPC.LIVE2D_PLAY_ACTION, { kind: "expression", name: "圈圈眼" }),
+        },
+        {
+          label: "😄 Cheerful Eyes (开心眼)",
+          click: () => sendToLive2DWindow(IPC.LIVE2D_PLAY_ACTION, { kind: "expression", name: "开心眼" }),
+        },
+        {
+          label: "🔄 Reset Pose & Expression (动作回正)",
+          click: () => sendToLive2DWindow(IPC.LIVE2D_PLAY_ACTION, { kind: "motion", group: "动作#6", motionName: "动作回正" }),
+        },
+      ],
+    },
+    { type: "separator" },
+    {
+      label: mainWindow?.isVisible() ? "👁️ Hide Cyrene (Alt+C)" : "👁️ Show Cyrene (Alt+C)",
+      click: () => {
+        if (mainWindow) {
+          if (mainWindow.isVisible()) mainWindow.hide();
+          else mainWindow.show();
+        }
+      },
+    },
+    {
+      label: "❌ Quit Cyrene",
+      click: () => app.quit(),
+    },
+  ]);
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (win && !win.isDestroyed()) {
+    menu.popup({ window: win });
+  } else {
+    menu.popup();
+  }
+});
+
+// Response & Activity Log IPC handlers
+ipcMain.handle(IPC.LOG_GET_ENTRIES, () => {
+  return activityLogBuffer;
+});
+
+ipcMain.on(IPC.LOG_CLOSE, () => {
+  if (logWindow && !logWindow.isDestroyed()) {
+    logWindow.hide();
+  }
+});
+
+ipcMain.on(IPC.LOG_MINIMIZE, () => {
+  if (logWindow && !logWindow.isDestroyed()) {
+    logWindow.minimize();
+  }
 });
 
 ipcMain.handle(IPC.LIVE2D_GET_MAIN_DIAGNOSTICS, () => ({
@@ -4485,18 +4731,21 @@ protocol.registerSchemesAsPrivileged([
 app.whenReady().then(async () => {
   console.info("[Cyrene] App is ready, initializing...");
   
-  // Register global shortcuts
+  // Register global shortcuts with toggle capability (press once to open/focus, press again to close/hide)
   globalShortcut.register("Alt+1", () => {
-    createChatWindow();
+    toggleChatWindow();
   });
   globalShortcut.register("Alt+2", () => {
-    createSidebarWindow();
+    toggleSidebarWindow();
   });
   globalShortcut.register("Alt+3", () => {
-    createTasksWindow();
+    toggleTasksWindow();
+  });
+  globalShortcut.register("Alt+4", () => {
+    toggleLogWindow();
   });
   globalShortcut.register("Alt+S", () => {
-    createSettingsWindow();
+    toggleSettingsWindow();
   });
   globalShortcut.register('Alt+C', () => {
       const win = mainWindow;
@@ -5714,6 +5963,7 @@ app.whenReady().then(async () => {
     proactiveConversationLifecycle,
     () => mainWindow,
     (event) => isTrustedMainFrameSender(event, chatWindow, expectedRendererDocument("chat/index.html")),
+    (type, text, meta) => pushActivityLog(type, text, meta),
   );
 
   ipcMain.handle(IPC.CHATS_OPEN_IN_CHAT_WINDOW, (_event, sessionId: string) => {

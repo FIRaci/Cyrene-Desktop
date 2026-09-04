@@ -36,6 +36,7 @@ if (!window.tasks) {
 
 // ── 常量 ──────────────────────────────────────────────────────
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const WEEKDAYS_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const CHART_HEIGHT_PX = 76;          // mini-chart 可用柱高（与 settings 页一致）
 const MIN_BAR_PX = 6;                 // None数据柱最低高度，避免Full消失
 const TASK_REFRESH_MS = 30_000;       // 任务列表轮询
@@ -135,7 +136,7 @@ function renderWeeklyBars(data7: TokenDayData[]): void {
     if (!peakSlot || (s.total ?? 0) > (peakSlot.total ?? 0)) peakSlot = s;
   }
 
-  for (const slot of weekSlots) {
+  weekSlots.forEach((slot, i) => {
     const bar = document.createElement("div");
     bar.className = "chart-bar";
 
@@ -152,11 +153,12 @@ function renderWeeklyBars(data7: TokenDayData[]): void {
     }
 
     const label = document.createElement("span");
-    label.textContent = slot.weekday;
+    label.textContent = WEEKDAYS_SHORT[i];
+    label.title = slot.weekday;
     bar.appendChild(label);
 
     container.appendChild(bar);
-  }
+  });
 
   // 日均（仅已发生天）+ 峰值说明
   const avgEl = $("mini-chart__avg");

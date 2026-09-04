@@ -21,7 +21,14 @@ export const IPC = {
   WINDOW_GET_CURSOR_POSITION: "window:get-cursor-position",
   PET_VISIBILITY_CHANGED: "pet:visibility-changed",
   PET_AGENT_EVENT: "pet:agent-event",
+  PET_SHOW_CONTEXT_MENU: "pet:show-context-menu",
   APP_QUIT: "app:quit",
+
+  // log window (response & activity log)
+  LOG_GET_ENTRIES: "log:get-entries",
+  LOG_ENTRY: "log:entry",
+  LOG_CLOSE: "log:close",
+  LOG_MINIMIZE: "log:minimize",
 
   // chat window
   CHAT_MINIMIZE: "chat:minimize",

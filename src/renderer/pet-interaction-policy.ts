@@ -17,6 +17,10 @@ export function shouldStartPetDrag(event: Pick<PointerEvent, "altKey" | "button"
   return event.altKey && event.button === 0;
 }
 
+export function shouldStartPetZoomDrag(event: Pick<PointerEvent, "altKey" | "button">): boolean {
+  return event.altKey && event.button === 1;
+}
+
 /** Coordinates persisted zoom with early IPC events and wheel input. */
 export class PetZoomHydrationState {
   private value = 1;

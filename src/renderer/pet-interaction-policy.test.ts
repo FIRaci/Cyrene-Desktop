@@ -5,6 +5,7 @@ import {
   PetZoomHydrationState,
   nextPetZoom,
   shouldStartPetDrag,
+  shouldStartPetZoomDrag,
 } from "./pet-interaction-policy";
 
 describe("pet interaction policy", () => {
@@ -20,6 +21,13 @@ describe("pet interaction policy", () => {
     expect(shouldStartPetDrag({ altKey: false, button: 0 })).toBe(false);
     expect(shouldStartPetDrag({ altKey: true, button: 1 })).toBe(false);
     expect(shouldStartPetDrag({ altKey: true, button: 2 })).toBe(false);
+  });
+
+  it("starts a window zoom drag for Alt plus the middle pointer button", () => {
+    expect(shouldStartPetZoomDrag({ altKey: true, button: 1 })).toBe(true);
+    expect(shouldStartPetZoomDrag({ altKey: false, button: 1 })).toBe(false);
+    expect(shouldStartPetZoomDrag({ altKey: true, button: 0 })).toBe(false);
+    expect(shouldStartPetZoomDrag({ altKey: true, button: 2 })).toBe(false);
   });
 
   it("queues wheel input until persisted zoom is hydrated", () => {

@@ -10,7 +10,11 @@ import { Live2DRendererLifecycleTracker } from "./live2d/lifecycle-diagnostics";
 import { resolveAsset } from "../shared/renderer-base";
 import { CompanionBubbleController } from "./live2d/companion-bubbles";
 import "./live2d/companion-bubbles.css";
-import { PetZoomHydrationState, shouldStartPetDrag } from "./pet-interaction-policy";
+import {
+  PetZoomHydrationState,
+  shouldStartPetDrag,
+  shouldStartPetZoomDrag,
+} from "./pet-interaction-policy";
 
 const canvas = document.getElementById("live2d-canvas") as HTMLCanvasElement;
 if (!canvas) throw new Error("Canvas #live2d-canvas not found");
@@ -34,6 +38,7 @@ if (!window.cyrene) {
     setPetZoom: (_zoom: number) => {},
     onPetZoom: (_cb: (zoom: number) => void) => () => {},
     onPetVisibilityChanged: (_cb: (visible: boolean) => void) => () => {},
+    showContextMenu: () => {},
   };
 }
 
@@ -79,11 +84,13 @@ function addTrackedEventListener(
 }
 
 const PETTING_LINES = [
-  "Cyrene is right here~ ✨",
-  "Hehe~ Did you miss me?",
-  "Cyrene will stay by your side~ ✨",
-  "A gentle head pat~ Hehe!",
-  "Keep your spirits up! ✨",
+  "Cyrene is right here~ ✨ (｡♥‿♥｡)",
+  "Hehe~ Did you miss me? (⁄ ⁄>⁄ ▽ ⁄<⁄ ⁄)",
+  "Cyrene will stay by your side~ 🌸 (✿◠‿◠)",
+  "A gentle head pat~ Hehe! (o^▽^o)",
+  "Keep your spirits up! ✨ (*•̀ᴗ•́*)و ̑̑",
+  "Wink~ You're doing great! (^_<)〜☆",
+  "Don't work too hard, remember to rest! (*´˘`*)♡",
 ];
 
 const manager = new Live2DManager({
@@ -282,78 +289,16 @@ window.addEventListener("beforeunload", () => {
 });
 
 let isDragging = false;
-let dragOffsetX = 0;
-let dragOffsetY = 0;
-let pendingPosition: { x: number; y: number } | null = null;
-let rafId: number | null = null;
-let dragOverlay: HTMLImageElement | null = null;
-let dragToken = 0;
+let lastDragScreenX = 0;
+let lastDragScreenY = 0;
 
-function clearDragOverlay(): void {
-  if (dragOverlay) {
-    dragOverlay.remove();
-    dragOverlay = null;
-  }
-  canvas.style.visibility = "";
-}
-
-async function showDragOverlay(token: number): Promise<void> {
-  const frame = await window.cyrene.captureFrame();
-  if (!frame || token !== dragToken || !isDragging) return;
-
-  const img = document.createElement("img");
-  img.src = frame;
-  img.alt = "";
-  img.draggable = false;
-  img.style.position = "fixed";
-  img.style.inset = "0";
-  img.style.width = "100vw";
-  img.style.height = "100vh";
-  img.style.objectFit = "contain";
-  img.style.pointerEvents = "none";
-  img.style.userSelect = "none";
-  img.style.zIndex = "10";
-
-  dragOverlay?.remove();
-  dragOverlay = img;
-  document.body.appendChild(img);
-  canvas.style.visibility = "hidden";
-}
-
-function scheduleMoveTo(screenX: number, screenY: number): void {
-  if (!Number.isFinite(screenX) || !Number.isFinite(screenY)) return;
-  if (!Number.isFinite(dragOffsetX) || !Number.isFinite(dragOffsetY)) return;
-  pendingPosition = {
-    x: screenX - dragOffsetX,
-    y: screenY - dragOffsetY,
-  };
-  if (rafId === null) {
-    rafId = requestAnimationFrame(flushMove);
-  }
-}
-
-function flushMove(): void {
-  rafId = null;
-  if (pendingPosition) {
-    window.cyrene.moveTo(pendingPosition.x, pendingPosition.y);
-    pendingPosition = null;
-  }
-}
-
-function cancelPendingMove(): void {
-  if (rafId !== null) {
-    cancelAnimationFrame(rafId);
-    rafId = null;
-  }
-  pendingPosition = null;
-}
+let isZoomDragging = false;
+let zoomDragStartY = 0;
+let zoomDragAccum = 0;
 
 function finishDrag(): void {
   if (!isDragging) return;
   isDragging = false;
-  dragToken += 1;
-  cancelPendingMove();
-  clearDragOverlay();
   if (petVisible) {
     manager.resume();
     focus?.resume();
@@ -362,33 +307,56 @@ function finishDrag(): void {
   if (petVisible) clickThrough?.resume();
 }
 
+function finishZoomDrag(): void {
+  if (!isZoomDragging) return;
+  isZoomDragging = false;
+  zoomDragAccum = 0;
+  if (petVisible) clickThrough?.resume();
+}
+
 // Click-through is driven per-pixel by ClickThroughController on pointermove.
-// We only need enter/leave to bookend the cursor's stay in the window:
-// entering hands control to the controller, leaving the window entirely
-// means there's nothing to capture (and no move will fire), so pass through.
-addTrackedEventListener(canvas, "canvas:pointerenter", "pointerenter", () => {
-  clickThrough?.resume();
+// Entering hands control to the controller or forces interactive if Alt is held.
+addTrackedEventListener(canvas, "canvas:pointerenter", "pointerenter", (e) => {
+  const event = e as PointerEvent;
+  if (event.altKey) {
+    void window.cyrene.setInteractive(true);
+  } else {
+    clickThrough?.resume();
+  }
 });
 
 addTrackedEventListener(canvas, "canvas:pointercancel", "pointercancel", () => {
   if (isDragging) finishDrag();
+  if (isZoomDragging) finishZoomDrag();
 });
 
 addTrackedEventListener(canvas, "canvas:lostpointercapture", "lostpointercapture", () => {
-  finishDrag();
+  if (isDragging) finishDrag();
+  if (isZoomDragging) finishZoomDrag();
 });
 
 addTrackedEventListener(window, "window:blur", "blur", () => {
-  finishDrag();
+  if (isDragging) finishDrag();
+  if (isZoomDragging) finishZoomDrag();
 });
 
 addTrackedEventListener(document, "document:visibilitychange", "visibilitychange", () => {
-  if (document.visibilityState !== "visible") finishDrag();
+  if (document.visibilityState !== "visible") {
+    finishDrag();
+    finishZoomDrag();
+  }
 });
 
 addTrackedEventListener(canvas, "canvas:pointerleave", "pointerleave", () => {
-  if (isDragging) return;
+  if (isDragging || isZoomDragging) return;
   void window.cyrene.setInteractive(false);
+});
+
+// Right-click context menu on Live2D model (Alt+1, Alt+2, Alt+3, Alt+4, Alt+S, expressions, quit)
+addTrackedEventListener(canvas, "canvas:contextmenu", "contextmenu", (e) => {
+  const event = e as MouseEvent;
+  event.preventDefault();
+  window.cyrene?.showContextMenu?.();
 });
 
 // Pressing Alt temporarily enables interactivity to ensure drag & wheel capture.
@@ -401,7 +369,7 @@ addTrackedEventListener(window, "window:keydown", "keydown", (e) => {
 
 addTrackedEventListener(window, "window:keyup", "keyup", (e) => {
   const event = e as KeyboardEvent;
-  if (event.key === "Alt" && !isDragging && petVisible) {
+  if (event.key === "Alt" && !isDragging && !isZoomDragging && petVisible) {
     clickThrough?.resume();
   }
 });
@@ -421,47 +389,96 @@ addTrackedEventListener(window, "window:wheel", "wheel", handleWheelZoom, { pass
 
 addTrackedEventListener(canvas, "canvas:pointerdown", "pointerdown", (e) => {
   const event = e as PointerEvent;
-  if (isDragging) return;
-  if (!shouldStartPetDrag(event)) return;
-  if (!Number.isFinite(event.screenX) || !Number.isFinite(event.screenY)) return;
-  if (!Number.isFinite(window.screenX) || !Number.isFinite(window.screenY)) return;
-  isDragging = true;
-  dragToken += 1;
-  const token = dragToken;
-  dragOffsetX = event.screenX - window.screenX;
-  dragOffsetY = event.screenY - window.screenY;
-  cancelPendingMove();
-  clickThrough?.pause();
-  focus?.pause(true);
-  manager.pause();
-  void window.cyrene.setInteractive(true);
-  window.cyrene.setDragging(true);
-  try {
-    (event.target as Element).setPointerCapture(event.pointerId);
-  } catch {}
-  void showDragOverlay(token);
+
+  // Alt + middle mouse zoom drag (button 1)
+  if (shouldStartPetZoomDrag(event)) {
+    if (!Number.isFinite(event.screenY)) return;
+    isZoomDragging = true;
+    zoomDragStartY = event.screenY;
+    zoomDragAccum = 0;
+    clickThrough?.pause();
+    void window.cyrene.setInteractive(true);
+    try {
+      (event.target as Element).setPointerCapture(event.pointerId);
+    } catch {}
+    return;
+  }
+
+  // Alt + left click window drag (button 0)
+  if (!isDragging && shouldStartPetDrag(event)) {
+    if (!Number.isFinite(event.screenX) || !Number.isFinite(event.screenY)) return;
+    isDragging = true;
+    lastDragScreenX = event.screenX;
+    lastDragScreenY = event.screenY;
+    clickThrough?.pause();
+    focus?.pause(true);
+    void window.cyrene.setInteractive(true);
+    window.cyrene.setDragging(true);
+    try {
+      (event.target as Element).setPointerCapture(event.pointerId);
+    } catch {}
+    return;
+  }
 });
 
 addTrackedEventListener(canvas, "canvas:pointermove", "pointermove", (e) => {
   const event = e as PointerEvent;
-  if (!isDragging) return;
-  scheduleMoveTo(event.screenX, event.screenY);
+
+  // Guarantee interactivity when user holds Alt
+  if (event.altKey) {
+    void window.cyrene.setInteractive(true);
+  }
+
+  if (isZoomDragging) {
+    const diff = zoomDragStartY - event.screenY;
+    zoomDragAccum += diff;
+    zoomDragStartY = event.screenY;
+    const threshold = 25; // 25px vertical travel per 0.1 zoom step
+    if (Math.abs(zoomDragAccum) >= threshold) {
+      const steps = Math.trunc(zoomDragAccum / threshold);
+      zoomDragAccum -= steps * threshold;
+      const deltaY = steps > 0 ? -120 : 120;
+      const nextZoom = petZoomState.wheel(deltaY);
+      if (nextZoom !== null) {
+        window.cyrene.setPetZoom(nextZoom);
+      }
+    }
+    return;
+  }
+
+  if (isDragging) {
+    const dx = event.screenX - lastDragScreenX;
+    const dy = event.screenY - lastDragScreenY;
+    if (dx !== 0 || dy !== 0) {
+      lastDragScreenX = event.screenX;
+      lastDragScreenY = event.screenY;
+      window.cyrene.moveBy(dx, dy);
+    }
+    return;
+  }
 });
 
 addTrackedEventListener(canvas, "canvas:pointerup", "pointerup", (e) => {
   const event = e as PointerEvent;
-  if (!isDragging) return;
-  scheduleMoveTo(event.screenX, event.screenY);
-  if (rafId !== null) {
-    cancelAnimationFrame(rafId);
-    rafId = null;
-  }
-  flushMove();
-  finishDrag();
 
-  try {
-    (event.target as Element).releasePointerCapture(event.pointerId);
-  } catch {}
+  if (isZoomDragging) {
+    finishZoomDrag();
+    try {
+      (event.target as Element).releasePointerCapture(event.pointerId);
+    } catch {}
+  }
+
+  if (isDragging) {
+    const dx = event.screenX - lastDragScreenX;
+    const dy = event.screenY - lastDragScreenY;
+    if (dx !== 0 || dy !== 0) {
+      window.cyrene.moveBy(dx, dy);
+    }
+    finishDrag();
+    try {
+      (event.target as Element).releasePointerCapture(event.pointerId);
+    } catch {}
+  }
 
   const rect = canvas.getBoundingClientRect();
   const outside =

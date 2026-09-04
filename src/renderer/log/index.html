@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cyrene · Activity & Response Log</title>
+  <link rel="stylesheet" href="../ui/tokens.css" />
+  <link rel="stylesheet" href="../ui/fonts.css" />
+  <link rel="stylesheet" href="../ui/base.css" />
+  <link rel="stylesheet" href="./log.css" />
+</head>
+<body>
+  <div class="log-window">
+    <header class="log__titlebar">
+      <div class="log__title">
+        <span class="log__icon" aria-hidden="true">📜</span>
+        <span class="log__name">Activity & Response Log</span>
+        <span class="log__hint">Alt+4</span>
+      </div>
+      <div class="log__titlebar-actions">
+        <button type="button" class="log__winbtn" id="min-btn" aria-label="Minimize" title="Minimize">
+          <svg width="9" height="2" viewBox="0 0 9 2" aria-hidden="true"><rect width="9" height="2" rx="1" fill="currentColor"/></svg>
+        </button>
+        <button type="button" class="log__winbtn log__winbtn--close" id="close-btn" aria-label="Close" title="Close">
+          <svg width="9" height="9" viewBox="0 0 9 9" aria-hidden="true">
+            <line x1="2" y1="2" x2="7" y2="7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+            <line x1="7" y1="2" x2="2" y2="7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <div class="log__toolbar">
+      <div class="log__filters">
+        <button type="button" class="filter-btn is-active" data-filter="all">All (<span id="count-all">0</span>)</button>
+        <button type="button" class="filter-btn" data-filter="reasoning">Thinking (<span id="count-reasoning">0</span>)</button>
+        <button type="button" class="filter-btn" data-filter="response">Responses (<span id="count-response">0</span>)</button>
+        <button type="button" class="filter-btn" data-filter="tool">Tools (<span id="count-tool">0</span>)</button>
+        <button type="button" class="filter-btn" data-filter="error">Errors (<span id="count-error">0</span>)</button>
+      </div>
+      <div class="log__actions">
+        <input type="text" id="log-search" class="log__search" placeholder="Filter logs..." aria-label="Search logs" />
+        <button type="button" class="action-btn" id="copy-btn" title="Copy visible logs">📋 Copy</button>
+        <button type="button" class="action-btn" id="clear-btn" title="Clear log entries">🗑️ Clear</button>
+        <button type="button" class="action-btn is-active" id="autoscroll-btn" title="Toggle autoscroll">⬇️ Auto-scroll</button>
+      </div>
+    </div>
+
+    <main class="log__body" id="log-container">
+      <div class="log__empty" id="log-empty">
+        <div class="log__empty-icon">🌸</div>
+        <div class="log__empty-title">No Activity Logs Yet</div>
+        <div class="log__empty-subtitle">Send messages or interact with Cyrene to see real-time reasoning thoughts, tool executions, and response telemetry.</div>
+      </div>
+      <div class="log__list" id="log-list"></div>
+    </main>
+
+    <footer class="log__footer">
+      <div class="log__status" id="log-status">Ready</div>
+      <div class="log__version">Cyrene v0.9.0 · Response Telemetry</div>
+    </footer>
+  </div>
+  <script type="module" src="./main.ts"></script>
+</body>
+</html>

@@ -15,6 +15,13 @@ declare global {
       setPetZoom: (zoom: number) => void;
       onPetZoom: (callback: (zoom: number) => void) => () => void;
       onPetVisibilityChanged: (callback: (visible: boolean) => void) => () => void;
+      showContextMenu?: () => void;
+    };
+    activityLog?: {
+      getEntries: () => Promise<Array<{ timestamp: number; type: string; text: string; meta?: unknown }>>;
+      onEntry: (callback: (entry: { timestamp: number; type: string; text: string; meta?: unknown }) => void) => () => void;
+      minimize: () => void;
+      close: () => void;
     };
     updater?: {
       checkForUpdates: () => Promise<{

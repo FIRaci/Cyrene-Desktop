@@ -281,6 +281,7 @@ export function registerAgUiIpc(
   lifecycle?: AguiConversationLifecycle,
   getPetWindow: GetPetWindowFn = () => null,
   isTrustedChatSender?: (event: IpcMainInvokeEvent) => boolean,
+  onActivityLog?: (type: "user" | "reasoning" | "response" | "tool" | "error" | "system", text: string, meta?: unknown) => void,
 ): void {
   buildOptionsFn = buildOptions;
   getChatWindowFn = getChatWindow;
@@ -303,9 +304,11 @@ export function registerAgUiIpc(
       perf.dump();
       lifecycle?.onConversationEnded();
       console.error("[AgUiBridge] Failed to prepare run:", diagnosticError(error));
+      onActivityLog?.("error", "Failed to prepare run: " + (error instanceof Error ? error.message : String(error)));
       throw new Error("Cyrene could not start that request. Check Ollama and try again.");
     }
     const { options, latestUserText } = built;
+    onActivityLog?.("user", latestUserText);
 
     const threadId = `thread-${Date.now()}`;
     const runId = `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -365,6 +368,19 @@ export function registerAgUiIpc(
       next: (baseEvent) => {
         const eventType = (baseEvent as { type?: string })?.type;
 
+        if (eventType === "TOOL_CALL_START") {
+          const name = (baseEvent as { toolCallName?: string })?.toolCallName || "tool";
+          onActivityLog?.("tool", `Invoking tool: ${name}`);
+        } else if (eventType === "TOOL_CALL_END") {
+          const name = (baseEvent as { toolCallName?: string })?.toolCallName || "tool";
+          onActivityLog?.("tool", `Finished tool: ${name}`);
+        } else if (eventType === "CUSTOM") {
+          const custom = baseEvent as { name?: string; delta?: string; value?: unknown };
+          if (custom.delta) {
+            onActivityLog?.("reasoning", custom.delta);
+          }
+        }
+
         // Delay RUN_FINISHED until post-run events are delivered.
         if (eventType === "RUN_FINISHED") {
           // Discard a filter left behind by a missing TEXT_MESSAGE_END.
@@ -416,6 +432,7 @@ export function registerAgUiIpc(
         thinkFilter = null;
         const safe = safeRunError(err);
         console.error("[AgUiBridge] Run failed:", diagnosticError(err));
+        onActivityLog?.("error", safe.message || "Agent execution failed");
         perf.dump();
         send({ type: "RUN_ERROR", message: safe.message, code: safe.code, threadId, runId });
         activeRuns.delete(runId);
@@ -427,6 +444,9 @@ export function registerAgUiIpc(
         try {
           if (agent.lastResult) {
             const lastResult = agent.lastResult;
+            if (lastResult.reply) {
+              onActivityLog?.("response", lastResult.reply);
+            }
             await perf.track("on_run_finished", async () => { await onFinished(lastResult, latestUserText); });
             // Index history asynchronously after visible post-run work.
             void indexConversationTurn(

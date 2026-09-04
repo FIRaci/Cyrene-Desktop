@@ -294,23 +294,28 @@ body {
 
 .indicator__text {
   display: flex;
-  align-items: baseline;
+  flex-direction: column;
+  justify-content: center;
   gap: 2px;
   min-width: 0;
 }
 
 .indicator__prefix {
-  font: var(--rb-text-small);
+  font: var(--rb-text-micro);
   color: var(--rb-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
   white-space: nowrap;
 }
 
 .indicator__label {
   font: var(--rb-text-body-em);
   color: var(--rb-text-strong);
-  letter-spacing: 0.4px;
+  letter-spacing: 0.2px;
   text-shadow: 0 0 8px rgba(236, 72, 153, 0.2);
-  white-space: nowrap;
+  line-height: 1.25;
+  word-break: break-word;
 }
 
 .model-card {
