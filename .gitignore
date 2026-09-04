@@ -1,4 +1,4 @@
-﻿node_modules/
+node_modules/
 
 # Build outputs (Electron + Vite + tsc)
 dist/main/
@@ -121,3 +121,14 @@ images (1).jpg
 cyrene_icon (2).ico
 phase-*.md
 plan.md
+
+# Cyrene persistent local data directory
+data/
+
+dist/.*
+dist/.smoke-user-data/
+
+
+task.md
+walkthrough.md
+
