@@ -12,7 +12,7 @@ export type Live2DTarget =
   | { kind: "expression"; name: string };
 
 export interface Live2DAction {
-  /** Chinese name exposed to the LLM. Unique within the catalog (case-insensitive). */
+  /** English name exposed to the LLM. Unique within the catalog (case-insensitive). */
   alias: string;
   /** One-line hint shown to the LLM alongside the alias. */
   description: string;
@@ -22,53 +22,53 @@ export interface Live2DAction {
 
 export const LIVE2D_ACTIONS: readonly Live2DAction[] = [
   {
-    alias: "回正",
-    description: "恢复到默认姿态和表情",
+    alias: "reset",
+    description: "Return to the default pose and expression",
     target: { kind: "motion", group: "动作#6", motionName: "动作回正" },
   },
   {
-    alias: "眨眨眼",
-    description: "俏皮地眨一只眼睛",
+    alias: "wink",
+    description: "Give the user a playful wink",
     target: { kind: "motion", group: "动作#6", motionName: "Wink~" },
   },
   {
-    alias: "可爱一下",
-    description: "害羞地装可爱",
+    alias: "act cute",
+    description: "Strike a shy, cute pose",
     target: { kind: "motion", group: "动作#6", motionName: "我可爱吧~" },
   },
   {
-    alias: "笑一笑",
-    description: "对着用户微笑",
+    alias: "smile",
+    description: "Smile warmly at the user",
     target: { kind: "motion", group: "动作#6", motionName: "笑一笑吧~" },
   },
   {
-    alias: "戴墨镜",
-    description: "戴上墨镜耍个帅",
+    alias: "sunglasses",
+    description: "Put on sunglasses with confidence",
     target: { kind: "expression", name: "墨镜" },
   },
   {
-    alias: "问号",
-    description: "头顶冒出一个问号",
+    alias: "question mark",
+    description: "Show a puzzled question mark",
     target: { kind: "expression", name: "问号" },
   },
   {
-    alias: "闪闪发光",
-    description: "身上闪出光芒",
+    alias: "sparkle",
+    description: "Shimmer with bright sparkles",
     target: { kind: "expression", name: "闪耀" },
   },
   {
-    alias: "星星眼",
-    description: "眼睛变成星星形状",
+    alias: "starry eyes",
+    description: "Turn her eyes into excited stars",
     target: { kind: "expression", name: "星星眼" },
   },
   {
-    alias: "圈圈眼",
-    description: "眼睛变成眩晕圈圈",
+    alias: "dizzy eyes",
+    description: "Show dizzy spiral eyes",
     target: { kind: "expression", name: "圈圈眼" },
   },
   {
-    alias: "开心眼",
-    description: "眼睛变成弯弯的笑眼",
+    alias: "happy eyes",
+    description: "Show cheerful smiling eyes",
     target: { kind: "expression", name: "开心眼" },
   },
 ];

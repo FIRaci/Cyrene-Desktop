@@ -25,6 +25,8 @@ describe("live2d-actions catalog", () => {
   it("every alias has a non-empty description", () => {
     for (const a of LIVE2D_ACTIONS) {
       expect(a.description.length, `alias ${a.alias} has empty description`).toBeGreaterThan(0);
+      expect(a.alias).not.toMatch(/\p{Script=Han}/u);
+      expect(a.description).not.toMatch(/\p{Script=Han}/u);
     }
   });
 
@@ -48,7 +50,7 @@ describe("live2d-actions catalog", () => {
 
 describe("findAction", () => {
   it("returns the matching action for an exact alias", () => {
-    const found = findAction("眨眨眼");
+    const found = findAction("wink");
     expect(found?.target.kind).toBe("motion");
     if (found?.target.kind === "motion") {
       expect(found.target.motionName).toBe("Wink~");
@@ -56,12 +58,11 @@ describe("findAction", () => {
   });
 
   it("is case-insensitive", () => {
-    const lower = findAction("眨眨眼");
-    expect(lower).toBeDefined();
+    expect(findAction("WINK")).toBeDefined();
   });
 
   it("returns undefined for an unknown alias", () => {
-    expect(findAction("挥手")).toBeUndefined();
+    expect(findAction("wave")).toBeUndefined();
     expect(findAction("definitely-not-an-alias")).toBeUndefined();
   });
 

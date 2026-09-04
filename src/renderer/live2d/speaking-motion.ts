@@ -40,6 +40,7 @@ export class SpeakingMotionController {
   }
 
   private triggerSwing(): void {
+    // Raw model expression IDs are internal wiring and must match model3.json exactly.
     const expression = this.nextSide === "left" ? "拽秋千1" : "拽秋千2";
     this.nextSide = this.nextSide === "left" ? "right" : "left";
     void this.applyExpression(expression);

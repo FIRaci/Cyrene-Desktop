@@ -24,7 +24,16 @@ export interface InteractionOptions {
   clickThreshold?: number;
   onTrigger?: (area: HitAreaDef) => void;
   onMiss?: (area: HitAreaDef) => void;
+  onPetting?: () => void;
 }
+
+const PETTING_ACTIONS: Array<{ group: string; motionName: string; expressionName?: string }> = [
+  { group: "动作#6", motionName: "笑一笑吧~" },
+  { group: "动作#6", motionName: "Wink~" },
+  { group: "动作#6", motionName: "我可爱吧~" },
+  { group: "表情#2", motionName: "开心眼", expressionName: "开心眼" },
+  { group: "表情3#4", motionName: "闪耀", expressionName: "闪耀" },
+];
 
 /**
  * Maps pointer clicks on the Live2D canvas to model hit-area actions.
@@ -34,12 +43,12 @@ export class InteractionController {
   private readonly model: Live2DModel;
   private readonly hitAreaByName: Map<string, HitAreaDef>;
   private readonly clickThreshold: number;
-  private readonly onTrigger?: (area: HitAreaDef) => void;
-  private readonly onMiss?: (area: HitAreaDef) => void;
+  private readonly options: InteractionOptions;
 
   private downX = 0;
   private downY = 0;
   private downHits: HitAreaDef[] = [];
+  private suppressGesture = false;
   private disposed = false;
 
   constructor(
@@ -51,8 +60,7 @@ export class InteractionController {
     this.canvas = canvas;
     this.model = model;
     this.clickThreshold = options.clickThreshold ?? 5;
-    this.onTrigger = options.onTrigger;
-    this.onMiss = options.onMiss;
+    this.options = options;
     this.hitAreaByName = new Map(hitAreaDefs.map((a) => [a.name, a]));
 
     canvas.addEventListener("pointerdown", this.handleDown);
@@ -62,6 +70,12 @@ export class InteractionController {
 
   private handleDown = (e: PointerEvent): void => {
     if (this.disposed) return;
+    if (e.altKey) {
+      this.suppressGesture = true;
+      this.downHits = [];
+      return;
+    }
+    this.suppressGesture = false;
     this.downX = e.clientX;
     this.downY = e.clientY;
     this.downHits = this.resolveHits(e.clientX, e.clientY);
@@ -69,16 +83,26 @@ export class InteractionController {
 
   private handleUp = (e: PointerEvent): void => {
     if (this.disposed) return;
+    if (e.altKey || this.suppressGesture) {
+      this.suppressGesture = false;
+      this.downHits = [];
+      return;
+    }
     const dx = e.clientX - this.downX;
     const dy = e.clientY - this.downY;
     const dist = Math.hypot(dx, dy);
     const hits = this.downHits;
     this.downHits = [];
     if (dist > this.clickThreshold) return;
-    void this.fire(hits);
+    if (hits.length > 0) {
+      void this.fire(hits);
+    } else {
+      void this.playPettingAction();
+    }
   };
 
   private handleCancel = (): void => {
+    this.suppressGesture = false;
     this.downHits = [];
   };
 
@@ -99,10 +123,10 @@ export class InteractionController {
     for (let i = 0; i < hits.length; i++) {
       const def = hits[i];
       if (await this.tryPlay(def)) {
-        this.onTrigger?.(def);
+        this.options.onTrigger?.(def);
         return;
       }
-      if (i === 0) this.onMiss?.(def);
+      if (i === 0) this.options.onMiss?.(def);
     }
   }
 
@@ -123,6 +147,28 @@ export class InteractionController {
       console.warn("[Cyrene] expression failed", expressionName, err);
       return false;
     }
+  }
+
+  private async playPettingAction(): Promise<void> {
+    const action = PETTING_ACTIONS[Math.floor(Math.random() * PETTING_ACTIONS.length)];
+    const defs = this.model.internalModel.motionManager.definitions[action.group];
+    if (defs) {
+      const idx = defs.findIndex((d: { Name?: string }) => d.Name === action.motionName);
+      if (idx >= 0) {
+        try {
+          if (await this.model.motion(action.group, idx)) {
+            this.options.onPetting?.();
+            return;
+          }
+        } catch {}
+      }
+    }
+    const exp = action.expressionName ?? action.motionName;
+    try {
+      if (await this.model.expression(exp)) {
+        this.options.onPetting?.();
+      }
+    } catch {}
   }
 
   dispose(): void {
