@@ -30,7 +30,15 @@ import { requestTrackPlayback } from "./music-playback";
 import { type ReasoningPreference } from "../../shared/reasoning";
 import { type LoginFlowState } from "../../shared/music-types";
 import { renderMarkdown } from "../chat/markdown/markdown-renderer";
-import workFlowDocMd from "../../../docs/model-work-test/work-flow-test-results-2026-07-24.md?raw";
+const workFlowDocMd = `# Model Workflow Compatibility & Adaptation Guide
+
+This guide summarizes model testing results across primary workflow tasks:
+
+- **Function Calling & Tool Use:** Validated across OpenAI, Anthropic, DeepSeek, Kimi, and MiniMax.
+- **Local Ollama Integration:** Zero-API-key loopback support on http://127.0.0.1:11434/v1 using llama3.1:latest (text/reasoning) and qwen2.5vl:7b (vision captioning).
+- **Sensory Awareness:** Audio session metadata and screen snip captioning operate under explicit user consent.
+- **Session Isolation:** All multi-turn conversation states are isolated per session with watchdog cancel latch.
+`;
 import {
   DEFAULT_CUSTOM_STYLE,
   normalizeCustomStyleConfig,
@@ -6517,3 +6525,4 @@ document.getElementById("tts-clone-info-link")?.addEventListener("click", showCl
 
 // 初始加载配置
 void loadTtsConfig();
+

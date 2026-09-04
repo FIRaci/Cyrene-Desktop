@@ -25,13 +25,13 @@ describe("Electron package entry", () => {
     expect(builderConfig).toMatch(/^\s*- dist\/\*\*\/\*\s*$/m);
   });
 
-  it("keeps the Windows launcher on the package entry", () => {
-    const launcher = fs.readFileSync(
-      path.join(process.cwd(), "Start Cyrene.bat"),
-      "utf8",
-    );
+  it("maintains the canonical package start script as electron .", () => {
+    const repoRoot = process.cwd();
+    const manifest = JSON.parse(
+      fs.readFileSync(path.join(repoRoot, "package.json"), "utf8"),
+    ) as PackageManifest;
 
-    expect(launcher).toContain("electron\\dist\\electron.exe .");
-    expect(launcher).not.toContain("electron\\dist\\electron.exe main.js");
+    expect(manifest.scripts?.start).toBe("electron .");
+    expect(manifest.scripts?.["start:agent"]).toBe("electron .");
   });
 });

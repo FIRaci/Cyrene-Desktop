@@ -5108,7 +5108,7 @@ app.whenReady().then(async () => {
   const initialSettings = loadGeneralSettings();
 
   systemAudioAwareness = new SystemAudioAwarenessService(
-    new WindowsMediaSessionMetadataAdapter(path.join(app.getAppPath(), "get_audio_sessions.ps1")),
+    new WindowsMediaSessionMetadataAdapter(),
     { excludedApplications: [app.name, "cyrene"] },
   );
   await setSystemAudioAwarenessEnabled(initialSettings.systemAudioAwarenessEnabled);
@@ -5870,6 +5870,7 @@ app.on("activate", () => {
     createWindow();
   }
 });
+
 
 
 
