@@ -529,6 +529,18 @@ function getCoWatchService(): CoWatchService {
             text,
           });
         }
+        try {
+          const targetSessionId = ensureActiveChatSessionId();
+          chatsStore.appendMessage(targetSessionId, {
+            id: randomUUID(),
+            role: "model",
+            content: text,
+            at: Date.now(),
+          });
+          broadcastChatsChanged();
+        } catch (err) {
+          console.warn("[CoWatch] Failed to persist reaction to chat:", err);
+        }
       },
       pushLog: (type, text, meta) => {
         pushActivityLog(type, text, meta, "cowatch");
@@ -664,6 +676,21 @@ function initializeScreenshotService(initialHotkey: string): ScreenshotService {
 //  id（ IPC ）；
 // ""。 closed  null。
 let activeChatSessionId: string | null = null;
+
+export function ensureActiveChatSessionId(): string {
+  if (activeChatSessionId && chatsStore.isValidSessionId(activeChatSessionId)) {
+    const existing = chatsStore.getSession(activeChatSessionId);
+    if (existing) return activeChatSessionId;
+  }
+  const sessions = chatsStore.listSessions();
+  if (sessions.length > 0 && sessions[0]?.id) {
+    activeChatSessionId = sessions[0].id;
+    return activeChatSessionId;
+  }
+  const newSession = chatsStore.createSession({ title: "Cyrene & Master" });
+  activeChatSessionId = newSession.id;
+  return activeChatSessionId;
+}
 
 
 const isDev = process.env.VITE_DEV === "1";
@@ -3520,7 +3547,7 @@ function createWindow(): void {
 
 
 function createChatWindow(sessionId?: string): void {
-  const targetSessionId = sessionId || activeChatSessionId || undefined;
+  const targetSessionId = sessionId || ensureActiveChatSessionId();
   if (chatWindow && !chatWindow.isDestroyed()) {
     if (chatWindow.isMinimized()) chatWindow.restore();
     chatWindow.show();
@@ -6412,7 +6439,7 @@ app.whenReady().then(async () => {
     }
     return true;
   });
-  ipcMain.handle(IPC.CHATS_GET_ACTIVE_SESSION, () => activeChatSessionId);
+  ipcMain.handle(IPC.CHATS_GET_ACTIVE_SESSION, () => ensureActiveChatSessionId());
 
   const generalSettings = loadGeneralSettings();
   createWindow();

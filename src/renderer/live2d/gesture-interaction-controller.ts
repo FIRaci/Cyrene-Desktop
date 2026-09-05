@@ -139,6 +139,8 @@ export class GestureInteractionController {
       getActiveSession?: () => Promise<string | { id: string } | null>;
       append: (arg1: unknown, arg2?: unknown) => Promise<unknown>;
       get: (id: string) => Promise<{ messages: Array<{ role: string; content: string }> } | null>;
+      list?: () => Promise<Array<{ id: string }>>;
+      create?: (opts?: unknown) => Promise<{ id: string }>;
     } }).chatStore;
 
     const agui = (win as unknown as { agui?: {
@@ -258,20 +260,48 @@ export class GestureInteractionController {
 
   private async getOrCreateActiveSessionId(store?: {
     getActiveSession?: () => Promise<string | { id: string } | null>;
+    list?: () => Promise<Array<{ id: string }>>;
+    create?: (opts?: unknown) => Promise<{ id: string }>;
   }): Promise<string> {
-    if (this.cachedSessionId) return this.cachedSessionId;
-    if (!store?.getActiveSession) return "default";
+    if (!store) return this.cachedSessionId || "default";
     try {
-      const active = await store.getActiveSession();
-      const id = typeof active === "string" ? active : active?.id;
-      if (id) {
-        this.cachedSessionId = id;
-        return id;
+      if (store.getActiveSession) {
+        const active = await store.getActiveSession();
+        const id = typeof active === "string" ? active : active?.id;
+        if (id && id !== "default") {
+          this.cachedSessionId = id;
+          return id;
+        }
+      }
+      if (this.cachedSessionId && this.cachedSessionId !== "default") {
+        return this.cachedSessionId;
+      }
+      if (store.list) {
+        const list = await store.list();
+        if (Array.isArray(list) && list.length > 0 && list[0]?.id) {
+          this.cachedSessionId = list[0].id;
+          return list[0].id;
+        }
+      }
+      if (store.create) {
+        const created = await store.create({ title: "Cyrene & Master" });
+        if (created?.id) {
+          this.cachedSessionId = created.id;
+          return created.id;
+        }
+      }
+      if (store.getActiveSession) {
+        const active = await store.getActiveSession();
+        const id = typeof active === "string" ? active : active?.id;
+        if (id) {
+          this.cachedSessionId = id;
+          return id;
+        }
       }
     } catch {
       // ignore
     }
-    return "default";
+    return this.cachedSessionId || "default";
   }
 
   private async appendToStore(

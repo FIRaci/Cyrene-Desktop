@@ -4977,7 +4977,10 @@ window.chatStore?.onSwitchSession(async (sessionId) => {
     console.warn("[Cyrene Chat] Session switch deferred: active generation in progress");
     return;
   }
-  if (sessionId === currentSessionId) return;
+  if (sessionId === currentSessionId) {
+    await loadSessionTailIntoUI(sessionId);
+    return;
+  }
   const session = await window.chatStore.get(sessionId);
   if (session) loadSessionIntoUI(session);
 });
@@ -5019,5 +5022,14 @@ window.chatStore?.onChanged(async () => {
   if (!next) next = await window.chatStore.create({ identityId: null });
   if (next) loadSessionIntoUI(next);
 });
+
+window.addEventListener("focus", async () => {
+  if (!window.chatStore || !currentSessionId || sending) return;
+  const current = await window.chatStore.get(currentSessionId);
+  if (current && current.updatedAt > (seenSessionUpdatedAt.get(current.id) ?? 0)) {
+    await loadSessionTailIntoUI(current.id);
+  }
+});
+
 autosize();
 inputEl.focus();

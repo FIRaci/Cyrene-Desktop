@@ -302,4 +302,54 @@ describe("GestureInteractionController", () => {
 
     controller.dispose();
   });
+
+  it("resolves active session from list or create when getActiveSession returns null", async () => {
+    let aguiCallback: ((event: any) => void) | null = null;
+    const run = vi.fn().mockResolvedValue({ success: true });
+    const onEvent = vi.fn().mockImplementation((cb: (event: any) => void) => {
+      aguiCallback = cb;
+      return () => {
+        aguiCallback = null;
+      };
+    });
+
+    const append = vi.fn().mockResolvedValue(true);
+    const getActiveSession = vi.fn().mockResolvedValue(null);
+    const list = vi.fn().mockResolvedValue([{ id: "session-from-list-xyz" }]);
+    const get = vi.fn().mockResolvedValue({
+      id: "session-from-list-xyz",
+      messages: [],
+    });
+
+    vi.stubGlobal("window", {
+      agui: { run, onEvent },
+      chatStore: { append, getActiveSession, list, get },
+    });
+
+    const controller = new GestureInteractionController({
+      bubbles,
+      kaomoji,
+      voice,
+    });
+
+    await controller.handleHeadPat();
+    expect(run).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: "session-from-list-xyz",
+      }),
+    );
+
+    aguiCallback!({ type: "TEXT_MESSAGE_CONTENT", delta: "Hello Master" });
+    aguiCallback!({ type: "RUN_FINISHED" });
+
+    expect(append).toHaveBeenCalledWith(
+      "session-from-list-xyz",
+      expect.objectContaining({
+        role: "model",
+      }),
+    );
+
+    controller.dispose();
+  });
 });
+
