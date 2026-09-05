@@ -47,17 +47,28 @@
 }
 
 .pet-cowatch-badge__icon {
-  font-size: 13px;
-  line-height: 1;
+  width: 14px;
+  height: 14px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  filter: drop-shadow(0 0 4px rgba(192, 132, 252, 0.6));
-  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  color: #d8b4fe;
+  filter: drop-shadow(0 0 5px rgba(192, 132, 252, 0.7));
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1),
+              color 0.2s ease,
+              filter 0.2s ease;
+  flex-shrink: 0;
+}
+
+.pet-cowatch-badge__icon svg {
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 
 .pet-cowatch-badge:hover .pet-cowatch-badge__icon {
   transform: scale(1.15);
+  color: #f3e8ff;
 }
 
 .pet-cowatch-badge__pulse {
@@ -84,6 +95,10 @@
   border-color: rgba(56, 189, 248, 0.6);
   box-shadow: 0 4px 20px rgba(12, 4, 30, 0.7), 0 0 14px rgba(56, 189, 248, 0.4);
 }
+.pet-cowatch-badge.status-capturing .pet-cowatch-badge__icon {
+  color: #38bdf8;
+  filter: drop-shadow(0 0 6px rgba(56, 189, 248, 0.8));
+}
 .pet-cowatch-badge.status-capturing .pet-cowatch-badge__pulse {
   background: #38bdf8;
   box-shadow: 0 0 10px #38bdf8;
@@ -94,6 +109,11 @@
 .pet-cowatch-badge.status-analyzing .pet-cowatch-badge__pill {
   border-color: rgba(232, 121, 249, 0.7);
   box-shadow: 0 4px 22px rgba(12, 4, 30, 0.8), 0 0 16px rgba(232, 121, 249, 0.45);
+}
+.pet-cowatch-badge.status-analyzing .pet-cowatch-badge__icon {
+  color: #e879f9;
+  filter: drop-shadow(0 0 6px rgba(232, 121, 249, 0.85));
+  animation: cowatch-spin-slow 4s linear infinite;
 }
 .pet-cowatch-badge.status-analyzing .pet-cowatch-badge__pulse {
   background: #e879f9;
@@ -106,6 +126,10 @@
   border-color: rgba(244, 114, 182, 0.7);
   box-shadow: 0 4px 20px rgba(12, 4, 30, 0.7), 0 0 14px rgba(244, 114, 182, 0.4);
 }
+.pet-cowatch-badge.status-reacting .pet-cowatch-badge__icon {
+  color: #f472b6;
+  filter: drop-shadow(0 0 6px rgba(244, 114, 182, 0.8));
+}
 .pet-cowatch-badge.status-reacting .pet-cowatch-badge__pulse {
   background: #f472b6;
   box-shadow: 0 0 10px #f472b6;
@@ -115,9 +139,18 @@
 .pet-cowatch-badge.status-error .pet-cowatch-badge__pill {
   border-color: rgba(248, 113, 113, 0.7);
 }
+.pet-cowatch-badge.status-error .pet-cowatch-badge__icon {
+  color: #f87171;
+  filter: drop-shadow(0 0 6px rgba(248, 113, 113, 0.8));
+}
 .pet-cowatch-badge.status-error .pet-cowatch-badge__pulse {
   background: #f87171;
   box-shadow: 0 0 8px #f87171;
+}
+
+@keyframes cowatch-spin-slow {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
 @keyframes cowatch-pulse-breathe {

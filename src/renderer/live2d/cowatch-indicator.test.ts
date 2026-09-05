@@ -19,6 +19,7 @@ function createFakeElement(tag: string): any {
     },
     title: "",
     textContent: "",
+    innerHTML: "",
     children,
     style: { display: "" },
     offsetWidth: 100,
@@ -111,7 +112,8 @@ describe("PetCoWatchIndicator", () => {
 
     const icon = body.querySelector(".pet-cowatch-badge__icon");
     const text = body.querySelector(".pet-cowatch-badge__text");
-    expect(icon?.textContent).toBe("👁️");
+    expect(icon?.innerHTML).toContain("pet-cowatch-icon--idle");
+    expect(icon?.innerHTML).toContain("<svg");
     expect(text?.textContent).toBe("Co-Watching");
 
     indicator.dispose();
@@ -128,7 +130,7 @@ describe("PetCoWatchIndicator", () => {
     const text = body.querySelector(".pet-cowatch-badge__text");
 
     expect(badge?.classList.contains("status-capturing")).toBe(true);
-    expect(icon?.textContent).toBe("📸");
+    expect(icon?.innerHTML).toContain("pet-cowatch-icon--capturing");
     expect(text?.textContent).toBe("Capturing...");
 
     indicator.dispose();
@@ -141,8 +143,26 @@ describe("PetCoWatchIndicator", () => {
     const icon = body.querySelector(".pet-cowatch-badge__icon");
     const text = body.querySelector(".pet-cowatch-badge__text");
 
-    expect(icon?.textContent).toBe("✨");
+    expect(icon?.innerHTML).toContain("pet-cowatch-icon--analyzing");
     expect(text?.textContent).toBe("Thinking...");
+
+    indicator.dispose();
+  });
+
+  it("updates to reacting and error states", () => {
+    const indicator = new PetCoWatchIndicator(body);
+
+    indicator.update({ active: true, status: "reacting" });
+    let icon = body.querySelector(".pet-cowatch-badge__icon");
+    let text = body.querySelector(".pet-cowatch-badge__text");
+    expect(icon?.innerHTML).toContain("pet-cowatch-icon--reacting");
+    expect(text?.textContent).toBe("Observing");
+
+    indicator.update({ active: true, status: "error", errorMessage: "Failed to connect" });
+    icon = body.querySelector(".pet-cowatch-badge__icon");
+    text = body.querySelector(".pet-cowatch-badge__text");
+    expect(icon?.innerHTML).toContain("pet-cowatch-icon--error");
+    expect(text?.textContent).toBe("Observation Issue");
 
     indicator.dispose();
   });

@@ -8,6 +8,14 @@ export interface CoWatchStatePayload {
   errorMessage?: string;
 }
 
+export const COWATCH_ICONS = {
+  idle: `<svg class="pet-cowatch-icon pet-cowatch-icon--idle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>`,
+  capturing: `<svg class="pet-cowatch-icon pet-cowatch-icon--capturing" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>`,
+  analyzing: `<svg class="pet-cowatch-icon pet-cowatch-icon--analyzing" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3z"/></svg>`,
+  reacting: `<svg class="pet-cowatch-icon pet-cowatch-icon--reacting" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/><path d="M8 12h.01"/><path d="M12 12h.01"/><path d="M16 12h.01"/></svg>`,
+  error: `<svg class="pet-cowatch-icon pet-cowatch-icon--error" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`,
+};
+
 export class PetCoWatchIndicator {
   private badgeEl: HTMLElement;
   private iconEl: HTMLElement;
@@ -27,7 +35,7 @@ export class PetCoWatchIndicator {
 
     this.iconEl = document.createElement("span");
     this.iconEl.className = "pet-cowatch-badge__icon";
-    this.iconEl.textContent = "👁️";
+    this.iconEl.innerHTML = COWATCH_ICONS.idle;
 
     this.pulseEl = document.createElement("span");
     this.pulseEl.className = "pet-cowatch-badge__pulse";
@@ -99,29 +107,29 @@ export class PetCoWatchIndicator {
 
     switch (status) {
       case "capturing":
-        this.iconEl.textContent = "📸";
+        this.iconEl.innerHTML = COWATCH_ICONS.capturing;
         this.textEl.textContent = "Capturing...";
-        this.badgeEl.title = "📸 Co-Watch: Capturing screen frame · Click to stop";
+        this.badgeEl.title = "Co-Watch: Capturing screen frame · Click to stop";
         break;
       case "analyzing":
-        this.iconEl.textContent = "✨";
+        this.iconEl.innerHTML = COWATCH_ICONS.analyzing;
         this.textEl.textContent = "Thinking...";
-        this.badgeEl.title = "✨ Co-Watch: Cyrene is observing what you see · Click to stop";
+        this.badgeEl.title = "Co-Watch: Cyrene is observing what you see · Click to stop";
         break;
       case "reacting":
-        this.iconEl.textContent = "💬";
+        this.iconEl.innerHTML = COWATCH_ICONS.reacting;
         this.textEl.textContent = "Observing";
-        this.badgeEl.title = "💬 Co-Watch: Reacting to screen · Click to stop";
+        this.badgeEl.title = "Co-Watch: Reacting to screen · Click to stop";
         break;
       case "error":
-        this.iconEl.textContent = "⚠️";
+        this.iconEl.innerHTML = COWATCH_ICONS.error;
         this.textEl.textContent = "Observation Issue";
-        this.badgeEl.title = `⚠️ Co-Watch: ${state.errorMessage ?? "Error"} · Click to stop`;
+        this.badgeEl.title = `Co-Watch: ${state.errorMessage ?? "Error"} · Click to stop`;
         break;
       default:
-        this.iconEl.textContent = "👁️";
+        this.iconEl.innerHTML = COWATCH_ICONS.idle;
         this.textEl.textContent = "Co-Watching";
-        this.badgeEl.title = "👁️ Co-Watch active: Cyrene is watching with you! · Click to stop";
+        this.badgeEl.title = "Co-Watch active: Cyrene is watching with you! · Click to stop";
         break;
     }
   }

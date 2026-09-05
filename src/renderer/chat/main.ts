@@ -4523,11 +4523,11 @@ window.chat?.onCoWatchStateChanged?.((state) => {
         : state.status === "analyzing"
         ? "Thinking..."
         : "Watching";
-      cowatchBtn.title = `🔴 Co-Watching Active (${statusLabel}) · Click or Alt+G to stop`;
-      announceScreenshotStatus(`Co-Watch recording mode active 🔴 (${statusLabel}). Cyrene is watching with you in background!`);
+      cowatchBtn.title = `Co-Watching Active (${statusLabel}) · Click or Alt+G to stop`;
+      announceScreenshotStatus(`Co-Watch recording mode active (${statusLabel}). Cyrene is watching with you in background!`);
     } else {
       cowatchBtn.classList.remove("cowatch-btn--recording");
-      cowatchBtn.title = "🎬 Watch Together / Co-Watch Record Mode (Alt+G)";
+      cowatchBtn.title = "Watch Together / Co-Watch Record Mode (Alt+G)";
       announceScreenshotStatus("Co-Watch recording mode stopped.");
     }
   }

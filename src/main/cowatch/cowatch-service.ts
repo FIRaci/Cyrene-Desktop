@@ -150,7 +150,7 @@ export class CoWatchService {
         // 1. Capturing screen
         this.status = "capturing";
         this.broadcast();
-        this.deps.pushLog?.("tool", "📸 Co-Watch: Capturing primary screen frame...");
+        this.deps.pushLog?.("tool", "[Co-Watch] Capturing primary screen frame...");
 
         const capture = await this.deps.captureScreen();
         if (!capture?.filePath || !this.active) {
@@ -181,7 +181,7 @@ export class CoWatchService {
           this.broadcast();
 
           this.deps.deliverReaction(this.lastReaction);
-          this.deps.pushLog?.("response", `👁️ [Co-Watch] Cyrene: "${this.lastReaction}"`, {
+          this.deps.pushLog?.("response", `[Co-Watch] Cyrene: "${this.lastReaction}"`, {
             scene: "cowatch",
             capturedAt: this.lastCapturedAt,
           });
