@@ -6087,7 +6087,9 @@ app.whenReady().then(async () => {
     const cfg = loadGeneralSettings();
     if (cfg.ttsEngine === "off") return null;
     if (cfg.ttsEngine === "minimax" && (!cfg.ttsMinimaxKey || !cfg.ttsMinimaxVoiceId)) return null;
-    if (cfg.ttsEngine === "gptsovits" && (!cfg.ttsGptsovitsBaseUrl || !cfg.ttsGptsovitsRefAudioPath || !cfg.ttsGptsovitsPromptText)) return null;
+    const gptsovitsRefPath = cfg.ttsGptsovitsRefAudioPath || path.join(process.cwd(), "resources", "voice", "cyrene", "ref_audio.wav");
+    const gptsovitsPrompt = cfg.ttsGptsovitsPromptText || "开拓者，希琳一直都在这里陪着你哦。";
+    if (cfg.ttsEngine === "gptsovits" && (!cfg.ttsGptsovitsBaseUrl || !gptsovitsRefPath || !gptsovitsPrompt)) return null;
     if (cfg.ttsEngine === "custom-cloud" && !cfg.ttsCustomCloudEndpointUrl) return null;
     if (cfg.ttsEngine === "mimo" && (!cfg.ttsMimoKey || !cfg.ttsMimoVoiceAudioPath)) return null;
     //  TTS （ audio 100M  + ，）
@@ -6112,8 +6114,8 @@ app.whenReady().then(async () => {
         model: cfg.ttsMinimaxModel,
         // gptsovits
         baseUrl: cfg.ttsGptsovitsBaseUrl,
-        refAudioPath: cfg.ttsGptsovitsRefAudioPath,
-        promptText: cfg.ttsGptsovitsPromptText,
+        refAudioPath: gptsovitsRefPath,
+        promptText: gptsovitsPrompt,
         // custom-cloud
         endpointUrl: cfg.ttsCustomCloudEndpointUrl,
         timeoutMs: cfg.ttsCustomCloudTimeoutMs,

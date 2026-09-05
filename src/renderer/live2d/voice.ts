@@ -130,7 +130,7 @@ export class CompanionVoiceService {
       const settings = await (win as unknown as { settings?: { getGeneral: () => Promise<Record<string, unknown>> } })
         .settings?.getGeneral?.();
 
-      const engine = String(settings?.ttsEngine || "web-speech");
+      const engine = String(settings?.ttsEngine || (settings ? "gptsovits" : "web-speech"));
 
       if (engine === "gptsovits") {
         const played = await this.playGptsovits(cleaned, settings);
@@ -362,11 +362,11 @@ export class CompanionVoiceService {
     if (!tts?.synthesizeCachedGptsovits) return false;
 
     const baseUrl = String(settings.ttsGptsovitsBaseUrl || "http://127.0.0.1:9880");
-    const refAudioPath = String(settings.ttsGptsovitsRefAudioPath || "");
-    const promptText = String(settings.ttsGptsovitsPromptText || "");
+    const refAudioPath = String(settings.ttsGptsovitsRefAudioPath ?? "resources/voice/cyrene/ref_audio.wav");
+    const promptText = String(settings.ttsGptsovitsPromptText ?? "开拓者，希琳一直都在这里陪着你哦。");
 
-    if (!baseUrl) {
-      console.warn("[CompanionVoice] GPT-SoVITS missing configuration (baseUrl)");
+    if (!baseUrl || !refAudioPath || !promptText) {
+      console.warn("[CompanionVoice] GPT-SoVITS missing configuration (baseUrl, refAudioPath, or promptText)");
       return false;
     }
 
