@@ -132,7 +132,7 @@ describe("GestureInteractionController", () => {
 
     // Immediate visual feedback & idle thoughts paused
     expect(kaomoji.spawn).toHaveBeenCalledWith("(⁄ ⁄>⁄ ▽ ⁄<⁄ ⁄)", 150, 200);
-    expect(bubbles.think).toHaveBeenCalledWith("(⁄ ⁄>⁄ ▽ ⁄<⁄ ⁄) Mmh…", 30000);
+    expect(bubbles.think).toHaveBeenCalledWith("(⁄ ⁄>⁄ ▽ ⁄<⁄ ⁄) 唔…", 30000);
     expect(onExpressionReset).toHaveBeenCalled();
     expect(autonomousThoughts.pause).toHaveBeenCalled();
 
@@ -271,11 +271,11 @@ describe("GestureInteractionController", () => {
     await controller.handleHeadPat();
 
     expect(bubbles.say).toHaveBeenCalledWith(
-      expect.stringContaining("Cyrene loves it when you pat my head"),
+      expect.stringContaining("希琳最喜欢你了"),
       4000,
     );
     expect(voice.speak).toHaveBeenCalledWith(
-      expect.stringContaining("Cyrene loves it when you pat my head"),
+      expect.stringContaining("希琳最喜欢你了"),
     );
 
     controller.dispose();
@@ -293,11 +293,11 @@ describe("GestureInteractionController", () => {
     await controller.handleHeadPat();
 
     expect(bubbles.say).toHaveBeenCalledWith(
-      expect.stringContaining("Cyrene loves it when you pat my head"),
+      expect.stringContaining("希琳最喜欢你了"),
       4000,
     );
     expect(voice.speak).toHaveBeenCalledWith(
-      expect.stringContaining("Cyrene loves it when you pat my head"),
+      expect.stringContaining("希琳最喜欢你了"),
     );
 
     controller.dispose();

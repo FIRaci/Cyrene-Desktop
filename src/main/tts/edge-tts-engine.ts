@@ -57,13 +57,8 @@ export function resolveBestNeuralVoice(text: string, preferredVoice?: string): s
     return "vi-VN-HoaiMyNeural";
   }
 
-  // Chinese characters
-  if (/[\u4e00-\u9fa5]/.test(text)) {
-    return "zh-CN-XiaoyiNeural";
-  }
-
-  // Default: Sweet English anime companion voice for Cyrene
-  return "en-US-AnaNeural";
+  // Chinese characters or default character voice (zh-CN-XiaoyiNeural anime girl)
+  return "zh-CN-XiaoyiNeural";
 }
 
 /**

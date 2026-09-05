@@ -15,10 +15,10 @@ describe("edge-tts-engine", () => {
     expect(resolveBestNeuralVoice("Chào bạn, mình là Cyrene đây!")).toBe("vi-VN-HoaiMyNeural");
   });
 
-  it("defaults to en-US-AnaNeural for English text, even with kaomoji or emojis", () => {
-    expect(resolveBestNeuralVoice("Hello master, Cyrene is always by your side!")).toBe("en-US-AnaNeural");
-    expect(resolveBestNeuralVoice("Mmh... Cyrene loves head pats! (⁄ ⁄>⁄ ▽ ⁄<⁄ ⁄) ✨")).toBe("en-US-AnaNeural");
-    expect(resolveBestNeuralVoice("Ehehe~ 🌸")).toBe("en-US-AnaNeural");
+  it("defaults to zh-CN-XiaoyiNeural for Chinese or general companion text", () => {
+    expect(resolveBestNeuralVoice("Hello master, Cyrene is always by your side!")).toBe("zh-CN-XiaoyiNeural");
+    expect(resolveBestNeuralVoice("Mmh... Cyrene loves head pats! (⁄ ⁄>⁄ ▽ ⁄<⁄ ⁄) ✨")).toBe("zh-CN-XiaoyiNeural");
+    expect(resolveBestNeuralVoice("Ehehe~ 🌸")).toBe("zh-CN-XiaoyiNeural");
   });
 
   it("respects explicitly requested voice override", () => {

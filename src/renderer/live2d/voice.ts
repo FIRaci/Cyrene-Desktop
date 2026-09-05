@@ -150,11 +150,11 @@ export class CompanionVoiceService {
       // Ignore settings fetch errors and proceed
     }
 
-    // Default & Expressive: Online Neural Voice (Microsoft Edge Neural — sweet English anime girl)
+    // Default & Expressive: Online Neural Voice (Microsoft Edge Neural — sweet Chinese anime girl zh-CN-XiaoyiNeural)
     const played = await this.playOnlineNeural(cleaned);
     if (played) return true;
 
-    // Fallback: Web Speech API (Strictly female voice, NO male voices)
+    // Fallback: Web Speech API (Chinese anime female voice, NO male voices)
     return this.speakWebSpeech(cleaned);
   }
 
@@ -163,10 +163,24 @@ export class CompanionVoiceService {
       const win = typeof window !== "undefined" ? window : (globalThis as unknown as Window);
       const tts = (win as unknown as { tts?: {
         synthesizeOnline?: (payload: { text: string; lang?: string }) => Promise<{ base64: string; format: string } | null>;
+        translateToChinese?: (text: string) => Promise<string>;
       } }).tts;
 
       if (tts?.synthesizeOnline) {
-        const res = await tts.synthesizeOnline({ text, lang: "en-US" });
+        let textToSpeak = text;
+        // If text does not contain Chinese characters, translate to spoken Chinese so Cyrene speaks Chinese
+        if (!/[\u4e00-\u9fa5]/.test(text) && tts.translateToChinese) {
+          try {
+            const translated = await tts.translateToChinese(text);
+            if (translated && /[\u4e00-\u9fa5]/.test(translated)) {
+              textToSpeak = translated;
+            }
+          } catch (trErr) {
+            console.warn("[CompanionVoice] Chinese translation failed, speaking original:", trErr);
+          }
+        }
+
+        const res = await tts.synthesizeOnline({ text: textToSpeak, lang: "zh-CN" });
         if (res && res.base64) {
           return this.playBase64Audio(res.base64, res.format || "mp3");
         }
@@ -178,7 +192,7 @@ export class CompanionVoiceService {
   }
 
   /**
-   * Speak using browser/Electron Web Speech API (strictly English female anime voice, zero male voices).
+   * Speak using browser/Electron Web Speech API (strictly Chinese/anime female voice, zero male voices).
    */
   private speakWebSpeech(text: string): boolean {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) {
@@ -189,7 +203,7 @@ export class CompanionVoiceService {
       window.speechSynthesis.cancel();
 
       const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = "en-US";
+      utterance.lang = "zh-CN";
 
       const voices = window.speechSynthesis.getVoices();
       if (voices && voices.length > 0) {
@@ -210,34 +224,21 @@ export class CompanionVoiceService {
         const femaleVoices = voices.filter((v) => !isMaleVoice(v));
         const pool = femaleVoices.length > 0 ? femaleVoices : voices;
 
-        // 1st Priority: English female voices (Ana, Jenny, Aria, Zira, Samantha, Victoria, Natural, Female)
+        // 1st Priority: Chinese female voices (Xiaoyi, Xiaoxiao, Huihui, Yaoyao, Hanhan, zh-CN, Chinese, Mandarin)
         let preferredVoice = pool.find((v) => {
           const name = (v.name + " " + v.lang).toLowerCase();
           return (
-            (name.includes("en-us") || name.includes("en-gb") || name.includes("english")) &&
-            (name.includes("ana") ||
-              name.includes("jenny") ||
-              name.includes("aria") ||
-              name.includes("zira") ||
-              name.includes("samantha") ||
-              name.includes("victoria") ||
-              name.includes("natural") ||
-              name.includes("female"))
+            (name.includes("zh") || name.includes("chinese") || name.includes("mandarin")) &&
+            (name.includes("xiaoyi") ||
+              name.includes("xiaoxiao") ||
+              name.includes("huihui") ||
+              name.includes("yaoyao") ||
+              name.includes("female") ||
+              !isMaleVoice(v))
           );
         });
 
-        // 2nd Priority: Any English female voice
-        if (!preferredVoice) {
-          preferredVoice = pool.find((v) => {
-            const name = (v.name + " " + v.lang).toLowerCase();
-            return (
-              (name.includes("en") || name.includes("english")) &&
-              (name.includes("zira") || name.includes("female") || !isMaleVoice(v))
-            );
-          });
-        }
-
-        // 3rd Priority: Sweet anime Japanese female voices
+        // 2nd Priority: Sweet anime Japanese female voices
         if (!preferredVoice) {
           preferredVoice = pool.find((v) => {
             const name = (v.name + " " + v.lang).toLowerCase();
@@ -246,9 +247,15 @@ export class CompanionVoiceService {
               name.includes("japanese") ||
               name.includes("haruka") ||
               name.includes("ayumi") ||
-              name.includes("sayaka")
+              name.includes("sayaka") ||
+              name.includes("nanami")
             );
           });
+        }
+
+        // 3rd Priority: Any female voice
+        if (!preferredVoice) {
+          preferredVoice = pool.find((v) => !isMaleVoice(v));
         }
 
         if (preferredVoice) {

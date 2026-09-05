@@ -177,13 +177,14 @@ describe("CompanionVoiceService", () => {
     voice.dispose();
   });
 
-  it("speaks pure English voice without translating to Chinese", async () => {
+  it("speaks sweet Chinese voice with lang zh-CN", async () => {
     const voice = new CompanionVoiceService({ initialMuted: false });
-    await voice.speak("Cyrene is always right here by your side~ ✨ (｡♥‿♥｡)");
+    await voice.speak("希琳一直都在你身边哦~ ✨ (｡♥‿♥｡)");
 
     const utteranceArg = mockSpeechSynthesis.speak.mock.calls[0][0];
-    expect(utteranceArg.text).toBe("Cyrene is always right here by your side");
-    expect(utteranceArg.lang).toBe("en-US");
+    expect(utteranceArg.text).toBe("希琳一直都在你身边哦");
+    expect(utteranceArg.lang).toBe("zh-CN");
+    expect(utteranceArg.voice.name).toContain("Huihui");
 
     voice.dispose();
   });
