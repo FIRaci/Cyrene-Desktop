@@ -1,17 +1,17 @@
-// Mossland TTS 引擎（api.mosi.cn / Mossland 云端）。
+// Mossland TTS engine (api.mosi.cn / Mossland cloud).
 //
-// 第二步接通的功能：
-//   - synthesize()      POST /v1/audio/speech       单说话人 moss-tts（delivery_method=audio → binary）
-//   - cloneVoice()      POST /v1/audio/voices       multipart/form-data 上传参考音频，返回 voice_id
-//   - listVoices()      GET  /v1/audio/voices       拉取账号下已克隆的 voice_id 列表
+// Supported functions:
+//   - synthesize()      POST /v1/audio/speech       Single speaker moss-tts (delivery_method=audio -> binary)
+//   - cloneVoice()      POST /v1/audio/voices       multipart/form-data upload reference audio, returns voice_id
+//   - listVoices()      GET  /v1/audio/voices       Fetch list of cloned voice_ids under account
 //
-// 暂不实现的功能（按用户决策）：
-//   - 多说话人模型 moss-ttsd（POST /v1/audio/speech/speakers）
-//   - voice-generator 模型（POST /v1/audio/voice/generations）
-//   - async / webhook（同步 delivery_method=audio 足够 Settings 测试发音 + chat 自动朗读）
+// Deferred features:
+//   - Multi-speaker model moss-ttsd (POST /v1/audio/speech/speakers)
+//   - voice-generator model (POST /v1/audio/voice/generations)
+//   - async / webhook (synchronous delivery_method=audio suffices for settings tests + chat auto-read)
 //
-// 错误处理：Mossland 错误响应是 JSON { error: { message, type, param, code } }，
-// 我们按 `code` 映射到中文友好消息，HTTP 5xx 直接抛服务端异常。
+// Error handling: Mossland error response is JSON { error: { message, type, param, code } },
+// mapped to friendly messages by `code`, HTTP 5xx thrown directly.
 
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -20,8 +20,8 @@ const BASE_URL = "https://api.mosi.cn";
 const DEFAULT_TIMEOUT_MS = 30_000;
 
 /**
- * 错误码 → 中文友好消息。Mossland 文档列出的常见 code 都覆盖上；
- * 命中未列出的 code 就回落到服务端 message 字段。
+ * Error code -> user-friendly messages. Covers common codes documented by Mossland;
+ * Falls back to server message field when encountering unlisted codes.
  */
 const ERROR_CODE_MAP: Record<string, string> = {
   // 4xx
@@ -48,40 +48,40 @@ const ERROR_CODE_MAP: Record<string, string> = {
 
 interface MosslandErrorBody {
   error?: {
-    // 同步错误格式（文档标注）：message / type / param / code
+    // Synchronous error format (documented): message / type / param / code
     message?: string;
     type?: string;
     param?: string | null;
     code?: string;
-    // 异步 / 任务失败格式（实际观测）：error_code / error_msg
+    // Asynchronous / task failure format (observed): error_code / error_msg
     error_code?: number | string;
     error_msg?: string;
     internal_error_msg?: string;
   };
 }
 
-/** 把 fetch 错误响应统一解析成 "code + 中文消息"，方便调用方上抛。 */
+/** Parses fetch error responses into unified "code + message" for caller exceptions. */
 function buildError(prefix: string, status: number, rawBody: string): Error {
-  // HTTP 413：网关层 body 大小限制，服务端没解析 body 就拒了，不会有 JSON 错误体
+  // HTTP 413: Gateway body size limit rejected before body parsing, no JSON error payload
   if (status === 413) {
     return new Error(`${prefix}: The uploaded file exceeds the service limit (HTTP 413). Compress or shorten the audio and try again.`);
   }
-  // 尝试解析 JSON 错误体（Mossland 有两种错误格式：同步 code/message，异步 error_code/error_msg）
+  // Attempt parsing JSON error body (Mossland has two formats: sync code/message, async error_code/error_msg)
   let code: string | undefined;
   let upstreamMsg: string | undefined;
   try {
     const parsed = JSON.parse(rawBody) as MosslandErrorBody;
-    // 异步 / 任务失败格式优先（error_code + error_msg）
+    // Prioritize async / task failure format (error_code + error_msg)
     if (parsed.error?.error_msg) {
       code = String(parsed.error.error_code ?? "");
       upstreamMsg = parsed.error.error_msg;
     } else {
-      // 同步错误格式（code + message）
+      // Synchronous error format (code + message)
       code = parsed.error?.code;
       upstreamMsg = parsed.error?.message;
     }
   } catch {
-    // 非 JSON 错误体（如网关层拦截），原样抛
+    // Non-JSON error payload (e.g. gateway interception), throw raw
     return new Error(`${prefix}：HTTP ${status} ${rawBody.slice(0, 200)}`);
   }
   const friendly = code && ERROR_CODE_MAP[code];
@@ -89,7 +89,7 @@ function buildError(prefix: string, status: number, rawBody: string): Error {
   return new Error(`${prefix}：${detail} (HTTP ${status}${code ? `, code: ${code}` : ""})`);
 }
 
-/** 通用 fetch 封装：Bearer 鉴权 + AbortController 超时。 */
+/** Generic fetch wrapper: Bearer auth + AbortController timeout. */
 async function mossFetch(
   url: string,
   init: RequestInit & { apiKey: string; timeoutMs?: number },
@@ -119,8 +119,8 @@ export interface MosslandSynthesizeOptions {
   text: string;
   speed?: number;
   volume?: number;
-  model?: string;                       // 默认 "moss-tts"
-  format?: "mp3" | "wav" | "pcm";       // 默认 "mp3"
+  model?: string;                       // Default "moss-tts"
+  format?: "mp3" | "wav" | "pcm";       // Default "mp3"
 }
 
 export interface MosslandSynthesizeResult {
@@ -129,8 +129,8 @@ export interface MosslandSynthesizeResult {
 }
 
 /**
- * 单说话人合成：POST /v1/audio/speech。
- * 用 delivery_method=audio 拿到二进制流（不需要再 GET URL，省一轮）。
+ * Single speaker synthesis: POST /v1/audio/speech.
+ * Uses delivery_method=audio to receive binary stream directly (avoids extra GET URL round-trip).
  */
 export async function synthesize(opts: MosslandSynthesizeOptions): Promise<MosslandSynthesizeResult> {
   const format = opts.format ?? "mp3";
@@ -140,7 +140,7 @@ export async function synthesize(opts: MosslandSynthesizeOptions): Promise<Mossl
   if (!opts.voiceId) throw new Error("Mossland synthesis failed: voice_id is required; clone a voice first");
   if (!opts.text) throw new Error("Mossland synthesis failed: synthesis text is required");
 
-  // 只传文档里列出的字段；Mossland 严格校验，未知字段直接 400
+  // Only send documented fields; Mossland validates strictly and returns 400 on unknown fields
   const body: Record<string, unknown> = {
     model,
     input: opts.text,
@@ -162,7 +162,7 @@ export async function synthesize(opts: MosslandSynthesizeOptions): Promise<Mossl
     throw buildError("Mossland synthesis failed", response.status, raw);
   }
 
-  // delivery_method=audio：响应体直接是音频二进制
+  // delivery_method=audio: response body is direct audio binary
   const audio = Buffer.from(await response.arrayBuffer());
   if (audio.length === 0) {
     throw new Error("Mossland synthesis failed: the service returned empty audio");
@@ -174,7 +174,7 @@ export async function synthesize(opts: MosslandSynthesizeOptions): Promise<Mossl
 
 export interface MosslandCloneOptions {
   apiKey: string;
-  filePath: string;             // 本地音频绝对路径
+  filePath: string;             // Local audio absolute path
   name?: string;
   description?: string;
 }
@@ -182,12 +182,12 @@ export interface MosslandCloneOptions {
 export interface MosslandCloneResult {
   voiceId: string;
   name?: string;
-  createdAt?: number;           // Unix 秒
+  createdAt?: number;           // Unix seconds
 }
 
 /**
- * 音色克隆：POST /v1/audio/voices（multipart/form-data）。
- * 字段 audio_sample（必填）+ name（可选）+ description（可选）。
+ * Voice cloning: POST /v1/audio/voices (multipart/form-data).
+ * Fields: audio_sample (required) + name (optional) + description (optional).
  */
 export async function cloneVoice(opts: MosslandCloneOptions): Promise<MosslandCloneResult> {
   if (!opts.apiKey) throw new Error("Mossland voice cloning failed: API key is required");
@@ -195,16 +195,16 @@ export async function cloneVoice(opts: MosslandCloneOptions): Promise<MosslandCl
     throw new Error(`Mossland voice cloning failed: reference audio does not exist (${opts.filePath ?? ""})`);
   }
 
-  // 文件名只取扩展名，主体用固定 ASCII 名，避免中文文件名导致 header 编码问题
+  // Use fixed ASCII filename with original extension, avoiding non-ASCII header encoding issues
   const ext = path.extname(opts.filePath) || ".wav";
   const safeFileName = "audio_sample" + ext;
   const fileBuffer = fs.readFileSync(opts.filePath);
 
-  // 构造 multipart/form-data（参考 minimax-engine.uploadFile 的写法）
+  // Build multipart/form-data (similar to minimax-engine.uploadFile)
   const boundary = "----CyreneMossland" + Math.random().toString(36).slice(2);
   const parts: Buffer[] = [];
 
-  // audio_sample 文件字段
+  // audio_sample file field
   parts.push(
     Buffer.from(
       `--${boundary}\r\nContent-Disposition: form-data; name="audio_sample"; filename="${safeFileName}"\r\nContent-Type: application/octet-stream\r\n\r\n`,
@@ -213,7 +213,7 @@ export async function cloneVoice(opts: MosslandCloneOptions): Promise<MosslandCl
   parts.push(fileBuffer);
   parts.push(Buffer.from("\r\n"));
 
-  // 可选文本字段：name / description（用 UTF-8 编码）
+  // Optional text fields: name / description (encoded as UTF-8)
   if (opts.name) {
     parts.push(
       Buffer.from(
@@ -267,7 +267,7 @@ export async function cloneVoice(opts: MosslandCloneOptions): Promise<MosslandCl
 export interface MosslandVoiceInfo {
   id: string;
   name: string;
-  createdAt: number;            // Unix 秒
+  createdAt: number;            // Unix seconds
 }
 
 export interface MosslandListVoicesResult {
@@ -275,9 +275,9 @@ export interface MosslandListVoicesResult {
 }
 
 /**
- * 拉取账号下已克隆的音色列表：GET /v1/audio/voices?limit=50。
- * 返回 { data, has_more, ... }，只取 data 数组。
- * Mossland 文档没有 GET /v1/audio/voices/{id}，所以这里只能 list。
+ * Fetch list of cloned voices: GET /v1/audio/voices?limit=50.
+ * Returns { data, has_more, ... }, takes data array.
+ * Mossland API lacks GET /v1/audio/voices/{id}, so listing is used.
  */
 export async function listVoices(opts: { apiKey: string; limit?: number }): Promise<MosslandListVoicesResult> {
   if (!opts.apiKey) throw new Error("Failed to list Mossland voices: API key is required");

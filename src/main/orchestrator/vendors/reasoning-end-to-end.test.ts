@@ -1,11 +1,11 @@
-// reasoning 透传到真实 adapter buildRequest 的契约测试（用户第三轮修订 #5）。
+// Contract test for reasoning passthrough to adapter buildRequest.
 //
-// 原则：
-//   - 不做字符串扫描（不 grep "reasoning" src/main/index.ts）
-//   - 不抽 buildVendorConfig helper
-//   - 不 mock main/index
-//   - 改走真实 adapter 调用路径：构造符合 VendorConfig 形状的 fake cfg，
-//     调 adapter.buildRequest，断言 JSON body
+// Principles:
+//   - No string scanning
+//   - No extracted helper
+//   - No mocking main/index
+//   - Uses real adapter invocation path with VendorConfig-shaped fake cfg,
+//     calls adapter.buildRequest and asserts JSON body
 
 import { describe, expect, test } from "vitest";
 import { OpenAICompatAdapter } from "./openai-adapter";
@@ -46,7 +46,7 @@ const claudeCap: ProviderCapability = {
 
 const mimoCap: ProviderCapability = {
   id: "mimo",
-  displayName: "MiMo（小米）",
+  displayName: "MiMo",
   transport: "openai",
   baseUrl: "https://api.xiaomimimo.com/v1",
   authStyle: "bearer",
@@ -73,7 +73,7 @@ function cfgOf(
   };
 }
 
-describe("G1 OpenAI chatgpt + reasoning 透传", () => {
+describe("G1 OpenAI chatgpt + reasoning passthrough", () => {
   const adapter = new OpenAICompatAdapter("chatgpt", chatgptCap);
 
   test("gpt-5.6 + {mode:'on', effort:'high'} → body.reasoning_effort === 'high'", () => {
@@ -85,7 +85,7 @@ describe("G1 OpenAI chatgpt + reasoning 透传", () => {
     expect(body.reasoning_effort).toBe("high");
   });
 
-  test("gpt-5.6 + reasoning=auto → body 中无 reasoning_effort", () => {
+  test("gpt-5.6 + reasoning=auto -> no reasoning_effort in body", () => {
     const http = adapter.buildRequest(
       { model: "gpt-5.6", messages: [{ role: "user", content: "hi" }] },
       cfgOf(chatgptCap, { model: "gpt-5.6", reasoning: { mode: "auto" } }),
@@ -94,7 +94,7 @@ describe("G1 OpenAI chatgpt + reasoning 透传", () => {
     expect("reasoning_effort" in body).toBe(false);
   });
 
-  test("gpt-4o + reasoning=auto → body 中无 reasoning_effort（非推理模型）", () => {
+  test("gpt-4o + reasoning=auto -> no reasoning_effort in body (non-reasoning model)", () => {
     const http = adapter.buildRequest(
       { model: "gpt-4o", messages: [{ role: "user", content: "hi" }] },
       cfgOf(chatgptCap, { model: "gpt-4o", reasoning: { mode: "auto" } }),
@@ -104,10 +104,10 @@ describe("G1 OpenAI chatgpt + reasoning 透传", () => {
   });
 });
 
-describe("G2 Claude + reasoning 透传", () => {
+describe("G2 Claude + reasoning passthrough", () => {
   const adapter = new AnthropicAdapter("claude", claudeCap);
 
-  test("claude-sonnet-5 + {mode:'on', effort:'xhigh'} → body.output_config.effort === 'xhigh' 且 thinking.type === 'adaptive'", () => {
+  test("claude-sonnet-5 + {mode:'on', effort:'xhigh'} -> body.output_config.effort === 'xhigh' and thinking.type === 'adaptive'", () => {
     const http = adapter.buildRequest(
       { model: "claude-sonnet-5", messages: [{ role: "user", content: "hi" }], maxTokens: 100 },
       cfgOf(claudeCap, { model: "claude-sonnet-5", reasoning: { mode: "on", effort: "xhigh" } }),
@@ -118,15 +118,15 @@ describe("G2 Claude + reasoning 透传", () => {
   });
 });
 
-describe("G3 reasoning=undefined（视为 auto）", () => {
-  test("mimo mimo-v2.5-pro + reasoning=undefined → body 中无 thinking", () => {
+describe("G3 reasoning=undefined (treated as auto)", () => {
+  test("mimo mimo-v2.5-pro + reasoning=undefined -> no thinking in body", () => {
     const adapter = new OpenAICompatAdapter("mimo", mimoCap);
     const cfg: VendorConfig = {
       provider: mimoCap.displayName,
       baseUrl: mimoCap.baseUrl,
       model: "mimo-v2.5-pro",
       apiKey: "sk-test",
-      // reasoning 缺省
+      // reasoning omitted
     };
     const http = adapter.buildRequest(
       { model: "mimo-v2.5-pro", messages: [{ role: "user", content: "hi" }] },
@@ -138,11 +138,11 @@ describe("G3 reasoning=undefined（视为 auto）", () => {
   });
 });
 
-describe("G4 cfg.reasoning 改动 → JSON body 改动（契约：adapter 必须读 cfg.reasoning）", () => {
-  test("MiniMax-M3 auto vs off → body.thinking.type 不同", () => {
+describe("G4 cfg.reasoning changes -> JSON body changes (contract: adapter reads cfg.reasoning)", () => {
+  test("MiniMax-M3 auto vs off -> different body.thinking.type", () => {
     const miniMaxCap: ProviderCapability = {
       id: "minimax",
-      displayName: "MiniMax（稀宇科技）",
+      displayName: "MiniMax",
       transport: "anthropic",
       baseUrl: "https://api.minimaxi.com/anthropic",
       authStyle: "x-api-key",
@@ -173,18 +173,18 @@ describe("G4 cfg.reasoning 改动 → JSON body 改动（契约：adapter 必须
     const bodyOn = JSON.parse(httpOn.body) as Record<string, unknown>;
     const bodyOff = JSON.parse(httpOff.body) as Record<string, unknown>;
 
-    // auto 不发 thinking
+    // auto sends no thinking
     expect("thinking" in bodyAuto).toBe(false);
-    // on 发 adaptive
+    // on sends adaptive
     expect((bodyOn.thinking as Record<string, unknown>).type).toBe("adaptive");
-    // off 发 disabled
+    // off sends disabled
     expect((bodyOff.thinking as Record<string, unknown>).type).toBe("disabled");
   });
 
-  test("DeepSeek v4 toggle + on vs off → body.thinking.type 不同", () => {
+  test("DeepSeek v4 toggle + on vs off -> different body.thinking.type", () => {
     const dsCap: ProviderCapability = {
       id: "deepseek",
-      displayName: "DeepSeek（深度求索）",
+      displayName: "DeepSeek",
       transport: "openai",
       baseUrl: "https://api.deepseek.com",
       authStyle: "bearer",
@@ -215,11 +215,11 @@ describe("G4 cfg.reasoning 改动 → JSON body 改动（契约：adapter 必须
   });
 });
 
-describe("G5 5+ 关键 capability 形态端到端", () => {
-  test("Kimi K2.7-Code + {mode:'on'} → body 中无 thinking（fixed-on + requestStyle=none）", () => {
+describe("G5 5+ key capability forms end-to-end", () => {
+  test("Kimi K2.7-Code + {mode:'on'} -> no thinking in body (fixed-on + requestStyle=none)", () => {
     const kimiCap: ProviderCapability = {
       id: "kimi",
-      displayName: "Kimi（月之暗面）",
+      displayName: "Kimi",
       transport: "openai",
       baseUrl: "https://api.moonshot.cn/v1",
       authStyle: "bearer",
@@ -243,7 +243,7 @@ describe("G5 5+ 关键 capability 形态端到端", () => {
   test("Kimi K2.6 + {mode:'on', hasTools} → body.thinking.keep === 'all'", () => {
     const kimiCap: ProviderCapability = {
       id: "kimi",
-      displayName: "Kimi（月之暗面）",
+      displayName: "Kimi",
       transport: "openai",
       baseUrl: "https://api.moonshot.cn/v1",
       authStyle: "bearer",
@@ -268,10 +268,10 @@ describe("G5 5+ 关键 capability 形态端到端", () => {
     expect(body.thinking).toEqual({ type: "enabled", keep: "all" });
   });
 
-  test("Qwen qwen3-max + {mode:'on'} → body.enable_thinking === true 且 body 中无 thinking", () => {
+  test("Qwen qwen3-max + {mode:'on'} -> body.enable_thinking === true and no thinking in body", () => {
     const qwenCap: ProviderCapability = {
       id: "qwen",
-      displayName: "Qwen（通义千问）",
+      displayName: "Qwen",
       transport: "openai",
       baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
       authStyle: "bearer",
@@ -293,10 +293,10 @@ describe("G5 5+ 关键 capability 形态端到端", () => {
     expect("thinking" in body).toBe(false);
   });
 
-  test("豆包 seed 2.1 + {mode:'on'} → body.thinking.type=enabled", () => {
+  test("Doubao seed 2.1 + {mode:'on'} -> body.thinking.type=enabled", () => {
     const doubaoCap: ProviderCapability = {
       id: "doubao",
-      displayName: "豆包（火山方舟）",
+      displayName: "Doubao",
       transport: "openai",
       baseUrl: "https://ark.cn-beijing.volces.com/api/v3",
       authStyle: "bearer",

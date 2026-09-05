@@ -1,21 +1,21 @@
-// vlm-locator —— 视觉定位调用（OpenAI 兼容多图协议）。
-// 复用 vision-captioner 的协议形态，但 prompt 改为要求返回坐标/判断 JSON，且支持多图。
-// 不复用 vision-captioner 模块本身（它写死单图+通用描述），本模块是 game-bot 定位专用。
+// vlm-locator — visual localization API (OpenAI compatible multi-image protocol).
+// Follows multi-modal message structure, requesting coordinate/judgment JSON with multi-image support.
+// Dedicated locator module for game-bot.
 
 import { parseClickCoord, parseBoolAnswer, parseMatchIndex } from "./coords";
 import { isModelEndpointUsable, modelAuthorizationHeaders } from "../../shared/model-endpoint";
 
 export interface VlmConfig {
-  baseUrl: string;  // 如 https://api.siliconflow.cn/v1
+  baseUrl: string;  // e.g. https://api.siliconflow.cn/v1
   apiKey: string;
-  model: string;    // 如 Qwen/Qwen3-VL-8B-Instruct
+  model: string;    // e.g. Qwen/Qwen3-VL-8B-Instruct
 }
 
 export function isVlmConfigUsable(config: VlmConfig): boolean {
   return isModelEndpointUsable(config);
 }
 
-/** 图片数据（不含 data: 前缀的纯 base64 + mime）。 */
+/** Image data (raw base64 without data: prefix + mime). */
 export interface ImgData {
   base64: string;
   mime: string;
@@ -23,7 +23,7 @@ export interface ImgData {
 
 const VLM_TIMEOUT_MS = 30_000;
 
-/** 拼接 baseUrl + /chat/completions，兼容带或不带尾斜杠。 */
+/** Joins baseUrl + /chat/completions, handling trailing slashes cleanly. */
 function chatUrl(baseUrl: string): string {
   const t = baseUrl.trim().replace(/\/+$/, "");
   if (t.endsWith("/chat/completions")) return t;
@@ -34,7 +34,7 @@ type ContentBlock =
   | { type: "text"; text: string }
   | { type: "image_url"; image_url: { url: string } };
 
-/** 发一次多图 chat 请求，返回助手文本。失败返回空串。 */
+/** Sends multi-image chat request, returns assistant text. Returns empty string on failure. */
 async function chat(config: VlmConfig, instruction: string, images: ImgData[]): Promise<string> {
   if (!isVlmConfigUsable(config)) {
     console.error("[GameBot] VLM configuration is incomplete or requires an API key.");
@@ -75,9 +75,9 @@ async function chat(config: VlmConfig, instruction: string, images: ImgData[]): 
 }
 
 /**
- * 定位点击：参考小图（目标元素）+ 当前截图 → 返回目标在当前截图的屏幕坐标。
- * images 顺序：先参考图后当前截图。screenW/H 用于归一化转像素。
- * 未找到或失败返回 null。
+ * Localization click: reference image (target element) + current screenshot -> target screen coordinates.
+ * images order: reference image first, current screenshot last. screenW/H converts normalized coordinates to pixels.
+ * Returns null if not found or on failure.
  */
 export async function locate(
   config: VlmConfig,
@@ -93,13 +93,13 @@ export async function locate(
     "Find the same or most visually similar target in the current screenshot and return its center. " +
     "Use normalized coordinates from 0 to 1000, with 0,0 at top-left and 1000,1000 at bottom-right. " +
     "Return only JSON: {\"x\":<0-1000>,\"y\":<0-1000>}.";
-  // 顺序：参考图在前，当前截图最后
+  // Order: reference image first, current screenshot last
   const text = await chat(config, instruction, [...refImgs, screenImg]);
   if (!text) return null;
   return parseClickCoord(text, screenW, screenH);
 }
 
-/** 状态判断：当前截图（可选参考图）+ 问题 → 布尔。无法判断返回 null。 */
+/** State judgment: current screenshot (optional reference image) + question -> boolean. Returns null if inconclusive. */
 export async function check(
   config: VlmConfig,
   screenImg: ImgData,
@@ -114,7 +114,7 @@ export async function check(
   return parseBoolAnswer(text);
 }
 
-/** 多图比对：当前截图 + 多张参考图 → 匹配的参考图序号（0-based）。无法判断返回 null。 */
+/** Multi-image comparison: current screenshot + multiple reference images -> matched index (0-based). Returns null if inconclusive. */
 export async function compare(
   config: VlmConfig,
   screenImg: ImgData,

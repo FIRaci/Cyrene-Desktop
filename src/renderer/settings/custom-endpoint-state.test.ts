@@ -31,7 +31,7 @@ describe("custom endpoint settings state", () => {
   it("restores the custom endpoint mode from the saved provider", () => {
     expect(getCustomEndpointMode(CUSTOM_ENDPOINT_PROVIDERS.cloud)).toBe("cloud");
     expect(getCustomEndpointMode(CUSTOM_ENDPOINT_PROVIDERS.local)).toBe("local");
-    expect(getCustomEndpointMode("MiniMax（稀宇科技）")).toBeNull();
+    expect(getCustomEndpointMode("MiniMax")).toBeNull();
   });
 
   it("presents cloud endpoints as API-key based OpenAI-compatible services", () => {

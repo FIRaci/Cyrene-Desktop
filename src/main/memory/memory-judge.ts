@@ -32,7 +32,7 @@ function loadModelSettings(): ModelSettings {
     if (!fs.existsSync(filePath)) return DEFAULT_MODEL_SETTINGS
     const raw = fs.readFileSync(filePath, "utf8")
     const parsed = JSON.parse(raw) as Partial<ModelSettings>
-    // explicitTransport 取自顶层（顶层是 perProvider[currentProvider] 的镜像）
+    // explicitTransport taken from top-level (mirror of perProvider[currentProvider])
     const explicitTransport: ModelSettings["explicitTransport"] =
       parsed.explicitTransport === "openai" || parsed.explicitTransport === "anthropic" || parsed.explicitTransport === "auto"
         ? parsed.explicitTransport
@@ -59,30 +59,30 @@ function stripThinkBlocks(text: string): string {
 }
 
 function extractJsonArray(raw: string): unknown[] | null {
-  // 第一步：去掉 markdown 代码块包裹 + think 块
+  // Step 1: Remove markdown code block fences + think blocks
   let text = raw
     .replace(/```json\s*/gi, '')
     .replace(/```\s*/gi, '')
     .trim()
 
-  // 第二步：截取从第一个 [ 开始的内容（不要求结尾有 ]，防 max_tokens 截断）
+  // Step 2: Slice content starting from first [ (doesn't require trailing ] to handle max_tokens truncation)
   const start = text.indexOf('[')
   if (start === -1) return null
   text = text.slice(start)
 
-  // 第三步：直接尝试解析（完整数组的情况）
+  // Step 3: Attempt direct parse (for complete arrays)
   try {
     const parsed = JSON.parse(text) as unknown[]
     if (Array.isArray(parsed)) return parsed
   } catch (_) {}
 
-  // 第四步：截断救场 —— 即使末尾 ] 缺失，把已完整的 {...} 对象逐个捞出来。
-  // 关键：用栈匹配大括号深度，避免把对象内部的 } 当成对象结束。
+  // Step 4: Truncation rescue — even if trailing ] is missing, extract completed {...} objects one by one.
+  // Key: track brace depth to avoid treating internal } as object end.
   const results: unknown[] = []
   let i = 0
   while (i < text.length) {
     if (text[i] !== '{') { i++; continue }
-    // 找匹配的 } —— 跟踪引号和嵌套深度
+    // Find matching } — track quotes and nesting depth
     let depth = 0
     let inStr = false
     let esc = false
@@ -96,28 +96,28 @@ function extractJsonArray(raw: string): unknown[] | null {
       if (c === '{') depth++
       else if (c === '}') {
         depth--
-        if (depth === 0) break  // 找到匹配的闭合
+        if (depth === 0) break  // Found matching closing brace
       }
     }
-    if (depth !== 0) break  // 这个对象被截断了，后面也不可能有完整的了
+    if (depth !== 0) break  // Object was truncated, no subsequent complete objects
     const objStr = text.slice(i, j + 1)
     try {
       const obj = JSON.parse(objStr)
       if (obj && typeof obj === "object") results.push(obj)
     } catch (_) {
-      // 单个对象解析失败，跳过继续找下一个
+      // Single object parse failed, continue searching for next
     }
     i = j + 1
   }
 
   if (results.length > 0) {
-    console.log('[MemoryJudge] 截断救场提取成功，条数:', results.length)
+    console.log('[MemoryJudge] Truncation rescue extraction succeeded, count:', results.length)
     return results
   }
 
-  // 第五步：修复嵌套英文引号问题（针对完整数组的情况再试一次）
+  // Step 5: Fix nested double quotes issue (retry for complete array)
   try {
-    // 给 text 补上缺失的 ] 让 JSON.parse 有机会成功
+    // Append missing ] to give JSON.parse a chance to succeed
     const fixedText = text.replace(/("content"|"triggerText"):\s*"([\s\S]*?)(?<!\\)"/g,
       (match: string, key: string, value: string) => {
         let k = 0
@@ -125,7 +125,7 @@ function extractJsonArray(raw: string): unknown[] | null {
         return key + ': "' + cleaned + '"'
       }
     )
-    // 尝试找最后一个完整对象后补 ]
+    // Try finding last complete object and append ]
     const lastBrace = fixedText.lastIndexOf('}')
     if (lastBrace > 0) {
       const candidate = fixedText.slice(0, lastBrace + 1) + ']'
@@ -137,7 +137,7 @@ function extractJsonArray(raw: string): unknown[] | null {
   return null
 }
 
-const ABSOLUTE_TERMS = ["只", "永远", "从不", "一定", "完全", "绝对", "以后都", "不再"]
+const ABSOLUTE_TERMS = ["only", "always", "never", "definitely", "completely", "absolutely", "forever"]
 
 function hasUnsupportedAbsolute(summary: string, evidenceQuotes: string[]): boolean {
   return ABSOLUTE_TERMS.some((term) => summary.includes(term) && !evidenceQuotes.some((quote) => quote.includes(term)))
@@ -202,7 +202,7 @@ async function callChatCompletions(
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
 
-  // 拼 VendorConfig（settings 顶层三件套 + 镜像字段都参与）
+  // Build VendorConfig
   const cfg: VendorConfig = {
     provider: settings.provider,
     baseUrl: settings.baseUrl,
@@ -212,10 +212,7 @@ async function callChatCompletions(
   }
 
   try {
-    // adapter 三层 transport 解析（explicitTransport → baseUrl 启发式 → capabilities fallback）
-    // —— 之前直接写 OpenAI body / Bearer header / choices[0].message.content 解析，
-    // 切到 anthropic transport 厂商（如 MiniMax / Claude）时会拿到空字符串，误判 "JSON 解析失败"。
-    // 现在交给 adapter，OpenAI / Anthropic 端点都正确。
+    // Use vendor adapter for multi-transport routing
     const adapter = getAdapterForConfig(cfg)
     const http = adapter.buildRequest({
       model: cfg.model,
@@ -234,13 +231,13 @@ async function callChatCompletions(
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({})) as Record<string, unknown>
       const errMsg = (errorData as { error?: { message?: string } }).error?.message
-      throw new Error(errMsg || `模型请求失败：HTTP ${response.status}`)
+      throw new Error(errMsg || `Model request failed: HTTP ${response.status}`)
     }
 
     const data = await response.json()
     const parsed = adapter.parseResponse(data)
 
-    // 记录 token 用量（统一字段，OpenAI / Anthropic adapter 都映射成 {input, output}）
+    // Record token usage (unified mapping {input, output})
     if (parsed.usage) {
       recordUsage(parsed.usage.input, parsed.usage.output, 1)
     }
@@ -260,85 +257,83 @@ export class MemoryJudge {
     turns: MemoryJudgeTurn[],
     conversationId: string,
   ): Promise<MemoryCandidate[]> {
-    console.log(`[MemoryJudge] 分析最近 ${turns.length} 轮对话...`)
+    console.log(`[MemoryJudge] Analyzing recent ${turns.length} dialogue turns...`)
 
     try {
       const settings = loadModelSettings()
       if (!isModelEndpointUsable(settings)) {
         console.error("[MemoryJudge] Model call skipped: no usable model configuration")
-        console.log("[MemoryJudge] 本轮无值得记录的信息")
+        console.log("[MemoryJudge] No information worth recording in this turn")
         return []
       }
 
       const systemPrompt = [
-        "你是一个保守的记忆候选提取器，不是事实裁判，也不是用户画像改写器。",
-        "你的目标是少记错，不是多记住。",
+        "You are a conservative memory candidate extractor, not a fact arbiter or user profile rewriter.",
+        "Your goal is to minimize false memories, not to maximize retention.",
         "",
-        "你只能提取用户明确表达、且未来确实有帮助的信息候选。",
-        "禁止把推断写成确定事实；禁止把一次性状态写成长期偏好；禁止为了输出而输出。",
-        "如果最近这些对话没有值得记的内容，必须返回空数组 []。",
+        "You must only extract candidates that the user explicitly expressed and are genuinely useful for the future.",
+        "Never treat inference as established fact; never convert one-off states into long-term preferences; never output for the sake of outputting.",
+        "If recent conversations contain nothing worth recording, you must return an empty array [].",
         "",
-        "记忆层级定义：",
-        "- L0：用户稳定身份信息或核心画像。只有 certainty=explicit 且 attribution=user_explicit 才允许进入 L0。",
-        "  识别到 L0 信息时，必须同时在 field 字段里指定要写入哪个格子。",
-        "  可用的 field 值如下（只能用这些，不能自己发明）：",
+        "Memory layer definitions:",
+        "- L0: Stable user identity or core profile. Only certainty=explicit and attribution=user_explicit may enter L0.",
+        "  When identifying L0 information, you must specify which slot in the field property.",
+        "  Available field values (strictly use these, do not invent others):",
         this.buildL0FieldPrompt(),
         "",
-        "  重要：field 的值必须严格是上方列出的英文字段名，",
-        "  例如 preferredName、occupation，",
-        "  不能用 nickname、name、job 等其他词。",
-        "- L1：用户近期目标或阶段性偏好，只能写近期状态，不要写成长期偏好。",
-        "- L2：具体事件、经历、局部偏好、情绪背景、待观察信息。",
+        "  Important: The value of field must strictly be the English field name listed above,",
+        "  for example preferredName, occupation,",
+        "  do not use nickname, name, job, etc.",
+        "- L1: User recent goals or phase preferences. Only record recent states, not long-term preferences.",
+        "- L2: Specific events, experiences, local preferences, emotional context, items under observation.",
         "",
-        "判断原则：",
-        "- 宁可漏记，不要误记",
-        "- 纯日常问候、闲聊、情绪发泄（无信息量）→ 返回空数组",
-        "- 必须是用户主动表达的信息，不是 AI 说的",
-        "- summary 必须忠于用户原话和上下文，不要自行推广范围",
-        "- 如果只是 AI 的建议、安慰、总结、推断，不要写成用户事实",
-        "- 不要把「这次」「刚刚」「这个话题里」变成长期偏好",
-        "- 不要自动使用绝对化表达：只、永远、从不、一定、完全、绝对、以后都、不再，除非用户原话明确说过这些词",
-        "- 如果 summary 中存在可能过度概括的词，必须写入 forbiddenOverclaims；有 forbiddenOverclaims 时 shouldWrite 必须是 false",
+        "Decision principles:",
+        "- Better to omit than to record incorrectly.",
+        "- Pure casual greetings, chit-chat, emotional venting (no information) -> return empty array [].",
+        "- Must be information proactively expressed by the user, not spoken by the AI.",
+        "- summary must stay faithful to user original words and context; do not broaden scope.",
+        "- If it is only AI advice, consolation, summary, or inference, do not record as user fact.",
+        "- Do not convert 'this time', 'just now', or 'in this topic' into long-term preferences.",
+        "- Do not automatically use absolute expressions: only, always, never, definitely, completely, absolutely, forever, unless explicitly spoken by the user.",
+        "- If summary contains potentially over-generalized terms, must write into forbiddenOverclaims; when forbiddenOverclaims is present, shouldWrite must be false.",
         "",
-        "重要格式规则：",
-        "- summary 和 evidenceQuotes 字段的值里，禁止出现英文双引号 \"",
-        "- 如果内容里有引号，统一用中文引号「」替代，例如：用户希望被称为「宝宝」",
-        "- 不要用 markdown 代码块包裹 JSON，直接输出裸 JSON",
-        "- 数组第一个字符必须是 [，最后一个字符必须是 ]",
+        "Formatting rules:",
+        "- In summary and evidenceQuotes values, do not include raw unescaped double quotes.",
+        "- Do not wrap JSON in markdown code blocks, output raw JSON directly.",
+        "- The first character of the array must be [, last character must be ].",
         "",
-        "输出格式为 JSON 数组，禁止用 markdown 代码块包裹，直接输出裸 JSON。",
+        "Output format is a JSON array without markdown code blocks, direct raw JSON only.",
         "",
-        "每个候选必须包含这些字段：",
+        "Each candidate must include these fields:",
         "{",
         "  \"layer\": \"L0\",",
         "  \"field\": \"preferredName\",",
-        "  \"summary\": \"保守、可追溯的候选摘要\",",
+        "  \"summary\": \"Conservative, traceable candidate summary\",",
         "  \"importance\": \"low|medium|high\",",
         "  \"stability\": \"one_off|situational|stable\",",
         "  \"certainty\": \"explicit|inferred|uncertain\",",
         "  \"attribution\": \"user_explicit|assistant_inferred|mixed\",",
-        "  \"evidenceQuotes\": [\"用户原话短引文，必须来自用户\"],",
-        "  \"contextSummary\": \"最近多轮上下文概括，不超过80字\",",
+        "  \"evidenceQuotes\": [\"User original short quotation, must come from user\"],",
+        "  \"contextSummary\": \"Recent multi-turn context summary, within 80 words\",",
         "  \"shouldWrite\": true,",
-        "  \"reason\": \"为什么值得记，或为什么不写\",",
+        "  \"reason\": \"Why it is worth recording, or why not to write\",",
         "  \"forbiddenOverclaims\": []",
         "}",
         "",
-        "L1/L2 不需要 field。",
-        "inferred / uncertain 不允许进入 L0；如果还值得保留，只能放 L2，或者 shouldWrite=false。",
-        "没有值得记录的信息时，输出：[]",
-        "summary 和 evidenceQuotes 里禁止出现英文双引号，用「」替代。",
+        "L1/L2 do not require field.",
+        "inferred / uncertain are not permitted in L0; if worth keeping, place in L2, or set shouldWrite=false.",
+        "When nothing is worth recording, output: []",
       ].join("\n")
 
       const transcript = turns.map((turn, index) => [
-        `第 ${index + 1} 轮：`,
-        `用户：${turn.userInput}`,
-        `AI：${turn.assistantReply}`,
+        `Turn ${index + 1}:`,
+        `User: ${turn.userInput}`,
+        `AI: ${turn.assistantReply}`,
       ].join("\n")).join("\n\n")
 
       const userPrompt = [
         `conversationId: ${conversationId}`,
-        "最近对话：",
+        "Recent conversations:",
         transcript,
       ].join("\n")
 
@@ -354,8 +349,8 @@ export class MemoryJudge {
 
       const parsed = extractJsonArray(raw)
       if (!parsed) {
-        console.error("[MemoryJudge] JSON 解析失败，原始内容：\n", raw.slice(0, 200))
-        console.log("[MemoryJudge] 本轮无值得记录的信息")
+        console.error("[MemoryJudge] JSON parse failed, raw content:\n", raw.slice(0, 200))
+        console.log("[MemoryJudge] No information worth recording in this turn")
         return []
       }
 
@@ -366,18 +361,18 @@ export class MemoryJudge {
         .filter((item) => item.layer !== "L0" || (item.certainty === "explicit" && item.attribution === "user_explicit"))
 
       if (candidates.length === 0) {
-        console.log("[MemoryJudge] 本轮无值得记录的信息")
+        console.log("[MemoryJudge] No information worth recording in this turn")
         return []
       }
 
-      console.log(`[MemoryJudge] 提取候选: ${candidates.length} 条（过滤后）`)
+      console.log(`[MemoryJudge] Extracted candidates: ${candidates.length} items (after filtering)`)
       console.log(
-        `[MemoryJudge] 候选详情: ${candidates.map((item) => item.layer === "L0" && item.field ? `${item.layer}.${item.field}(\"${item.content.slice(0, 20)}\", ${item.confidence.toFixed(2)})` : `${item.layer}(\"${item.content.slice(0, 20)}\", ${item.confidence.toFixed(2)})`).join(" ")}`,
+        `[MemoryJudge] Candidate details: ${candidates.map((item) => item.layer === "L0" && item.field ? `${item.layer}.${item.field}(\"${item.content.slice(0, 20)}\", ${item.confidence.toFixed(2)})` : `${item.layer}(\"${item.content.slice(0, 20)}\", ${item.confidence.toFixed(2)})`).join(" ")}`,
       )
       return candidates
     } catch (error) {
-      console.error("[MemoryJudge] LLM 调用失败:", error)
-      console.log("[MemoryJudge] 本轮无值得记录的信息")
+      console.error("[MemoryJudge] LLM call failed:", error)
+      console.log("[MemoryJudge] No information worth recording in this turn")
       return []
     }
   }

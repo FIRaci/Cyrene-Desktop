@@ -12,9 +12,9 @@ function oldAtom(overrides: Partial<SocialAtom> = {}): SocialAtom {
     id: "old-home",
     conversationId: "chat-a",
     type: "long_term",
-    content: "用户住在上海",
+    content: "User lives in Shanghai",
     evidenceTurnId: "user-old",
-    evidenceQuote: "我住在上海",
+    evidenceQuote: "I live in Shanghai",
     createdAt: NOW - 10_000,
     status: "active",
     ...overrides,
@@ -24,14 +24,14 @@ function oldAtom(overrides: Partial<SocialAtom> = {}): SocialAtom {
 function input(overrides: Partial<SocialExtractionInput> = {}): SocialExtractionInput {
   return {
     conversationId: "chat-a",
-    userTurn: { id: "user-2", role: "user", text: "其实我已经搬到杭州了，周末有空。" },
-    assistantTurn: { id: "assistant-2", role: "assistant", text: "好呀，那周末一起聊聊杭州。" },
+    userTurn: { id: "user-2", role: "user", text: "Actually I moved to Hangzhou, free on weekends." },
+    assistantTurn: { id: "assistant-2", role: "assistant", text: "Great, let's chat about Hangzhou this weekend." },
     retrievedAtoms: [oldAtom(), oldAtom({
       id: "loop",
       type: "open_loop",
-      content: "用户还没有回答周末是否有空",
+      content: "User has not answered if free this weekend",
       evidenceTurnId: "assistant-1",
-      evidenceQuote: "你周末有空吗",
+      evidenceQuote: "Are you free this weekend",
       expiresAt: NOW + 10_000,
     })],
     now: NOW,
@@ -78,15 +78,15 @@ describe("social extraction validation", () => {
         {
           operation: "supersede",
           type: "long_term",
-          content: "用户已经搬到杭州",
+          content: "User already moved to Hangzhou",
           evidenceTurnId: "user-2",
-          evidenceQuote: "我已经搬到杭州了",
+          evidenceQuote: "I moved to Hangzhou",
           supersedesAtomId: "old-home",
         },
         {
           operation: "resolve",
           evidenceTurnId: "user-2",
-          evidenceQuote: "周末有空",
+          evidenceQuote: "free on weekends",
           supersedesAtomId: "loop",
         },
       ],
@@ -97,7 +97,7 @@ describe("social extraction validation", () => {
     expect(result.operations[0]).toMatchObject({
       operation: "supersede",
       targetAtomId: "old-home",
-      atom: { id: "new-home", content: "用户已经搬到杭州" },
+      atom: { id: "new-home", content: "User already moved to Hangzhou" },
     });
     expect(result.operations[1]).toMatchObject({
       operation: "resolve",
@@ -112,22 +112,22 @@ describe("social extraction validation", () => {
         {
           operation: "add",
           type: "long_term",
-          content: "用户住在杭州",
+          content: "User lives in Hangzhou",
           evidenceTurnId: "user-2",
-          evidenceQuote: "用户已搬到杭州",
+          evidenceQuote: "User moved to Hangzhou",
         },
         {
           operation: "add",
           type: "short_term",
-          content: "用户周末要聊杭州",
+          content: "User will talk about Hangzhou this weekend",
           evidenceTurnId: "assistant-2",
-          evidenceQuote: "周末一起聊聊杭州",
+          evidenceQuote: "let's chat about Hangzhou this weekend",
           expiresAt: NOW + 1_000,
         },
         {
           operation: "resolve",
           evidenceTurnId: "user-2",
-          evidenceQuote: "周末有空",
+          evidenceQuote: "free on weekends",
           supersedesAtomId: "not-retrieved",
         },
       ],
@@ -142,9 +142,9 @@ describe("social extraction validation", () => {
       operations: Array.from({ length: 5 }, (_, index) => ({
         operation: "add",
         type: "open_loop",
-        content: `用户还没有回答问题 ${index}`,
+        content: `User has not answered question ${index}`,
         evidenceTurnId: "assistant-2",
-        evidenceQuote: "周末一起聊聊杭州",
+        evidenceQuote: "let's chat about Hangzhou this weekend",
       })),
     }), input(), (() => {
       let index = 0;
@@ -163,9 +163,9 @@ describe("social extraction validation", () => {
       operations: [{
         operation: "add",
         type: "open_loop",
-        content: "用户还没有继续这个话题",
+        content: "User has not continued this topic",
         evidenceTurnId: "user-2",
-        evidenceQuote: "周末有空",
+        evidenceQuote: "free on weekends",
       }],
     }), input());
 
@@ -178,9 +178,9 @@ describe("social extraction validation", () => {
       operations: [{
         operation: "add",
         type: "short_term",
-        content: "用户今天状态不错",
+        content: "User is in good shape today",
         evidenceTurnId: "user-2",
-        evidenceQuote: "周末有空",
+        evidenceQuote: "free on weekends",
       }],
     }), input());
 

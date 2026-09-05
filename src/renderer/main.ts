@@ -10,6 +10,13 @@ import { Live2DRendererLifecycleTracker } from "./live2d/lifecycle-diagnostics";
 import { resolveAsset } from "../shared/renderer-base";
 import { CompanionBubbleController } from "./live2d/companion-bubbles";
 import "./live2d/companion-bubbles.css";
+import { FloatingKaomojiController } from "./live2d/floating-kaomoji";
+import { MiniChatWidget } from "./live2d/mini-chat";
+import { PetZoomHudController } from "./live2d/zoom-hud";
+import { PetCoWatchIndicator } from "./live2d/cowatch-indicator";
+import { GestureInteractionController } from "./live2d/gesture-interaction-controller";
+import { CompanionVoiceService } from "./live2d/voice";
+import { AutonomousThoughtController } from "./live2d/autonomous-thoughts";
 import {
   PetZoomHydrationState,
   shouldStartPetDrag,
@@ -22,7 +29,83 @@ const speechBubble = document.getElementById("pet-speech-bubble");
 const thoughtBubble = document.getElementById("pet-thought-bubble");
 if (!speechBubble || !thoughtBubble) throw new Error("Pet companion bubbles not found");
 const companionBubbles = new CompanionBubbleController(speechBubble, thoughtBubble);
-const petAgentEventOff = window.petCompanion?.onAgentEvent((event) => companionBubbles.handle(event)) ?? (() => {});
+
+const kaomojiContainer = document.getElementById("pet-kaomoji-container");
+const kaomojiController = new FloatingKaomojiController(kaomojiContainer);
+
+const autonomousThoughts = new AutonomousThoughtController({
+  bubbles: companionBubbles,
+  kaomoji: kaomojiController,
+  minIntervalMs: 120_000,
+  maxIntervalMs: 240_000,
+  kaomojiProbability: 0.35,
+});
+
+const companionVoice = new CompanionVoiceService({
+  onStartSpeaking: (durationMs) => {
+    mouthSync?.start(durationMs);
+    speakingMotion?.start();
+  },
+  onStopSpeaking: () => {
+    mouthSync?.stop();
+    speakingMotion?.stop();
+  },
+});
+
+const miniChat = new MiniChatWidget({
+  bubbles: companionBubbles,
+  kaomoji: kaomojiController,
+  voice: companionVoice,
+});
+
+const zoomHud = new PetZoomHudController();
+const cowatchIndicator = new PetCoWatchIndicator();
+
+const gestureController = new GestureInteractionController({
+  bubbles: companionBubbles,
+  kaomoji: kaomojiController,
+  voice: companionVoice,
+  onExpressionReset: () => expressionReset?.restart(),
+  autonomousThoughts,
+});
+
+let accumulatedAgentSpeech = "";
+let lastAgentSpeechKaomojiTime = 0;
+
+const petAgentEventOff = window.petCompanion?.onAgentEvent((event) => {
+  if (gestureController.isBusy() || miniChat.isOpen()) return;
+  companionBubbles.handle(event);
+  if (event.type === "RUN_STARTED") {
+    accumulatedAgentSpeech = "";
+  } else if (event.type === "TEXT_MESSAGE_CONTENT") {
+    if (event.delta) {
+      accumulatedAgentSpeech += event.delta;
+    }
+  } else if (event.type === "TEXT_MESSAGE_END" || event.type === "RUN_FINISHED") {
+    if (accumulatedAgentSpeech.trim()) {
+      const speechToDeliver = accumulatedAgentSpeech.trim();
+      accumulatedAgentSpeech = "";
+      const now = Date.now();
+      if (now - lastAgentSpeechKaomojiTime > 30_000) {
+        lastAgentSpeechKaomojiTime = now;
+        kaomojiController.spawn();
+      }
+      void companionVoice.speak(speechToDeliver);
+    }
+  } else if (event.type === "say") {
+    if (event.text) {
+      companionBubbles.say(event.text);
+    }
+    const now = Date.now();
+    if (now - lastAgentSpeechKaomojiTime > 30_000) {
+      lastAgentSpeechKaomojiTime = now;
+      kaomojiController.spawn();
+    }
+    if (event.text) {
+      void companionVoice.speak(event.text);
+    }
+  }
+}) ?? (() => {});
 
 if (!window.cyrene) {
   (window as unknown as { cyrene: unknown }).cyrene = {
@@ -39,6 +122,8 @@ if (!window.cyrene) {
     onPetZoom: (_cb: (zoom: number) => void) => () => {},
     onPetVisibilityChanged: (_cb: (visible: boolean) => void) => () => {},
     showContextMenu: () => {},
+    onToggleMiniChat: (_cb: () => void) => () => {},
+    onToggleVoice: (_cb: () => void) => () => {},
   };
 }
 
@@ -66,11 +151,28 @@ let petVisibilityOff: (() => void) | null = null;
 let petVisible = true;
 const petZoomState = new PetZoomHydrationState();
 let live2dSpeechOffs: Array<() => void> = [];
+let miniChatOff: (() => void) | null = null;
+let voiceOff: (() => void) | null = null;
 const live2dLifecycle = new Live2DRendererLifecycleTracker();
 
 function trackSubscription(label: string, off: () => void): () => void {
   return live2dLifecycle.track("subscription", label, off);
 }
+
+miniChatOff = trackSubscription(
+  "cyrene:onToggleMiniChat",
+  window.cyrene.onToggleMiniChat?.(() => {
+    miniChat.toggle();
+  }) ?? (() => {})
+);
+
+voiceOff = trackSubscription(
+  "cyrene:onToggleVoice",
+  window.cyrene.onToggleVoice?.(() => {
+    const isMuted = companionVoice.toggleMute();
+    companionBubbles.say(isMuted ? "Voice muted 🔇" : "Voice active~ 🔊", 2000);
+  }) ?? (() => {})
+);
 
 function addTrackedEventListener(
   target: EventTarget,
@@ -83,21 +185,25 @@ function addTrackedEventListener(
   live2dLifecycle.track("listener", label, () => target.removeEventListener(type, listener, options));
 }
 
-const PETTING_LINES = [
-  "Cyrene is right here~ ✨ (｡♥‿♥｡)",
-  "Hehe~ Did you miss me? (⁄ ⁄>⁄ ▽ ⁄<⁄ ⁄)",
-  "Cyrene will stay by your side~ 🌸 (✿◠‿◠)",
-  "A gentle head pat~ Hehe! (o^▽^o)",
-  "Keep your spirits up! ✨ (*•̀ᴗ•́*)و ̑̑",
-  "Wink~ You're doing great! (^_<)〜☆",
-  "Don't work too hard, remember to rest! (*´˘`*)♡",
-];
+let musicStateOff: (() => void) | null = null;
+let lastIdleKaomojiTime = 0;
 
 const manager = new Live2DManager({
   canvas,
   width: window.innerWidth,
   height: window.innerHeight,
   modelPath: resolveAsset("models/cyrene/Cyrene.model3.json"),
+  onIdleAction: (type) => {
+    // Only spawn idle mood kaomoji if speech bubble is not currently active and at least 120s has passed
+    if (companionBubbles.isBusy) return;
+    const now = Date.now();
+    if (now - lastIdleKaomojiTime < 120_000) return;
+    // ~5% organic probability during idle swing / wink / smile with 120s cooldown
+    if (Math.random() < 0.05) {
+      lastIdleKaomojiTime = now;
+      kaomojiController.spawnIdle(type);
+    }
+  },
   onLoad: () => {
     console.log("[Cyrene] Model loaded");
     const model = manager.getModel();
@@ -136,12 +242,31 @@ const manager = new Live2DManager({
       },
       onMiss: (area) =>
         console.warn("[Cyrene] hit", area.name, "has no resolvable motion"),
-      onPetting: () => {
-        expressionReset?.restart();
-        const line = PETTING_LINES[Math.floor(Math.random() * PETTING_LINES.length)];
-        companionBubbles.say(line, 3500);
+      onPetting: (x, y) => {
+        void gestureController.handlePetting(x, y);
+      },
+      onHeadPat: (x, y) => {
+        void gestureController.handleHeadPat(x, y);
       },
     });
+
+    if (window.music?.onStateChanged) {
+      let lastMusicPlaying = false;
+      let lastMusicKaomojiTime = 0;
+      musicStateOff = trackSubscription(
+        "music:onStateChanged",
+        (window.music.onStateChanged((state: unknown) => {
+          const s = state as { player?: string; isPlaying?: boolean } | undefined;
+          const isPlaying = s?.player === "playing" || Boolean(s?.isPlaying);
+          const now = Date.now();
+          if (isPlaying && !lastMusicPlaying && now - lastMusicKaomojiTime > 120_000) {
+            lastMusicKaomojiTime = now;
+            kaomojiController.spawnMusic();
+          }
+          lastMusicPlaying = isPlaying;
+        }) as (() => void) | undefined) ?? (() => {}),
+      );
+    }
 
     focus = new MouseFocusController(canvas, model);
     focus.focusCenter(true);
@@ -154,7 +279,10 @@ const manager = new Live2DManager({
     // process has already resized the window to base × zoom; this rescales
     // the model to match.
     petZoomOff = trackSubscription("cyrene:onPetZoom", window.cyrene.onPetZoom((zoom) => {
-      manager.applyZoom(petZoomState.receiveAuthoritativeZoom(zoom));
+      const actualZoom = petZoomState.receiveAuthoritativeZoom(zoom);
+      document.documentElement.style.setProperty("--pet-zoom", String(actualZoom));
+      manager.applyZoom(actualZoom);
+      zoomHud.show(actualZoom);
     }));
     petVisibilityOff = trackSubscription("cyrene:onPetVisibilityChanged", window.cyrene.onPetVisibilityChanged((visible) => {
       petVisible = visible;
@@ -162,12 +290,14 @@ const manager = new Live2DManager({
         clickThrough?.pause();
         focus?.pause();
         manager.pause();
+        autonomousThoughts.pause();
         return;
       }
       if (!isDragging) {
         manager.resume();
         focus?.resume();
         clickThrough?.resume();
+        autonomousThoughts.resume();
       }
     }));
 
@@ -175,12 +305,14 @@ const manager = new Live2DManager({
     const hydrationRevision = petZoomState.beginHydration();
     window.settings?.getGeneral().then((cfg) => {
       const queuedZooms = petZoomState.finishHydration(cfg?.petZoom ?? 1, hydrationRevision);
+      document.documentElement.style.setProperty("--pet-zoom", String(petZoomState.current));
       manager.applyZoom(petZoomState.current);
       for (const zoom of queuedZooms) {
         window.cyrene.setPetZoom(zoom);
       }
     }).catch(() => {
       const queuedZooms = petZoomState.finishHydration(1, hydrationRevision);
+      document.documentElement.style.setProperty("--pet-zoom", String(petZoomState.current));
       manager.applyZoom(petZoomState.current);
       for (const zoom of queuedZooms) window.cyrene.setPetZoom(zoom);
     });
@@ -190,6 +322,9 @@ const manager = new Live2DManager({
       interaction,
       focus,
       expressionReset,
+      miniChat,
+      kaomoji: kaomojiController,
+      voice: companionVoice,
       resetExpression: () => expressionReset?.resetNow(),
       getLive2DDiagnostics: () => ({
         resources: manager.getResourceMetrics(),
@@ -264,7 +399,17 @@ addTrackedEventListener(window, "window:resize", "resize", () => {
 });
 
 window.addEventListener("beforeunload", () => {
+  zoomHud.dispose();
+  voiceOff?.();
+  companionVoice.dispose();
+  miniChatOff?.();
+  miniChat.dispose();
+  musicStateOff?.();
+  musicStateOff = null;
+  kaomojiController.dispose();
+  flushPendingDrag();
   petAgentEventOff();
+  autonomousThoughts.dispose();
   companionBubbles.dispose();
   expressionReset?.dispose();
   expressionReset = null;
@@ -291,17 +436,49 @@ window.addEventListener("beforeunload", () => {
 let isDragging = false;
 let lastDragScreenX = 0;
 let lastDragScreenY = 0;
+let pendingDragDx = 0;
+let pendingDragDy = 0;
+let dragRafId: number | null = null;
+
+function flushPendingDrag(): void {
+  if (dragRafId !== null) {
+    cancelAnimationFrame(dragRafId);
+    dragRafId = null;
+  }
+  if (pendingDragDx !== 0 || pendingDragDy !== 0) {
+    window.cyrene.moveBy(pendingDragDx, pendingDragDy);
+    pendingDragDx = 0;
+    pendingDragDy = 0;
+  }
+}
+
+function scheduleDragFlush(): void {
+  if (dragRafId !== null) return;
+  dragRafId = requestAnimationFrame(() => {
+    dragRafId = null;
+    if (pendingDragDx !== 0 || pendingDragDy !== 0) {
+      window.cyrene.moveBy(pendingDragDx, pendingDragDy);
+      pendingDragDx = 0;
+      pendingDragDy = 0;
+    }
+  });
+}
 
 let isZoomDragging = false;
 let zoomDragStartY = 0;
 let zoomDragAccum = 0;
 
+let lastDragFinishedAt = 0;
+
 function finishDrag(): void {
   if (!isDragging) return;
+  flushPendingDrag();
   isDragging = false;
+  lastDragFinishedAt = performance.now();
   if (petVisible) {
     manager.resume();
     focus?.resume();
+    autonomousThoughts.resume();
   }
   window.cyrene.setDragging(false);
   if (petVisible) clickThrough?.resume();
@@ -352,25 +529,37 @@ addTrackedEventListener(canvas, "canvas:pointerleave", "pointerleave", () => {
   void window.cyrene.setInteractive(false);
 });
 
-// Right-click context menu on Live2D model (Alt+1, Alt+2, Alt+3, Alt+4, Alt+S, expressions, quit)
+// Right-click context menu on Live2D model (Alt+1, Alt+2, Alt+3, Alt+4, Alt+5, Alt+S, expressions, quit)
 addTrackedEventListener(canvas, "canvas:contextmenu", "contextmenu", (e) => {
   const event = e as MouseEvent;
   event.preventDefault();
+  if (event.altKey || isDragging || performance.now() - lastDragFinishedAt < 300) {
+    return;
+  }
   window.cyrene?.showContextMenu?.();
 });
 
 // Pressing Alt temporarily enables interactivity to ensure drag & wheel capture.
+// Also handle Alt+5 local hotkey for toggling Quick Mini Chat.
 addTrackedEventListener(window, "window:keydown", "keydown", (e) => {
   const event = e as KeyboardEvent;
   if (event.key === "Alt") {
     void window.cyrene.setInteractive(true);
   }
+  if (event.altKey && (event.key === "5" || event.code === "Digit5")) {
+    event.preventDefault();
+    miniChat.toggle();
+  }
 });
 
 addTrackedEventListener(window, "window:keyup", "keyup", (e) => {
   const event = e as KeyboardEvent;
-  if (event.key === "Alt" && !isDragging && !isZoomDragging && petVisible) {
-    clickThrough?.resume();
+  if (event.key === "Alt") {
+    if (isDragging) finishDrag();
+    if (isZoomDragging) finishZoomDrag();
+    if (petVisible) {
+      clickThrough?.resume();
+    }
   }
 });
 
@@ -382,6 +571,7 @@ const handleWheelZoom = (e: Event): void => {
   event.preventDefault();
   const nextZoom = petZoomState.wheel(event.deltaY);
   if (nextZoom === null) return;
+  zoomHud.show(nextZoom);
   window.cyrene.setPetZoom(nextZoom);
 };
 
@@ -404,12 +594,16 @@ addTrackedEventListener(canvas, "canvas:pointerdown", "pointerdown", (e) => {
     return;
   }
 
-  // Alt + left click window drag (button 0)
+  // Alt + drag window (left click button 0 or right click button 2)
   if (!isDragging && shouldStartPetDrag(event)) {
     if (!Number.isFinite(event.screenX) || !Number.isFinite(event.screenY)) return;
+    event.preventDefault();
     isDragging = true;
     lastDragScreenX = event.screenX;
     lastDragScreenY = event.screenY;
+    pendingDragDx = 0;
+    pendingDragDy = 0;
+    autonomousThoughts.pause();
     clickThrough?.pause();
     focus?.pause(true);
     void window.cyrene.setInteractive(true);
@@ -440,6 +634,7 @@ addTrackedEventListener(canvas, "canvas:pointermove", "pointermove", (e) => {
       const deltaY = steps > 0 ? -120 : 120;
       const nextZoom = petZoomState.wheel(deltaY);
       if (nextZoom !== null) {
+        zoomHud.show(nextZoom);
         window.cyrene.setPetZoom(nextZoom);
       }
     }
@@ -452,7 +647,9 @@ addTrackedEventListener(canvas, "canvas:pointermove", "pointermove", (e) => {
     if (dx !== 0 || dy !== 0) {
       lastDragScreenX = event.screenX;
       lastDragScreenY = event.screenY;
-      window.cyrene.moveBy(dx, dy);
+      pendingDragDx += dx;
+      pendingDragDy += dy;
+      scheduleDragFlush();
     }
     return;
   }
@@ -472,7 +669,8 @@ addTrackedEventListener(canvas, "canvas:pointerup", "pointerup", (e) => {
     const dx = event.screenX - lastDragScreenX;
     const dy = event.screenY - lastDragScreenY;
     if (dx !== 0 || dy !== 0) {
-      window.cyrene.moveBy(dx, dy);
+      pendingDragDx += dx;
+      pendingDragDy += dy;
     }
     finishDrag();
     try {
@@ -487,4 +685,30 @@ addTrackedEventListener(canvas, "canvas:pointerup", "pointerup", (e) => {
     event.clientY < rect.top ||
     event.clientY > rect.bottom;
   if (outside) void window.cyrene.setInteractive(false);
+});
+
+addTrackedEventListener(window, "window:pointerup", "pointerup", (e) => {
+  const event = e as PointerEvent;
+  if (isDragging) {
+    const dx = event.screenX - lastDragScreenX;
+    const dy = event.screenY - lastDragScreenY;
+    if (dx !== 0 || dy !== 0) {
+      pendingDragDx += dx;
+      pendingDragDy += dy;
+    }
+    finishDrag();
+  }
+  if (isZoomDragging) {
+    finishZoomDrag();
+  }
+});
+
+addTrackedEventListener(window, "window:pointercancel", "pointercancel", () => {
+  if (isDragging) finishDrag();
+  if (isZoomDragging) finishZoomDrag();
+});
+
+addTrackedEventListener(window, "window:blur", "blur", () => {
+  if (isDragging) finishDrag();
+  if (isZoomDragging) finishZoomDrag();
 });

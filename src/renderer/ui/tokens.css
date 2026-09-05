@@ -77,8 +77,8 @@
   --rb-font-mono: "JetBrains Mono", "Fira Code", ui-monospace, SFMono-Regular,
                   Menlo, Consolas, monospace;
 
-  /* 全局字间距：中英文正文统一略微松开，提升可读性。
-     局部元素可覆盖此值（如标题负间距、数字图表）。 */
+  /* Letter spacing：，。
+ （Title、Chart）。 */
   --rb-letter-spacing: 0.7px;
 
   --rb-text-hero:    600 80px/1.10 var(--rb-font-sans);

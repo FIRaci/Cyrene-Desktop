@@ -8,7 +8,7 @@ describe("extractJsonCandidates", () => {
   });
 
   test("extracts fenced and prose-surrounded objects", () => {
-    const text = '解释\n```json\n{"decision":"respond"}\n```\n另一个 {"decision":"ask_user"}';
+    const text = 'Explanation\n```json\n{"decision":"respond"}\n```\nAnother {"decision":"ask_user"}';
     expect(extractJsonCandidates(text).map((item) => item.value)).toEqual([
       { decision: "respond" },
       { decision: "ask_user" },
@@ -17,7 +17,7 @@ describe("extractJsonCandidates", () => {
 
   test("handles nested braces, escaped quotes, backslashes, unicode, and braces in strings", () => {
     const value = {
-      text: '中文 {not structural} and "quote" and C:\\temp',
+      text: 'English {not structural} and "quote" and C:\\temp',
       nested: { ok: true },
     };
     expect(extractJsonCandidates(`prefix ${JSON.stringify(value)} suffix`)[0]?.value).toEqual(value);

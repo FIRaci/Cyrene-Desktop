@@ -9,31 +9,31 @@ import type { AskClarificationInput } from "../../shared/ask-clarification";
 import type { ChatRequest, ChatResponse } from "./vendors/types";
 
 const input: AskClarificationInput = {
-  userRequest: "生成一份文档",
+  userRequest: "Generate a document",
   trustedUserProfile: {
-    callPreference: "伙伴",
+    callPreference: "Friend",
     gender: "male",
   },
   missingFields: [
     {
       field: "topic",
-      reason: "文档主题未知",
+      reason: "Document topic unknown",
       required: true,
-      questionHint: "这份文档主要写什么？",
+      questionHint: "What is this document mainly about?",
       typeHint: "text",
       allowCustom: false,
     },
     {
       field: "format",
-      reason: "输出格式未知",
+      reason: "Output format unknown",
       required: true,
-      questionHint: "希望生成哪种格式？",
+      questionHint: "Which format do you prefer?",
       typeHint: "single_select",
       allowedOptions: [
-        { value: "word", label: "Word 文档" },
-        { value: "markdown", label: "Markdown 文档" },
-        { value: "pdf", label: "PDF 文档" },
-        { value: "excel", label: "Excel 表格" },
+        { value: "word", label: "Word Document" },
+        { value: "markdown", label: "Markdown Document" },
+        { value: "pdf", label: "PDF Document" },
+        { value: "excel", label: "Excel Spreadsheet" },
       ],
       allowCustom: true,
     },
@@ -43,28 +43,28 @@ const input: AskClarificationInput = {
 describe("Ask Soul clarification contract", () => {
   it("keeps authoritative fields, caps model choices at three, and leaves custom insertion to Runtime", () => {
     const result = normalizeAskClarificationOutput({
-      intro: "伙伴，想把这份文档做得更合你心意，我还需要确认两件小事呀。",
+      intro: "Friend, to make this document suit you better, I need to confirm two small things.",
       questions: [
         {
           field: "topic",
-          question: "这份文档主要写什么？",
+          question: "What is this document mainly about?",
           type: "text",
           options: [],
           allowCustom: false,
-          freeTextPlaceholder: "例如：项目说明",
+          freeTextPlaceholder: "For example: Project description",
         },
         {
           field: "format",
-          question: "希望生成哪种格式？",
+          question: "Which format do you prefer?",
           type: "single_select",
           options: [
-            { value: "word", label: "Word 文档" },
-            { value: "markdown", label: "Markdown 文档" },
-            { value: "pdf", label: "PDF 文档" },
-            { value: "__custom__", label: "其他，我自己填写" },
+            { value: "word", label: "Word Document" },
+            { value: "markdown", label: "Markdown Document" },
+            { value: "pdf", label: "PDF Document" },
+            { value: "__custom__", label: "Other — I'll enter it myself" },
           ],
           allowCustom: true,
-          freeTextPlaceholder: "填写其他格式",
+          freeTextPlaceholder: "Enter another format",
         },
       ],
       deferredFields: [],
@@ -72,25 +72,25 @@ describe("Ask Soul clarification contract", () => {
 
     expect(result.questions).toHaveLength(2);
     expect(result.questions[1].options).toEqual([
-      { value: "word", label: "Word 文档" },
-      { value: "markdown", label: "Markdown 文档" },
-      { value: "pdf", label: "PDF 文档" },
+      { value: "word", label: "Word Document" },
+      { value: "markdown", label: "Markdown Document" },
+      { value: "pdf", label: "PDF Document" },
     ]);
   });
 
   it("builds a usable local fallback without inventing choices", () => {
     const result = buildFallbackAskClarification(input);
 
-    expect(result.intro).toContain("伙伴");
+    expect(result.intro).toContain("Friend");
     expect(result.questions).toEqual([
       expect.objectContaining({ field: "topic", type: "text", options: [] }),
       expect.objectContaining({
         field: "format",
         type: "single_select",
         options: [
-          { value: "word", label: "Word 文档" },
-          { value: "markdown", label: "Markdown 文档" },
-          { value: "pdf", label: "PDF 文档" },
+          { value: "word", label: "Word Document" },
+          { value: "markdown", label: "Markdown Document" },
+          { value: "pdf", label: "PDF Document" },
         ],
       }),
     ]);
@@ -103,26 +103,26 @@ describe("Ask Soul clarification contract", () => {
       return {
         assistantMessage: { role: "assistant", content: "{}" },
         text: JSON.stringify({
-          intro: "伙伴，想把这份文档做得更合你心意，我还需要确认两件小事呀。",
+          intro: "Friend, to make this document suit you better, I need to confirm two small things.",
           questions: [
             {
               field: "topic",
-              question: "这份文档主要写什么？",
+              question: "What is this document mainly about?",
               type: "text",
               options: [],
               allowCustom: false,
-              freeTextPlaceholder: "例如：项目说明",
+              freeTextPlaceholder: "For example: Project description",
             },
             {
               field: "format",
-              question: "希望生成哪种格式？",
+              question: "Which format do you prefer?",
               type: "single_select",
               options: [
-                { value: "word", label: "Word 文档" },
-                { value: "markdown", label: "Markdown 文档" },
+                { value: "word", label: "Word Document" },
+                { value: "markdown", label: "Markdown Document" },
               ],
               allowCustom: true,
-              freeTextPlaceholder: "填写其他格式",
+              freeTextPlaceholder: "Enter another format",
             },
           ],
           deferredFields: [],
@@ -144,8 +144,8 @@ describe("Ask Soul clarification contract", () => {
 
   it("detects a recently used preferred address so Ask Soul does not repeat it", () => {
     expect(detectRecentAddressedUser([
-      { role: "user", content: "生成一份文档" },
-      { role: "assistant", content: "伙伴，我在听呢。" },
-    ], { callPreference: "伙伴", nickname: "小王", gender: "male" })).toBe(true);
+      { role: "user", content: "Generate a document" },
+      { role: "assistant", content: "Friend, I am listening." },
+    ], { callPreference: "Friend", nickname: "Wang", gender: "male" })).toBe(true);
   });
 });

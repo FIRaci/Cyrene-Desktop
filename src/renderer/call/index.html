@@ -43,6 +43,23 @@
       <!-- Optional transcript for the current turn -->
       <div class="call__transcript" id="transcript" hidden></div>
 
+      <!-- Quick chat input for in-call messaging -->
+      <form class="call__quick-bar" id="quick-form">
+        <input
+          type="text"
+          class="call__quick-input"
+          id="quick-input"
+          placeholder="Type a message to Cyrene..."
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <button type="submit" class="call__quick-send" id="quick-send" title="Send message" aria-label="Send">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+          </svg>
+        </button>
+      </form>
+
       <!-- Footer: capsule waveform and hang-up button -->
       <div class="call__actions">
         <div class="call__mic-wave" id="mic-wave">

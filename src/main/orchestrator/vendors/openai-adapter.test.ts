@@ -74,8 +74,8 @@ describe("OpenAICompatAdapter", () => {
   test("keeps ordinary native Function Calling on auto", () => {
     const adapter = new OpenAICompatAdapter("test-openai", capability);
     const req = adapter.buildRequest({
-      model: "m", messages: [{ role: "user", content: "搜歌" }],
-      tools: [{ name: "music_search", description: "搜索", parameters: { type: "object" } }],
+      model: "m", messages: [{ role: "user", content: "search songs" }],
+      tools: [{ name: "music_search", description: "search", parameters: { type: "object" } }],
     }, { provider: "p", baseUrl: "https://e.test/v1", model: "m", apiKey: "k" });
     expect(JSON.parse(req.body).tool_choice).toBe("auto");
   });
@@ -84,8 +84,8 @@ describe("OpenAICompatAdapter", () => {
     const adapter = new OpenAICompatAdapter("qwen", { ...capability, id: "qwen" });
     const req = adapter.buildRequest({
       model: "qwen3-7b",
-      messages: [{ role: "user", content: "搜歌" }],
-      tools: [{ name: "music_search", description: "搜索", parameters: { type: "object" } }],
+      messages: [{ role: "user", content: "search songs" }],
+      tools: [{ name: "music_search", description: "search", parameters: { type: "object" } }],
       toolChoiceIntent: { mode: "must_call", toolName: "music_search" },
     }, { provider: "qwen", baseUrl: "https://e.test/v1", model: "qwen3-7b", apiKey: "sk-test", reasoning: { mode: "off" } });
 
@@ -98,13 +98,13 @@ describe("OpenAICompatAdapter", () => {
   test("maps must-call intent through the active provider and thinking policy", () => {
     const toolRequest = {
       model: "m",
-      messages: [{ role: "user" as const, content: "搜歌" }],
-      tools: [{ name: "music_search", description: "搜索", parameters: { type: "object" } }],
+      messages: [{ role: "user" as const, content: "search songs" }],
+      tools: [{ name: "music_search", description: "search", parameters: { type: "object" } }],
       toolChoiceIntent: { mode: "must_call" as const, toolName: "music_search" },
     };
     const deepseek = new OpenAICompatAdapter("deepseek", { ...capability, id: "deepseek" });
     const deepseekBody = JSON.parse(deepseek.buildRequest(toolRequest, {
-      provider: "DeepSeek（深度求索）", baseUrl: "https://api.deepseek.com", model: "deepseek-v4-pro",
+      provider: "DeepSeek", baseUrl: "https://api.deepseek.com", model: "deepseek-v4-pro",
       apiKey: "k", reasoning: { mode: "on", effort: "high" },
     }).body);
     expect(deepseekBody.tools).toHaveLength(1);
@@ -112,7 +112,7 @@ describe("OpenAICompatAdapter", () => {
 
     const minimax = new OpenAICompatAdapter("minimax", { ...capability, id: "minimax" });
     const minimaxBody = JSON.parse(minimax.buildRequest(toolRequest, {
-      provider: "MiniMax（稀宇科技）", baseUrl: "https://api.minimaxi.com/v1", model: "MiniMax-M3",
+      provider: "MiniMax", baseUrl: "https://api.minimaxi.com/v1", model: "MiniMax-M3",
       apiKey: "k", reasoning: { mode: "on" },
     }).body);
     expect(minimaxBody.tool_choice).toBe("auto");
@@ -125,8 +125,8 @@ describe("OpenAICompatAdapter", () => {
       toolChoiceModes: ["required"],
     });
     const req = adapter.buildRequest({
-      model: "m", messages: [{ role: "user", content: "搜歌" }],
-      tools: [{ name: "music_search", description: "搜索", parameters: { type: "object" } }],
+      model: "m", messages: [{ role: "user", content: "search songs" }],
+      tools: [{ name: "music_search", description: "search", parameters: { type: "object" } }],
       toolChoiceIntent: { mode: "must_call", toolName: "music_search" },
     }, { provider: "p", baseUrl: "https://e.test/v1", model: "m", apiKey: "k", reasoning: { mode: "off" } });
     expect(JSON.parse(req.body).tool_choice).toBe("required");
@@ -142,7 +142,7 @@ describe("OpenAICompatAdapter", () => {
           {
             role: "user",
             content: [
-              { type: "text", text: "请看图" },
+              { type: "text", text: "Please see image" },
               { type: "image_url", image_url: { url: "data:image/png;base64,abc" } },
             ],
           },
@@ -160,7 +160,7 @@ describe("OpenAICompatAdapter", () => {
     expect(body.messages[1]).toEqual({
       role: "user",
       content: [
-        { type: "text", text: "请看图" },
+        { type: "text", text: "Please see image" },
         { type: "image_url", image_url: { url: "data:image/png;base64,abc" } },
       ],
     });
@@ -186,35 +186,35 @@ describe("OpenAICompatAdapter", () => {
     expect(req.headers.Authorization).toBeUndefined();
   });
 
-  // ─── 流式 / 非流式 reasoning_content 解析（覆盖 DeepSeek / Qwen / GLM / MiMo / Doubao） ───
+  // --- Streaming / non-streaming reasoning_content parsing (covers DeepSeek / Qwen / GLM / MiMo / Doubao) ---
 
-  test("parseStreamEvent: delta.reasoning_content → chunk.deltaThinking（DeepSeek/Qwen/GLM/MiMo 流式）", () => {
+  test("parseStreamEvent: delta.reasoning_content -> chunk.deltaThinking", () => {
     const adapter = new OpenAICompatAdapter("test-openai", capability);
     const chunk = adapter.parseStreamEvent({
       eventType: "data",
-      data: JSON.stringify({ choices: [{ delta: { reasoning_content: "我在思考" } }] }),
+      data: JSON.stringify({ choices: [{ delta: { reasoning_content: "I am thinking" } }] }),
     });
-    expect(chunk?.deltaThinking).toBe("我在思考");
+    expect(chunk?.deltaThinking).toBe("I am thinking");
     expect(chunk?.deltaText).toBeUndefined();
   });
 
-  test("parseStreamEvent: delta.content → chunk.deltaText（不影响 reasoning_content）", () => {
+  test("parseStreamEvent: delta.content -> chunk.deltaText (does not affect reasoning_content)", () => {
     const adapter = new OpenAICompatAdapter("test-openai", capability);
     const chunk = adapter.parseStreamEvent({
       eventType: "data",
-      data: JSON.stringify({ choices: [{ delta: { content: "你好" } }] }),
+      data: JSON.stringify({ choices: [{ delta: { content: "Hello" } }] }),
     });
-    expect(chunk?.deltaText).toBe("你好");
+    expect(chunk?.deltaText).toBe("Hello");
     expect(chunk?.deltaThinking).toBeUndefined();
   });
 
-  test("parseStreamEvent: [DONE] 哨兵 → chunk.done=true", () => {
+  test("parseStreamEvent: [DONE] sentinel -> chunk.done=true", () => {
     const adapter = new OpenAICompatAdapter("test-openai", capability);
     const chunk = adapter.parseStreamEvent({ eventType: "data", data: "[DONE]" });
     expect(chunk?.done).toBe(true);
   });
 
-  test("parseStreamEvent: usage 块（choices 为空但有 usage）→ chunk.usage", () => {
+  test("parseStreamEvent: usage block (choices empty but has usage) -> chunk.usage", () => {
     const adapter = new OpenAICompatAdapter("test-openai", capability);
     const chunk = adapter.parseStreamEvent({
       eventType: "data",
@@ -223,28 +223,28 @@ describe("OpenAICompatAdapter", () => {
     expect(chunk?.usage).toEqual({ input: 10, output: 20 });
   });
 
-  test("parseResponse: 同时返回 reasoning_content 与 content → assistantMessage 双字段", () => {
+  test("parseResponse: returns reasoning_content and content simultaneously", () => {
     const adapter = new OpenAICompatAdapter("test-openai", capability);
     const resp = adapter.parseResponse({
       choices: [{
         message: {
           role: "assistant",
-          content: "最终答案",
-          reasoning_content: "思考过程",
+          content: "Final answer",
+          reasoning_content: "Thinking process",
         },
         finish_reason: "stop",
       }],
       usage: { prompt_tokens: 5, completion_tokens: 10 },
     });
-    expect(resp.text).toBe("最终答案");
-    expect(resp.thinking).toBe("思考过程");
-    expect(resp.assistantMessage.thinking).toBe("思考过程");
-    expect(resp.assistantMessage.content).toBe("最终答案");
+    expect(resp.text).toBe("Final answer");
+    expect(resp.thinking).toBe("Thinking process");
+    expect(resp.assistantMessage.thinking).toBe("Thinking process");
+    expect(resp.assistantMessage.content).toBe("Final answer");
     expect(resp.usage).toEqual({ input: 5, output: 10 });
     expect(resp.finishReason).toBe("stop");
   });
 
-  test("parseResponse: tool_calls 多轮字段映射正确", () => {
+  test("parseResponse: tool_calls mapped correctly", () => {
     const adapter = new OpenAICompatAdapter("test-openai", capability);
     const resp = adapter.parseResponse({
       choices: [{
@@ -254,32 +254,32 @@ describe("OpenAICompatAdapter", () => {
           tool_calls: [{
             id: "tc1",
             type: "function",
-            function: { name: "get_weather", arguments: '{"city":"北京"}' },
+            function: { name: "get_weather", arguments: '{"city":"Beijing"}' },
           }],
         },
         finish_reason: "tool_calls",
       }],
     });
     expect(resp.toolCalls).toEqual([
-      { id: "tc1", name: "get_weather", arguments: '{"city":"北京"}' },
+      { id: "tc1", name: "get_weather", arguments: '{"city":"Beijing"}' },
     ]);
     expect(resp.finishReason).toBe("tool_calls");
     expect(resp.assistantMessage.toolCalls).toEqual(resp.toolCalls);
   });
 
-  // ─── 多轮工具调用：appendToolResults + buildRequest 端到端 ───
+  // --- Multi-turn tool calls: appendToolResults + buildRequest end-to-end ---
 
-  test("多轮工具调用：assistant 带 toolCalls → appendToolResults → buildRequest 的 wire messages 顺序与字段完整", () => {
+  test("multi-turn tool calls: assistant with toolCalls preserves wire message ordering and fields", () => {
     const adapter = new OpenAICompatAdapter("test-openai", capability);
     const messages = [
-      { role: "user" as const, content: "北京天气如何" },
+      { role: "user" as const, content: "How is Beijing weather" },
       {
         role: "assistant" as const,
         content: undefined,
-        toolCalls: [{ id: "tc1", name: "get_weather", arguments: '{"city":"北京"}' }],
+        toolCalls: [{ id: "tc1", name: "get_weather", arguments: '{"city":"Beijing"}' }],
       },
-      { role: "tool" as const, toolCallId: "tc1", name: "get_weather", content: "晴 25°C" },
-      { role: "user" as const, content: "那上海呢" },
+      { role: "tool" as const, toolCallId: "tc1", name: "get_weather", content: "Sunny 25C" },
+      { role: "user" as const, content: "What about Shanghai" },
     ];
     const req = adapter.buildRequest(
       { model: "test-model", messages },
@@ -287,26 +287,26 @@ describe("OpenAICompatAdapter", () => {
     );
     const body = JSON.parse(req.body) as { messages: Array<Record<string, unknown>> };
     expect(body.messages).toHaveLength(4);
-    // 第 1 条 user
-    expect(body.messages[0]).toEqual({ role: "user", content: "北京天气如何" });
-    // 第 2 条 assistant 带 tool_calls（adapter: m.content || null → wire 上是 null）
+    // message 1 user
+    expect(body.messages[0]).toEqual({ role: "user", content: "How is Beijing weather" });
+    // message 2 assistant with tool_calls
     expect(body.messages[1]).toEqual({
       role: "assistant",
       content: null,
       tool_calls: [{
         id: "tc1",
         type: "function",
-        function: { name: "get_weather", arguments: '{"city":"北京"}' },
+        function: { name: "get_weather", arguments: '{"city":"Beijing"}' },
       }],
     });
-    // 第 3 条 tool 带 tool_call_id 与 name（OpenAI 多轮必须）
+    // message 3 tool with tool_call_id and name
     expect(body.messages[2]).toEqual({
       role: "tool",
       tool_call_id: "tc1",
-      content: "晴 25°C",
+      content: "Sunny 25C",
       name: "get_weather",
     });
-    // 第 4 条 user 顺序在最后
-    expect(body.messages[3]).toEqual({ role: "user", content: "那上海呢" });
+    // message 4 user at end
+    expect(body.messages[3]).toEqual({ role: "user", content: "What about Shanghai" });
   });
 });

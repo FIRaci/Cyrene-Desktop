@@ -5,11 +5,11 @@ export interface ChatContextMessage {
 }
 
 export interface ConversationTimeContext {
-  /** 不带时间戳前缀的干净消息（给 Action Gate 等决策层用）*/
+  /** Clean messages without timestamp prefix (for Action Gate and decision layers) */
   cleanMessages: ChatContextMessage[];
-  /** 带时间戳前缀的消息（给 Soul / Legacy 用，当前行为）*/
+  /** Timestamped messages (for Soul / Legacy runtime) */
   timestampedMessages: ChatContextMessage[];
-  /** @deprecated 使用 timestampedMessages */
+  /** @deprecated Use timestampedMessages */
   messages: ChatContextMessage[];
   timeContext: string;
 }
@@ -39,9 +39,9 @@ function isValidTimezone(timezone: string): boolean {
 }
 
 /**
- * 默认时区：用户资料缺失或非法时使用。需求：用户时区 → Asia/Shanghai。
- * 注意：所有"模型可见时间"的格式化位置都必须先调 `resolveChatContextTimezone`，
- * 禁止直接把未校验的 profile.timezone 喂 Intl，避免非法 IANA 值触发 RangeError。
+ * Default timezone: used when user profile is missing or invalid. Default: Asia/Shanghai.
+ * Note: All model-visible time formatting must call `resolveChatContextTimezone` first;
+ * never pass unvalidated profile.timezone directly to Intl to avoid RangeError.
  */
 export const DEFAULT_CHAT_CONTEXT_TIMEZONE = "Asia/Shanghai";
 

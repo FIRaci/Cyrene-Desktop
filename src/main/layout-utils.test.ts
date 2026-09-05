@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 
-// 纯函数直接从源码文本提取（避免 electron module mock）
-// clampWindowToWorkArea 和 computePanelLayout 是纯函数，不依赖 electron。
+// Pure functions directly extracted from source text (avoids electron module mock)
+// clampWindowToWorkArea and computePanelLayout are pure functions, independent of electron.
 function clampWindowToWorkArea(
   pos: { x: number; y: number },
   size: { width: number; height: number },
@@ -48,7 +48,7 @@ function computePanelLayout(
     return positions;
   }
 
-  // 阶梯排列
+  // Cascading layout
   const chatPos = clampWindowToWorkArea(
     { x: workArea.x + Math.floor((workArea.width - panels[0].width) / 2), y: baseY },
     panels[0],
@@ -86,11 +86,11 @@ const PANELS = [
 ];
 
 describe("computePanelLayout", () => {
-  it("2560x1440: 三窗口水平排列，垂直居中（y > 0）", () => {
+  it("2560x1440: three panels horizontally arranged, vertically centered (y > 0)", () => {
     const wa = { x: 0, y: 0, width: 2560, height: 1440 };
     const positions = computePanelLayout(wa, PANELS, 8);
     expect(positions).toHaveLength(3);
-    // 高度 1440 >= 面板高度 760，垂直居中
+    // Height 1440 >= panel height 760, vertically centered
     expect(positions[0].y).toBeGreaterThan(0);
     expect(positions[0].y).toBe(wa.y + Math.floor((wa.height - 760) / 2));
     for (let i = 0; i < 3; i++) {
@@ -100,11 +100,11 @@ describe("computePanelLayout", () => {
     }
   });
 
-  it("1920x1080: 三窗口水平排列，垂直居中（y > 0）", () => {
+  it("1920x1080: three panels horizontally arranged, vertically centered (y > 0)", () => {
     const wa = { x: 0, y: 0, width: 1920, height: 1080 };
     const positions = computePanelLayout(wa, PANELS, 8);
     expect(positions).toHaveLength(3);
-    // 高度 1080 >= 面板高度 760，垂直居中
+    // Height 1080 >= panel height 760, vertically centered
     expect(positions[0].y).toBeGreaterThan(0);
     expect(positions[0].y).toBe(wa.y + Math.floor((wa.height - 760) / 2));
     for (let i = 0; i < 3; i++) {
@@ -114,7 +114,7 @@ describe("computePanelLayout", () => {
     }
   });
 
-  it("1366x768: 阶梯布局，三窗口至少 120x80 可见", () => {
+  it("1366x768: cascading layout, three panels at least 120x80 visible", () => {
     const wa = { x: 0, y: 0, width: 1366, height: 768 };
     const positions = computePanelLayout(wa, PANELS, 8);
     for (let i = 0; i < 3; i++) {
@@ -124,10 +124,10 @@ describe("computePanelLayout", () => {
     }
   });
 
-  it("1280x720: 阶梯布局，y = workArea.y（高度不足，顶部对齐）", () => {
+  it("1280x720: cascading layout, y = workArea.y (insufficient height, top-aligned)", () => {
     const wa = { x: 0, y: 0, width: 1280, height: 720 };
     const positions = computePanelLayout(wa, PANELS, 8);
-    // 高度 720 < 面板高度 760，顶部对齐
+    // Height 720 < panel height 760, top-aligned
     expect(positions[0].y).toBe(wa.y);
     for (let i = 0; i < 3; i++) {
       const v = visibleArea(positions[i], PANELS[i], wa);

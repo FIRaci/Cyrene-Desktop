@@ -1,11 +1,11 @@
 /**
- * 搜索后端工具过滤与 API Key 校验。
+ * Search backend tool filtering and API Key validation.
  *
- * 每轮根据当前搜索后端设置，决定暴露哪些搜索工具给 Action Gate。
- * 搜索后端互斥：同一时间只暴露一个搜索后端的工具。
+ * Exposes corresponding search tools to Action Gate each turn based on search backend settings.
+ * Search backends are mutually exclusive: only tools from one search backend exposed at a time.
  */
 
-// ── API Key 校验 ──────────────────────────
+// -- API Key validation --
 
 export interface KeyValidationResult {
   valid: boolean;
@@ -15,8 +15,8 @@ export interface KeyValidationResult {
 }
 
 /**
- * 校验搜索 API Key 的安全性。
- * 不泄漏原始 Key，只返回脱敏诊断。
+ * Validate security of search API Key.
+ * Does not leak raw Key, returning sanitized diagnostics only.
  */
 export function validateSearchApiKey(rawKey: string, label: string): KeyValidationResult {
   const originalLength = rawKey.length;
@@ -27,18 +27,18 @@ export function validateSearchApiKey(rawKey: string, label: string): KeyValidati
   const diagnostics = { length: normalized.length, trimmed, hasNonAscii, hasControlChars };
 
   if (normalized.length === 0) {
-    return { valid: false, normalized: "", error: `${label} cannot be empty (不能为空)`, diagnostics };
+    return { valid: false, normalized: "", error: `${label} cannot be empty`, diagnostics };
   }
   if (hasControlChars) {
-    return { valid: false, normalized: "", error: `${label} contains control characters / 包含控制字符，请重新输入`, diagnostics };
+    return { valid: false, normalized: "", error: `${label} contains control characters, please re-enter`, diagnostics };
   }
   if (hasNonAscii) {
-    return { valid: false, normalized: "", error: `${label} contains non-ASCII characters / 包含非 ASCII 字符，请确认是否复制了多余内容`, diagnostics };
+    return { valid: false, normalized: "", error: `${label} contains non-ASCII characters, please verify if extra content was copied`, diagnostics };
   }
   return { valid: true, normalized, diagnostics };
 }
 
-// ── 搜索工具过滤 ──────────────────────────
+// -- Search tool filtering --
 
 export const BUILTIN_SEARCH_TOOL_ID = "web_search";
 export const MINIMAX_SEARCH_TOOL_PREFIX = "minimax-web-search-";
@@ -46,8 +46,8 @@ export const MINIMAX_SEARCH_TOOL_PREFIX = "minimax-web-search-";
 export type SearchBackend = "off" | "ddg" | "bocha" | "tavily" | "minimax";
 
 /**
- * 判断一个工具是否应该根据当前搜索后端设置被暴露。
- * 返回 true = 暴露，false = 隐藏。
+ * Determines whether a tool should be exposed according to current search backend settings.
+ * Returns true = exposed, false = hidden.
  */
 export function shouldExposeSearchTool(
   toolId: string,
@@ -59,12 +59,12 @@ export function shouldExposeSearchTool(
   if (toolId.startsWith(MINIMAX_SEARCH_TOOL_PREFIX)) {
     return activeBackend === "minimax";
   }
-  return true; // 非搜索工具正常暴露
+  return true; // Non-search tools exposed normally
 }
 
 /**
- * 从工具列表中过滤出当前搜索后端对应的搜索工具。
- * 非搜索工具不受影响。
+ * Filter tool list for search tools corresponding to current search backend.
+ * Non-search tools are unaffected.
  */
 export function filterToolsBySearchBackend<T extends { id: string }>(
   tools: T[],

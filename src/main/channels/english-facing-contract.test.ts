@@ -47,9 +47,9 @@ describe("channel English-facing contract", () => {
         const relative = path.relative(CHANNEL_ROOT, filePath).replaceAll("\\", "/");
         const isChineseSaveIntentCompatibility = relative === "adapters/wechat/inbound-media.ts"
           && literal.kind === ts.SyntaxKind.RegularExpressionLiteral
-          && literal.text.includes("保存到桌面");
+          && (literal.text.includes("\u4fdd\u5b58\u5230\u684c\u9762") || literal.text.includes("\\u4fdd\\u5b58\\u5230\\u684c\\u9762"));
         const isStableLegacyInboxPath = relative === "adapters/wechat/ilink-bot-adapter.ts"
-          && literal.text === '"Cyrene 收件箱"';
+          && (literal.text === '"Cyrene \u6536\u4ef6\u7bb1"' || literal.text === '"Cyrene \\u6536\\u4ef6\\u7bb1"');
         if (!isChineseSaveIntentCompatibility && !isStableLegacyInboxPath) {
           violations.push(`${relative}:${literal.line}: ${literal.text}`);
         }

@@ -1,9 +1,9 @@
-// Embedding 表情包匹配引擎
-// 将语义描述转向量，对 LLM 回复做余弦相似度匹配
+// Embedding sticker matching engine
+// Transforms semantic descriptions into vectors, matching LLM replies via cosine similarity
 
 import { type EmbeddingProvider } from "./rag/embedding";
 
-// ── 余弦相似度 ──
+// ── Cosine Similarity ──
 function cosineSimilarity(a: number[], b: number[]): number {
   let dot = 0;
   let normA = 0;
@@ -17,22 +17,22 @@ function cosineSimilarity(a: number[], b: number[]): number {
   return dot / (Math.sqrt(normA) * Math.sqrt(normB));
 }
 
-// ── 类型 ──
+// ── Types ──
 
-/** Embedding 索引中的一条 */
+/** Single entry in embedding index */
 export interface StickerEmbeddingEntry {
   id: string;
   embedding: number[];
 }
 
-// ── 公共 API ──
+// ── Public API ──
 
 /**
- * 构建完整的 sticker embedding 索引
- * @param provider  embedding provider
- * @param builtIn   内置 sticker 描述 { id → { phrases } }
- * @param userStickers 用户 sticker 元数据 { id → { phrases } }
- * @returns 索引数组
+ * Builds complete sticker embedding index
+ * @param provider  Embedding provider
+ * @param builtIn   Built-in sticker descriptions { id -> { phrases } }
+ * @param userStickers User sticker metadata { id -> { phrases } }
+ * @returns Index array
  */
 export async function buildStickerEmbeddingIndex(
   provider: EmbeddingProvider,
@@ -41,23 +41,23 @@ export async function buildStickerEmbeddingIndex(
 ): Promise<StickerEmbeddingEntry[]> {
   const entries: StickerEmbeddingEntry[] = [];
 
-  // 收集所有需要转向量的文本
+  // Collect all texts requiring embedding conversion
   const allIds: string[] = [];
   const allTexts: string[] = [];
 
   for (const [id, desc] of Object.entries(builtIn)) {
     allIds.push(id);
-    allTexts.push(desc.phrases.join("，"));
+    allTexts.push(desc.phrases.join(", "));
   }
 
   for (const [id, meta] of Object.entries(userStickers)) {
     allIds.push(id);
-    allTexts.push(meta.phrases.join("，"));
+    allTexts.push(meta.phrases.join(", "));
   }
 
   if (allTexts.length === 0) return [];
 
-  // 批量转向量
+  // Batch embed vectors
   const embeddings = await provider.embedBatch(allTexts);
   for (let i = 0; i < allIds.length; i++) {
     entries.push({ id: allIds[i], embedding: embeddings[i] });
@@ -67,12 +67,12 @@ export async function buildStickerEmbeddingIndex(
 }
 
 /**
- * 对查询文本做 embedding 匹配
- * @param query     LLM 回复内容（可拼接用户输入）
- * @param provider  embedding provider
- * @param index     embedding 索引
- * @param threshold 相似度阈值 0.3~0.9
- * @returns 匹配到的 sticker id 和分数，低于阈值返回 null
+ * Matches query text against embedding index
+ * @param query     LLM reply content (can include user input)
+ * @param provider  Embedding provider
+ * @param index     Embedding index
+ * @param threshold Similarity threshold 0.3~0.9
+ * @returns Matched sticker id and score, returns null below threshold
  */
 export async function matchSticker(
   query: string,

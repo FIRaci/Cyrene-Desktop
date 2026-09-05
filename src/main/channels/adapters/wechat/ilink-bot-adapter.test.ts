@@ -23,10 +23,10 @@ describe("ILinkBotAdapter.send", () => {
     (adapter as any).client = { sendText };
     (adapter as any).replyContextByTarget.set("wx-user-1", "ctx-1");
 
-    const result = await adapter.send(message([{ kind: "text", text: "你好" }]));
+    const result = await adapter.send(message([{ kind: "text", text: "Hello" }]));
 
     expect(result).toEqual({ ok: true });
-    expect(sendText).toHaveBeenCalledWith("wx-user-1", "你好", "ctx-1");
+    expect(sendText).toHaveBeenCalledWith("wx-user-1", "Hello", "ctx-1");
   });
 
   it("sends multiple text parts as separate messages", async () => {
@@ -36,15 +36,15 @@ describe("ILinkBotAdapter.send", () => {
     (adapter as any).replyContextByTarget.set("wx-user-1", "ctx-1");
 
     const result = await adapter.send(message([
-      { kind: "text", text: "第一句。" },
-      { kind: "text", text: "第二句？" },
-      { kind: "text", text: "\n第三句！" },
+      { kind: "text", text: "First sentence." },
+      { kind: "text", text: "Second sentence?" },
+      { kind: "text", text: "\nThird sentence!" },
     ]));
 
     expect(result).toEqual({ ok: true });
-    expect(sendText).toHaveBeenNthCalledWith(1, "wx-user-1", "第一句。", "ctx-1");
-    expect(sendText).toHaveBeenNthCalledWith(2, "wx-user-1", "第二句？", "ctx-1");
-    expect(sendText).toHaveBeenNthCalledWith(3, "wx-user-1", "第三句！", "ctx-1");
+    expect(sendText).toHaveBeenNthCalledWith(1, "wx-user-1", "First sentence.", "ctx-1");
+    expect(sendText).toHaveBeenNthCalledWith(2, "wx-user-1", "Second sentence?", "ctx-1");
+    expect(sendText).toHaveBeenNthCalledWith(3, "wx-user-1", "Third sentence!", "ctx-1");
   });
 
   it("uploads image and sticker parts as image items in one sendmessage payload", async () => {
@@ -61,13 +61,13 @@ describe("ILinkBotAdapter.send", () => {
     (adapter as any).replyContextByTarget.set("wx-user-1", "ctx-1");
 
     const result = await adapter.send(message([
-      { kind: "text", text: "看图" },
-      { kind: "image", filePath: "C:/tmp/pic.png", caption: "图片" },
+      { kind: "text", text: "See picture" },
+      { kind: "image", filePath: "C:/tmp/pic.png", caption: "picture" },
       { kind: "sticker", stickerId: "happy", imagePath: "C:/tmp/sticker.png" },
     ]));
 
     expect(result).toEqual({ ok: true });
-    expect(sendText).toHaveBeenCalledWith("wx-user-1", "看图", "ctx-1");
+    expect(sendText).toHaveBeenCalledWith("wx-user-1", "See picture", "ctx-1");
     expect(uploadMedia).toHaveBeenCalledTimes(2);
     expect(uploadMedia).toHaveBeenNthCalledWith(1, expect.anything(), "wx-user-1", "C:/tmp/pic.png", 1);
     expect(uploadMedia).toHaveBeenNthCalledWith(2, expect.anything(), "wx-user-1", "C:/tmp/sticker.png", 1);
@@ -165,12 +165,12 @@ describe("ILinkBotAdapter.send", () => {
     (adapter as any).replyContextByTarget.set("wx-user-1", "ctx-1");
 
     const result = await adapter.send(message([
-      { kind: "text", text: "语音来了" },
+      { kind: "text", text: "Voice message coming" },
       { kind: "audio", filePath: "package.json", mime: "audio/wav" },
     ]));
 
     expect(result).toEqual({ ok: true });
-    expect(sendText).toHaveBeenCalledWith("wx-user-1", "语音来了", "ctx-1");
+    expect(sendText).toHaveBeenCalledWith("wx-user-1", "Voice message coming", "ctx-1");
     expect(encodeVoice).toHaveBeenCalledWith(expect.any(Buffer), { format: "wav" });
     expect(uploadMediaData).toHaveBeenCalledWith(expect.anything(), "wx-user-1", Buffer.from("silk-data"), 4);
     expect(sendMessage).toHaveBeenCalledWith("wx-user-1", [
@@ -211,12 +211,12 @@ describe("ILinkBotAdapter.send", () => {
     (adapter as any).replyContextByTarget.set("wx-user-1", "ctx-1");
 
     const result = await adapter.send(message([
-      { kind: "text", text: "先把文字发出去" },
+      { kind: "text", text: "Send text first" },
       { kind: "audio", filePath: "package.json", mime: "audio/wav" },
     ]));
 
     expect(result).toEqual({ ok: true });
-    expect(sendText).toHaveBeenCalledWith("wx-user-1", "先把文字发出去", "ctx-1");
+    expect(sendText).toHaveBeenCalledWith("wx-user-1", "Send text first", "ctx-1");
     expect(sendMessage).toHaveBeenCalledTimes(1);
   });
 });
@@ -237,7 +237,7 @@ describe("ILinkBotAdapter inbound media", () => {
       fromUserId: "wx-user-1",
       toUserId: "bot-1",
       msgType: 1,
-      content: "看看这个",
+      content: "Look at this",
       items: [
         {
           type: 2,
@@ -261,7 +261,7 @@ describe("ILinkBotAdapter inbound media", () => {
     expect(onMessage).toHaveBeenCalledWith(expect.objectContaining({
       channel: "wechat",
       senderId: "wx-user-1",
-      text: "看看这个",
+      text: "Look at this",
       attachments: [
         {
           kind: "image",
@@ -288,7 +288,7 @@ describe("ILinkBotAdapter inbound media", () => {
       fromUserId: "wx-user-1",
       toUserId: "bot-1",
       msgType: 1,
-      content: "看看这个",
+      content: "Look at this",
       items: [
         {
           type: 2,
@@ -319,7 +319,7 @@ describe("ILinkBotAdapter inbound media", () => {
     const sendText = vi.fn(async () => ({ ok: true }));
     (adapter as any).onMessage = onMessage;
     (adapter as any).client = { sendText };
-    (adapter as any).saveInboundMedia = vi.fn(async () => "C:/Users/13575/Desktop/Cyrene 收件箱/archive.zip");
+    (adapter as any).saveInboundMedia = vi.fn(async () => "C:/Users/13575/Desktop/Cyrene \u6536\u4ef6\u7bb1/archive.zip");
 
     await (adapter as any).dispatchInbound({
       msgId: "msg-file-1",
@@ -348,8 +348,8 @@ describe("ILinkBotAdapter inbound media", () => {
       fromUserId: "wx-user-1",
       toUserId: "bot-1",
       msgType: 1,
-      content: "保存到桌面",
-      items: [{ type: 1, text_item: { text: "保存到桌面" } }],
+      content: "\u4fdd\u5b58\u5230\u684c\u9762",
+      items: [{ type: 1, text_item: { text: "\u4fdd\u5b58\u5230\u684c\u9762" } }],
       contextToken: "ctx-text",
       raw: {},
     });
@@ -360,7 +360,7 @@ describe("ILinkBotAdapter inbound media", () => {
     );
     expect(sendText).toHaveBeenLastCalledWith(
       "wx-user-1",
-      "Saved, friend. I placed it in the “Cyrene Inbox” folder on your desktop: C:/Users/13575/Desktop/Cyrene 收件箱/archive.zip",
+      "Saved, friend. I placed it in the “Cyrene Inbox” folder on your desktop: C:/Users/13575/Desktop/Cyrene \u6536\u4ef6\u7bb1/archive.zip",
       "ctx-text",
     );
     expect(onMessage).not.toHaveBeenCalled();
@@ -372,15 +372,15 @@ describe("ILinkBotAdapter inbound media", () => {
     const sendText = vi.fn(async () => ({ ok: true }));
     (adapter as any).onMessage = onMessage;
     (adapter as any).client = { sendText };
-    (adapter as any).saveInboundMedia = vi.fn(async () => "C:/Users/13575/Desktop/Cyrene 收件箱/movie.mp4");
+    (adapter as any).saveInboundMedia = vi.fn(async () => "C:/Users/13575/Desktop/Cyrene \u6536\u4ef6\u7bb1/movie.mp4");
 
     await (adapter as any).dispatchInbound({
       msgId: "msg-text-2",
       fromUserId: "wx-user-1",
       toUserId: "bot-1",
       msgType: 1,
-      content: "帮我代收一下",
-      items: [{ type: 1, text_item: { text: "帮我代收一下" } }],
+      content: "\u5e2e\u6211\u4ee3\u6536\u4e00\u4e0b",
+      items: [{ type: 1, text_item: { text: "\u5e2e\u6211\u4ee3\u6536\u4e00\u4e0b" } }],
       contextToken: "ctx-text",
       raw: {},
     });
@@ -419,7 +419,7 @@ describe("ILinkBotAdapter inbound media", () => {
     );
     expect(sendText).toHaveBeenLastCalledWith(
       "wx-user-1",
-      "Saved, friend. I placed it in the “Cyrene Inbox” folder on your desktop: C:/Users/13575/Desktop/Cyrene 收件箱/movie.mp4",
+      "Saved, friend. I placed it in the “Cyrene Inbox” folder on your desktop: C:/Users/13575/Desktop/Cyrene \u6536\u4ef6\u7bb1/movie.mp4",
       "ctx-video",
     );
     expect(onMessage).not.toHaveBeenCalled();
@@ -431,7 +431,7 @@ describe("ILinkBotAdapter inbound media", () => {
     const sendText = vi.fn(async () => ({ ok: true }));
     (adapter as any).onMessage = onMessage;
     (adapter as any).client = { sendText };
-    (adapter as any).saveInboundMedia = vi.fn(async () => "C:/Users/13575/Desktop/Cyrene 收件箱/report.pdf");
+    (adapter as any).saveInboundMedia = vi.fn(async () => "C:/Users/13575/Desktop/Cyrene \u6536\u4ef6\u7bb1/report.pdf");
     (adapter as any).downloadMedia = vi.fn();
 
     await (adapter as any).dispatchInbound({
@@ -439,8 +439,8 @@ describe("ILinkBotAdapter inbound media", () => {
       fromUserId: "wx-user-1",
       toUserId: "bot-1",
       msgType: 1,
-      content: "保存到桌面",
-      items: [{ type: 1, text_item: { text: "保存到桌面" } }],
+      content: "\u4fdd\u5b58\u5230\u684c\u9762",
+      items: [{ type: 1, text_item: { text: "\u4fdd\u5b58\u5230\u684c\u9762" } }],
       contextToken: "ctx-text",
       raw: {},
     });
@@ -482,7 +482,7 @@ describe("ILinkBotAdapter inbound media", () => {
     (adapter as any).onMessage = onMessage;
     (adapter as any).client = { sendText };
     (adapter as any).isAsrConfigured = () => true;
-    (adapter as any).transcribeVoice = vi.fn(async () => "你在忙什么呀");
+    (adapter as any).transcribeVoice = vi.fn(async () => "What are you busy with?");
 
     await (adapter as any).dispatchInbound({
       msgId: "msg-voice-1",
@@ -515,7 +515,7 @@ describe("ILinkBotAdapter inbound media", () => {
     expect(onMessage).toHaveBeenCalledWith(expect.objectContaining({
       channel: "wechat",
       senderId: "wx-user-1",
-      text: "你在忙什么呀",
+      text: "What are you busy with?",
       attachments: undefined,
     }));
   });

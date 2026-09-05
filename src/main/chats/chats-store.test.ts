@@ -45,7 +45,7 @@ describe("chats store", () => {
     store.initialize();
 
     const created = store.createSession({
-      title: "昔涟的主动消息",
+      title: "Cyrene's proactive message",
       purpose: "proactive-chat",
     });
 
@@ -67,24 +67,24 @@ describe("chats store", () => {
     store.initialize();
 
     const sessions = await Promise.all(Array.from({ length: 8 }, async () => (
-      store.getOrCreateSessionByPurpose("proactive-chat", { title: "昔涟的主动消息" })
+      store.getOrCreateSessionByPurpose("proactive-chat", { title: "Cyrene's proactive message" })
     )));
 
     expect(new Set(sessions.map((session) => session.id)).size).toBe(1);
     expect(store.listSessions().filter((session) => session.purpose === "proactive-chat")).toHaveLength(1);
 
-    store.appendMessage(sessions[0].id, { id: "p1", role: "model", content: "主动问候", at: 1 });
-    expect(store.getSession(sessions[0].id)?.title).toBe("昔涟的主动消息");
+    store.appendMessage(sessions[0].id, { id: "p1", role: "model", content: "Proactive greeting", at: 1 });
+    expect(store.getSession(sessions[0].id)?.title).toBe("Cyrene's proactive message");
   });
 
   it("recreates the proactive singleton after it is deleted", async () => {
     const store = await import("./chats-store");
     store.initialize();
 
-    const first = store.getOrCreateSessionByPurpose("proactive-chat", { title: "昔涟的主动消息" });
+    const first = store.getOrCreateSessionByPurpose("proactive-chat", { title: "Cyrene's proactive message" });
     expect(store.deleteSession(first.id)).toBe(true);
 
-    const second = store.getOrCreateSessionByPurpose("proactive-chat", { title: "昔涟的主动消息" });
+    const second = store.getOrCreateSessionByPurpose("proactive-chat", { title: "Cyrene's proactive message" });
     expect(second.id).not.toBe(first.id);
     expect(store.getSessionByPurpose("proactive-chat")?.id).toBe(second.id);
   });

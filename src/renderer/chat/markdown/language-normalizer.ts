@@ -1,12 +1,12 @@
 /**
- * 语言别名映射 + 显示名。
+ * Language alias mapping + display names.
  *
- * Shiki 只接受合法 language id（如 typescript / powershell / batch）。
- * `cmd` / `bat` / `ps1` 等仅作为本地别名，不在 Shiki 中注册。
- * 未知语言统一降级为 `text`。
+ * Shiki accepts only valid language IDs (such as typescript / powershell / batch).
+ * `cmd` / `bat` / `ps1` serve only as local aliases, not registered directly in Shiki.
+ * Unknown languages gracefully degrade to `text`.
  */
 
-/** Shiki 合法 language id 白名单（与 code-highlighter.ts 的预加载列表一致） */
+/** Shiki valid language ID allowlist (consistent with preloaded list in code-highlighter.ts) */
 const SHIKI_LANGS = new Set([
   "javascript",
   "typescript",
@@ -25,7 +25,7 @@ const SHIKI_LANGS = new Set([
   "text",
 ]);
 
-/** 用户可能写的别名 -> Shiki 合法 id */
+/** User-written aliases -> Shiki valid IDs */
 const ALIASES: Record<string, string> = {
   ts: "typescript",
   typescript: "typescript",
@@ -76,7 +76,7 @@ const ALIASES: Record<string, string> = {
   "": "text",
 };
 
-/** Shiki 合法 id -> 用户可见的显示名 */
+/** Shiki valid IDs -> User-facing display names */
 const DISPLAY_NAMES: Record<string, string> = {
   typescript: "TypeScript",
   javascript: "JavaScript",
@@ -96,8 +96,8 @@ const DISPLAY_NAMES: Record<string, string> = {
 };
 
 /**
- * 把 fence info string（如 `ts` / `c++` / `powershell`）标准化为 Shiki 合法 id。
- * 未知或不在白名单的语言统一降级为 `text`。
+ * Normalizes fence info string (e.g. `ts` / `c++` / `powershell`) to a valid Shiki ID.
+ * Unknown or unlisted languages degrade to `text`.
  */
 export function normalizeLang(input: string | undefined): string {
   const key = (input ?? "").trim().toLowerCase();
@@ -107,7 +107,7 @@ export function normalizeLang(input: string | undefined): string {
 }
 
 /**
- * 获取语言的显示名。输入应为 normalizeLang 的返回值。
+ * Gets language display name. Input should be the return value of normalizeLang.
  */
 export function getLanguageDisplayName(lang: string): string {
   return DISPLAY_NAMES[lang] ?? "Code";

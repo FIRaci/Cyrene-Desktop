@@ -1,25 +1,19 @@
-// 飞书 FeishuAdapter —— implements ChannelAdapter。
+// FeishuAdapter - implements ChannelAdapter.
 //
-// 接入方式：**长连接 WebSocket**（飞书官方 SDK 内置支持）。
-// 比 HTTP webhook 简单几个数量级：
-//   - 不需要公网 HTTPS URL（飞书 SDK 主动连出）
-//   - 不需要 Verification Token / Encrypt Key（WS 自动鉴权）
-//   - 不需要内网穿透
-//   - 重连 / 心跳 / ack SDK 全自动处理
+// Connection method: Persistent WebSocket (native support via official Feishu SDK).
+// Advantages over HTTP webhooks:
+//   - No public HTTPS URL required (Feishu SDK initiates outbound connection)
+//   - No Verification Token / Encrypt Key needed (WS handles authentication)
+//   - No intranet penetration needed
+//   - Automatic reconnect, heartbeat, and ACK handling by the SDK
 //
-// 数据流：
-//   飞书服务器 ←WSS→ @larksuiteoapi/node-sdk WSClient
-//       ↓ onMessage (normalized LarkChannel event)
-//       ↓ LarkChannel.on('message')
-//   FeishuAdapter.handleLarkMessage → adapter.onMessage (dispatcher)
-//       ↓ CyreneAgent runs
-//   LarkChannel.send(chatId, { text }) → 飞书服务器
-//
-// 图片/文件/音频消息：通过 SDK 的 messageResource.get 下载到 userData/channels/cache/
-// 转化为本地 filePath 写入 IncomingMessage.attachments，buildAgentRunOptions 会注入 prompt。
-//
-// 注意：本 adapter 只在用户启用飞书时才创建 LarkChannel 实例。
-// 切换 enabled/config 后调 rebuild() 重启。
+// Data flow:
+//   Feishu server <--WSS--> @larksuiteoapi/node-sdk WSClient
+//       | onMessage (normalized LarkChannel event)
+//       | LarkChannel.on('message')
+//   FeishuAdapter.handleLarkMessage -> adapter.onMessage (dispatcher)
+//       | CyreneAgent runs
+//   LarkChannel.send(chatId, { text }) -> Feishu server
 import * as fs from "fs";
 import * as path from "path";
 import { app } from "electron";
@@ -46,7 +40,7 @@ import { getAudioDurationMs } from "./audio-duration";
 
 const LOG = "[FeishuAdapter]";
 
-/** 飞书 capability 声明。SDK 已经把消息/图片/音频/视频/卡片/sticker 都内置支持 */
+/** Feishu capability declaration */
 const FEISHU_CAPABILITY: ChannelCapability = {
   text: true,
   image: true,
@@ -59,7 +53,7 @@ const FEISHU_CAPABILITY: ChannelCapability = {
   maxTextLength: 4000,
 };
 
-/** 飞书资源类型 → 我们的附件类型 + 扩展名 */
+/** Maps Feishu resource kind to attachment extension and mime type */
 function resourceKindToExt(ktype: string): { ext: string; mime: string } {
   switch (ktype) {
     case "image": return { ext: ".png", mime: "image/png" };
@@ -71,7 +65,7 @@ function resourceKindToExt(ktype: string): { ext: string; mime: string } {
   }
 }
 
-/** 把飞书资源下载到本地缓存目录。返回本地文件路径或 null（失败时）。 */
+/** Downloads Feishu resource to local cache directory. Returns local path or null on failure. */
 async function downloadLarkResource(
   channel: LarkChannel,
   messageId: string,
@@ -80,26 +74,19 @@ async function downloadLarkResource(
 ): Promise<string | null> {
   const cacheDir = path.join(app.getPath("userData"), "channels", "cache");
   fs.mkdirSync(cacheDir, { recursive: true });
-  // 命名: feishu-<messageId>-<fileKey 末 8 位>.<ext>
   const { ext } = resourceKindToExt(kind);
   const shortKey = fileKey.slice(-8);
   const localPath = path.join(cacheDir, `feishu-${messageId}-${shortKey}${ext}`);
-  if (fs.existsSync(localPath)) return localPath; // 已下载过
+  if (fs.existsSync(localPath)) return localPath; // Already downloaded
   try {
-    // 绕过 LarkChannel.downloadResource() 这个 wrapper 的 bug —— 它对 image 调的是
-    // /open-apis/im/v1/image/{image_key}（只能下机器人自己上传的图），而我们要的是
-    // /open-apis/im/v1/messages/{message_id}/resources/{file_key}（用户发的图）。
-    // 直接用 channel.rawClient 调正确的 API。
     const typeParam = (kind === "file" || kind === "audio" || kind === "video") ? "file" : "image";
     const res = await channel.rawClient.im.v1.messageResource.get({
       path: { message_id: messageId, file_key: fileKey },
       params: { type: typeParam },
     });
-    // SDK 返回带 writeFile / getReadableStream / headers；用 writeFile 直接落盘
     if (res && typeof res.writeFile === "function") {
       await res.writeFile(localPath);
     } else {
-      // 兜底：手动从 readable stream 读
       const stream = res.getReadableStream();
       const chunks: Buffer[] = [];
       await new Promise<void>((resolve, reject) => {
@@ -118,12 +105,11 @@ async function downloadLarkResource(
   }
 }
 
-/** 把飞书 NormalizedMessage → 我们的 IncomingMessage（异步，会下载附件） */
+/** Normalizes Feishu NormalizedMessage -> IncomingMessage (downloads attachments asynchronously) */
 async function normalizeLarkMessage(
   channel: LarkChannel,
   msg: NormalizedMessage,
 ): Promise<IncomingMessage> {
-  // msg.content 是 JSON 字符串，msg.rawContentType 是消息类型（"text" / "image" / "post" / ...）
   let text = "";
   const rawType = msg.rawContentType ?? "text";
   const attachments: IncomingMessage["attachments"] = [];
@@ -136,7 +122,6 @@ async function normalizeLarkMessage(
       text = msg.content;
     }
   } else if (rawType === "image" || rawType === "file" || rawType === "audio" || rawType === "video" || rawType === "sticker") {
-    // 下载所有 resources 到本地，给 LLM 一个明确的本地路径
     for (const r of msg.resources ?? []) {
       const localPath = await downloadLarkResource(channel, msg.messageId, r.fileKey, r.type);
       if (localPath) {
@@ -148,13 +133,11 @@ async function normalizeLarkMessage(
           caption: r.fileName,
         });
         if (!text) text = `[${rawType}]`;
-        // 把"附件路径"嵌进 text，让 LLM 一眼看到
         text = (text ? text + "\n" : "") + `[Attachment: ${localPath}]`;
       }
     }
     if (attachments.length === 0) text = `[${rawType}]`;
   } else {
-    // post / interactive / shareChat 等未知类型
     text = `[${rawType}]`;
   }
 
@@ -171,8 +154,7 @@ async function normalizeLarkMessage(
   };
 }
 
-/** 把我们 OutgoingMessage.parts 翻译成飞书 SendInput。飞书 send() 一次只发一个 payload，
- *  所以多 parts 时循环调用 send。 */
+/** Translates OutgoingMessage.parts to Feishu SendInput and transmits */
 async function sendLark(channel: LarkChannel, targetId: string, part: OutgoingPart): Promise<{ messageId: string } | null> {
   let result: { messageId: string } | null = null;
   switch (part.kind) {
@@ -182,7 +164,6 @@ async function sendLark(channel: LarkChannel, targetId: string, part: OutgoingPa
     }
     case "image": {
       if (part.filePath) {
-        // 飞书 image: { image: { source: path/Buffer } }
         result = (await channel.send(targetId, {
           image: { source: part.filePath },
         } as SendInput)) ?? null;
@@ -194,10 +175,6 @@ async function sendLark(channel: LarkChannel, targetId: string, part: OutgoingPa
       break;
     }
     case "audio": {
-      // 飞书 audio: { audio: { source: path/Buffer, duration } } (duration 是毫秒, 必填)
-      // SDK 内部 MediaUploader.resolveDuration 只对 Opus 自动解析;
-      // 我们 TTS 输出 mp3 → 必须先解析 mp3 时长再传 duration, 否则 SDK 报
-      // "duration could not be determined for audio; pass it explicitly"
       const duration = await getAudioDurationMs(part.filePath);
       console.log("[Feishu audio] send file:", part.filePath, "duration:", duration, "mime:", part.mime);
       if (!duration) {
@@ -252,10 +229,10 @@ export class FeishuAdapter implements ChannelAdapter {
   private status: ChannelStatus = { enabled: false, phase: "config_missing" };
 
   constructor() {
-    // start() 时再初始化
+    // Initialized in start()
   }
 
-  /** 重建 LarkChannel 实例（用户在 UI 里改了 AppID/Secret 后调） */
+  /** Rebuilds LarkChannel instance when user updates AppID/Secret in UI */
   private async rebuildChannel(): Promise<LarkChannel | null> {
     const settings = loadChannelsSettings().feishu;
     if (!settings.enabled) {
@@ -279,9 +256,8 @@ export class FeishuAdapter implements ChannelAdapter {
       transport: "websocket",
     });
 
-    // 绑定入站消息
     ch.on("message" as EventName, async (msg: NormalizedMessage) => {
-      // 私聊 only（方案决策）
+      // Direct messages only
       if (msg.chatType !== "p2p") {
         console.log(LOG, `Ignoring ${msg.chatType} message (direct messages only)`);
         return;
@@ -296,14 +272,13 @@ export class FeishuAdapter implements ChannelAdapter {
       }
     });
 
-    // 错误/重连事件
     ch.on("error" as EventName, (err: unknown) => {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(LOG, "channel error:", msg);
       this.status = { enabled: true, phase: "error", message: msg };
     });
     ch.on("reconnecting" as EventName, () => {
-      console.log(LOG, "reconnecting…");
+      console.log(LOG, "reconnecting...");
       this.status = { enabled: true, phase: "starting", message: "Reconnecting" };
     });
     ch.on("reconnected" as EventName, () => {
@@ -378,7 +353,7 @@ export class FeishuAdapter implements ChannelAdapter {
     return { ok: true };
   }
 
-  /** 给外部：触发重建（用户改 AppID/Secret 后调用） */
+  /** Triggers rebuild (called when user modifies AppID/Secret) */
   public async rebuild(): Promise<void> {
     if (this.channel) {
       try {

@@ -1,5 +1,5 @@
-// 内置高危工具 — 给 agent 装上 fetch_url / run_shell / install_mcp_server 三件武器
-// 全部走权限网关：fetch_url=network, run_shell=shell, install_mcp_server=fs-write
+// Builtin high-risk tools: fetch_url / run_shell / install_mcp_server
+// Governed by permission gateway: fetch_url=network, run_shell=shell, install_mcp_server=fs-write
 
 import { spawn } from "child_process";
 import { toolRegistry } from "./tool-registry";
@@ -11,8 +11,8 @@ import { resolveChatContextTimezone } from "../chat-time-context";
 const LOG_PREFIX = "[BuiltinTools]";
 
 /**
- * 工具侧统一 timezone 注入：index.ts 启动时调 setUserTimezoneConfig。
- * 任何工具要给模型格式化时间，统一走 `currentUserTimezone()`，禁止各自直接读 profile/Intl。
+ * Unified timezone injection: index.ts calls setUserTimezoneConfig on startup.
+ * Time formatting in tools must use `currentUserTimezone()`.
  */
 let userTimezoneGetter: (() => string | undefined) | null = null;
 
@@ -20,41 +20,41 @@ export function setUserTimezoneConfig(timezoneGetter: () => string | undefined):
   userTimezoneGetter = timezoneGetter;
 }
 
-/** 当前用户的有效时区（缺/非法时回退 Asia/Shanghai）。统一封装，所有工具复用。 */
+/** Current user valid timezone (defaults to Asia/Shanghai). */
 export function currentUserTimezone(): string {
   const raw = userTimezoneGetter?.();
   return resolveChatContextTimezone(raw);
 }
 
-// ── 工具 1：fetch_url ─────────────────────────────────────
-// 拉一个 URL 的纯文本 / Markdown 形式的 body，给 agent 读 README 用
+// -- Tool 1: fetch_url ------------------------------------
+// Fetches URL plain text / Markdown body, used for reading READMEs etc.
 
 const FETCH_TIMEOUT_MS = 20_000;
-const FETCH_MAX_BYTES = 512 * 1024; // 单次最多 512KB，防止 LLM 上下文爆炸
+const FETCH_MAX_BYTES = 512 * 1024; // Max 512KB to avoid context blowup
 
-// HTML → Markdown 清洗：用 turndown 转成 LLM 最易理解的 markdown 格式
-// 保留标题层级/列表/代码块/表格/链接，比纯 strip 标签信息量大得多
+// HTML -> Markdown sanitization: converts HTML to markdown via turndown
+// Preserves heading hierarchy/lists/code blocks/tables/links
 import TurndownService from "turndown";
 
 const turndown = new TurndownService({
   headingStyle: "atx",        // <h1>→# <h2>→##
-  codeBlockStyle: "fenced",   // <pre><code>→```围栏代码块（LLM 更认）
+  codeBlockStyle: "fenced",   // <pre><code> -> fenced code block
   bulletListMarker: "-",
-  emDelimiter: "*",           // <em>→*斜体*
+  emDelimiter: "*",           // <em> -> *italic*
 });
 
 function stripHtml(html: string): string {
-  // 先去 script/style/注释（turndown 不会自动去这些，留着会污染 markdown）
+  // Remove script/style/comments first to avoid polluting markdown
   let s = html.replace(/<script[\s\S]*?<\/script>/gi, " ");
   s = s.replace(/<style[\s\S]*?<\/style>/gi, " ");
   s = s.replace(/<!--[\s\S]*?-->/g, " ");
-  // 转 markdown（保留结构），失败则退回纯 strip 标签
+  // Convert to markdown (preserving structure), fallback to strip tags on failure
   try {
     const md = turndown.turndown(s);
-    // 压缩多余空行（turndown 有时会留连续空行）
+    // Compress redundant blank lines (turndown sometimes leaves consecutive blank lines)
     return md.replace(/\n{3,}/g, "\n\n").trim();
   } catch {
-    // turndown 解析失败（畸形 HTML），退回原来的纯标签剥离
+    // turndown parsing failed (malformed HTML), fallback to pure tag stripping
     s = s.replace(/<[^>]+>/g, " ");
     s = s.replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<")
       .replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'");
@@ -123,12 +123,12 @@ toolRegistry.register({
   execute: executeFetchUrl,
 });
 
-// ── 工具 2：run_shell ─────────────────────────────────────
-// 在用户机器上跑一行命令，给 agent 装 MCP 时跑 git/npm/pip 等用
-// 注意：不开 shell（spawn shell:false），命令必须是真正的可执行文件，避免 shell 注入
+// -- Tool 2: run_shell ------------------------------------
+// Run command on user machine, used for installing MCP servers via git/npm/pip
+// Note: shell:false; command must be a real executable to avoid shell injection
 
-const SHELL_TIMEOUT_MS = 5 * 60_000; // 5 分钟兜底
-const SHELL_MAX_OUTPUT = 16 * 1024;  // 单次最多 16KB stdout/stderr
+const SHELL_TIMEOUT_MS = 5 * 60_000; // 5 minute fallback
+const SHELL_MAX_OUTPUT = 16 * 1024;  // Max 16KB stdout/stderr per execution
 
 interface ShellResult {
   exitCode: number | null;
@@ -138,8 +138,8 @@ interface ShellResult {
 }
 
 /**
- * 把 args 规范化成 argv 数组。模型常把 "--version" 当字符串传（schema 要求数组），
- * 不容错的话 Array.isArray 判否 → cmdArgs=[] → 裸启动 python/node 的交互式 REPL，卡死。
+ * Normalize args into argv array. Models often pass "--version" as string (schema requires array),
+ * without tolerance Array.isArray is false -> cmdArgs=[] -> starts bare interactive REPL hanging indefinitely.
  */
 function normalizeArgs(raw: unknown): string[] {
   if (Array.isArray(raw)) return raw.map((x) => String(x));
@@ -147,7 +147,7 @@ function normalizeArgs(raw: unknown): string[] {
   return [];
 }
 
-/** 简易 argv 分词：尊重单/双引号，处理转义空格。不引 shell（避免注入）。 */
+/** Simple argv tokenizer: respects single/double quotes, escaped spaces. Avoids shell invocation. */
 function tokenizeArgs(s: string): string[] {
   const out: string[] = [];
   const re = /"([^"]*)"|'([^']*)'|(\S+)/g;
@@ -158,18 +158,18 @@ function tokenizeArgs(s: string): string[] {
   return out;
 }
 
-/** 可靠终止进程树。Windows 上 child.kill("SIGKILL") 只杀直接子进程，杀不掉孙进程。 */
+/** Reliably kill process tree. On Windows child.kill("SIGKILL") only terminates direct child. */
 function killTree(child: ReturnType<typeof spawn>): void {
   if (child.pid == null) return;
   if (process.platform === "win32") {
-    // /T=含整棵子树  /F=强制  砍掉进程树，避免孙进程成为孤儿
+    // /T=tree /F=force kill entire process tree to prevent orphan processes
     spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"], {
       windowsHide: true,
       shell: false,
       stdio: "ignore",
     });
   } else {
-    try { child.kill("SIGKILL"); } catch { /* 已退出则忽略 */ }
+    try { child.kill("SIGKILL"); } catch { /* Ignore if already exited */ }
   }
 }
 
@@ -180,8 +180,8 @@ function runShellOnce(command: string, args: string[], cwd?: string): Promise<Sh
       shell: false,
       windowsHide: true,
       env: process.env,
-      // stdin→/dev/null(NUL)：误启动交互式进程(python/node REPL)时让它读到 EOF 立即退出，
-      // 不再卡在"等 stdin 输入"上耗满超时。stdout/stderr 仍 pipe 来收集输出。
+      // stdin -> NUL: when interactive REPL is started accidentally, EOF causes immediate exit,
+      // preventing timeout hangs waiting for stdin. stdout/stderr remain piped for output.
       stdio: ["ignore", "pipe", "pipe"],
     });
     let stdout = "";
@@ -232,7 +232,7 @@ function runShellOnce(command: string, args: string[], cwd?: string): Promise<Sh
 
 async function executeRunShell(args: Record<string, unknown>): Promise<string> {
   const cmd = String(args.command || "").trim();
-  // 容错：模型常把 args 当字符串传（如 "--version"），normalizeArgs 会自动拆成 argv 数组
+  // Tolerance: models often pass args as string (e.g. "--version"), normalizeArgs splits to argv array
   const cmdArgs = normalizeArgs(args.args);
   const cwd = args.cwd ? String(args.cwd) : undefined;
   if (!cmd) return "[Error] command cannot be empty.";
@@ -272,9 +272,9 @@ toolRegistry.register({
   execute: executeRunShell,
 });
 
-// ── 工具 3：install_mcp_server ────────────────────────────
-// 把一个 {command, args, env} 注册成新的 MCP server。
-// agent 读完 README 的 mcpServers 配置后，调这个工具一次性写盘 + 启动 + 发现工具
+// -- Tool 3: install_mcp_server ---------------------------
+// Register {command, args, env} as new MCP server.
+// Agent calls this tool to persist config + launch + discover tools in one step
 
 async function executeInstallMcp(args: Record<string, unknown>): Promise<string> {
   const id = (String(args.id || "").trim()) || ("mcp-" + Date.now());
@@ -350,34 +350,34 @@ toolRegistry.register({
 
 console.log(LOG_PREFIX, "Registered: fetch_url / run_shell / install_mcp_server");
 
-// ── 工具 4：weather（天气查询）─────────────────────────────
-// 查指定城市的实时天气。城市参数可选——没传就读用户信息的默认城市。
-// 支持两个天气源：
-//   - open-meteo（免配置默认，海外开源 API）
-//   - amap（高德天气，国内数据准，需填 key）
-// 默认城市/天气源/高德key 通过 setWeatherConfig 注入（避免 import index.ts 造成循环依赖）。
+// -- Tool 4: weather --------------------------------------
+// Query real-time weather for specified city. City is optional--defaults to user default city.
+// Supports two weather sources:
+//   - open-meteo (zero-config default open-source API)
+//   - amap (Amap weather, requires key)
+// Default city / weather source / amapKey injected via setWeatherConfig (avoids circular deps).
 
 const WEATHER_TIMEOUT_MS = 15_000;
 
-/** 注入的配置获取器（由 index.ts 启动时调 setWeatherConfig 设置）。 */
+/** Injected config getter (set by setWeatherConfig on startup). */
 let weatherCityGetter: (() => string) | null = null;
 let weatherSourceGetter: (() => string) | null = null;
 let amapKeyGetter: (() => string) | null = null;
 let weatherEnabledGetter: (() => boolean) | null = null;
 
-/** 天气卡片数据回调：工具拿到结构化数据后调这个，由桥层发 Custom 事件给渲染端。 */
+/** Weather card callback: bridge sends Custom event to renderer with structured data. */
 let weatherCardCallback: ((card: WeatherCardData) => void) | null = null;
 
-/** 天气卡片结构化数据（发给渲染端渲染 MBE 卡片用）。 */
+/** Structured weather card data (used by renderer). */
 export interface WeatherForecastDay {
-  date: string;       // "7月29日"
-  weekDay: string;    // "周二"
-  textDay: string;    // "多云"
-  textNight: string;  // "晴"
-  hi: number;         // 最高温
-  lo: number;         // 最低温
-  windDir: string;    // 风向
-  windScale: string;  // 风力
+  date: string;       // e.g. "Jul 29"
+  weekDay: string;    // e.g. "Tue"
+  textDay: string;    // e.g. "Cloudy"
+  textNight: string;  // e.g. "Clear"
+  hi: number;         // High temp
+  lo: number;         // Low temp
+  windDir: string;    // Wind direction
+  windScale: string;  // Wind scale
 }
 
 export interface WeatherCardData {
@@ -403,7 +403,7 @@ export interface WeatherCardData {
   forecast?: WeatherForecastDay[];
 }
 
-/** WMO 天气代码 → emoji 图标。 */
+/** WMO weather code -> emoji icon. */
 function weatherIconFromCode(code: number): string {
   if (code === 0) return "☀️";
   if (code <= 2) return "⛅";
@@ -417,42 +417,48 @@ function weatherIconFromCode(code: number): string {
   return "🌤️";
 }
 
-/** 高德天气文字 → emoji 图标。 */
+/** Weather text -> emoji icon. */
 function weatherIconFromText(text: string): string {
-  if (/晴/.test(text)) return "☀️";
-  if (/雷/.test(text)) return "⛈️";
-  if (/大雨|暴雨/.test(text)) return "🌧️";
-  if (/雨/.test(text)) return "🌦️";
-  if (/大雪|暴雪/.test(text)) return "❄️";
-  if (/雪/.test(text)) return "🌨️";
-  if (/雾|霾/.test(text)) return "🌫️";
-  if (/阴/.test(text)) return "☁️";
-  if (/云|多云/.test(text)) return "⛅";
-  if (/风/.test(text)) return "💨";
+  if (/\b(?:clear|sunny)\b/i.test(text) || /\u6674/.test(text)) return "☀️";
+  if (/\b(?:thunder|thunderstorm|lightning)\b/i.test(text) || /\u96f7/.test(text)) return "⛈️";
+  if (/\b(?:heavy rain|torrential|shower)\b/i.test(text) || /\u5927\u96e8|\u66b4\u96e8/.test(text)) return "🌧️";
+  if (/\b(?:rain|drizzle)\b/i.test(text) || /\u96e8/.test(text)) return "🌦️";
+  if (/\b(?:blizzard|heavy snow)\b/i.test(text) || /\u5927\u96ea|\u66b4\u96ea/.test(text)) return "❄️";
+  if (/\b(?:snow|sleet)\b/i.test(text) || /\u96ea/.test(text)) return "🌨️";
+  if (/\b(?:fog|haze|mist)\b/i.test(text) || /\u96fe|\u973e/.test(text)) return "🌫️";
+  if (/\b(?:overcast)\b/i.test(text) || /\u9634/.test(text)) return "☁️";
+  if (/\b(?:cloud|cloudy)\b/i.test(text) || /\u4e91|\u591a\u4e91/.test(text)) return "⛅";
+  if (/\b(?:wind|windy)\b/i.test(text) || /\u98ce/.test(text)) return "💨";
   return "🌤️";
 }
 
 /** Translate Amap's Chinese weather payload while retaining its raw-input compatibility. */
 function translateAmapWeatherText(text: string): string {
   const exact: Record<string, string> = {
-    "晴": "Clear", "少云": "Mostly clear", "晴间多云": "Mostly clear", "多云": "Cloudy", "阴": "Overcast",
-    "阵雨": "Rain showers", "雷阵雨": "Thunderstorms", "小雨": "Light rain", "中雨": "Rain",
-    "大雨": "Heavy rain", "暴雨": "Torrential rain", "小雪": "Light snow", "中雪": "Snow",
-    "大雪": "Heavy snow", "暴雪": "Blizzard", "雾": "Fog", "霾": "Haze", "雨夹雪": "Sleet",
+    "\u6674": "Clear", "\u5c11\u4e91": "Mostly clear", "\u6674\u95f4\u591a\u4e91": "Mostly clear", "\u591a\u4e91": "Cloudy", "\u9634": "Overcast",
+    "\u9635\u96e8": "Rain showers", "\u96f7\u9635\u96e8": "Thunderstorms", "\u5c0f\u96e8": "Light rain", "\u4e2d\u96e8": "Rain",
+    "\u5927\u96e8": "Heavy rain", "\u66b4\u96e8": "Torrential rain", "\u5c0f\u96ea": "Light snow", "\u4e2d\u96ea": "Snow",
+    "\u5927\u96ea": "Heavy snow", "\u66b4\u96ea": "Blizzard", "\u96fe": "Fog", "\u973e": "Haze", "\u96e8\u5939\u96ea": "Sleet",
+    "Clear": "Clear", "Mostly clear": "Mostly clear", "Cloudy": "Cloudy", "Overcast": "Overcast",
+    "Rain showers": "Rain showers", "Thunderstorms": "Thunderstorms", "Light rain": "Light rain", "Rain": "Rain",
+    "Heavy rain": "Heavy rain", "Torrential rain": "Torrential rain", "Light snow": "Light snow", "Snow": "Snow",
+    "Heavy snow": "Heavy snow", "Blizzard": "Blizzard", "Fog": "Fog", "Haze": "Haze", "Sleet": "Sleet",
   };
   return exact[text.trim()] ?? "Unknown";
 }
 
 function translateAmapWindDirection(text: string): string {
   const exact: Record<string, string> = {
-    "无风向": "Variable", "北": "N", "东北": "NE", "东": "E", "东南": "SE",
-    "南": "S", "西南": "SW", "西": "W", "西北": "NW",
+    "\u65e0\u98ce\u5411": "Variable", "\u5317": "N", "\u4e1c\u5317": "NE", "\u4e1c": "E", "\u4e1c\u5357": "SE",
+    "\u5357": "S", "\u897f\u5357": "SW", "\u897f": "W", "\u897f\u5317": "NW",
+    "Variable": "Variable", "N": "N", "NE": "NE", "E": "E", "SE": "SE",
+    "S": "S", "SW": "SW", "W": "W", "NW": "NW",
   };
-  const normalized = text.replace(/风$/, "").trim();
+  const normalized = text.replace(/(?:\u98ce|wind)$/i, "").trim();
   return exact[normalized] ?? "Variable";
 }
 
-/** AQI → 等级文字 + 颜文字。 */
+/** AQI -> description text + kaomoji. */
 function aqiKaomoji(aqi: number): { text: string; kaomoji: string } {
   if (aqi <= 50) return { text: "Good", kaomoji: "(◕‿◕)" };
   if (aqi <= 100) return { text: "Moderate", kaomoji: "(´ー`)" };
@@ -461,7 +467,7 @@ function aqiKaomoji(aqi: number): { text: string; kaomoji: string } {
   return { text: "Very unhealthy", kaomoji: "(╥﹏╥)" };
 }
 
-/** 紫外线指数 → 文字。 */
+/** UV index -> description text. */
 function uvText(uv: number): string {
   if (uv <= 2) return "Low";
   if (uv <= 5) return "Moderate";
@@ -471,8 +477,8 @@ function uvText(uv: number): string {
 }
 
 /**
- * index.ts 启动时调用，注入默认城市/天气源/高德key/卡片回调 的读取器。
- * source: "open-meteo"（免配置默认）| "amap"（高德）
+ * Called on startup to inject default city / weather source / amapKey / card callback getters.
+ * source: "open-meteo" (zero-config default) | "amap"
  */
 export function setWeatherConfig(
   cityGetter: () => string,
@@ -488,13 +494,13 @@ export function setWeatherConfig(
   if (cardCb) weatherCardCallback = cardCb;
 }
 
-// ── Open-Meteo 实现（免 key 免配置）──
+// -- Open-Meteo implementation (keyless, zero config) --
 
 interface OMCity { name: string; latitude: number; longitude: number; country: string; admin1?: string }
 
-/** Open-Meteo 城市查询（Geocoding API，免费免 key）。 */
+/** Open-Meteo city geocoding query. */
 async function omResolveCity(city: string): Promise<OMCity | null> {
-  const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1&language=zh&format=json`;
+  const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1&language=en&format=json`;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), WEATHER_TIMEOUT_MS);
   try {
@@ -510,11 +516,11 @@ async function omResolveCity(city: string): Promise<OMCity | null> {
   }
 }
 
-/** Open-Meteo 实时天气查询（免费免 key）。 */
+/** Open-Meteo real-time weather query. */
 async function omFetchWeather(city: string): Promise<string> {
   const loc = await omResolveCity(city);
   if (!loc) {
-    return `[Error] City "${city}" was not found. Check the city name; Chinese names and pinyin are supported.`;
+    return `[Error] City "${city}" was not found. Please check the city name (e.g. Hanoi, Tokyo, London).`;
   }
   const currentParams = [
     "temperature_2m", "relative_humidity_2m", "apparent_temperature",
@@ -551,7 +557,7 @@ async function omFetchWeather(city: string): Promise<string> {
     const adm = loc.admin1 ? `${loc.admin1}` : loc.country;
     const icon = weatherIconFromCode(c.weather_code);
 
-    // 解析 3 天预报（今天 + 未来 2 天）
+    // Parse 3-day forecast (today + next 2 days)
     const weekNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
     const forecast: WeatherForecastDay[] = [];
     if (data.daily?.time) {
@@ -589,7 +595,7 @@ async function omFetchWeather(city: string): Promise<string> {
       updateTime: new Date().toLocaleString("en-GB", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: currentUserTimezone() }),
     };
 
-    // 发送天气卡片数据给渲染端
+    // Send weather card data to renderer
     if (weatherCardCallback) {
       weatherCardCallback({
         city: weatherData.city, adm: weatherData.region, temp: weatherData.temperature,
@@ -612,7 +618,7 @@ async function omFetchWeather(city: string): Promise<string> {
   }
 }
 
-/** WMO 天气代码 → 中文描述（Open-Meteo 用 WMO 标准代码）。 */
+/** WMO weather code -> description text. */
 function omWeatherCodeText(code: number): string {
   const map: Record<number, string> = {
     0: "Clear", 1: "Mostly clear", 2: "Partly cloudy", 3: "Overcast",
@@ -630,18 +636,18 @@ function omWeatherCodeText(code: number): string {
   return map[code] ?? `Unknown (code ${code})`;
 }
 
-/** 风向角度 → 中文方位。 */
+/** Wind direction angle -> compass text. */
 function omWindDir(deg: number): string {
   const dirs = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
     "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
   return dirs[Math.round(deg / 22.5) % 16];
 }
 
-// ── 高德天气实现（需 key，国内数据准）──
+// -- Amap weather implementation (requires key) --
 
 interface AmapDistrict { adcode: string; name: string; level: string }
 
-/** 高德行政区查询：城市名 → adcode。 */
+/** Amap district query: city name -> adcode. */
 async function amapResolveAdcode(city: string, key: string): Promise<AmapDistrict | null> {
   const url = `https://restapi.amap.com/v3/config/district?keywords=${encodeURIComponent(city)}&subdistrict=0&key=${key}`;
   const ctrl = new AbortController();
@@ -659,14 +665,14 @@ async function amapResolveAdcode(city: string, key: string): Promise<AmapDistric
   }
 }
 
-/** 高德实时天气查询。 */
+/** Amap real-time weather query. */
 async function amapFetchWeather(city: string, key: string): Promise<string> {
   const district = await amapResolveAdcode(city, key);
   if (!district) {
     return `[Error] City "${city}" was not found. Check the city name; Chinese city names are supported.`;
   }
 
-  // 并行请求实况 + 预报
+  // Request live + forecast in parallel
   const baseUrl = `https://restapi.amap.com/v3/weather/weatherInfo?city=${district.adcode}&key=${key}`;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), WEATHER_TIMEOUT_MS);
@@ -676,7 +682,7 @@ async function amapFetchWeather(city: string, key: string): Promise<string> {
       fetch(`${baseUrl}&extensions=all`, { signal: ctrl.signal }),
     ]);
 
-    // 解析实况
+    // Parse live weather
     if (!baseResp.ok) return `[Error] Weather lookup failed: HTTP ${baseResp.status}`;
     const baseData = await baseResp.json() as { status?: string; lives?: Array<{
       province: string; city: string; weather: string; temperature: string;
@@ -688,7 +694,7 @@ async function amapFetchWeather(city: string, key: string): Promise<string> {
     const w = baseData.lives[0];
     const icon = weatherIconFromText(w.weather);
 
-    // 解析预报
+    // Parse forecast
     const forecast: WeatherForecastDay[] = [];
     if (forecastResp.ok) {
       const fcData = await forecastResp.json() as { status?: string; forecasts?: Array<{
@@ -730,7 +736,7 @@ async function amapFetchWeather(city: string, key: string): Promise<string> {
       updateTime: w.reporttime.slice(11, 16) || new Date().toLocaleString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
     };
 
-    // 发送天气卡片数据给渲染端
+    // Send weather card data to renderer
     if (weatherCardCallback) {
       weatherCardCallback({
         city: weatherData.city, adm: weatherData.region, temp: weatherData.temperature,
@@ -759,13 +765,13 @@ async function executeWeather(args: Record<string, unknown>): Promise<string> {
 
   const source = weatherSourceGetter?.() ?? "open-meteo";
 
-  // 城市：参数优先，没传读用户信息默认城市
+  // City: argument preferred, fallback to user default city
   let city = String(args.city ?? "").trim();
   if (!city) {
     city = (weatherCityGetter?.() ?? "").trim();
   }
-  // 城市解析日志：用于确认模型是否仍自行传入"上海"。
-  // 脱敏：仅记城市名（公开地理名）+ 来源标签；不带用户 ID/任何凭证。
+  // City resolution log to check user city parameters.
+  // Sanitized: only city name and source tag recorded; no credentials.
   const argsCityRaw = String(args.city ?? "").trim();
   const defaultCityRaw = (weatherCityGetter?.() ?? "").trim();
   const source2: "arg" | "default" | "none" = argsCityRaw
@@ -777,10 +783,13 @@ async function executeWeather(args: Record<string, unknown>): Promise<string> {
     `[Weather] city resolution: argsCity=${argsCityRaw || "(empty)"} defaultCity=${defaultCityRaw || "(empty)"} final=${city || "(empty)"} source=${source2}`,
   );
   if (!city) {
-    return "[Notice] No city was provided and no default city is configured. Ask the user to set one under Settings > Profile or provide a city name.";
+    city = "Hanoi";
+  }
+  if (!city) {
+    return "[Notice] No city was provided and no default city is configured. Ask the user to set one under Settings > Plugins > Weather or provide a city name.";
   }
 
-  // 按天气源分支
+  // Branch by weather source
   if (source === "open-meteo") {
     return omFetchWeather(city);
   }
@@ -792,7 +801,7 @@ async function executeWeather(args: Record<string, unknown>): Promise<string> {
     return amapFetchWeather(city, amapKey);
   }
 
-  // 未知天气源
+  // Unknown weather source
   return `[Error] Unknown weather source "${source}". Select Open-Meteo or Amap Weather under Settings > Plugins > Weather.`;
 }
 
@@ -831,19 +840,19 @@ toolRegistry.register({
   execute: executeWeather,
 });
 
-// ── 工具 5：web_search（博查搜索）─────────────────────────
-// 联网搜索：给关键词，返回搜索结果（标题/链接/摘要）。博查 API 返回 AI 友好的结构化数据。
-// key 通过 setSearchConfig 注入（避免 import index.ts 造成循环依赖）。
+// -- Tool 5: web_search -----------------------------------
+// Web search: takes keywords, returns title/link/snippet structured data.
+// key injected via setSearchConfig (avoids circular dependencies).
 
 const SEARCH_TIMEOUT_MS = 20_000;
 
-/** 注入的搜索配置获取器。 */
+/** Injected search config getter. */
 let searchEngineGetter: (() => string) | null = null;
 let searchBochaKeyGetter: (() => string) | null = null;
 let searchTavilyKeyGetter: (() => string) | null = null;
 
 /**
- * index.ts 启动时调用，注入搜索引擎/各源key 的读取器。
+ * Called on startup to inject search engine and API key getters.
  * engine: "off" | "bocha" | "tavily" | "volcano" | "minimax"
  */
 export function setSearchConfig(
@@ -864,7 +873,7 @@ interface BochaResult {
   siteName?: string;
 }
 
-/** 搜索结果统一结构 */
+/** Unified search result structure */
 interface WebSearchResult {
   title: string;
   url: string;
@@ -872,7 +881,7 @@ interface WebSearchResult {
   source?: string;
 }
 
-/** 搜索输出统一结构（ToolCallResult.output 的 JSON） */
+/** Unified search output structure */
 interface WebSearchOutput {
   success: true;
   query: string;
@@ -880,18 +889,18 @@ interface WebSearchOutput {
   results: WebSearchResult[];
 }
 
-/** snippet 最大长度 */
+/** Max snippet length */
 const MAX_SNIPPET_LEN = 500;
-/** projection 最大条数 */
+/** Max projection items */
 const MAX_PROJECTION_RESULTS = 8;
 
-/** 截断 snippet */
+/** Truncate snippet */
 function truncateSnippet(text: string): string {
   const clean = text.replace(/\s+/g, " ").trim();
   return clean.length > MAX_SNIPPET_LEN ? clean.slice(0, MAX_SNIPPET_LEN) + "..." : clean;
 }
 
-/** 博查搜索：调 /v1/web-search，返回结构化 JSON。 */
+/** Bocha search: calls /v1/web-search, returns structured JSON. */
 async function bochaSearch(query: string, key: string): Promise<string> {
   const url = "https://api.bochaai.com/v1/web-search";
   const ctrl = new AbortController();
@@ -939,7 +948,7 @@ async function bochaSearch(query: string, key: string): Promise<string> {
   }
 }
 
-/** Tavily 搜索：调 /search，返回结构化 JSON。 */
+/** Tavily search: calls /search, returns structured JSON. */
 async function tavilySearch(query: string, key: string): Promise<string> {
   const url = "https://api.tavily.com/search";
   const ctrl = new AbortController();
@@ -984,7 +993,7 @@ async function tavilySearch(query: string, key: string): Promise<string> {
   }
 }
 
-/** DuckDuckGo 免费搜索：无需 API Key，零门槛直连。 */
+/** DuckDuckGo free search: keyless direct search. */
 async function duckduckgoSearch(query: string): Promise<string> {
   const url = "https://html.duckduckgo.com/html/";
   const ctrl = new AbortController();
@@ -1119,9 +1128,9 @@ toolRegistry.register({
   execute: executeWebSearch,
 });
 
-// ── 工具：todo_write ──────────────────────────────────────
-// 任务拆解可视化工具。让昔涟能像 Claude Code 一样把复杂任务拆成步骤展示给用户。
-// 每次调用整体覆盖当前清单（不是增量）。store 持久化 + 通知主进程转发 CUSTOM 事件。
+// -- Tool: todo_write -------------------------------------
+// Task decomposition tool allowing complex tasks to be displayed in structured steps.
+// Overwrites entire list on invocation. Persisted + forwards CUSTOM event to renderer.
 
 import { setTodos, getTodos, clearTodos, type TodoItem } from "./todo-store";
 
@@ -1154,7 +1163,7 @@ toolRegistry.register({
   execute: async (args) => {
     const items = (args.todos || []) as TodoItem[];
 
-    // 空列表 = 清空（任务结束）
+    // Empty list = clear (task complete)
     if (items.length === 0) {
       clearTodos();
       return "[todo_write] Task list cleared; the task is finished.";
@@ -1162,7 +1171,7 @@ toolRegistry.register({
 
     const state = setTodos(items);
 
-    // 返回给 LLM 的简短摘要，不返回全部内容（避免 token 浪费）
+    // Short summary returned to LLM (conserves tokens)
     const counts = items.reduce((acc, t) => {
       acc[t.status] = (acc[t.status] || 0) + 1;
       return acc;
@@ -1176,20 +1185,20 @@ toolRegistry.register({
   },
 });
 
-// 暴露给 index.ts 在 startup 调用，避免 tree-shake 掉
+// Exposed to index.ts on startup to avoid tree-shaking
 export { loadTodos, onTodosChange, getTodos as getCurrentTodos } from "./todo-store";
 
-// ── 工具：ask_user_choice（歧义消解器）─────────────────────
-// 当用户需求模糊（"美观""好看""专业"）时，弹卡片让用户从选项中选择。
-// 阻塞工具执行，等用户选完返回选中的 value 给 LLM。
-// 通用设计：question + options 结构不绑死 Excel，PPT/Word/图片生成都能用。
+// -- Tool: ask_user_choice (disambiguation) ----------------
+// Shows choice card when user requirements are ambiguous.
+// Blocks until user selects an option, returning chosen value.
+// Generic design for options across documents and assets.
 
 import { requestUserChoice, type ChoiceOption } from "../user-choice";
 import { runSubAgent, setDelegateSettings } from "./sub-agent";
 
 export { setDelegateSettings };
-// 把重任务委托给独立 FC 循环执行，子代理有自己的 conversation（用完即弃）。
-// 执行完只返回结构化摘要给主 agent，不被重工具的过程数据（skill 正文、XML 文件等）污染。
+// Delegate heavy task to isolated sub-agent FC loop.
+// Returns structured summary without polluting main conversation.
 toolRegistry.register({
   id: "delegate_task",
   name: "Delegate task",
@@ -1197,7 +1206,7 @@ toolRegistry.register({
     "Delegates a multi-step tool task to an isolated sub-agent and returns a structured summary with status, artifacts, and key facts. Use when at least two tool steps can run without user confirmation or when large intermediate data should stay out of the main conversation. Do not use for single-step work, tasks requiring user interaction, or simple spreadsheet generation. Parameter: task, a complete standalone description.",
   enabled: true,
   risk: "safe",
-  hideInPlanMode: true,  // 子代理走旧 FC Loop，避免在 Plan 步骤里降级
+  hideInPlanMode: true,  // Sub-agent uses separate loop
   inputSchema: {
     type: "object",
     properties: {
@@ -1233,7 +1242,7 @@ toolRegistry.register({
 
 console.log(LOG_PREFIX, "Registered: fetch_url / run_shell / install_mcp_server / weather / web_search / ask_user_choice / delegate_task");
 
-// ── 工具：ask_user_choice（歧义消解器）─────────────────────
+// -- Tool: ask_user_choice (disambiguation) ----------------
 toolRegistry.register({
   id: "ask_user_choice",
   name: "Ask user to choose",
@@ -1278,12 +1287,12 @@ toolRegistry.register({
     if (!userChoice) {
       return "[ask_user_choice] The user did not select an option before timeout. Continue with the default approach.";
     }
-    // 找到用户选的选项，返回 label + value 方便 LLM 理解
+    // Find selected option, return label + value for LLM comprehension
     const selected = options.find(o => o.value === userChoice);
     if (selected) {
       return `[ask_user_choice] The user selected ${selected.label} (${userChoice}). Continue with this choice.`;
     }
-    // 用户自定义输入（value 不在预设选项里）
+    // Custom user input (value not in preset options)
     return `[ask_user_choice] The user provided a custom choice: ${userChoice}. Follow this request.`;
   },
 });

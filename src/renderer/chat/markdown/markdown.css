@@ -1,11 +1,11 @@
 /* ============================================================
-   Markdown 渲染样式
-   - 代码块、行内代码、表格、引用、链接
-   - 全部使用 CSS 变量（--rb-* 和 --md-*），不写死颜色
-   - 深色/浅色主题由 tokens.css + theme.css 的变量覆盖适配
-   ============================================================ */
+ Markdown 
+ - Code block、、、、
+ - CSS （--rb-* --md-*），Color
+ - / tokens.css + theme.css 
+ ============================================================ */
 
-/* ── 代码块容器 ──────────────────────────────────────────── */
+/* ── Code block ──────────────────────────────────────────── */
 .code-block {
   margin: 12px 0;
   border-radius: var(--rb-radius-lg);
@@ -52,7 +52,7 @@
   border-color: rgba(34, 197, 94, 0.4);
 }
 
-/* Shiki 输出的 pre.shiki */
+/* Shiki pre.shiki */
 .code-block__code pre {
   margin: 0;
   padding: 12px 16px;
@@ -60,7 +60,7 @@
   font-family: "Cascadia Code", "JetBrains Mono", "Fira Code", "Consolas", monospace;
   font-size: 13px;
   line-height: 1.5;
-  background: transparent !important; /* Shiki 自带背景由 .code-block 控制 */
+  background: transparent !important; /* Shiki Background .code-block */
 }
 
 .code-block__code pre code {
@@ -68,13 +68,13 @@
   background: transparent !important;
 }
 
-/* fallback 纯文本代码块（Shiki 未就绪时） */
+/* fallback Code block（Shiki ） */
 .code-block__code pre:not(.shiki) {
   color: var(--rb-text-default);
   white-space: pre;
 }
 
-/* ── 行内代码 ────────────────────────────────────────────── */
+/* ── ────────────────────────────────────────────── */
 .msg__bubble code:not(.code-block__code code) {
   padding: 2px 6px;
   border-radius: var(--rb-radius-xs);
@@ -84,7 +84,7 @@
   font-size: 0.9em;
 }
 
-/* ── 表格 ────────────────────────────────────────────────── */
+/* ── ────────────────────────────────────────────────── */
 .msg__bubble table {
   width: 100%;
   border-collapse: collapse;
@@ -105,7 +105,7 @@
   color: var(--rb-text-strong);
 }
 
-/* ── 引用 ────────────────────────────────────────────────── */
+/* ── ────────────────────────────────────────────────── */
 .msg__bubble blockquote {
   margin: 8px 0;
   padding: 8px 16px;
@@ -119,7 +119,7 @@
   margin: 4px 0;
 }
 
-/* ── 链接 ────────────────────────────────────────────────── */
+/* ── ────────────────────────────────────────────────── */
 .msg__bubble a {
   color: var(--md-link-color);
   text-decoration: none;
@@ -131,35 +131,35 @@
   text-decoration: underline;
 }
 
-/* ── Markdown 容器基础 ───────────────────────────────────── */
-/* 覆盖气泡的 white-space: pre-wrap，避免标签间换行文本节点被渲染 */
+/* ── Markdown ───────────────────────────────────── */
+/* Bubble white-space: pre-wrap， */
 .msg__bubble {
   white-space: normal;
   overflow-wrap: anywhere;
 }
 
-/* 流式阶段：固定宽度，防止公式/代码块因气泡变宽而移动 */
+/* ：，/Code blockBubble */
 .msg__bubble.is-streaming {
   width: min(42rem, 100%);
 }
 
-/* 含复杂内容的终态消息：保持稳定宽度 */
+/* ： */
 .msg__bubble.has-rich-content {
   width: min(42rem, 100%);
 }
 
-/* ── 清除浏览器默认块级间距，统一用 > * + * 控制 ──────── */
+/* ── ， > * + * ──────── */
 .msg__bubble > * {
   margin-block: 0;
 }
 
-/* 相邻块级元素之间的统一间距 */
+/* */
 .msg__bubble > * + * {
   margin-top: var(--rb-chat-para-spacing, 0.5em);
 }
 
-/* ── 段落 ──────────────────────────────────────────────── */
-/* 只限制正文节点，不影响 KaTeX 内部（让 KaTeX 用自己的字体指标） */
+/* ── ──────────────────────────────────────────────── */
+/* ， KaTeX （ KaTeX ） */
 .msg__bubble > p,
 .msg__bubble > ul,
 .msg__bubble > ol,
@@ -172,14 +172,14 @@
   line-height: var(--rb-chat-line-height, 1.75);
 }
 
-/* 列表项内的正文 */
+/* */
 .msg__bubble li {
   line-height: var(--rb-chat-line-height, 1.75);
 }
 
-/* 不让 .msg__bubble 通配选择器作用到 KaTeX 内部 */
+/* .msg__bubble KaTeX */
 
-/* ── 标题 ──────────────────────────────────────────────── */
+/* ── Title ──────────────────────────────────────────────── */
 .msg__bubble h1,
 .msg__bubble h2,
 .msg__bubble h3 {
@@ -191,7 +191,7 @@
 .msg__bubble h2 { font-size: 1.15em; }
 .msg__bubble h3 { font-size: 1.05em; }
 
-/* ── 列表 ──────────────────────────────────────────────── */
+/* ── ──────────────────────────────────────────────── */
 .msg__bubble ul,
 .msg__bubble ol {
   padding-left: 1.35em;
@@ -202,7 +202,7 @@
   line-height: 1.65;
 }
 
-/* 列表项内如果有段落，不要重新撑开 */
+/* ， */
 .msg__bubble li > p {
   margin: 0;
 }
@@ -213,13 +213,13 @@
   margin: 12px 0;
 }
 
-/* ── 纯文本降级模式 ─────────────────────────────────────── */
-/* 当 markdown-it 解析失败或超长文本降级时，保留换行显示 */
+/* ── ─────────────────────────────────────── */
+/* markdown-it ， */
 .msg__bubble[data-md-mode="text"] {
   white-space: pre-wrap;
 }
 
-/* ── 代码块滚动条 ────────────────────────────────────────── */
+/* ── Code block ────────────────────────────────────────── */
 .code-block__code pre::-webkit-scrollbar {
   height: 6px;
 }
@@ -233,24 +233,24 @@
   border-radius: 3px;
 }
 
-/* ── 流式 Markdown 渲染容器 ──────────────────────────────── */
+/* ── Markdown ──────────────────────────────── */
 .markdown-stream {
   width: 100%;
 }
 
 .markdown-stream__stable {
-  /* committed blocks 只追加，不重建 */
+  /* committed blocks ， */
 }
 
 .markdown-stream__active {
-  /* mutable tail 可替换 */
+  /* mutable tail */
 }
 
-/* ── KaTeX 数学公式 ──────────────────────────────────────── */
-/* KaTeX 自带 katex.min.css 处理排版；这里只覆盖颜色以适配主题 */
+/* ── KaTeX ──────────────────────────────────────── */
+/* KaTeX katex.min.css ；Color */
 
-/* 流式代码块（Phase 3）：与终态代码块共用 .code-block 样式，
-   额外标记 --streaming 用于细微差异（如无 Shiki 高亮时的等宽字体） */
+/* Code block（Phase 3）：Code block .code-block ，
+ --streaming （ Shiki Highlight） */
 .code-block--streaming .code-block__code pre code {
   color: var(--rb-text-default);
   font-family: "Cascadia Code", "JetBrains Mono", "Fira Code", "Consolas", monospace;
@@ -264,8 +264,8 @@
   font-size: 1.05em;
 }
 
-/* 块级公式：外层负责垂直布局和自然高度 */
-/* margin 设为 0，让 > * + * 规则统一控制间距 */
+/* ： */
+/* margin 0， > * + * */
 .msg__bubble .math-block {
   display: block;
   margin: 0;
@@ -273,7 +273,7 @@
   overflow: visible;
 }
 
-/* 内层只负责横向滚动 */
+/* */
 .msg__bubble .math-block__scroll {
   display: block;
   max-width: 100%;
@@ -282,11 +282,11 @@
   padding-block: 0.2em;
 }
 
-/* KaTeX 自己负责真实高度 */
+/* KaTeX */
 .msg__bubble .math-block .katex-display {
   margin: 0;
   overflow: visible;
-  text-align: left;             /* 左对齐：避免流式时公式随气泡宽度变化而移动 */
+  text-align: left;             /* ：Bubble */
 }
 
 .msg__bubble .math-block .katex-display > .katex {
@@ -296,19 +296,19 @@
 }
 
 
-/* 块级公式不应该被 > * + * 再叠加 margin */
+/* > * + * margin */
 .msg__bubble .katex-display + * {
   margin-top: var(--rb-chat-para-spacing, 0.5em);
 }
 
-/* KaTeX 错误（无效 LaTeX）显示为红色提示 */
+/* KaTeX （ LaTeX） */
 .msg__bubble .katex-error {
   color: var(--rb-pink-400, #f472b6);
   font-family: monospace;
   font-size: 0.9em;
 }
 
-/* 块级公式滚动条 */
+/* */
 .msg__bubble .katex-display::-webkit-scrollbar {
   height: 4px;
 }

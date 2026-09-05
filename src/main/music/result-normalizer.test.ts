@@ -49,7 +49,7 @@ describe("result-normalizer", () => {
   });
 
   it("rejects legacy human-readable daily recommendation text", () => {
-    expect(() => normalizeDailyRecommendations("📅 今日推荐 (1首): ..."))
+    expect(() => normalizeDailyRecommendations("📅 Daily Recommendations (1 song): ..."))
       .toThrow(/E_DAILY_RECOMMEND_INVALID_RESPONSE/);
   });
 

@@ -1,14 +1,14 @@
-// buildAgentRunOptions —— 把 AG-UI 桥的 buildOptions 闭包抽成纯函数。
+// buildAgentRunOptions - Extract the AG-UI bridge's buildOptions closure into a pure function.
 //
-// 设计原则：
-//   - 函数无模块级状态；所有 index.ts 模块级符号（runtimeState, stickerEmbeddingIndex 等）
-//     通过 deps 参数注入。
-//   - 函数无副作用（不算 console.warn）；副作用（记忆写入/sticker 广播）由 onRunFinished
-//     单独做，注入到同一个 deps 里。
-//   - index.ts / dispatcher / scheduler 共用同一个 factory。
-//   - 默认 style 写死 '01_default.md'，与原行为一致。
+// Design principles:
+//   - The function has no module-level state; all index.ts module-level symbols (runtimeState, stickerEmbeddingIndex, etc.)
+//     are injected via the deps parameter.
+//   - The function has no side effects (excluding console.warn); side effects (memory write / sticker broadcast) are handled
+//     separately by onRunFinished, injected into the same deps.
+//   - index.ts / dispatcher / scheduler share the same factory.
+//   - Default style is hardcoded to '01_default.md', consistent with original behavior.
 //
-// 字段依赖梳理（按 index.ts:3175-3281）：
+// Field dependency overview (per index.ts:3175-3281):
 //   loadModelSettings / loadUserProfile / buildEnvironmentContext
 //   buildSkillCatalog / skillRegistry / resolveSlashActivation
 //   buildToneInjection / sceneEmbeddingIndex / getSceneEmbeddingProvider
@@ -17,9 +17,9 @@
 //   scheduleMemoryWrite / inferRuntimeState / runtimeState / feelingToExpression
 //   matchSticker / stickerEmbeddingIndex / getEmbeddingProvider / loadStickerSettings
 //   broadcastRuntimeStateChanged / observeRuntimeState
-//   IPC.AGUI_EVENT / chatWindow（用于推 sticker）
+//   IPC.AGUI_EVENT / chatWindow (used to push stickers)
 //
-// 这些全部塞到 BuildOptionsDeps 里。dispatcher 在 Phase 1 注入同样的 deps 即可。
+// All of these are packed into BuildOptionsDeps. dispatcher injects the same deps in Phase 1.
 import {
   resolveExecutionMode,
   type CyreneRunOptions,
@@ -55,9 +55,9 @@ import type { TrustedAskUserProfile } from "../../shared/ask-clarification";
 import type { SkillRouteInfo } from "./task-router";
 import { filterToolsBySearchBackend, type SearchBackend } from "./search-backend-filter";
 
-/** index.ts 模块级符号的最小可注入子集。
- *  类型故意用宽签名（unknown / 任意 shape）—— 因为 build-options 是纯消费者，
- *  实际调用时由 index.ts 注入真实的强类型函数。这避免循环类型依赖。 */
+/** Minimal injectable subset of index.ts module-level symbols.
+ *  Types intentionally use loose signatures (unknown / arbitrary shape) because build-options is a pure consumer;
+ *  actual calls from index.ts inject real strongly-typed functions. This prevents circular type dependencies. */
 export interface BuildOptionsDeps {
   loadModelSettings: () => ModelSettingsLite;
   loadGeneralSettings: () => StyleSettingsLite;
@@ -82,19 +82,19 @@ export interface BuildOptionsDeps {
   ) => Promise<string>;
   buildRelationshipContext: () => Promise<string>;
   buildSystemPrompt: (styleFile: string) => string;
-  /** 第一期：工具阶段 system prompt。仅含工具调度规则 + 自动生成的工具目录。 */
+  /** Phase 1: Tool-phase system prompt. Contains only tool scheduling rules + auto-generated tool catalog. */
   buildToolSystemPrompt: (enabledTools: ReadonlyArray<unknown>) => string;
-  /** 第一期：Soul 阶段使用的基础 system prompt。工具结果在 FC 循环 Soul 阶段执行前动态追加。 */
+  /** Phase 1: Base system prompt used in the Soul phase. Tool results are dynamically appended before Soul phase execution in the FC loop. */
   buildSoulSystemBasePrompt: (styleFile: string) => string;
-  /** 已由 main 侧解析好的 style Markdown；build-options 只负责注入边界。 */
+  /** Style Markdown already resolved by the main side; build-options only handles boundary injection. */
   readStylePrompt: (styleId: StyleId) => string;
-  /** 按 provider/model/reasoning/customStyle 解析后的 Soul 采样参数。 */
+  /** Soul sampling parameters resolved by provider/model/reasoning/customStyle. */
   resolveSoulSampling: (input: {
     styleId: StyleId;
     settings: ModelSettingsLite;
     customStyle: CustomStyleConfig;
   }) => ApprovedStyleSampling;
-  /** 第一期：注入 toolRegistry（用于 buildToolSystemPrompt 自动生成目录）。 */
+  /** Phase 1: Injected toolRegistry (used by buildToolSystemPrompt to auto-generate catalog). */
   toolRegistry: { getEnabled(): ReadonlyArray<unknown> };
   logWorldbookInjection: (alwaysOnContext: string, systemContent: string) => void;
   normalizeChatMessages: (raw: ReadonlyArray<unknown>) => ChatMessage[];
@@ -129,12 +129,13 @@ export interface BuildOptionsDeps {
   }>;
 }
 
-/** onRunFinished 副作用所需的 deps（与 BuildOptionsDeps 部分重叠） */
+/** deps needed for onRunFinished side-effects (partially overlapping with BuildOptionsDeps) */
 export interface OnRunFinishedDeps {
   loadModelSettings: () => ModelSettingsLite;
   scheduleMemoryWrite: (userText: string, reply: string) => void;
   scheduleSocialAtomExtraction?: (input: SocialExtractionInput) => void;
   inferRuntimeState: (userText: string, reply: string, flag: boolean) => { status: string };
+  inferFeelingState?: (text: string) => string;
   runtimeState: {
     status: string;
     expression: number;
@@ -170,7 +171,7 @@ export interface ModelSettingsLite {
   model: string;
   apiKey: string;
   explicitTransport?: "openai" | "anthropic" | "auto";
-  /** 顶层 reasoning 镜像（来自 perProvider[currentProvider].reasoning）。adapter 直接读。 */
+  /** Top-level reasoning mirror (from perProvider[currentProvider].reasoning). Read directly by adapter. */
   reasoning?: import("../../shared/reasoning").ReasoningPreference;
   runtimeSync?: string;
   stickerEnabled?: boolean;
@@ -237,14 +238,14 @@ function stripTurnModelContextForSideEffects(text: string): string {
     // Legacy stored turns can still contain the retired localized section
     // markers. Keep them as input-only aliases so document payloads never leak
     // into memory or sticker side effects after upgrading.
-    "\n\n【本轮文件】",
-    "\n\n【文档内容】",
-    "\n\n【图片视觉信息】",
-    "\n\n【图片附件】",
-    "【本轮文件】",
-    "【文档内容】",
-    "【图片视觉信息】",
-    "【图片附件】",
+    "\n\n\u3010\u672c\u8f6e\u6587\u4ef6\u3011",
+    "\n\n\u3010\u6587\u6863\u5185\u5bb9\u3011",
+    "\n\n\u3010\u56fe\u7247\u89c6\u89c9\u4fe1\u606f\u3011",
+    "\n\n\u3010\u56fe\u7247\u9644\u4ef6\u3011",
+    "\u3010\u672c\u8f6e\u6587\u4ef6\u3011",
+    "\u3010\u6587\u6863\u5185\u5bb9\u3011",
+    "\u3010\u56fe\u7247\u89c6\u89c9\u4fe1\u606f\u3011",
+    "\u3010\u56fe\u7247\u9644\u4ef6\u3011",
   ];
   const cut = markers
     .map((marker) => text.indexOf(marker))
@@ -361,8 +362,8 @@ function buildStylePromptBlock(markdown: string): string {
 }
 
 /**
- * 构造 CyreneAgent.runWithEvents 所需的 options + 提取 latestUserText。
- * 与 index.ts 原 AG-UI bridge 的 buildOptions 行为完全一致。
+ * Construct options required by CyreneAgent.runWithEvents + extract latestUserText.
+ * Completely identical in behavior to the original index.ts AG-UI bridge buildOptions.
  */
 export async function buildAgentRunOptions(
   input: AguiRunInput,
@@ -441,7 +442,7 @@ export async function buildAgentRunOptions(
   const autoInjectedSkillContext = deps.buildAutoInjectedSkillContext(enabledSkills);
   const autoInjectedSoulContext = deps.buildAutoInjectedSoulContext?.(enabledSkills) ?? "";
 
-  // Task Router 可用 Skill 列表（Router 判断 direct/plan 和 Skill 加载用）
+  // Task Router available Skill list (used by Router for direct/plan determination and Skill loading)
   const availableSkills: SkillRouteInfo[] = (enabledSkills as Array<Record<string, unknown>>).map((s) => ({
     id: String(s.id ?? ""),
     description: String(s.description ?? ""),
@@ -535,11 +536,11 @@ export async function buildAgentRunOptions(
     settings,
     customStyle: styleSettings.customStyle as CustomStyleConfig,
   });
-  // 运行模式只决定基础 system；表达 style 始终单独注入 Soul。
+  // Execution mode determines base system only; expressive style is always separately injected into Soul.
   const basePromptMode = isChatMode ? "chat" : "work";
   const enabledTools = deps.toolRegistry.getEnabled();
 
-  // 搜索后端互斥过滤：每轮只暴露当前后端对应的搜索工具
+  // Search backend mutually exclusive filter: expose only search tools corresponding to current backend per turn
   const generalSettings = deps.loadGeneralSettings();
   const activeSearchBackend = ((generalSettings as Record<string, unknown>).searchEngine as string ?? "off") as SearchBackend;
   const filteredBySearch = isChatMode ? [] : filterToolsBySearchBackend(
@@ -552,8 +553,8 @@ export async function buildAgentRunOptions(
     .filter((t) => t.id === "web_search" || t.id.startsWith("minimax-web-search-"))
     .map((t) => t.id);
   console.log(`[Cyrene] search backend=${activeSearchBackend} exposed search tools=[${searchToolIds.join(", ") || "none"}]`);
-  // 第一期：保留旧 systemContent 兼容（已不再使用，保留字段是为了 logger 诊断）。
-  // 同时新增 toolSystemContent / soulSystemBaseContent 两套。
+  // Phase 1: Keep legacy systemContent for compatibility (no longer used, retained for logger diagnostics).
+  // Concurrently adds toolSystemContent / soulSystemBaseContent suites.
   const systemContent =
     (environmentContext ? environmentContext + "\n\n" : "") +
     (conversationTimeContext ? conversationTimeContext + "\n\n---\n\n" : "") +
@@ -567,14 +568,14 @@ export async function buildAgentRunOptions(
     (relationshipContext ? "\n\n" + relationshipContext + "\n\n" : "") +
     attachmentContext;
 
-  // 工具阶段：工具规则 + 运行时工具目录 + 可用 Skill 路由清单。
+  // Tool phase: tool rules + runtime tool catalog + available Skill routing manifest.
   const toolSystemContent = deps.buildToolSystemPrompt(runTools)
     + (skillCatalog ? "\n\n---\n\n" + skillCatalog : "")
     + (autoInjectedSkillContext ? "\n\n---\n\n" + autoInjectedSkillContext : "")
     + (citaContextBlock ? "\n\n" + citaContextBlock : "");
 
-  // Soul 阶段基础 system：人设 + 环境/记忆/关系/附件/渠道（这些是"表达"所需）。
-  // FC 循环在 Soul 阶段追加通用 ToolExecutionContext，并保留 role:tool 协议消息。
+  // Soul phase base system: persona + environment/memory/relationship/attachments/channel (needed for "expression").
+  // FC loop appends common ToolExecutionContext during Soul phase and preserves role:tool protocol messages.
   const soulSystemWithoutCita =
     (environmentContext ? environmentContext + "\n\n" : "") +
     (conversationTimeContext ? conversationTimeContext + "\n\n---\n\n" : "") +
@@ -611,7 +612,7 @@ export async function buildAgentRunOptions(
 
   deps.logWorldbookInjection(alwaysOnContext, systemContent);
 
-  // 第一期：原始 messages 不再携带 system。FC 循环按阶段动态注入。
+  // Phase 1: original messages no longer carry system. FC loop dynamically injects per phase.
   const fcMessages: ChatMessage[] = withDirectImageAttachments(llmMessages as unknown as ChatMessage[], input);
   const cleanFcMessages: ChatMessage[] = withDirectImageAttachments(cleanLlm as unknown as ChatMessage[], input);
   const imageCaptionFallback = buildImageCaptionFallbackMessages(
@@ -670,14 +671,14 @@ export async function buildAgentRunOptions(
 }
 
 /**
- * agent 跑完后的副作用：记忆 + 表情/sticker 推断 + 广播。
- * 与 index.ts 原 AG-UI bridge 的 onRunFinished 行为完全一致。
+ * Side effects after agent completes run: memory + expression/sticker inference + broadcast.
+ * Completely identical in behavior to original index.ts AG-UI bridge onRunFinished.
  *
- * 注意：feeling 字段由 inferRuntimeState 内部副作用更新；本函数只同步 status/expression/updatedAt。
+ * Note: feeling field is updated by inferRuntimeState internal side effect; this function only syncs status/expression/updatedAt.
  *
- * 渠道（wechat/feishu/...）的 sticker 走 OutgoingMessage.parts（统一消息模型）；
- * 桌面聊天窗保留 IPC 广播（向后兼容 + 桌面渲染端 sticker 选择器依赖此事件）。
- * 两者从同一份 sticker 决定出发，不会重复。
+ * Channel (wechat/feishu/...) stickers go through OutgoingMessage.parts (unified message model);
+ * Desktop chat window retains IPC broadcast (backwards compatibility + desktop renderer sticker selector depends on this event).
+ * Both derive from the same sticker decision and will not duplicate.
  */
 export async function onAgentRunFinished(
   result: CyreneRunResult,
@@ -723,7 +724,7 @@ export async function onAgentRunFinished(
     await deps.recordRelationshipTurn({
       userText: sideEffectUserText,
       assistantText: chatContent,
-      cyreneFeeling: deps.runtimeState.feeling ?? "平静",
+      cyreneFeeling: deps.runtimeState.feeling ?? "Calm",
       channel: channel ?? "desktop",
     });
   });
@@ -754,19 +755,27 @@ export async function onAgentRunFinished(
     });
   }
   if (settings.runtimeSync === "local") {
+    if (deps.inferFeelingState) {
+      const localFeeling = deps.inferFeelingState(sideEffectUserText + " " + chatContent);
+      deps.setRuntimeState({
+        feeling: localFeeling,
+        expression: deps.feelingToExpression[localFeeling] ?? 0,
+        updatedAt: Date.now(),
+      });
+    }
     deps.broadcastRuntimeStateChanged();
   } else if (settings.runtimeSync === "llm") {
     deps.broadcastRuntimeStateChanged();
-    // 心情观察器在 channels bot (wechat/feishu) 上跳过：节省一次 LLM 调用、加快首条回复
-    // 桌面聊天（channel === undefined）照常跑，保持 Live2D 表情/心情跟随对话变化
+    // Mood observer is skipped on channel bots (wechat/feishu): saves one LLM call and speeds up first reply
+    // Desktop chat (channel === undefined) runs normally to keep Live2D expression/mood aligned with conversation
     if (!usesSocialExtractor && channel !== "wechat" && channel !== "feishu") {
       void deps.observeRuntimeState(settings, [], sideEffectUserText, chatContent);
     }
   }
 
-  // 返回 sticker 决定：
-  // - 桌面聊天窗的 sticker 由 IPC 广播（上面 chatWin.webContents.send）继续承担
-  // - 渠道（wechat/feishu/...）的 sticker 由 dispatcher 收下，纳入 OutgoingMessage.parts
-  // - 桌面路径也返回 sticker 以保持签名一致；dispatcher 路径下 channel !== undefined 才会消费它
+  // Return sticker decision:
+  // - Desktop chat window sticker continues to be handled by IPC broadcast (above chatWin.webContents.send)
+  // - Channel (wechat/feishu/...) stickers are received by dispatcher and included in OutgoingMessage.parts
+  // - Desktop path also returns sticker to maintain signature consistency; dispatcher consumes it only when channel !== undefined
   return { sticker };
 }

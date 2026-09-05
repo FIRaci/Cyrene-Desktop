@@ -1,5 +1,4 @@
-// Sim 自带的 fixture 解析（极简版，专注行为测试，不复用 worldbook.ts 的 parser）
-// 解析：## title / - 触发词: k1, k2 / - 常驻: 是 / - 优先级: N / - 内在价值: N
+// Sim fixture parser (minimal version for behavior testing)
 import type { WorldbookEntry } from "../../rag/worldbook";
 
 export function parseFixtureMarkdown(content: string, fileName: string): WorldbookEntry[] {
@@ -36,13 +35,18 @@ export function parseFixtureMarkdown(content: string, fileName: string): Worldbo
     }
 
     if (!title || contentLines.join("").trim() === "") continue;
-    const keywords = (meta["触发词"] ?? "")
+    const keywords = (meta["keywords"] ?? meta["Keywords"] ?? meta["\u89e6\u53d1\u8bcd"] ?? "")
       .split(/[,，、]/)
       .map((k) => k.trim())
       .filter(Boolean);
-    const intrinsicValue = parseFloat(meta["内在价值"] ?? meta["初始分"] ?? meta["initial_score"] ?? meta["intrinsic_value"] ?? "60") || 60;
-    const priority = parseInt(meta["优先级"] ?? "5") || 5;
-    const permanent = ["是", "yes", "true"].includes(meta["常驻"] ?? "");
+    const intrinsicValue = parseFloat(
+      meta["intrinsic_value"] ?? meta["intrinsicValue"] ?? meta["Intrinsic Value"] ??
+      meta["\u5185\u5728\u4ef7\u503c"] ?? meta["\u521d\u59cb\u5206"] ?? meta["initial_score"] ?? "60"
+    ) || 60;
+    const priority = parseInt(
+      meta["priority"] ?? meta["Priority"] ?? meta["\u4f18\u5148\u7ea7"] ?? "5"
+    ) || 5;
+    const permanent = ["\u662f", "yes", "true"].includes((meta["permanent"] ?? meta["Permanent"] ?? meta["\u5e38\u9a7b"] ?? "").toLowerCase());
 
     entries.push({
       id: `wb_${fileName}_${title.replace(/\s+/g, "_")}`,

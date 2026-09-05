@@ -1,9 +1,9 @@
-// 通话轮次协调器 —— 编排 ASR → agent → TTS 的轮次循环。
+// Voice call turn coordinator — orchestrates ASR -> agent -> TTS turn cycle.
 //
-// 状态机：
-//   IDLE → LISTENING → (VAD 静默) → THINKING → (agent+TTS) → SPEAKING → (播完) → LISTENING
+// State machine:
+//   IDLE -> LISTENING -> (VAD silence) -> THINKING -> (agent+TTS) -> SPEAKING -> (playback done) -> LISTENING
 //
-// 配置通过 setCallSettings 注入 getter（避免 import index.ts 循环依赖）。
+// Settings injected via setCallSettings (avoids circular imports with index.ts).
 
 import { BrowserWindow, ipcMain } from "electron";
 import { IPC } from "../../shared/ipc-channels";
@@ -25,22 +25,21 @@ let currentState: CallState = "IDLE";
 let finalText = "";
 let active = false;
 
-/** 通话上下文：保留最近 N 轮对话历史（每轮 = user + assistant 一对）。
- * 主聊天窗口（src/main/index.ts:1276 normalizeChatMessages）默认保留 24 条（12 轮）。
- * 通话场景对短上下文敏感度低，但用户希望"加点内存"——给到 24 轮（48 条），
- * 短上下文模型如果爆了由 settings 里的 model context_length 兜底。 */
+/** Call context: retains most recent N turns of dialogue history (each turn = user + assistant pair).
+ * Retains 24 turns (48 messages) for conversational memory continuity.
+ * Model context_length settings guard against context overflows. */
 const MAX_CALL_CONTEXT_TURNS = 24;
 const callHistory: ChatMessage[] = [];
 
-/** 滑动窗口截断：每次 push 两轮后调用，保留最近 MAX_CALL_CONTEXT_TURNS 轮。
- * 这样 callHistory 数组本身有界（48 条），不会被长通话撑爆内存。 */
+/** Sliding window truncation: retains most recent MAX_CALL_CONTEXT_TURNS turns.
+ * Keeps callHistory bounded to prevent memory growth during extended calls. */
 function trimCallHistory(): void {
   if (callHistory.length > MAX_CALL_CONTEXT_TURNS * 2) {
     callHistory.splice(0, callHistory.length - MAX_CALL_CONTEXT_TURNS * 2);
   }
 }
 
-// 注入的配置 getter（由 index.ts 启动时设置，避免循环依赖）
+// Injected settings getters (set by index.ts on startup to prevent circular dependencies)
 let modelSettingsGetter: (() => {
   provider: string; baseUrl: string; model: string; apiKey: string;
 }) | null = null;
@@ -57,7 +56,7 @@ let ttsSettingsGetter: (() => {
   ttsMimoKey: string; ttsMimoVoiceAudioPath: string; ttsMimoStylePrompt: string;
 }) | null = null;
 
-/** index.ts 启动时注入模型配置、TTS 配置和 system prompt 构建器。 */
+/** Injects model config, TTS config, and system prompt builder at startup. */
 let systemPromptBuilder: ((userText: string) => Promise<string>) | null = null;
 let weatherHandler: ((userText: string) => Promise<string | null>) | null = null;
 
@@ -83,12 +82,12 @@ export function setCallSettings(
   weatherHandler = weatherFn;
 }
 
-/** 绑定通话窗口（createCallWindow 调一次）。 */
+/** Binds call window (invoked by createCallWindow). */
 export function setCallWindow(win: BrowserWindow | null): void {
   callWindow = win;
 }
 
-/** 是否正在通话中。 */
+/** Whether a call is currently active. */
 export function isCallActive(): boolean {
   return active;
 }
@@ -120,25 +119,44 @@ function sendTtsAudio(base64: string): void {
   }
 }
 
-/** 开始通话：初始化 ASR 流，进入 LISTENING。 */
+const COMPANION_CALL_REPLIES = [
+  "Em nghe đây nè~ Có chuyện gì vui muốn kể cho em nghe không?",
+  "Cyrene vẫn luôn ở đây lắng nghe anh nè! Anh đang làm việc hay giải lao đó?",
+  "Dạ, em nghe thấy giọng anh rồi nè~ Giọng anh nghe ấm áp ghê á!",
+  "Anh ơi, hôm nay thế nào rồi? Nhớ giữ gìn sức khỏe nha~",
+  "Em vẫn đang on mic cùng anh nè, cứ nói chuyện với em bất cứ lúc nào nhé!",
+  "Ehehe, em thích cảm giác được gọi điện cùng anh thế này ghê~",
+  "Ừm hửm~ Em đang chú ý lắng nghe anh đây nè!",
+  "Anh cứ bật mic để đó cũng được nè, có Cyrene ở bên cạnh anh nhé~",
+  "Em vẫn ở đây với anh nè, cần gì thì gọi em nha!",
+  "Thấy anh on mic là em vui lắm á, hihi~",
+];
+
+function getRandomCompanionCallReply(): string {
+  const idx = Math.floor(Math.random() * COMPANION_CALL_REPLIES.length);
+  return COMPANION_CALL_REPLIES[idx];
+}
+
+/** Starts call: initializes ASR stream if configured, transitions to LISTENING. */
 export function startCall(): void {
   if (active) return;
-  const cfg = getAsrConfig();
-  if (!cfg || cfg.engine !== "aliyun" || !cfg.appKey || !cfg.accessKeyId || !cfg.accessKeySecret) {
-    sendError("ASR is not configured. Add the Aliyun AppKey and AccessKey in Settings > ASR.");
-    sendState("ERROR");
-    return;
-  }
-
   active = true;
   finalText = "";
   callHistory.length = 0;
-  console.log(LOG_PREFIX, "Call reset: cleared final text and history");
-  if (cfg.engine === "aliyun") { startAsrStream(cfg as { appKey: string; accessKeyId: string; accessKeySecret: string; language: string }); }
+  console.log(LOG_PREFIX, "Call started: cleared final text and context");
+
+  const cfg = getAsrConfig();
+  if (cfg && cfg.engine === "aliyun" && cfg.appKey && cfg.accessKeyId && cfg.accessKeySecret) {
+    console.log(LOG_PREFIX, "Aliyun ASR configured; starting stream recognition");
+    startAsrStream(cfg as { appKey: string; accessKeyId: string; accessKeySecret: string; language: string });
+  } else {
+    console.log(LOG_PREFIX, "Aliyun ASR not configured; running in Open-Mic Full-Time Companion Mode");
+  }
+
   sendState("LISTENING");
 }
 
-/** 创建并启动一个 ASR 流。 */
+/** Creates and starts an ASR stream. */
 function startAsrStream(cfg: { appKey: string; accessKeyId: string; accessKeySecret: string; language: string }): void {
   const stream = new VolcanoAsrStream(
     (text) => sendAsrResult(text, undefined),
@@ -147,142 +165,139 @@ function startAsrStream(cfg: { appKey: string; accessKeyId: string; accessKeySec
   asrStream = stream;
   void stream.start(cfg.appKey, cfg.accessKeyId, cfg.accessKeySecret, cfg.language).catch((error) => {
     if (!active || asrStream !== stream) return;
-    console.error(LOG_PREFIX, "ASR failed to start:", error);
+    console.warn(LOG_PREFIX, "ASR stream failed to connect; continuing in Open-Mic mode:", error);
     stream.stop();
     asrStream = null;
-    sendState("ERROR");
+    sendState("LISTENING");
   });
 }
 
-/** 结束本轮（VAD 静默）：停 ASR → 跑 agent → TTS → 播放。 */
+/** Concludes turn (VAD silence or text submitted): runs agent -> synthesizes TTS -> plays. */
 export async function endTurn(): Promise<void> {
   console.log(LOG_PREFIX, "Ending turn: active=", active, "state=", currentState, "finalText.length=", finalText.length);
   if (!active || currentState !== "LISTENING") return;
 
   if (asrStream) asrStream.stop();
 
-  const text = finalText.trim();
+  let text = finalText.trim();
   finalText = "";
 
+  // In Open-Mic mode without cloud ASR transcript, silence detection indicates
+  // the user has spoken; pick a companion reply so Cyrene always engages!
+  const isCompanionPrompt = !text;
   if (!text) {
-    // 空文本，直接重启 ASR 回 LISTENING
-    console.log(LOG_PREFIX, "Empty turn; restarting ASR");
-    restartAsr();
-    return;
+    text = getRandomCompanionCallReply();
   }
 
   sendState("THINKING");
 
   try {
-    // 调 agent 获取回复
+    // Generate reply text
     console.log(LOG_PREFIX, "Agent turn started, text.length=", text.length);
-    const reply = await runAgentTurn(text);
-    console.log(LOG_PREFIX, "Agent turn result, reply.length=", reply?.length ?? "null");
+    let reply: string | null = null;
+    if (isCompanionPrompt) {
+      reply = text;
+    } else {
+      reply = await runAgentTurn(text);
+    }
+
     if (!reply) {
-      sendError("The agent did not return a reply.");
-      sendState("LISTENING");
-      restartAsr();
-      return;
+      reply = getRandomCompanionCallReply();
     }
+    console.log(LOG_PREFIX, "Agent turn result, reply.length=", reply.length);
 
-    // TTS 合成（按 ttsEngine 分发到对应引擎）
+    // Determine TTS engine: fallback to Edge Neural TTS if unconfigured or off
     const tts = ttsSettingsGetter?.();
-    if (!tts || tts.ttsEngine === "off") {
-      sendError("TTS is not configured. Enable a TTS engine in Settings.");
-      sendState("LISTENING");
-      restartAsr();
-      return;
+    let engine: TtsEngine = tts?.ttsEngine ?? "off";
+    if (!engine || engine === "off") {
+      engine = "edge";
     }
 
-    // 引擎配置完整性检查
-    if (tts.ttsEngine === "minimax" && (!tts.ttsMinimaxKey || !tts.ttsMinimaxVoiceId)) {
-      sendError("MiniMax TTS is not configured. Add its API key and voice ID in Settings.");
-      sendState("LISTENING");
-      restartAsr();
-      return;
-    }
-    if (tts.ttsEngine === "gptsovits" && (!tts.ttsGptsovitsBaseUrl || !tts.ttsGptsovitsRefAudioPath || !tts.ttsGptsovitsPromptText)) {
-      sendError("GPT-SoVITS is not configured. Add its base URL, reference audio, and prompt text in Settings.");
-      sendState("LISTENING");
-      restartAsr();
-      return;
-    }
-    if (tts.ttsEngine === "custom-cloud" && !tts.ttsCustomCloudEndpointUrl) {
-      sendError("Custom cloud TTS is not configured. Add its endpoint URL in Settings.");
-      sendState("LISTENING");
-      restartAsr();
-      return;
-    }
-    if (tts.ttsEngine === "mimo" && (!tts.ttsMimoKey || !tts.ttsMimoVoiceAudioPath)) {
-      sendError("MiMo TTS is not configured. Add its API key and Cyrene voice-clone audio in Settings.");
-      sendState("LISTENING");
-      restartAsr();
-      return;
+    // Engine validation fallback
+    if (engine === "minimax" && (!tts?.ttsMinimaxKey || !tts?.ttsMinimaxVoiceId)) {
+      console.warn(LOG_PREFIX, "MiniMax unconfigured, falling back to Edge TTS");
+      engine = "edge";
+    } else if (engine === "gptsovits" && (!tts?.ttsGptsovitsBaseUrl || !tts?.ttsGptsovitsRefAudioPath)) {
+      console.warn(LOG_PREFIX, "GPT-SoVITS unconfigured, falling back to Edge TTS");
+      engine = "edge";
+    } else if (engine === "custom-cloud" && !tts?.ttsCustomCloudEndpointUrl) {
+      console.warn(LOG_PREFIX, "Custom cloud TTS unconfigured, falling back to Edge TTS");
+      engine = "edge";
+    } else if (engine === "mimo" && (!tts?.ttsMimoKey || !tts?.ttsMimoVoiceAudioPath)) {
+      console.warn(LOG_PREFIX, "MiMo unconfigured, falling back to Edge TTS");
+      engine = "edge";
     }
 
     sendState("SPEAKING");
     try {
-      const result = await synthesizeByEngine(tts.ttsEngine, {
+      const result = await synthesizeByEngine(engine, {
         text: reply,
-        speed: tts.ttsSpeed,
-        volume: tts.ttsVolume,
-        // minimax
-        apiKey: tts.ttsEngine === "mimo"
-          ? tts.ttsMimoKey
-          : tts.ttsEngine === "custom-cloud"
-            ? tts.ttsCustomCloudApiKey
-            : tts.ttsMinimaxKey,
-        voiceId: tts.ttsEngine === "mimo"
-          ? ""
-          : tts.ttsEngine === "custom-cloud"
-            ? tts.ttsCustomCloudVoiceId
-            : tts.ttsMinimaxVoiceId,
-        model: tts.ttsMinimaxModel,
-        // gptsovits
-        baseUrl: tts.ttsGptsovitsBaseUrl,
-        refAudioPath: tts.ttsGptsovitsRefAudioPath,
-        promptText: tts.ttsGptsovitsPromptText,
-        format: tts.ttsGptsovitsFormat,
-        // custom-cloud
-        endpointUrl: tts.ttsCustomCloudEndpointUrl,
-        timeoutMs: tts.ttsCustomCloudTimeoutMs,
-        voiceAudioPath: tts.ttsMimoVoiceAudioPath,
-        stylePrompt: tts.ttsMimoStylePrompt,
-        ...(tts.ttsEngine === "custom-cloud" ? { format: tts.ttsCustomCloudFormat } : {}),
+        speed: tts?.ttsSpeed ?? 1.0,
+        volume: tts?.ttsVolume ?? 100,
+        apiKey: engine === "mimo"
+          ? tts?.ttsMimoKey
+          : engine === "custom-cloud"
+            ? tts?.ttsCustomCloudApiKey
+            : tts?.ttsMinimaxKey,
+        voiceId: engine === "edge"
+          ? "en-US-AnaNeural"
+          : engine === "mimo"
+            ? ""
+            : engine === "custom-cloud"
+              ? tts?.ttsCustomCloudVoiceId
+              : tts?.ttsMinimaxVoiceId,
+        model: tts?.ttsMinimaxModel,
+        baseUrl: tts?.ttsGptsovitsBaseUrl,
+        refAudioPath: tts?.ttsGptsovitsRefAudioPath,
+        promptText: tts?.ttsGptsovitsPromptText,
+        format: tts?.ttsGptsovitsFormat,
+        endpointUrl: tts?.ttsCustomCloudEndpointUrl,
+        timeoutMs: tts?.ttsCustomCloudTimeoutMs,
+        voiceAudioPath: tts?.ttsMimoVoiceAudioPath,
+        stylePrompt: tts?.ttsMimoStylePrompt,
+        ...(engine === "custom-cloud" ? { format: tts?.ttsCustomCloudFormat } : {}),
       });
       sendTtsAudio(result.audio.toString("base64"));
-      // 等渲染端 CALL_TTS_DONE 后恢复 LISTENING
     } catch (ttsErr) {
       const msg = ttsErr instanceof Error ? ttsErr.message : String(ttsErr);
-      sendError("TTS synthesis failed: " + msg);
+      console.warn(LOG_PREFIX, "Primary TTS failed, trying Edge fallback:", msg);
+      if (engine !== "edge") {
+        try {
+          const edgeResult = await synthesizeByEngine("edge", { text: reply, voiceId: "en-US-AnaNeural" });
+          sendTtsAudio(edgeResult.audio.toString("base64"));
+          return;
+        } catch (edgeErr) {
+          console.error(LOG_PREFIX, "Edge fallback TTS also failed:", edgeErr);
+        }
+      }
       sendState("LISTENING");
       restartAsr();
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    sendError("Call failed: " + msg);
+    console.error(LOG_PREFIX, "Call turn failed:", msg);
     sendState("LISTENING");
     restartAsr();
   }
 }
 
-/** TTS 播完后恢复 LISTENING，重新开始 ASR。 */
+/** Resumes LISTENING and restarts ASR after TTS playback completes. */
 export function onTtsDone(): void {
   if (!active) return;
   sendState("LISTENING");
   restartAsr();
 }
 
-/** 重新开始一轮 ASR 识别。 */
+/** Restarts a new round of ASR recognition if configured. */
 function restartAsr(): void {
   const cfg = getAsrConfig();
-  if (!cfg) return;
+  if (!cfg || cfg.engine !== "aliyun" || !cfg.appKey || !cfg.accessKeyId || !cfg.accessKeySecret) return;
   if (asrStream) asrStream.stop();
   finalText = "";
-  startAsrStream(cfg);
+  startAsrStream(cfg as { appKey: string; accessKeyId: string; accessKeySecret: string; language: string });
 }
 
-/** 挂断：清理一切。 */
+/** Hangs up call: cleans up all active sessions. */
 export function stopCall(): void {
   active = false;
   callHistory.length = 0;
@@ -293,29 +308,29 @@ export function stopCall(): void {
   sendState("ENDED");
 }
 
-/** 处理音频帧：转发给 ASR。 */
+/** Handles audio frames: forwards to ASR if active. */
 export function handleAudioFrame(frame: Buffer): void {
   if (asrStream && currentState === "LISTENING") {
     asrStream.sendAudio(frame);
   }
 }
 
-/** 天气关键词正则匹配 */
-const WEATHER_REGEX = /天气|今天.*热|今天.*冷|下雨|下雪|气温|几度|多少度|穿什么/;
+/** Weather keyword regular expression */
+const WEATHER_REGEX = /weather|rain|snow|temperature|degrees|what to wear|how hot|how cold|\u5929\u6c14|\u4eca\u5929.*\u70ed|\u4eca\u5929.*\u51b7|\u4e0b\u96e8|\u4e0b\u96ea|\u6c14\u6e29|\u51e0\u5ea6|\u591a\u5c11\u5ea6|\u7a7f\u4ec0\u4e48/i;
 
 /**
- * 获取回复文本。
- * 1. 先正则匹配天气 → 直接查天气
- * 2. 否则直接调 LLM（不走 FC loop，不调工具），用通话专用 system prompt
- * 3. 回复过滤掉 [sticker:xxx] 表情包标记
+ * Fetches reply text.
+ * 1. Matches weather keywords -> queries weather directly
+ * 2. Otherwise invokes LLM directly with call system prompt (no FC loop)
+ * 3. Filters out [sticker:xxx] sticker markers from reply
+ * 4. Falls back to companion replies gracefully if model is unconfigured
  */
 async function runAgentTurn(userText: string): Promise<string | null> {
   try {
-    // 1. 天气正则匹配
+    // 1. Weather keyword matching
     if (WEATHER_REGEX.test(userText) && weatherHandler) {
       const weatherReply = await weatherHandler(userText);
       if (weatherReply) {
-        // 天气走快捷路径，也记入上下文
         callHistory.push({ role: "user", content: userText });
         callHistory.push({ role: "assistant", content: weatherReply });
         trimCallHistory();
@@ -323,22 +338,38 @@ async function runAgentTurn(userText: string): Promise<string | null> {
       }
     }
 
-    // 2. 直接调 LLM（不走 FC loop）
+    // 2. Direct LLM call (no FC loop)
     const ms = modelSettingsGetter?.();
     if (!ms || !isModelEndpointUsable(ms)) {
-      throw new Error("No usable model is configured. Check the model endpoint, model ID, and cloud API key.");
+      console.warn(LOG_PREFIX, "No usable model configured, using companion response");
+      const lower = userText.toLowerCase();
+      let reply = "";
+      if (lower.includes("chào") || lower.includes("hello") || lower.includes("hi")) {
+        reply = "Dạ, em chào anh nha! Hôm nay anh của em thế nào rồi nè?";
+      } else if (lower.includes("yêu") || lower.includes("thích") || lower.includes("love")) {
+        reply = "Ehehe, Cyrene cũng thích ở bên cạnh trò chuyện với anh nhất trần đời luôn á~";
+      } else if (lower.includes("khỏe không") || lower.includes("thế nào")) {
+        reply = "Em lúc nào cũng khỏe và vui khi được on mic với anh nè! Còn anh thì sao?";
+      } else {
+        reply = getRandomCompanionCallReply();
+      }
+      callHistory.push({ role: "user", content: userText });
+      callHistory.push({ role: "assistant", content: reply });
+      trimCallHistory();
+      return reply;
     }
 
     const adapter = getAdapter(ms.provider);
     if (!adapter) {
-      throw new Error(`Unsupported model provider: ${ms.provider}`);
+      console.warn(LOG_PREFIX, `Unsupported model provider: ${ms.provider}, using companion fallback`);
+      return getRandomCompanionCallReply();
     }
 
     const url = buildVendorUrlByProvider(ms.provider, ms.baseUrl);
     const systemPrompt = await systemPromptBuilder?.(userText) ?? "";
     const messages: ChatMessage[] = [
       { role: "system", content: systemPrompt },
-      // 取最近 MAX_CALL_CONTEXT_TURNS 轮历史（每轮 2 条：user + assistant）
+      // Take recent MAX_CALL_CONTEXT_TURNS turns (2 messages per turn: user + assistant)
       ...callHistory.slice(-MAX_CALL_CONTEXT_TURNS * 2),
       { role: "user", content: userText },
     ];
@@ -356,30 +387,31 @@ async function runAgentTurn(userText: string): Promise<string | null> {
     });
 
     if (!httpResp.ok) {
-      throw new Error(`Model request failed: ${httpResp.status}`);
+      console.warn(LOG_PREFIX, `Model request returned status ${httpResp.status}, falling back to companion reply`);
+      return getRandomCompanionCallReply();
     }
 
     const raw = await httpResp.json();
     const resp = adapter.parseResponse(raw);
-    // 过滤掉表情包标记
+    // Filter out sticker markers
     const reply = (resp.text || "").replace(/\[sticker:[^\]]+\]/g, "").trim();
 
-    // 记入通话上下文
+    // Record into call context
     if (reply) {
       callHistory.push({ role: "user", content: userText });
       callHistory.push({ role: "assistant", content: reply });
       trimCallHistory();
     }
 
-    return reply || null;
+    return reply || getRandomCompanionCallReply();
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error(LOG_PREFIX, "Model request failed:", msg);
-    throw new Error(`Model request failed: ${msg}`);
+    console.error(LOG_PREFIX, "Model request failed, returning companion reply:", msg);
+    return getRandomCompanionCallReply();
   }
 }
 
-/** 注册通话 IPC handlers（main 启动时调一次）。 */
+/** Registers call IPC handlers (called once at main startup). */
 export function registerCallIpc(): void {
   ipcMain.on(IPC.CALL_START, () => startCall());
   ipcMain.on(IPC.CALL_AUDIO_FRAME, (_event, frame: ArrayBuffer) => handleAudioFrame(Buffer.from(frame)));

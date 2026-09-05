@@ -119,4 +119,19 @@ describe("pet window move controller", () => {
     expect(destroyedWindow.getPosition).not.toHaveBeenCalled();
     expect(destroyedWindow.setPosition).not.toHaveBeenCalled();
   });
+
+  it("accumulates relative moves smoothly without dropping deltas or hitting stale reads", () => {
+    const window = createWindow([100, 200]);
+    const persist = vi.fn();
+    const controller = new PetWindowMoveController(() => window, persist);
+
+    controller.moveRelative(10, 5);
+    expect(window.setPosition).toHaveBeenCalledWith(110, 205, false);
+
+    controller.moveRelative(15, -10);
+    expect(window.setPosition).toHaveBeenCalledWith(125, 195, false);
+
+    controller.finishDragging();
+    expect(persist).toHaveBeenCalledWith({ x: 125, y: 195 });
+  });
 });

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Cyrene · Today's Schedule</title>
+  <title>Cyrene · Schedule Planner</title>
   <link rel="stylesheet" href="../ui/tokens.css" />
   <link rel="stylesheet" href="../ui/fonts.css" />
   <link rel="stylesheet" href="../ui/base.css" />
@@ -13,9 +13,11 @@
   <div class="tasks">
     <header class="tasks__titlebar">
       <div class="tasks__title">
-        <span class="tasks__icon" aria-hidden="true">📋</span>
-        <span class="tasks__name">Today's Schedule</span>
-        <span class="tasks__hint">Read-Only</span>
+        <span class="tasks__icon" aria-hidden="true">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        </span>
+        <span class="tasks__name">Schedule Planner</span>
+        <span class="tasks__hint">Calendar</span>
       </div>
       <div class="tasks__titlebar-actions">
         <button type="button" class="tasks__winbtn" id="min-btn" aria-label="Minimize" title="Minimize">
@@ -31,34 +33,125 @@
     </header>
 
     <main class="tasks__body">
-      <section class="schedule-panel" aria-label="Today's Schedule Overview">
+      <section class="schedule-panel" aria-label="Schedule Planner Overview">
 
-        <div class="schedule-count">
-          <span class="schedule-count__value" id="schedule-count">0</span>
-          <span class="schedule-count__unit">pending schedule(s)</span>
-        </div>
-
-        <div class="schedule-date" id="schedule-date"><svg width="14" height="14" viewBox="0 0 48 48" fill="none" aria-hidden="true" style="vertical-align:-2px; margin-right:2px"><path d="M5 19H43V40C43 41.1046 42.1046 42 41 42H7C5.89543 42 5 41.1046 5 40V19Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M5 9C5 7.89543 5.89543 7 7 7H41C42.1046 7 43 7.89543 43 9V19H5V9Z" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M16 4V12" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M32 4V12" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M28 34H34" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 34H20" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M28 26H34" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 26H20" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg> —</div>
-
-        <div class="schedule-usage">
-          <div class="usage-info">
-            <span class="usage-label"><svg width="18" height="18" viewBox="0 0 48 48" fill="none" aria-hidden="true" style="vertical-align:-4px; margin-right:4px"><rect x="4" y="14" width="36" height="20" rx="2" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M42 20H44C45.1046 20 46 20.8954 46 22V26C46 27.1046 45.1046 28 44 28H42V20Z" fill="currentColor"/><path d="M13 21V27" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M19 21V27" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M25 21V27" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M31 24V27" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>Token Usage</span>
-            <span class="usage-number" id="usage-number">0</span>
+        <!-- Top summary: Stat badge, Hanoi weather telemetry, and Realtime date/clock -->
+        <div class="schedule-summary">
+          <div class="schedule-stat-badge" title="Total tasks scheduled for this day">
+            <span class="schedule-count__value" id="schedule-count">0</span>
+            <span class="schedule-count__unit" id="schedule-count-label">task</span>
+          </div>
+          <div class="schedule-meta-group">
+            <div class="schedule-weather-chip" id="schedule-weather" title="Current weather in Hanoi (Open-Meteo)">
+              <span class="weather-loc-icon" aria-hidden="true">📍</span>
+              <span class="weather-city">Hanoi</span>
+              <span class="weather-separator" aria-hidden="true">•</span>
+              <span class="weather-temp" id="weather-temp">28°C</span>
+              <span class="weather-icon" id="weather-icon" aria-hidden="true">⛅</span>
+              <span class="weather-desc" id="weather-desc">Partly Cloudy</span>
+            </div>
+            <div class="schedule-datetime-chip" id="schedule-datetime" title="Current time and selected day">
+              <span class="schedule-weekday" id="schedule-weekday">Saturday</span>
+              <span class="schedule-clock-divider" aria-hidden="true">•</span>
+              <span class="schedule-clock" id="schedule-clock">05/09/2026 07:53:38</span>
+              <span class="schedule-date-tag" id="schedule-date-tag" style="display:none;"></span>
+            </div>
+            <div class="schedule-date-legacy" id="schedule-date" style="display:none;">—</div>
           </div>
         </div>
 
-        <div class="mini-chart" aria-hidden="true">
-          <div class="mini-chart__avg" id="mini-chart__avg"><span>Daily Avg 0</span></div>
-          <div class="mini-chart__bars" id="mini-chart__bars"></div>
-        </div>
+        <!-- Weekly calendar navigator strip -->
+        <section class="calendar-card" aria-label="Weekly Calendar Strip">
+          <div class="calendar-header">
+            <div class="calendar-month-picker" id="calendar-month-picker">
+              <select id="calendar-month-select" class="cal-select cal-select--month" aria-label="Month">
+                <option value="0">January</option>
+                <option value="1">February</option>
+                <option value="2">March</option>
+                <option value="3">April</option>
+                <option value="4">May</option>
+                <option value="5">June</option>
+                <option value="6">July</option>
+                <option value="7">August</option>
+                <option value="8">September</option>
+                <option value="9">October</option>
+                <option value="10">November</option>
+                <option value="11">December</option>
+              </select>
+              <select id="calendar-year-select" class="cal-select cal-select--year" aria-label="Year">
+                <option value="2024">2024</option>
+                <option value="2025">2025</option>
+                <option value="2026">2026</option>
+                <option value="2027">2027</option>
+                <option value="2028">2028</option>
+                <option value="2029">2029</option>
+                <option value="2030">2030</option>
+                <option value="2031">2031</option>
+                <option value="2032">2032</option>
+                <option value="2033">2033</option>
+                <option value="2034">2034</option>
+                <option value="2035">2035</option>
+              </select>
+              <span class="calendar-month-label-sr" id="calendar-month-label" aria-hidden="true" style="display:none;"></span>
+            </div>
+            <div class="calendar-nav-actions">
+              <button type="button" class="cal-nav-btn" id="prev-week-btn" aria-label="Previous Week" title="Previous Week">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+              </button>
+              <button type="button" class="cal-today-btn" id="today-btn" title="Jump to Today">Today</button>
+              <button type="button" class="cal-nav-btn" id="next-week-btn" aria-label="Next Week" title="Next Week">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+              </button>
+            </div>
+          </div>
+          <div class="week-strip" id="week-strip" role="tablist" aria-label="Days of the week"></div>
+        </section>
 
-        <div class="schedule-note" id="schedule-note"><svg width="18" height="18" viewBox="0 0 48 48" fill="none" aria-hidden="true" style="vertical-align:-2px"><title>Token</title><path d="M4 42H44" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><rect x="8" y="28" width="6" height="14" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><rect x="21" y="18" width="6" height="24" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><rect x="34" y="6" width="6" height="36" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/></svg> Token Consumption Trend This Week</div>
+        <!-- Category filter and Add action -->
+        <section class="task-controls" aria-label="Filter and Actions">
+          <div class="category-filters-container">
+            <div class="category-filters" id="category-filters" role="tablist" title="Scroll or drag horizontally to view categories">
+              <button type="button" class="cat-filter is-active" data-cat="all" role="tab" aria-selected="true"><span>All</span></button>
+              <button type="button" class="cat-filter" data-cat="study" role="tab" aria-selected="false">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+                <span>Study</span>
+              </button>
+              <button type="button" class="cat-filter" data-cat="work" role="tab" aria-selected="false">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+                <span>Work</span>
+              </button>
+              <button type="button" class="cat-filter" data-cat="meeting" role="tab" aria-selected="false">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                <span>Meeting</span>
+              </button>
+              <button type="button" class="cat-filter" data-cat="reminder" role="tab" aria-selected="false">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                <span>Reminder</span>
+              </button>
+            </div>
+          </div>
+          <div class="task-controls-actions">
+            <select id="category-dropdown-select" class="category-dropdown-select" aria-label="Category dropdown filter" title="Category Filter">
+              <option value="all">All</option>
+              <option value="study">Study</option>
+              <option value="work">Work</option>
+              <option value="meeting">Meeting</option>
+              <option value="reminder">Reminder</option>
+            </select>
+            <button type="button" class="add-event-btn" id="open-add-modal-btn" title="Add New Event">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+              <span>Add Event</span>
+            </button>
+          </div>
+        </section>
 
+        <!-- Task list for selected day -->
         <section class="task-section" aria-label="Scheduled Tasks List">
-          <div class="task-section__header"><svg width="18" height="18" viewBox="0 0 48 48" fill="none" aria-hidden="true"><path d="M23.9998 44.3332C34.1251 44.3332 42.3332 36.1251 42.3332 25.9999C42.3332 15.8747 34.1251 7.66656 23.9998 7.66656C13.8746 7.66656 5.6665 15.8747 5.6665 25.9999C5.6665 36.1251 13.8746 44.3332 23.9998 44.3332Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M23.7594 15.3536L23.7582 26.3624L31.5305 34.1347" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 9.00001L11 4.00001" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M44 9.00001L37 4.00001" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg> Scheduled Tasks</div>
           <div class="task-list" id="task-list"></div>
         </section>
+
       </section>
+
       <footer class="schedule-footer">
         <button type="button" class="schedule-settings-btn" id="settings-btn" aria-label="Task Settings">
           <span class="schedule-settings-btn__icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 48 48" fill="none" aria-hidden="true" style="display:block"><title>Task Settings</title><path d="M18.2838 43.1713C14.9327 42.1736 11.9498 40.3213 9.58787 37.867C10.469 36.8227 11 35.4734 11 34.0001C11 30.6864 8.31371 28.0001 5 28.0001C4.79955 28.0001 4.60139 28.01 4.40599 28.0292C4.13979 26.7277 4 25.3803 4 24.0001C4 21.9095 4.32077 19.8938 4.91579 17.9995C4.94381 17.9999 4.97188 18.0001 5 18.0001C8.31371 18.0001 11 15.3138 11 12.0001C11 11.0488 10.7786 10.1493 10.3846 9.35011C12.6975 7.1995 15.5205 5.59002 18.6521 4.72314C19.6444 6.66819 21.6667 8.00013 24 8.00013C26.3333 8.00013 28.3556 6.66819 29.3479 4.72314C32.4795 5.59002 35.3025 7.1995 37.6154 9.35011C37.2214 10.1493 37 11.0488 37 12.0001C37 15.3138 39.6863 18.0001 43 18.0001C43.0281 18.0001 43.0562 17.9999 43.0842 17.9995C43.6792 19.8938 44 21.9095 44 24.0001C44 25.3803 43.8602 26.7277 43.594 28.0292C43.3986 28.01 43.2005 28.0001 43 28.0001C39.6863 28.0001 37 30.6864 37 34.0001C37 35.4734 37.531 36.8227 38.4121 37.867C36.0502 40.3213 33.0673 42.1736 29.7162 43.1713C28.9428 40.752 26.676 39.0001 24 39.0001C21.324 39.0001 19.0572 40.752 18.2838 43.1713Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M24 31C27.866 31 31 27.866 31 24C31 20.134 27.866 17 24 17C20.134 17 17 20.134 17 24C17 27.866 20.134 31 24 31Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/></svg></span>
@@ -68,6 +161,72 @@
         <div class="schedule-footer__version">Cyrene v0.9.0</div>
       </footer>
     </main>
+
+    <!-- Modal for adding new schedule item -->
+    <div class="modal-backdrop is-hidden" id="add-modal-backdrop">
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+        <div class="modal-card__header">
+          <h2 class="modal-card__title" id="modal-title">New Schedule Event</h2>
+          <button type="button" class="modal-card__close" id="close-modal-btn" aria-label="Close dialog">×</button>
+        </div>
+
+        <form id="add-schedule-form" class="modal-card__form">
+          <div class="form-group">
+            <label class="form-label" for="task-category-select">Category</label>
+            <div class="form-category-pills" id="form-category-pills">
+              <button type="button" class="cat-choice is-selected" data-cat="study">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+                <span>Study</span>
+              </button>
+              <button type="button" class="cat-choice" data-cat="work">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+                <span>Work</span>
+              </button>
+              <button type="button" class="cat-choice" data-cat="meeting">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                <span>Meeting</span>
+              </button>
+              <button type="button" class="cat-choice" data-cat="reminder">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                <span>Reminder</span>
+              </button>
+            </div>
+            <input type="hidden" id="task-category-input" value="study" />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="task-title-input">Title</label>
+            <input type="text" id="task-title-input" class="form-input" placeholder="e.g. Calculus Lecture, Team Standup, Code Review" required />
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="task-time-input">Time</label>
+              <input type="time" id="task-time-input" class="form-input" value="09:00" required />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="task-repeat-select">Repeat</label>
+              <select id="task-repeat-select" class="form-select">
+                <option value="once">Once</option>
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="task-prompt-input">Cyrene Reminder Note</label>
+            <textarea id="task-prompt-input" class="form-textarea" rows="2" placeholder="What should Cyrene remind or assist you with?"></textarea>
+          </div>
+
+          <div class="modal-card__actions">
+            <button type="button" class="btn-cancel" id="cancel-add-btn">Cancel</button>
+            <button type="submit" class="btn-submit" id="save-schedule-btn">Save Event</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
   </div>
   <script type="module" src="./tasks.ts"></script>
 </body>

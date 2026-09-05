@@ -1,28 +1,32 @@
-// coords —— VLM 文本 → 坐标/布尔/匹配索引 解析。
-// 纯函数，不依赖 electron。VLM 返回 JSON（可能带 ```json 围栏或夹在文本里），
-// 统一要求坐标为 0-1000 归一化，不依赖各模型私有格式。
+// coords — VLM text -> coordinates/boolean/matched index parser.
+// Pure function, independent of electron. VLM returns JSON (may contain ```json fencing or embedded in text).
+// Standardizes coordinates to 0-1000 normalization, independent of model-private formats.
 
-/** 从文本提取首个 JSON 对象并解析。失败返回 null。 */
+/** Extract first JSON object from text and parse. Returns null on failure. */
 function extractJson(text: string): Record<string, unknown> | null {
   const cleaned = text.replace(/```(?:json)?\s*/gi, "").replace(/```/gi, "").trim();
   try {
     const v = JSON.parse(cleaned);
-    return v && typeof v === "object" ? v as Record<string, unknown> : null;
+    return v && typeof v === "object" ? (v as Record<string, unknown>) : null;
   } catch {
     const start = cleaned.indexOf("{");
     const end = cleaned.lastIndexOf("}");
     if (start < 0 || end <= start) return null;
     try {
       const v = JSON.parse(cleaned.slice(start, end + 1));
-      return v && typeof v === "object" ? v as Record<string, unknown> : null;
+      return v && typeof v === "object" ? (v as Record<string, unknown>) : null;
     } catch {
       return null;
     }
   }
 }
 
-/** VLM 文本 → 点击坐标（0-1000 归一化 → 屏幕像素，clamp 边界）。无坐标返回 null。 */
-export function parseClickCoord(text: string, screenW: number, screenH: number): { x: number; y: number } | null {
+/** VLM text -> click coordinates (0-1000 normalized -> screen pixels, clamped to bounds). Returns null if no coordinates. */
+export function parseClickCoord(
+  text: string,
+  screenW: number,
+  screenH: number,
+): { x: number; y: number } | null {
   const obj = extractJson(text);
   if (!obj) return null;
   const x = Number(obj.x);
@@ -33,17 +37,17 @@ export function parseClickCoord(text: string, screenW: number, screenH: number):
   return { x: px, y: py };
 }
 
-/** VLM 文本 → 布尔（vlm_check 用）。JSON {answer:bool} 优先；否则中文/英文关键词。无法判断 null。 */
+/** VLM text -> boolean (used for vlm_check). Prefers JSON {answer:bool}; falls back to keywords. Returns null if inconclusive. */
 export function parseBoolAnswer(text: string): boolean | null {
   const obj = extractJson(text);
   if (obj && typeof obj.answer === "boolean") return obj.answer;
-  // false 关键词优先（"没有"含"有"但整体应是 false）
-  if (/无|没|否|不|未|关|false|no/i.test(text)) return false;
-  if (/是|有|开|true|yes/i.test(text)) return true;
+  // false keywords take precedence
+  if (/\u65e0|\u6ca1|\u5426|\u4e0d|\u672a|\u5173|false|no/i.test(text)) return false;
+  if (/\u662f|\u6709|\u5f00|true|yes/i.test(text)) return true;
   return null;
 }
 
-/** VLM 文本 → 匹配索引（vlm_compare 用）。{match:index}；索引超 [0,refCount) 返回 null。 */
+/** VLM text -> match index (used for vlm_compare). {match:index}; returns null if index outside [0,refCount). */
 export function parseMatchIndex(text: string, refCount: number): number | null {
   const obj = extractJson(text);
   if (!obj) return null;

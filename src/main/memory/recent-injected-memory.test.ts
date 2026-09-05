@@ -38,9 +38,9 @@ describe("recent injected memory tracking", () => {
 
   it("records l2 ids from RAG search entry metadata only", () => {
     recordRecentMemorySearchEntries([
-      { text: "用户喜欢跑步", metadata: { l2Id: "l2_run" } },
-      { text: "旧格式无 l2 id", metadata: {} },
-      { text: "导入文档", metadata: { l2Id: 123 } },
+      { text: "User likes running", metadata: { l2Id: "l2_run" } },
+      { text: "Old format without l2 id", metadata: {} },
+      { text: "Imported document", metadata: { l2Id: 123 } },
     ], 1000)
 
     expect(getRecentlyInjectedMemoryIds(1000)).toEqual(["l2_run"])

@@ -1,19 +1,19 @@
 /**
- * Soul Execution Context -- 通用执行投影层。
+ * Soul Execution Context -- Generic execution projection layer.
  *
- * 将 ToolCallResult 确定性投影为 Soul 可安全使用的结构化上下文。
- * 不暴露原始 output、toolId、args 或内部引用。
+ * Deterministically projects ToolCallResult into structured context safely usable by Soul.
+ * Does not expose raw output, toolId, args, or internal references.
  *
- * 核心原则：
- * - actions 只证明某个工具调用真实发生过
- * - projections 才定义这个工具结果允许 Soul 声称到什么程度
- * - executionStatus=succeeded ≠ 业务动作完成 ≠ 用户目标完成
+ * Core principles:
+ * - actions only prove a tool call actually took place
+ * - projections define the extent to which Soul is permitted to make claims from the tool result
+ * - executionStatus=succeeded != business action completed != user goal achieved
  */
 
 import type { ToolCallResult } from "./types";
 import type { ToolDefinition } from "./tool-registry";
 
-// ── 尺寸限制 ──────────────────────────────────────────────
+// -- Size limits --
 
 const MAX_PROJECTION_ITEMS = 10;
 const MAX_ATTRIBUTES_PER_ITEM = 8;
@@ -21,7 +21,7 @@ const MAX_STRING_LENGTH = 500;
 const MAX_ARRAY_ITEMS = 10;
 const MAX_TOTAL_PROJECTION_LENGTH = 12_000;
 
-// ── 控制标签转义 ──────────────────────────────────────────
+// -- Control tag escaping --
 
 const CONTROL_TAGS = [
   "SOUL_PHASE_RULES",
@@ -44,7 +44,7 @@ function escapeControlTags(text: string): string {
   );
 }
 
-// ── 路径安全 ──────────────────────────────────────────────
+// -- Path safety --
 
 const FORBIDDEN_SEGMENTS = new Set(["__proto__", "prototype", "constructor"]);
 
@@ -61,7 +61,7 @@ function getValueByPath(obj: unknown, path: string): unknown {
   return current;
 }
 
-// ── 值清洗 ────────────────────────────────────────────────
+// -- Value sanitization --
 
 type ProjectionValue = string | number | boolean | string[];
 
@@ -83,7 +83,7 @@ function sanitizeValue(value: unknown): ProjectionValue | undefined {
   return undefined;
 }
 
-// ── 类型定义 ──────────────────────────────────────────────
+// -- Type definitions --
 
 export type ProjectionSource = "trusted_internal" | "external_untrusted";
 
@@ -163,7 +163,7 @@ export type SoulProjection =
     };
 
 export interface SoulAction {
-  /** 安全语义名称；未配置 soulActionLabel 时不输出此字段 */
+  /** Safe semantic name; omitted when soulActionLabel is not configured */
   actionLabel?: string;
   executionStatus: "succeeded" | "failed" | "denied" | "cancelled" | "timed_out";
   terminal: boolean;
@@ -176,7 +176,7 @@ export interface SoulExecutionContext {
   projections: SoulProjection[];
 }
 
-// ── 通用错误消息 ──────────────────────────────────────────
+// -- Common error messages --
 
 const COMMON_ERROR_MESSAGES: Record<string, string> = {
   E_PERMISSION_DENIED: "Permission denied; user authorization is required",
@@ -202,7 +202,7 @@ function mapExecutionStatus(
   return "failed";
 }
 
-// ── 投影器 ────────────────────────────────────────────────
+// -- Projectors --
 
 function projectEntityList(
   parsed: unknown,
@@ -322,7 +322,7 @@ function projectResult(
   result: ToolCallResult,
   config: SoulProjectionConfig,
 ): SoulProjection | undefined {
-  // action_completed with tool_status 不需要解析 output
+  // action_completed with tool_status does not require parsing output
   if (config.projector === "action_completed" && config.confirmation.kind === "tool_status") {
     return projectActionCompleted(result, undefined, config);
   }
@@ -346,12 +346,12 @@ function projectResult(
   }
 }
 
-// ── 主构建函数 ────────────────────────────────────────────
+// -- Main builder function --
 
 /**
- * 对单个工具结果执行投影，返回 SoulProjection 或 undefined。
- * 供 Layer 2 (buildSoulExecutionContext) 和 planVerify 共享使用。
- * 不依赖 Soul Prompt 文本，只调用确定性投影逻辑。
+ * Projects a single tool result, returning SoulProjection or undefined.
+ * Shared by Layer 2 (buildSoulExecutionContext) and planVerify.
+ * Does not depend on Soul Prompt text, calling only deterministic projection logic.
  */
 export function projectToolResult(
   result: ToolCallResult,
@@ -401,7 +401,7 @@ export function buildSoulExecutionContext(
   return { actions, projections };
 }
 
-// ── 输出格式化 ────────────────────────────────────────────
+// -- Output formatting --
 
 export function formatSoulExecutionContext(ctx: SoulExecutionContext): string {
   return [

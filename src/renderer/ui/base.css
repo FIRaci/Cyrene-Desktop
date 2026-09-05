@@ -9,6 +9,7 @@
 html, body {
   margin: 0;
   padding: 0;
+  color-scheme: dark;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -29,6 +30,14 @@ input, textarea, select {
   background: none;
   border: none;
   outline: none;
+}
+select {
+  color-scheme: dark;
+}
+select option,
+select optgroup {
+  background-color: #241e42;
+  color: #fdf2f8;
 }
 a {
   color: var(--rb-pink-400);

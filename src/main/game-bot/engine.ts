@@ -1,17 +1,17 @@
-// engine —— 步骤解释器。逐原语执行 GameRecipe，支持 branch/变量/settle/retry。
-// 核心纯逻辑：通过 BotTools 接口调用工具（依赖注入），不直接 import screenshot/input/vlm，
-// 因此可用 mock BotTools 单测。settle/sleep 也走注入，便于 fake timer。
+// engine — step interpreter. Executes GameRecipe primitives, supporting branch/variables/settle/retry.
+// Core pure logic: accesses capabilities via BotTools dependency injection, without importing screenshot/input/vlm directly,
+// making unit testing with mock BotTools straightforward. settle/sleep are also injected for fake timers.
 
 import type { GameRecipe, Step } from "./types";
 import type { BotTools, ProgressCb } from "./bot-tools";
 
 export interface RunContext {
   tools: BotTools;
-  vars?: Record<string, string>;      // 注入变量（exe_path / vlm_config 等）
-  settleMs?: number;                   // vlm_* 截图前等待，默认 3000
+  vars?: Record<string, string>;      // Injected variables (exe_path / vlm_config etc.)
+  settleMs?: number;                   // Wait before vlm_* screenshot, default 3000
   sleep?: (ms: number) => Promise<void>;
   onProgress?: ProgressCb;
-  signal?: { aborted: boolean };       // 中止信号：true 则在当前步骤后停止
+  signal?: { aborted: boolean };       // Abort signal: true stops execution after current step
 }
 
 export interface RunResult {
@@ -23,7 +23,7 @@ export interface RunResult {
 
 const defaultSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-/** 替换 ${var} 为 vars 中的值。 */
+/** Replaces ${var} with values from vars. */
 function resolveVars(s: string, vars: Record<string, unknown>): string {
   return s.replace(/\$\{(\w+)\}/g, (_, k) => {
     const v = vars[k];
@@ -32,8 +32,8 @@ function resolveVars(s: string, vars: Record<string, unknown>): string {
 }
 
 /**
- * 求 branch.if 表达式 → 布尔。
- * 支持 "${var}" / "${var == 'val'}" / "${var == 1}" / 裸 true/false。
+ * Evaluates branch.if expression -> boolean.
+ * Supports "${var}" / "${var == 'val'}" / "${var == 1}" / bare true/false.
  */
 function evalExpr(expr: string, vars: Record<string, unknown>): boolean {
   const m = expr.trim().match(/^\$\{(\w+)\s*(?:==\s*(.+?))?\}$/);

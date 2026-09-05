@@ -8,7 +8,7 @@ import {
   type SearchBackend,
 } from "./search-backend-filter";
 
-// ── API Key 校验 ──────────────────────────
+// -- API Key validation --
 
 describe("validateSearchApiKey", () => {
   it("accepts a valid ASCII key", () => {
@@ -29,20 +29,20 @@ describe("validateSearchApiKey", () => {
   it("rejects empty key", () => {
     const result = validateSearchApiKey("", "Test Key");
     expect(result.valid).toBe(false);
-    expect(result.error).toContain("不能为空");
+    expect(result.error).toContain("cannot be empty");
   });
 
   it("rejects whitespace-only key", () => {
     const result = validateSearchApiKey("   ", "Test Key");
     expect(result.valid).toBe(false);
-    expect(result.error).toContain("不能为空");
+    expect(result.error).toContain("cannot be empty");
     expect(result.diagnostics.trimmed).toBe(true);
   });
 
   it("rejects non-ASCII characters", () => {
-    const result = validateSearchApiKey("sk-abc中文123", "Test Key");
+    const result = validateSearchApiKey("sk-abc\u4e2d\u6587123", "Test Key");
     expect(result.valid).toBe(false);
-    expect(result.error).toContain("非 ASCII");
+    expect(result.error).toContain("non-ASCII");
     expect(result.diagnostics.hasNonAscii).toBe(true);
   });
 
@@ -55,7 +55,7 @@ describe("validateSearchApiKey", () => {
   it("rejects control characters", () => {
     const result = validateSearchApiKey("sk-abc\x00123", "Test Key");
     expect(result.valid).toBe(false);
-    expect(result.error).toContain("控制字符");
+    expect(result.error).toContain("control characters");
     expect(result.diagnostics.hasControlChars).toBe(true);
   });
 
@@ -86,7 +86,7 @@ describe("validateSearchApiKey", () => {
   });
 });
 
-// ── 搜索工具过滤 ──────────────────────────
+// -- Search tool filtering --
 
 describe("shouldExposeSearchTool", () => {
   it("exposes built-in web_search for bocha backend", () => {

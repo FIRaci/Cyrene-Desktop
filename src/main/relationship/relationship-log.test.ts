@@ -16,9 +16,9 @@ describe("relationship log", () => {
     const store = new RelationshipLogStore(filePath)
 
     await store.recordTurn({
-      userText: "记忆确认卡片不要，太影响观感了！",
-      assistantText: "明白，这个不做。",
-      cyreneFeeling: "温柔",
+      userText: "No memory confirmation cards, they are too intrusive and ruin the experience!",
+      assistantText: "Understood, will not do that.",
+      cyreneFeeling: "gentle",
       channel: "desktop",
     })
 
@@ -28,10 +28,10 @@ describe("relationship log", () => {
     }
 
     expect(data.entries).toHaveLength(1)
-    expect(data.entries[0].userMood).toBe("明确边界")
-    expect(data.entries[0].relationshipSignal).toContain("低打扰")
-    expect(data.entries[0].nextCareCue).toContain("不要弹确认")
-    expect(data.dailySummaries[0].summary).toContain("明确边界")
+    expect(data.entries[0].userMood).toBe("clear boundary")
+    expect(data.entries[0].relationshipSignal).toContain("low disturbance")
+    expect(data.entries[0].nextCareCue).toContain("Do not pop confirmation")
+    expect(data.dailySummaries[0].summary).toContain("clear boundary")
   })
 
   it("builds a compact context from recent cues", async () => {
@@ -39,17 +39,17 @@ describe("relationship log", () => {
     const store = new RelationshipLogStore(filePath)
 
     await store.recordTurn({
-      userText: "我今天有点累，先别安排太多",
-      assistantText: "那就慢一点来。",
-      cyreneFeeling: "担心",
+      userText: "I'm a bit tired today, don't schedule too much for now",
+      assistantText: "Then let's take it slowly.",
+      cyreneFeeling: "concerned",
       channel: "desktop",
     })
 
     const context = await store.buildContext()
 
-    expect(context).toContain("【近期关系线索】")
-    expect(context).toContain("用户最近状态")
-    expect(context).toContain("疲惫")
-    expect(context).toContain("下次回应提示")
+    expect(context).toContain("[Recent Relationship Cues]")
+    expect(context).toContain("User recent state")
+    expect(context).toContain("tired")
+    expect(context).toContain("Next response cue")
   })
 })

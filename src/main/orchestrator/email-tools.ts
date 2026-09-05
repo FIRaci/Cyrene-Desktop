@@ -1,11 +1,11 @@
-// ✉️ 邮件发送工具 —— SMTP 直发，支持附件/抄送/多收件人。
+// Email sending tool: SMTP direct send, supports attachments / CC / multiple recipients.
 //
-// 设计原则：
-// - 复用 GeneralSettings 中 SMTP 配置（host/port/secure/user/pass/fromName）
-// - 用 nodemailer 发送，每次 execute 新建 transport（不缓存，配置即时生效）
-// - 发信前用 requestUserChoice 弹确认卡片（复用现有 ask_user_choice 机制）
-// - 配置通过 setEmailConfig 注入 getter（避免 import index.ts 循环依赖）
-// - 错误以 [错误]/[send_email] 字符串返回，不抛异常（流回对话）
+// Design principles:
+// - Reuses SMTP configuration from GeneralSettings
+// - Uses nodemailer, creates new transport per execution without caching
+// - Displays confirmation card before sending via requestUserChoice
+// - Configuration injected via setEmailConfig to break circular dependency
+// - Returns error string instead of throwing exceptions
 
 import * as fs from "fs";
 import * as path from "path";
@@ -17,7 +17,7 @@ const LOG_PREFIX = "[EmailTools]";
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // ══════════════════════════════════════════════════════════
-// 配置注入
+// Configuration injection
 // ══════════════════════════════════════════════════════════
 
 let emailEnabledGetter: (() => boolean) | null = null;
@@ -28,7 +28,7 @@ let smtpUserGetter: (() => string) | null = null;
 let smtpPassGetter: (() => string) | null = null;
 let fromNameGetter: (() => string) | null = null;
 
-/** index.ts 启动时注入 SMTP 配置获取器（每次执行实时读 GeneralSettings）。 */
+/** Injected SMTP config getter on startup. */
 export function setEmailConfig(
   enabledGetter: () => boolean,
   hostGetter: () => string,
@@ -48,11 +48,11 @@ export function setEmailConfig(
 }
 
 // ══════════════════════════════════════════════════════════
-// 工具入口
+// Tool entrypoint
 // ══════════════════════════════════════════════════════════
 
 async function executeSendEmail(args: Record<string, unknown>): Promise<string> {
-  // 1. 读配置 + 启用检查
+  // 1. Read config + enabled check
   const enabled = emailEnabledGetter?.() ?? false;
   if (!enabled) {
     return "[Error] Email feature is disabled. Please enable it in Settings.";
@@ -67,7 +67,7 @@ async function executeSendEmail(args: Record<string, unknown>): Promise<string> 
   const secure = smtpSecureGetter?.() ?? (port === 465);
   const fromName = fromNameGetter?.() ?? "";
 
-  // 2. 校验收件人
+  // 2. Validate recipients
   const to = (args.to as unknown[] ?? []).map(String).map(s => s.trim()).filter(Boolean);
   if (to.length === 0) {
     return "[Error] Recipient list is empty";
@@ -82,7 +82,7 @@ async function executeSendEmail(args: Record<string, unknown>): Promise<string> 
     return `[Error] Invalid CC email: ${invalidCc}`;
   }
 
-  // 3. 正文
+  // 3. Body text
   const subject = String(args.subject ?? "").trim();
   const body = String(args.body ?? "").trim();
   const html = args.html ? String(args.html) : undefined;
@@ -93,7 +93,7 @@ async function executeSendEmail(args: Record<string, unknown>): Promise<string> 
     return "[Error] Email body cannot be empty";
   }
 
-  // 4. 【前置校验】附件存在性
+  // 4. Validate attachment existence
   const attachments = (args.attachments as unknown[] ?? []).map(String).map(s => s.trim()).filter(Boolean);
   for (const p of attachments) {
     if (!fs.existsSync(p)) {
@@ -101,41 +101,41 @@ async function executeSendEmail(args: Record<string, unknown>): Promise<string> 
     }
   }
 
-  // 5. 确认卡片（实现注意点 12.4：摘要只取 body 纯文本，不截取 html）
+  // 5. Confirmation card (summary uses plain text only)
   const bodyPreview = body.length > 100 ? body.slice(0, 100) + "…" : body;
   const attachNames = attachments.length > 0
     ? attachments.map(p => path.basename(p)).join(", ")
-    : "（无）";
+    : "(none)";
   const question = [
-    "确认发送邮件？",
-    `收件人：${to.join(", ")}`,
-    cc.length > 0 ? `抄送：${cc.join(", ")}` : null,
-    `主题：${subject}`,
-    `正文摘要：${bodyPreview}`,
-    `附件：${attachNames}`,
+    "Confirm sending email?",
+    `To: ${to.join(", ")}`,
+    cc.length > 0 ? `Cc: ${cc.join(", ")}` : null,
+    `Subject: ${subject}`,
+    `Body preview: ${bodyPreview}`,
+    `Attachments: ${attachNames}`,
   ].filter(Boolean).join("\n");
   const options: ChoiceOption[] = [
-    { label: "发送", value: "send" },
-    { label: "取消", value: "cancel" },
+    { label: "Send", value: "send" },
+    { label: "Cancel", value: "cancel" },
   ];
   const choice = await requestUserChoice(question, options, "cancel");
   if (choice !== "send") {
     return "[send_email] User cancelled sending";
   }
 
-  // 6. 发送（实现注意点 12.2：fromName 转义；12.3：cc 空数组传 undefined；12.5：每次新建 transport）
+  // 6. Send: fromName escaping, cc handling, fresh transport
   try {
-    // 实现注意点 12.5：每次 execute 新建 transport，不缓存模块级实例
+    // Creates fresh transport per execution
     const transport = nodemailer.createTransport({
       host,
       port,
       secure,
       auth: { user, pass },
     });
-    // 实现注意点 12.2：fromName 双引号转义（RFC 5322）
+    // Quotes fromName per RFC 5322
     const safeName = fromName.replace(/"/g, '\\"');
     const from = fromName ? `"${safeName}" <${user}>` : user;
-    // 实现注意点 12.3：cc 为空数组时传 undefined，避免空 CC 头
+    // Pass undefined for empty cc array to avoid empty CC header
     const ccField = cc.length > 0 ? cc.join(", ") : undefined;
     const info = await transport.sendMail({
       from,
@@ -156,10 +156,10 @@ async function executeSendEmail(args: Record<string, unknown>): Promise<string> 
 }
 
 // ══════════════════════════════════════════════════════════
-// 注册
+// Registration
 // ══════════════════════════════════════════════════════════
 
-/** 注册邮件工具。index.ts startup 调一次。 */
+/** Register email tools on startup. */
 export function registerEmailTools(): void {
   toolRegistry.register({
     id: "send_email",

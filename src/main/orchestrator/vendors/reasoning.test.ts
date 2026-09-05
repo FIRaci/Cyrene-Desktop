@@ -85,15 +85,15 @@ const toggleEffortAnthropicCap: ReasoningCapability = {
   supportsDisable: true,
 };
 
-describe("applyReasoningPreference — auto 路径", () => {
-  test("auto + 任何 control → 不增加字段", () => {
+describe("applyReasoningPreference -- auto path", () => {
+  test("auto + any control -> does not add fields", () => {
     const body = { model: "x", messages: [] };
     expect(applyReasoningPreference(body, { mode: "auto" }, noneCap, ctx)).toEqual(body);
     expect(applyReasoningPreference(body, { mode: "auto" }, toggleQwenCap, ctx)).toEqual(body);
     expect(applyReasoningPreference(body, { mode: "auto" }, toggleAdaptiveCap, ctx)).toEqual(body);
   });
 
-  test("不修改入参（snapshot）", () => {
+  test("does not mutate input params (snapshot)", () => {
     const body = { model: "x", messages: [] };
     const snapshot = { ...body };
     applyReasoningPreference(body, { mode: "on" }, toggleAdaptiveCap, ctx);
@@ -102,38 +102,38 @@ describe("applyReasoningPreference — auto 路径", () => {
 });
 
 describe("applyReasoningPreference — none / dynamic", () => {
-  test("none + 任何 mode → body 不变", () => {
+  test("none + any mode -> body unchanged", () => {
     const body = { messages: [] };
     expect(applyReasoningPreference(body, { mode: "on" }, noneCap, ctx)).toEqual(body);
     expect(applyReasoningPreference(body, { mode: "off" }, noneCap, ctx)).toEqual(body);
   });
 
-  test("dynamic + 任何 mode → body 不变", () => {
+  test("dynamic + any mode -> body unchanged", () => {
     const body = { messages: [] };
     expect(applyReasoningPreference(body, { mode: "on" }, dynamicCap, ctx)).toEqual(body);
     expect(applyReasoningPreference(body, { mode: "off" }, dynamicCap, ctx)).toEqual(body);
   });
 });
 
-describe("applyReasoningPreference — fixed-on 归一化（用户修订 #3）", () => {
-  test("fixed-on + thinking-type + off → effective=on，注入 { type: 'enabled' }", () => {
+describe("applyReasoningPreference -- fixed-on normalization", () => {
+  test("fixed-on + thinking-type + off -> effective=on, injects { type: 'enabled' }", () => {
     const body = {};
     const result = applyReasoningPreference(body, { mode: "off" }, fixedOnThinkingCap, ctx);
     expect(result).toEqual({ thinking: { type: "enabled" } });
   });
 
-  test("fixed-on + requestStyle=none + off → body 不变（K2.7-Code 路径）", () => {
+  test("fixed-on + requestStyle=none + off -> body unchanged (K2.7-Code path)", () => {
     const body = { messages: [] };
     expect(applyReasoningPreference(body, { mode: "off" }, fixedOnNoneCap, ctx)).toEqual(body);
   });
 
-  test("fixed-on + anthropic-adaptive + auto → 注入 { type: 'adaptive' }", () => {
+  test("fixed-on + anthropic-adaptive + auto -> injects { type: 'adaptive' }", () => {
     const body = {};
     const result = applyReasoningPreference(body, { mode: "auto" }, fixedOnAdaptiveCap, ctx);
     expect(result).toEqual({ thinking: { type: "adaptive" } });
   });
 
-  test("fixed-on + on → 注入启用字段", () => {
+  test("fixed-on + on -> injects enable field", () => {
     const body = {};
     const result = applyReasoningPreference(body, { mode: "on" }, fixedOnAdaptiveCap, ctx);
     expect(result).toEqual({ thinking: { type: "adaptive" } });
@@ -156,12 +156,12 @@ describe("applyReasoningPreference — toggle", () => {
       .toEqual({ thinking: { type: "enabled" } });
   });
 
-  test("thinking-type + on + keepOnTools=true + hasTools → { type: 'enabled', keep: 'all' }（K2.6 路径）", () => {
+  test("thinking-type + on + keepOnTools=true + hasTools -> { type: 'enabled', keep: 'all' } (K2.6 path)", () => {
     expect(applyReasoningPreference({}, { mode: "on" }, toggleThinkingKeepCap, ctxWithTools))
       .toEqual({ thinking: { type: "enabled", keep: "all" } });
   });
 
-  test("thinking-type + on + keepOnTools=false + hasTools → 无 keep（K2.5 路径）", () => {
+  test("thinking-type + on + keepOnTools=false + hasTools -> no keep (K2.5 path)", () => {
     expect(applyReasoningPreference({}, { mode: "on" }, toggleThinkingNoKeepCap, ctxWithTools))
       .toEqual({ thinking: { type: "enabled" } });
   });
@@ -171,7 +171,7 @@ describe("applyReasoningPreference — toggle", () => {
       .toEqual({ thinking: { type: "disabled" } });
   });
 
-  test("anthropic-adaptive（MiniMax-M3）+ on → { type: 'adaptive' }（不是 enabled）", () => {
+  test("anthropic-adaptive (MiniMax-M3) + on -> { type: 'adaptive' } (not enabled)", () => {
     expect(applyReasoningPreference({}, { mode: "on" }, toggleAdaptiveCap, ctx))
       .toEqual({ thinking: { type: "adaptive" } });
   });
@@ -182,14 +182,14 @@ describe("applyReasoningPreference — toggle", () => {
   });
 });
 
-describe("applyReasoningPreference — effort / supportsDisable（用户修订 #1）", () => {
-  test("effort + on + effort 在 supportedEfforts → reasoning_effort 字段", () => {
+describe("applyReasoningPreference -- effort / supportsDisable", () => {
+  test("effort + on + effort in supportedEfforts -> reasoning_effort field", () => {
     expect(applyReasoningPreference({}, { mode: "on", effort: "max" }, effortDisableCap, ctx))
       .toEqual({ reasoning_effort: "max" });
   });
 
-  test("effort + on + effort 不在 supportedEfforts（已被 resolveEffectiveReasoning 退回 defaultEffort）→ reasoning_effort 用 defaultEffort", () => {
-    // 模拟 resolveEffectiveReasoning 已把 'max' 退回 'high' 后的 preference
+  test("effort + on + effort not in supportedEfforts -> reasoning_effort uses defaultEffort", () => {
+    // Simulate preference after fallback from 'max' to 'high'
     expect(applyReasoningPreference({}, { mode: "on", effort: "high" }, effortDisableCap, ctx))
       .toEqual({ reasoning_effort: "high" });
   });
@@ -199,16 +199,16 @@ describe("applyReasoningPreference — effort / supportsDisable（用户修订 #
       .toEqual({ reasoning_effort: "none" });
   });
 
-  test("effort + off + supportsDisable=false → body 不变（OpenAI GPT-5.6 路径）", () => {
+  test("effort + off + supportsDisable=false -> body unchanged (GPT-5.6 path)", () => {
     expect(applyReasoningPreference({}, { mode: "off" }, effortNoDisableCap, ctx))
       .toEqual({});
   });
 });
 
 describe("applyReasoningPreference — toggle-effort", () => {
-  test("anthropic-adaptive + on → output_config.effort 合并已有 output_config", () => {
+  test("anthropic-adaptive + on -> output_config.effort merges with existing output_config", () => {
     const body = { output_config: { other_field: "keep_me" } };
-    // cap.supportedEfforts = [low, medium, high]，high 在列里
+    // cap.supportedEfforts = [low, medium, high], high is listed
     expect(applyReasoningPreference(body, { mode: "on", effort: "high" }, toggleEffortAnthropicCap, ctx))
       .toEqual({
         output_config: { other_field: "keep_me", effort: "high" },
@@ -216,9 +216,9 @@ describe("applyReasoningPreference — toggle-effort", () => {
       });
   });
 
-  test("anthropic-adaptive + on + effort 不在 supportedEfforts → 安全网退回 defaultEffort", () => {
+  test("anthropic-adaptive + on + effort not in supportedEfforts -> safety net falls back to defaultEffort", () => {
     const body = {};
-    // xhigh 不在 [low, medium, high] 内
+    // xhigh is not in [low, medium, high]
     expect(applyReasoningPreference(body, { mode: "on", effort: "xhigh" }, toggleEffortAnthropicCap, ctx))
       .toEqual({
         output_config: { effort: "high" },
@@ -226,7 +226,7 @@ describe("applyReasoningPreference — toggle-effort", () => {
       });
   });
 
-  test("anthropic-adaptive + on + 无 output_config → 直接设 effort", () => {
+  test("anthropic-adaptive + on + no output_config -> sets effort directly", () => {
     expect(applyReasoningPreference({}, { mode: "on", effort: "high" }, toggleEffortAnthropicCap, ctx))
       .toEqual({
         output_config: { effort: "high" },
@@ -234,7 +234,7 @@ describe("applyReasoningPreference — toggle-effort", () => {
       });
   });
 
-  test("anthropic-adaptive + off → thinking.type=disabled，不发 effort", () => {
+  test("anthropic-adaptive + off -> thinking.type=disabled, does not send effort", () => {
     expect(applyReasoningPreference({}, { mode: "off" }, toggleEffortAnthropicCap, ctx))
       .toEqual({ thinking: { type: "disabled" } });
   });
@@ -255,8 +255,8 @@ describe("applyReasoningPreference — toggle-effort", () => {
   });
 });
 
-describe("applyReasoningPreference — 已有字段合并", () => {
-  test("anthropic output_config 已有字段不被覆盖", () => {
+describe("applyReasoningPreference -- merge with existing fields", () => {
+  test("anthropic output_config existing fields are not overwritten", () => {
     const body = {
       output_config: { format: "json", effort: "old" },
     };
@@ -270,7 +270,7 @@ describe("applyReasoningPreference — 已有字段合并", () => {
     expect((result.output_config as Record<string, unknown>).effort).toBe("high");
   });
 
-  test("已有 body 字段保留", () => {
+  test("existing body fields are preserved", () => {
     const body = { model: "x", messages: [{ role: "user", content: "hi" }] };
     const result = applyReasoningPreference(body, { mode: "on" }, toggleAdaptiveCap, ctx);
     expect(result.model).toBe("x");

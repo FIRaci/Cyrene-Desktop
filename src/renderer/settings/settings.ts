@@ -1,6 +1,7 @@
 import "../ui/base.css";
 import "./settings.css";
 import "../ui/theme";
+import { showModal, showConfirm, showAlert } from "../ui/modal";
 import neteaseLogoUrl from "./assets/netease-logo.svg?url";
 import {
   formatChatRelativeTime,
@@ -64,58 +65,6 @@ export {
   type MusicStatusSnapshot,
   type NeteaseViewState,
 } from "../../shared/music-view-state";
-
-// Inline modal (to avoid Vite tree-shaking)
-let _cyModalOverlay: HTMLElement | null = null;
-function _initModalOverlay(): void {
-  if (_cyModalOverlay) return;
-  _cyModalOverlay = document.createElement("div");
-  _cyModalOverlay.id = "cy-modal-overlay";
-  _cyModalOverlay.className = "cy-modal-overlay is-hidden";
-  _cyModalOverlay.innerHTML = [
-    '<div class="cy-modal" role="alertdialog" aria-modal="true">',
-    '  <div class="cy-modal__head">',
-    '    <span class="cy-modal__icon" id="cy-modal-icon">📌</span>',
-    '    <h3 class="cy-modal__title" id="cy-modal-title">Notice</h3>',
-    '  </div>',
-    '  <hr class="cy-modal__divider">',
-    '  <p class="cy-modal__body" id="cy-modal-message">Are you sure you want to proceed?</p>',
-    '  <div class="cy-modal__actions">',
-    '    <button type="button" class="ghost-btn" id="cy-modal-cancel">Cancel</button>',
-    '    <button type="button" class="btn-primary" id="cy-modal-confirm">Confirm</button>',
-    '  </div>',
-    '</div>',
-  ].join("\n");
-  document.body.appendChild(_cyModalOverlay);
-}
-
-function showModal (options: { title: string; message: string; icon?: string; confirmText?: string; cancelText?: string }): Promise<boolean> {
-  _initModalOverlay();
-  if (!_cyModalOverlay) return Promise.resolve(false);
-  var iconEl = _cyModalOverlay.querySelector("#cy-modal-icon") as HTMLElement;
-  var titleEl = _cyModalOverlay.querySelector("#cy-modal-title") as HTMLElement;
-  var msgEl = _cyModalOverlay.querySelector("#cy-modal-message") as HTMLElement;
-  var cancelBtn = _cyModalOverlay.querySelector("#cy-modal-cancel") as HTMLButtonElement;
-  var confirmBtn = _cyModalOverlay.querySelector("#cy-modal-confirm") as HTMLButtonElement;
-  iconEl.innerHTML = options.icon || "📌";
-  titleEl.textContent = options.title;
-  msgEl.textContent = options.message;
-  cancelBtn.textContent = options.cancelText || "Cancel";
-  confirmBtn.textContent = options.confirmText || "Confirm";
-  _cyModalOverlay.classList.remove("is-hidden");
-  return new Promise(function (resolve) {
-    var cleanup = function (result: boolean) {
-      _cyModalOverlay?.classList.add("is-hidden");
-      cancelBtn.removeEventListener("click", onCancel);
-      confirmBtn.removeEventListener("click", onConfirm);
-      resolve(result);
-    };
-    var onCancel = function () { cleanup(false); };
-    var onConfirm = function () { cleanup(true); };
-    cancelBtn.addEventListener("click", onCancel);
-    confirmBtn.addEventListener("click", onConfirm);
-  });
-}
 
 /**
  * Rich HTML modal.
@@ -246,8 +195,8 @@ interface ProviderProfile {
   apiKey: string;
   displayName?: string;
   /**
-   * 用户在 settings 显式指定的 transport；"auto" = 按 baseUrl 启发式 + capabilities fallback。
-   * main 进程的 resolveTransport() 负责把 "auto" 解析为具体 transport。
+   *  settings  transport；"auto" =  baseUrl  + capabilities fallback.
+   * main  resolveTransport()  "auto"  transport.
    */
   explicitTransport?: "openai" | "anthropic" | "auto";
   reasoning?: ReasoningPreference;
@@ -256,37 +205,37 @@ interface ProviderProfile {
 interface ModelSettings {
   mode: "auto" | "manual";
   provider: string;
-  // 用户给模型起的自定义昵称，留空时用厂商 shortName。状态栏"正在喂养"显示它。
+  // ， shortName."".
   displayName?: string;
   baseUrl: string;
   model: string;
   apiKey: string;
   /**
-   * 当前厂商的 explicitTransport 镜像（顶层字段是 main 进程 perProvider[currentProvider] 的视图）。
-   * UI 改动 transport-select 时，saveConfig 把这个值带给 main 进程折叠回 perProvider。
+   *  explicitTransport （ main  perProvider[currentProvider] ).
+   * UI  transport-select ，saveConfig  main  perProvider.
    */
   explicitTransport?: "openai" | "anthropic" | "auto";
-  /** 当前厂商 reasoning 偏好的顶层镜像。 */
+  /**  reasoning . */
   reasoning?: ReasoningPreference;
-  // 按厂商缓存：切回该厂商时，从这里恢复 baseUrl / model / apiKey
+  // ：， baseUrl / model / apiKey
   perProvider?: Record<string, ProviderProfile>;
   runtimeSync: "off" | "local" | "llm";
   stickerEnabled: boolean;
   stickerSize: "small" | "standard" | "large";
   stickerSimilarityThreshold: number;
-  /** 整个聊天请求的超时（秒）。30-1800，默认 300。 */
+  /** （).30-1800， 300. */
   chatRequestTimeoutSec: number;
-  /** 总轮数。5-30，默认 12。 */
+  /** .5-30， 12. */
   maxIterations: number;
-  /** Plan 步骤失败后重规划次数。1-5，默认 2。 */
+  /** Plan .1-5， 2. */
   maxReplans: number;
-  /** 引用过期重新决策次数。0-3，默认 1。 */
+  /** .0-3， 1. */
   maxRefresh: number;
-  /** 单次 LLM 调用超时（秒）。30-120，默认 75。 */
+  /**  LLM （).30-120， 75. */
   perCallTimeoutSec: number;
-  /** CITA 结构化输出重试总预算（秒）。4-30，默认 8。 */
+  /** CITA （).4-30， 8. */
   citaRepairBudgetSec: number;
-  /** Action Gate 结构化输出重试总预算（秒）。5-40，默认 10。 */
+  /** Action Gate （).5-40， 10. */
   actionGateRepairBudgetSec: number;
   vision?: {
     baseUrl: string;
@@ -360,30 +309,30 @@ interface SchedulerApi {
 
 interface ModelPreset {
   providerName: string;
-  // 厂商短名（去括号后缀），用于状态栏"正在喂养"显示和昵称默认值。
-  // 如 "MiniMax（稀宇科技）" → shortName "MiniMax"。
+  // （)，"".
+  //  "MiniMax" → shortName "MiniMax".
   shortName: string;
   baseUrl: string;
   mainModels: string[];
   iconUrl: string;
-  // 厂商官网链接，显示在预设下拉框旁边，方便用户直接跳转注册/查看文档。
+  // ，，/.
   websiteUrl?: string;
-  // 视觉模型的 OpenAI 兼容 baseUrl。主模型与视觉模型入口不同时使用。
+  //  OpenAI  baseUrl..
   visionBaseUrl?: string;
-  // 该厂商默认主模型是否支持视觉。true 时设置页加载默认勾选"同步主模型"，
-  // 多模态用户开箱即用。与 capabilities.ts 的 supportsVision 镜像，需手动同步。
+  // .true ""，
+  // . capabilities.ts  supportsVision ，.
   supportsVision?: boolean;
-  // 标记为 true 时，该项在 <select> 里显示但不可选；
-  // 用于"已列出但 vendor adapter 还没接好"的情况，避免用户选到后调用直接报错。
+  //  true ， <select> Optional；
+  // " vendor adapter "，.
   disabled?: boolean;
-  // 视觉模型与主模型本质不同（如 MiMo 主 mimo-v2.5-pro、视觉 mimo-v2.5），
-  // 强制独立配置，无法"与主聊天模型相同"。与 supportsVision 正交。
+  // （ MiMo  mimo-v2.5-pro、 mimo-v2.5)，
+  // ，None"". supportsVision .
   independentVision?: boolean;
-  // 独立视觉模型的默认值（applyPreset 在没有保存值时使用）。
+  // （applyPreset ).
   defaultVisionModel?: string;
-  // 独立视觉模型的候选列表（用于视觉模型输入框的 datalist）。
+  // （ datalist).
   visionModels?: string[];
-  // 自定义端点的云端/本地变体共用一张可见卡片，但分别持久化配置。
+  // /，.
   customEndpointMode?: CustomEndpointMode;
   hiddenInPresetList?: boolean;
 }
@@ -506,7 +455,7 @@ interface SettingsApi {
   setPermissionLevel?: (level: string) => Promise<{ ok: boolean; level?: string; error?: string }>;
   testConnection?: (config: { provider: string; baseUrl: string; model: string; apiKey: string; explicitTransport?: "openai" | "anthropic" | "auto"; reasoning?: ReasoningPreference }) => Promise<{ ok: boolean; latency: number; sample?: string; error?: string }>;
   testVision?: (config: { baseUrl: string; apiKey: string; model: string }) => Promise<{ ok: boolean; latency: number; sample?: string; error?: string }>;
-  // main → settings：要求切到指定标签（窗口已打开时由 main 发这个事件）
+  // main → settings：（ main )
   onSwitchSection?: (callback: (section: string) => void) => (() => void) | void;
   channelsGetStatus: () => Promise<Record<string, { phase?: string; message?: string }>>;
   onChannelsStatusChanged: (callback: (status: unknown) => void) => (() => void) | void;
@@ -523,31 +472,31 @@ declare global {
   }
 }
 
-// MiMo 的 icon 是 lobehub-icons 仓库的 PNG（不在 icons-static-svg 包里）。
-// 单独声明，与 8 家 npmmirror SVG 常量解耦（feat/chore 两个 commit 真正独立）。
-// 实施时若图片加载失败，可考虑：1) 锁定 commit hash；2) 下载到本地 assets/icons/mimo.png
+// MiMo  icon  lobehub-icons  PNG（ icons-static-svg ).
+// ， 8  npmmirror SVG （feat/chore  commit ).
+// ，：1)  commit hash；2)  assets/icons/mimo.png
 const MIMO_ICON_URL =
   "https://raw.githubusercontent.com/lobehub/lobe-icons/refs/heads/master/packages/static-png/light/xiaomimimo.png";
 
 const MODEL_PRESETS: ModelPreset[] = [
-  // 当前已适配 9 家：MiniMax / DeepSeek / 豆包 / 智谱 GLM / Kimi / Qwen / ChatGPT / Claude / MiMo
-  // 顺序按使用频率 + 适配优先级；未在此清单内的厂商已硬删，需要时再补回。
+  //  9 ：MiniMax / DeepSeek /  /  GLM / Kimi / Qwen / ChatGPT / Claude / MiMo
+  //  + ；，.
   {
-    providerName: "MiniMax（稀宇科技）",
+    providerName: "MiniMax",
     shortName: "MiniMax",
     baseUrl: "https://api.minimaxi.com/v1",
     mainModels: ["MiniMax-M3", "MiniMax-M2.7", "MiniMax-M2.5"],
     iconUrl: "../icons/providers/minimax.svg",
     websiteUrl: "https://platform.minimaxi.com/",
-    // 主模型和视觉模型默认都走 OpenAI 兼容入口。
+    //  OpenAI .
     visionBaseUrl: "https://api.minimaxi.com/v1",
     supportsVision: true,
   },
   {
-    // DeepSeek：v1 vendor adapter 不为它做协议层强制，仅作为 OpenAI 兼容厂商列出。
-    // 已确认（来自官方定价文档）：支持 Tool Calls / JSON Output；后端原生缓存（命中后输入价跌至 1/50~1/120）。
-    // 缓存能力等 v2 vendor adapter 接入时再利用，v1 不动。
-    providerName: "DeepSeek（深度求索）",
+    // DeepSeek：v1 vendor adapter ， OpenAI .
+    // （)： Tool Calls / JSON Output；（ 1/50~1/120).
+    //  v2 vendor adapter ，v1 .
+    providerName: "DeepSeek",
     shortName: "DeepSeek",
     baseUrl: "https://api.deepseek.com",
     mainModels: ["deepseek-v4-pro", "deepseek-v4-flash"],
@@ -555,8 +504,8 @@ const MODEL_PRESETS: ModelPreset[] = [
     websiteUrl: "https://platform.deepseek.com/",
   },
   {
-    providerName: "豆包（火山方舟）",
-    shortName: "豆包",
+    providerName: "Doubao",
+    shortName: "Doubao",
     baseUrl: "https://ark.cn-beijing.volces.com/api/v3",
     mainModels: [
       "doubao-seed-2-1-pro-260628",
@@ -569,7 +518,7 @@ const MODEL_PRESETS: ModelPreset[] = [
     supportsVision: true,
   },
   {
-    providerName: "GLM（智谱）",
+    providerName: "GLM",
     shortName: "GLM",
     baseUrl: "https://open.bigmodel.cn/api/paas/v4",
     mainModels: ["glm-5.1", "glm-5-turbo", "glm-4.7"],
@@ -577,17 +526,17 @@ const MODEL_PRESETS: ModelPreset[] = [
     websiteUrl: "https://open.bigmodel.cn/",
   },
   {
-    providerName: "Kimi（月之暗面）",
+    providerName: "Kimi",
     shortName: "Kimi",
     baseUrl: "https://api.moonshot.cn/v1",
     mainModels: ["kimi-k2.6", "kimi-k2.5", "kimi-k2-thinking"],
     iconUrl: "../icons/providers/kimi.svg",
     websiteUrl: "https://platform.moonshot.cn/",
-    // k2.6 / k2.7-code 支持 image_url 多模态
+    // k2.6 / k2.7-code supports image_url multimodal
     supportsVision: true,
   },
   {
-    providerName: "Qwen（通义千问）",
+    providerName: "Qwen",
     shortName: "Qwen",
     baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
     mainModels: ["qwen-max", "qwen-plus", "qwen-turbo"],
@@ -595,16 +544,16 @@ const MODEL_PRESETS: ModelPreset[] = [
     websiteUrl: "https://bailian.console.aliyun.com/",
   },
   {
-    providerName: "ChatGPT（OpenAI）",
+    providerName: "ChatGPT",
     shortName: "ChatGPT",
     baseUrl: "https://api.openai.com/v1",
-    // 官方入口只推荐已纳入结构化输出 Profile 的型号；代理与自定义型号走“自定义端点”。
+    // Official endpoint recommends structured output profile models; proxies and custom models use Custom Endpoint.
     mainModels: ["gpt-5.6"],
     iconUrl: "../icons/providers/openai.svg",
     websiteUrl: "https://platform.openai.com/",
   },
   {
-    providerName: "Claude（Anthropic）",
+    providerName: "Claude",
     shortName: "Claude",
     baseUrl: "https://api.anthropic.com/v1",
     mainModels: ["claude-fable-5", "claude-opus-4-8", "claude-sonnet-4-6"],
@@ -612,7 +561,7 @@ const MODEL_PRESETS: ModelPreset[] = [
     websiteUrl: "https://console.anthropic.com/",
   },
   {
-    providerName: "MiMo（小米）",
+    providerName: "MiMo",
     shortName: "MiMo",
     baseUrl: "https://api.xiaomimimo.com/v1",
     mainModels: ["mimo-v2.5-pro"],
@@ -620,14 +569,14 @@ const MODEL_PRESETS: ModelPreset[] = [
     websiteUrl: "https://mimo.mi.com/",
     visionBaseUrl: "https://api.xiaomimimo.com/v1",
     supportsVision: true,
-    // 主模型 mimo-v2.5-pro 不适合做视觉（视觉模型是 mimo-v2.5），强制独立配置
+    // Primary model mimo-v2.5-pro is not suitable for vision; vision model is mimo-v2.5
     independentVision: true,
     defaultVisionModel: "mimo-v2.5",
     visionModels: ["mimo-v2.5"],
   },
   {
     providerName: CUSTOM_ENDPOINT_PROVIDERS.cloud,
-    shortName: "自定义",
+    shortName: "Custom",
     baseUrl: "",
     mainModels: [],
     iconUrl: "../icons/providers/custom-endpoint.svg",
@@ -635,7 +584,7 @@ const MODEL_PRESETS: ModelPreset[] = [
   },
   {
     providerName: CUSTOM_ENDPOINT_PROVIDERS.local,
-    shortName: "本地模型",
+    shortName: "Local Model",
     baseUrl: "",
     mainModels: [],
     iconUrl: "../icons/providers/custom-endpoint.svg",
@@ -655,7 +604,7 @@ if (!window.settings) {
         baseUrl: "https://api.deepseek.com",
         model: "deepseek-v4-pro",
         apiKey: "",
-        runtimeSync: "off",
+        runtimeSync: "llm",
         stickerEnabled: true,
         stickerSize: "standard",
         chatRequestTimeoutSec: 300,
@@ -789,9 +738,9 @@ let editingSchedulerTaskId: string | null = null;
 
 const presetCards = document.getElementById("preset-cards") as HTMLElement;
 const presetWebsiteLink = document.getElementById("preset-website-link") as HTMLAnchorElement;
-// 模式按钮已删除——baseUrl 永远可改、模型名永远可手填（datalist 出预设建议）
-// provider 不再暴露给用户（从预设内部拿，保证 capabilities 匹配不出错）。
-// 用户看到的是"昵称"框——给模型起自定义名字，状态栏"正在喂养"显示它。
+// Delete——baseUrl 、（datalist )
+// provider （， capabilities ).
+// ""——，"".
 const displayNameInput = document.getElementById("display-name") as HTMLInputElement;
 const baseUrlInput = document.getElementById("base-url") as HTMLInputElement;
 const baseUrlResetBtn = document.getElementById("base-url-reset-btn") as HTMLButtonElement;
@@ -801,7 +750,7 @@ const apiKeyInput = document.getElementById("api-key") as HTMLInputElement;
 const apiKeyLabel = document.getElementById("api-key-label") as HTMLElement;
 const apiKeyHint = document.getElementById("api-key-hint") as HTMLElement;
 const testConnectionBtn = document.getElementById("test-connection-btn") as HTMLButtonElement | null;
-// API 协议下拉（auto / openai / anthropic）—— 用户显式 override transport
+// API （auto / openai / anthropic)——  override transport
 const transportSelect = document.getElementById("transport-select") as HTMLSelectElement;
 const transportHint = document.getElementById("transport-hint") as HTMLElement;
 const customEndpointControls = document.getElementById("custom-endpoint-controls") as HTMLElement;
@@ -810,7 +759,7 @@ const customEndpointGuideBtn = document.getElementById("custom-endpoint-guide-bt
 const workFlowAdaptBtn = document.getElementById("work-flow-adapt-btn") as HTMLButtonElement | null;
 const apiNoteText = document.getElementById("api-note-text") as HTMLElement;
 
-// 视觉模型配置区元素
+// 
 const multimodalToggle = document.getElementById("multimodal-toggle") as HTMLInputElement;
 const visionBaseUrlInput = document.getElementById("vision-base-url") as HTMLInputElement;
 const visionApiKeyInput = document.getElementById("vision-api-key") as HTMLInputElement;
@@ -819,7 +768,7 @@ const visionFieldsWrap = document.getElementById("vision-fields-wrap") as HTMLEl
 const testVisionBtn = document.getElementById("test-vision-btn") as HTMLButtonElement;
 const visionTestStatus = document.getElementById("vision-test-status") as HTMLElement;
 
-// 高级运行设置
+// 
 const chatRequestTimeoutSecInput = document.getElementById("chat-request-timeout-sec") as HTMLInputElement;
 const maxIterationsInput = document.getElementById("max-iterations") as HTMLInputElement;
 const maxReplansInput = document.getElementById("max-replans") as HTMLInputElement;
@@ -830,11 +779,11 @@ const actionGateRepairBudgetSecInput = document.getElementById("action-gate-repa
 const advancedToggle = document.getElementById("advanced-toggle") as HTMLButtonElement;
 const advancedFieldsWrap = document.getElementById("advanced-fields-wrap") as HTMLElement;
 
-// 渲染端内存缓存：保存每个厂商上一次填写的 baseUrl / model / apiKey
-// 切厂商时从这里读，保存时同步进去；持久化由 main 进程的 saveModelSettings 负责（perProvider 字段）。
+// ： baseUrl / model / apiKey
+// ，； main  saveModelSettings （perProvider ).
 const providerProfileCache: Record<string, ProviderProfile> = {};
 
-// 当前激活的厂商：每次 applyPreset 后更新；用于"切到下一家厂商前先把当前那家的输入框值缓存住"
+// ： applyPreset ；""
 let activeProvider: string = "";
 let customEndpointMode: CustomEndpointMode = "cloud";
 const runtimeSyncSelect = document.getElementById("runtime-sync") as HTMLElement;
@@ -881,21 +830,21 @@ const stickerThresholdInput = document.getElementById("sticker-threshold") as HT
 const stickerThresholdVal = document.getElementById("sticker-threshold-val") as HTMLElement;
 
 const NAV_LABELS: Record<string, { emoji: string; title: string; hint: string }> = {
-  memory: { emoji: `<img src="../icons/mimi.png" width="24" height="24" alt="" aria-hidden="true" style="vertical-align:-3px" />`, title: "记忆", hint: "管理长期记忆与画像" },
-  chat: { emoji: `<svg style="vertical-align:-3px" width="24" height="24" viewBox="0 0 48 48" fill="none" aria-hidden="true"><path d="M33 38H22V30H36V22H44V38H39L36 41L33 38Z" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 6H36V30H17L13 34L9 30H4V6Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M19 18H20" stroke="currentColor" stroke-width="4" stroke-linecap="round"/><path d="M26 18H27" stroke="currentColor" stroke-width="4" stroke-linecap="round"/><path d="M12 18H13" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></svg>`, title: "聊天", hint: "管理聊天窗口与会话" },
-  user: { emoji: `<svg style="vertical-align:-3px" width="24" height="24" viewBox="0 0 48 48" fill="none" aria-hidden="true"><path d="M44 8H4V38H19L24 43L29 38H44V8Z" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="24" cy="19" r="5" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M33 32C33 27.5817 28.9706 24 24 24C19.0294 24 15 27.5817 15 32" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>`, title: "用户信息", hint: "编辑你的个人资料" },
-  tasks: { emoji: `<svg style="vertical-align:-3px" width="24" height="24" viewBox="0 0 48 48" fill="none" aria-hidden="true"><path d="M23.9998 44.3332C34.1251 44.3332 42.3332 36.1251 42.3332 25.9999C42.3332 15.8747 34.1251 7.66656 23.9998 7.66656C13.8746 7.66656 5.6665 15.8747 5.6665 25.9999C5.6665 36.1251 13.8746 44.3332 23.9998 44.3332Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M23.7594 15.3536L23.7582 26.3624L31.5305 34.1347" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 9.00001L11 4.00001" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M44 9.00001L37 4.00001" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>`, title: "定时任务", hint: "管理定时提醒与日程" },
-	  skills: { emoji: `<svg width="24" height="24" viewBox="0 0 48 48" fill="none" aria-hidden="true" style="vertical-align:-3px"><title>Skills</title><rect x="9" y="8" width="30" height="36" rx="2" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M18 4V10" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M30 4V10" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 19L32 19" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 27L28 27" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 35H24" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>`, title: "Skills", hint: "管理 agent 的 skill 指令（约束如何用工具）" },
-  plugins: { emoji: "🔌", title: "MCP", hint: "扩展功能与第三方集成" },
-	  preferences: { emoji: `<svg width="24" height="24" viewBox="0 0 48 48" fill="none" aria-hidden="true" style="vertical-align:-3px"><title>偏好设置</title><path d="M12 35.0137H9H4V8.01273C4 6.90868 4.89543 6.01367 6 6.01367H42C43.1046 6.01367 44 6.90868 44 8.01273V35.0137H36" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M24 32L14 42H34L24 32Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/></svg>`, title: "偏好设置", hint: "设置聊天窗口和输出行为的默认偏好" },
-	  appearance: { emoji: `<svg width="24" height="24" viewBox="0 0 48 48" fill="none" aria-hidden="true" style="vertical-align:-3px"><title>外观设置</title><path d="M24 44C29.9601 44 26.3359 35.136 30 31C33.1264 27.4709 44 29.0856 44 24C44 12.9543 35.0457 4 24 4C12.9543 4 4 12.9543 4 24C4 35.0457 12.9543 44 24 44Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M28 17C29.6569 17 31 15.6569 31 14C31 12.3431 29.6569 11 28 11C26.3431 11 25 12.3431 25 14C25 15.6569 26.3431 17 28 17Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M16 21C17.6569 21 19 19.6569 19 18C19 16.3431 17.6569 15 16 15C14.3431 15 13 16.3431 13 18C13 19.6569 14.3431 21 16 21Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M17 34C18.6569 34 20 32.6569 20 31C20 29.3431 18.6569 28 17 28C15.3431 28 14 29.3431 14 31C14 32.6569 15.3431 34 17 34Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/></svg>`, title: "外观设置", hint: "调整窗口布局、界面主题与昔涟桌宠" },
-	  general: { emoji: `<svg width="24" height="24" viewBox="0 0 48 48" fill="none" aria-hidden="true" style="vertical-align:-3px"><title>通用设置</title><path d="M18.2838 43.1713C14.9327 42.1736 11.9498 40.3213 9.58787 37.867C10.469 36.8227 11 35.4734 11 34.0001C11 30.6864 8.31371 28.0001 5 28.0001C4.79955 28.0001 4.60139 28.01 4.40599 28.0292C4.13979 26.7277 4 25.3803 4 24.0001C4 21.9095 4.32077 19.8938 4.91579 17.9995C4.94381 17.9999 4.97188 18.0001 5 18.0001C8.31371 18.0001 11 15.3138 11 12.0001C11 11.0488 10.7786 10.1493 10.3846 9.35011C12.6975 7.1995 15.5205 5.59002 18.6521 4.72314C19.6444 6.66819 21.6667 8.00013 24 8.00013C26.3333 8.00013 28.3556 6.66819 29.3479 4.72314C32.4795 5.59002 35.3025 7.1995 37.6154 9.35011C37.2214 10.1493 37 11.0488 37 12.0001C37 15.3138 39.6863 18.0001 43 18.0001C43.0281 18.0001 43.0562 17.9999 43.0842 17.9995C43.6792 19.8938 44 21.9095 44 24.0001C44 25.3803 43.8602 26.7277 43.594 28.0292C43.3986 28.01 43.2005 28.0001 43 28.0001C39.6863 28.0001 37 30.6864 37 34.0001C37 35.4734 37.531 36.8227 38.4121 37.867C36.0502 40.3213 33.0673 42.1736 29.7162 43.1713C28.9428 40.752 26.676 39.0001 24 39.0001C21.324 39.0001 19.0572 40.752 18.2838 43.1713Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M24 31C27.866 31 31 27.866 31 24C31 20.134 27.866 17 24 17C20.134 17 17 20.134 17 24C17 27.866 20.134 31 24 31Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/></svg>`, title: "通用设置", hint: "管理窗口、音频和系统行为" },
-	  api: { emoji: `<svg width="24" height="24" viewBox="0 0 48 48" fill="none" aria-hidden="true" style="vertical-align:-3px"><title>API 设置</title><g clip-path="url(#api-key-nav-clip)"><circle cx="15" cy="33" r="8" fill="none" stroke="currentColor" stroke-width="4"/><path d="M29 16L35.5 22" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 26L37 7" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M35 11L42 17.5" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></g><defs><clipPath id="api-key-nav-clip"><rect width="48" height="48" fill="none"/></clipPath></defs></svg>`, title: "API 设置", hint: "选择预设后只需要填写 API Key。" },
-  cyrene: { emoji: "🌸", title: "昔涟设置", hint: "管理 Agent 行为、记忆、RAG 与权限" },
-  tts: { emoji: "🎙️", title: "TTS 设置", hint: "语音合成与朗读偏好" },
-  asr: { emoji: "🎧", title: "ASR 设置", hint: "语音识别与通话配置" },
-	  tokens: { emoji: `<svg width="24" height="24" viewBox="0 0 48 48" fill="none" aria-hidden="true" style="vertical-align:-3px"><title>Token 用量</title><path d="M4 42H44" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><rect x="8" y="28" width="6" height="14" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><rect x="21" y="18" width="6" height="24" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><rect x="34" y="6" width="6" height="36" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/></svg>`, title: "Token 用量", hint: "查看 API 调用统计与消耗" },
-	  disclaimer: { emoji: `<svg width="24" height="24" viewBox="0 0 48 48" fill="none" aria-hidden="true" style="vertical-align:-3px"><title>免责声明</title><rect x="13" y="10" width="28" height="34" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M35 10V4H8C7.44772 4 7 4.44772 7 5V38H13" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 22H33" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 30H33" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>`, title: "免责声明", hint: "使用条款与隐私说明" },
+  memory: { emoji: `<img src="../icons/mimi.png" width="24" height="24" alt="" aria-hidden="true" style="vertical-align:-3px" />`, title: "Memory", hint: "Manage long-term memory & profile" },
+  chat: { emoji: `<svg style="vertical-align:-3px" width="24" height="24" viewBox="0 0 48 48" fill="none" aria-hidden="true"><path d="M33 38H22V30H36V22H44V38H39L36 41L33 38Z" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 6H36V30H17L13 34L9 30H4V6Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M19 18H20" stroke="currentColor" stroke-width="4" stroke-linecap="round"/><path d="M26 18H27" stroke="currentColor" stroke-width="4" stroke-linecap="round"/><path d="M12 18H13" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></svg>`, title: "Chats", hint: "Manage chat window & sessions" },
+  user: { emoji: `<svg style="vertical-align:-3px" width="24" height="24" viewBox="0 0 48 48" fill="none" aria-hidden="true"><path d="M44 8H4V38H19L24 43L29 38H44V8Z" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="24" cy="19" r="5" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M33 32C33 27.5817 28.9706 24 24 24C19.0294 24 15 27.5817 15 32" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>`, title: "Profile", hint: "Edit your personal information" },
+  tasks: { emoji: `<svg style="vertical-align:-3px" width="24" height="24" viewBox="0 0 48 48" fill="none" aria-hidden="true"><path d="M23.9998 44.3332C34.1251 44.3332 42.3332 36.1251 42.3332 25.9999C42.3332 15.8747 34.1251 7.66656 23.9998 7.66656C13.8746 7.66656 5.6665 15.8747 5.6665 25.9999C5.6665 36.1251 13.8746 44.3332 23.9998 44.3332Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M23.7594 15.3536L23.7582 26.3624L31.5305 34.1347" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 9.00001L11 4.00001" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M44 9.00001L37 4.00001" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>`, title: "Schedule", hint: "Manage timed reminders & schedule" },
+	  skills: { emoji: `<svg width="24" height="24" viewBox="0 0 48 48" fill="none" aria-hidden="true" style="vertical-align:-3px"><title>Skills</title><rect x="9" y="8" width="30" height="36" rx="2" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M18 4V10" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M30 4V10" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 19L32 19" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 27L28 27" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 35H24" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>`, title: "Skills", hint: "Manage agent skill instructions" },
+  plugins: { emoji: `<svg width="24" height="24" viewBox="0 0 48 48" fill="none" aria-hidden="true" style="vertical-align:-3px"><path d="M24 4v8M24 36v8M4 24h8M36 24h8" stroke="currentColor" stroke-width="4" stroke-linecap="round"/><circle cx="24" cy="24" r="10" stroke="currentColor" stroke-width="4" fill="none"/><circle cx="24" cy="24" r="4" fill="currentColor"/></svg>`, title: "MCP", hint: "Extensions & third-party integrations" },
+	  preferences: { emoji: `<svg width="24" height="24" viewBox="0 0 48 48" fill="none" aria-hidden="true" style="vertical-align:-3px"><title>Preferences</title><path d="M12 35.0137H9H4V8.01273C4 6.90868 4.89543 6.01367 6 6.01367H42C43.1046 6.01367 44 6.90868 44 8.01273V35.0137H36" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M24 32L14 42H34L24 32Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/></svg>`, title: "Preferences", hint: "Default preferences for chat and output behavior" },
+	  appearance: { emoji: `<svg width="24" height="24" viewBox="0 0 48 48" fill="none" aria-hidden="true" style="vertical-align:-3px"><title>Appearance</title><path d="M24 44C29.9601 44 26.3359 35.136 30 31C33.1264 27.4709 44 29.0856 44 24C44 12.9543 35.0457 4 24 4C12.9543 4 4 12.9543 4 24C4 35.0457 12.9543 44 24 44Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M28 17C29.6569 17 31 15.6569 31 14C31 12.3431 29.6569 11 28 11C26.3431 11 25 12.3431 25 14C25 15.6569 26.3431 17 28 17Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M16 21C17.6569 21 19 19.6569 19 18C19 16.3431 17.6569 15 16 15C14.3431 15 13 16.3431 13 18C13 19.6569 14.3431 21 16 21Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M17 34C18.6569 34 20 32.6569 20 31C20 29.3431 18.6569 28 17 28C15.3431 28 14 29.3431 14 31C14 32.6569 15.3431 34 17 34Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/></svg>`, title: "Appearance", hint: "Adjust window layout, theme & pet character" },
+	  general: { emoji: `<svg width="24" height="24" viewBox="0 0 48 48" fill="none" aria-hidden="true" style="vertical-align:-3px"><title>General</title><path d="M18.2838 43.1713C14.9327 42.1736 11.9498 40.3213 9.58787 37.867C10.469 36.8227 11 35.4734 11 34.0001C11 30.6864 8.31371 28.0001 5 28.0001C4.79955 28.0001 4.60139 28.01 4.40599 28.0292C4.13979 26.7277 4 25.3803 4 24.0001C4 21.9095 4.32077 19.8938 4.91579 17.9995C4.94381 17.9999 4.97188 18.0001 5 18.0001C8.31371 18.0001 11 15.3138 11 12.0001C11 11.0488 10.7786 10.1493 10.3846 9.35011C12.6975 7.1995 15.5205 5.59002 18.6521 4.72314C19.6444 6.66819 21.6667 8.00013 24 8.00013C26.3333 8.00013 28.3556 6.66819 29.3479 4.72314C32.4795 5.59002 35.3025 7.1995 37.6154 9.35011C37.2214 10.1493 37 11.0488 37 12.0001C37 15.3138 39.6863 18.0001 43 18.0001C43.0281 18.0001 43.0562 17.9999 43.0842 17.9995C43.6792 19.8938 44 21.9095 44 24.0001C44 25.3803 43.8602 26.7277 43.594 28.0292C43.3986 28.01 43.2005 28.0001 43 28.0001C39.6863 28.0001 37 30.6864 37 34.0001C37 35.4734 37.531 36.8227 38.4121 37.867C36.0502 40.3213 33.0673 42.1736 29.7162 43.1713C28.9428 40.752 26.676 39.0001 24 39.0001C21.324 39.0001 19.0572 40.752 18.2838 43.1713Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M24 31C27.866 31 31 27.866 31 24C31 20.134 27.866 17 24 17C20.134 17 17 20.134 17 24C17 27.866 20.134 31 24 31Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/></svg>`, title: "General", hint: "Manage window, audio and system behavior" },
+	  api: { emoji: `<svg width="24" height="24" viewBox="0 0 48 48" fill="none" aria-hidden="true" style="vertical-align:-3px"><title>API Settings</title><g clip-path="url(#api-key-nav-clip)"><circle cx="15" cy="33" r="8" fill="none" stroke="currentColor" stroke-width="4"/><path d="M29 16L35.5 22" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 26L37 7" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M35 11L42 17.5" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></g><defs><clipPath id="api-key-nav-clip"><rect width="48" height="48" fill="none"/></clipPath></defs></svg>`, title: "API Settings", hint: "Select a preset and enter your API Key." },
+  cyrene: { emoji: `<svg width="24" height="24" viewBox="0 0 48 48" fill="none" aria-hidden="true" style="vertical-align:-3px"><path d="M24 4C24 4 20 10 20 16C20 19.3 21.8 22.2 24 24C26.2 22.2 28 19.3 28 16C28 10 24 4 24 4Z" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/><path d="M44 24C44 24 38 20 32 20C28.7 20 25.8 21.8 24 24C25.8 26.2 28.7 28 32 28C38 28 44 24 44 24Z" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/><path d="M24 44C24 44 28 38 28 32C28 28.7 26.2 25.8 24 24C21.8 25.8 20 28.7 20 32C20 38 24 44 24 44Z" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/><path d="M4 24C4 24 10 28 16 28C19.3 28 22.2 26.2 24 24C22.2 21.8 19.3 20 16 20C10 20 4 24 4 24Z" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/><circle cx="24" cy="24" r="4" fill="currentColor" stroke="currentColor" stroke-width="2"/></svg>`, title: "Agent Settings", hint: "Manage agent behavior, memory, RAG & permissions" },
+  tts: { emoji: `<svg width="24" height="24" viewBox="0 0 48 48" fill="none" aria-hidden="true" style="vertical-align:-3px"><rect x="16" y="4" width="16" height="24" rx="8" stroke="currentColor" stroke-width="4"/><path d="M8 26C8 34.837 15.163 42 24 42C32.837 42 40 34.837 40 26" stroke="currentColor" stroke-width="4" stroke-linecap="round"/><path d="M24 42v4" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></svg>`, title: "Voice (TTS)", hint: "Text-to-speech synthesis preferences" },
+  asr: { emoji: `<svg width="24" height="24" viewBox="0 0 48 48" fill="none" aria-hidden="true" style="vertical-align:-3px"><path d="M8 28V22C8 13.163 15.163 6 24 6C32.837 6 40 13.163 40 22V28" stroke="currentColor" stroke-width="4" stroke-linecap="round"/><path d="M4 30C4 27.791 5.791 26 8 26H10C12.209 26 14 27.791 14 30V36C14 38.209 12.209 40 10 40H8C5.791 40 4 38.209 4 36V30Z" stroke="currentColor" stroke-width="4"/><path d="M34 30C34 27.791 35.791 26 38 26H40C42.209 26 44 27.791 44 30V36C44 38.209 42.209 40 40 40H38C35.791 40 34 38.209 34 36V30Z" stroke="currentColor" stroke-width="4"/></svg>`, title: "Speech Recognition", hint: "ASR & voice call configuration" },
+	  tokens: { emoji: `<svg width="24" height="24" viewBox="0 0 48 48" fill="none" aria-hidden="true" style="vertical-align:-3px"><title>Token Usage</title><path d="M4 42H44" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><rect x="8" y="28" width="6" height="14" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><rect x="21" y="18" width="6" height="24" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><rect x="34" y="6" width="6" height="36" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/></svg>`, title: "Token Usage", hint: "View API call statistics and consumption" },
+	  disclaimer: { emoji: `<svg width="24" height="24" viewBox="0 0 48 48" fill="none" aria-hidden="true" style="vertical-align:-3px"><title>Disclaimer</title><rect x="13" y="10" width="28" height="34" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M35 10V4H8C7.44772 4 7 4.44772 7 5V38H13" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 22H33" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 30H33" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>`, title: "Disclaimer", hint: "Terms of use & privacy notice" },
 };
 
 Object.assign(NAV_LABELS, {
@@ -1157,9 +1106,9 @@ function ensureCustomStyleModal(): HTMLElement {
       currentCustomStyleConfig = buildCustomStyleConfigFromModal();
       await window.settings!.saveGeneral({ customStyle: currentCustomStyleConfig });
       customStyleOverlay?.classList.add("is-hidden");
-      setPreferencesSaveStatus("自定义风格已保存", "is-ok");
+      setPreferencesSaveStatus("Custom style saved", "is-ok");
     } catch {
-      setPreferencesSaveStatus("自定义风格保存失败", "is-error");
+      setPreferencesSaveStatus("Failed to save custom style", "is-error");
     }
   });
   return customStyleOverlay;
@@ -1213,7 +1162,7 @@ function applyUiThemeSelection(theme: GeneralSettings["uiTheme"]): void {
 }
 
 function renderUiFont(font: UiFont): void {
-  uiFontCurrent.textContent = font.kind === "custom" ? font.displayName : "思源黑体（默认）";
+  uiFontCurrent.textContent = font.kind === "custom" ? font.displayName : "Default Font";
   uiFontResetButton.hidden = font.kind !== "custom";
 }
 
@@ -1249,7 +1198,7 @@ function fillPresetOptions(): void {
       card.disabled = true;
     }
 
-    // logo：有本地 SVG 用 img，没有（如 DeepSeek）用首字母文字占位
+    // logo： SVG  img，（ DeepSeek)
     const logoWrap = document.createElement("span");
     logoWrap.className = "preset-card__logo";
     if (preset.iconUrl) {
@@ -1267,14 +1216,14 @@ function fillPresetOptions(): void {
     const label = document.createElement("span");
     label.className = "preset-card__name";
     label.textContent = preset.shortName;
-    if (preset.disabled) label.textContent += "（暂未适配）";
+    if (preset.disabled) label.textContent += " (not yet supported)";
     card.appendChild(label);
 
     presetCards.appendChild(card);
   }
 }
 
-/** 标记当前选中的厂商卡片（替换原 presetSelect.value = ...） */
+/** （ presetSelect.value = ...) */
 function setActivePresetCard(providerName: string): void {
   if (!presetCards) return;
   const cardProvider = getCustomEndpointMode(providerName)
@@ -1286,18 +1235,18 @@ function setActivePresetCard(providerName: string): void {
 }
 
 function findPreset(providerName: string): ModelPreset {
-  // fallback：找不到匹配的预设时，回退到列表第一个可用项（当前是 MiniMax）。
-  // 不直接返回 MODEL_PRESETS[0] 是为了未来若把首项改成 disabled 也仍然合法。
+  // fallback：，（ MiniMax).
+  //  MODEL_PRESETS[0]  disabled .
   const fallback = MODEL_PRESETS.find((preset) => !preset.disabled) ?? MODEL_PRESETS[0];
   return MODEL_PRESETS.find((preset) => preset.providerName === providerName) ?? fallback;
 }
 
 /**
- * 填充模型名输入框 + datalist 联想建议。
- * 模式按钮已删除——只有一个输入框，可手填，按方向键也能从厂商预设里选。
+ *  + datalist .
+ * Delete——，，.
  */
 function fillModelOptions(preset: ModelPreset, preferredModel?: string): void {
-  // datalist 联想建议
+  // datalist 
   modelInputSuggestions.replaceChildren();
   for (const model of preset.mainModels) {
     const option = document.createElement("option");
@@ -1305,20 +1254,20 @@ function fillModelOptions(preset: ModelPreset, preferredModel?: string): void {
     modelInputSuggestions.appendChild(option);
   }
 
-  // 选中值：preferredModel 命中预设则用之；否则用预设首项；
-  // preferredModel 不在预设里（用户自填型号）也保留显示，不强行清空。
+  // ：preferredModel ；；
+  // preferredModel （)，.
   const fallback = preset.mainModels[0] ?? "";
   modelInput.value = preferredModel ?? fallback;
 }
 
 /**
- * 把"当前输入框里的值"快照到内存缓存里（perProvider）。
- * 切厂商前调用一次，避免覆盖丢失。
+ * ""（perProvider).
+ * ，.
  */
 function captureActiveProviderProfile(): void {
   if (!activeProvider) return;
   const cached = providerProfileCache[activeProvider];
-  // reasoning 仍由 renderReasoningControls 写入 cache；这里只保留它（不动 mode/effort）
+  // reasoning  renderReasoningControls  cache；（ mode/effort)
   providerProfileCache[activeProvider] = {
     baseUrl: baseUrlInput.value.trim(),
     model: getCurrentModelValue().trim(),
@@ -1329,18 +1278,18 @@ function captureActiveProviderProfile(): void {
   };
 }
 
-/** 模式按钮已删除——模型名永远从 input 读取。保留函数名供旧调用点用，语义不变。 */
+/** Delete—— input .，. */
 function getCurrentModelValue(): string {
   return modelInput.value;
 }
 
-/** 多模态开关 UI：ON 时隐藏视觉配置区，OFF 时显示。不清空输入框值。 */
+/**  UI：ON ，OFF .. */
 function applyMultimodalUI(): void {
   const on = multimodalToggle.checked;
   visionFieldsWrap.classList.toggle("is-hidden", on);
 }
 
-/** 填充视觉模型输入框的 datalist 候选。仅渲染候选，不修改 visionModelInput.value。 */
+/**  datalist .， visionModelInput.value. */
 function fillVisionModelOptions(preset: ModelPreset): void {
   const datalist = document.getElementById("vision-model-suggestions") as HTMLDataListElement | null;
   if (!datalist) return;
@@ -1378,13 +1327,13 @@ function applyCustomEndpointUI(preset: ModelPreset): void {
 
   if (!mode) {
     apiKeyLabel.textContent = "API Key";
-    apiKeyHint.textContent = "填写对应平台创建的 API Key";
+    apiKeyHint.textContent = "Enter the API Key from your provider platform";
     apiKeyInput.placeholder = "sk-...";
     baseUrlInput.placeholder = "https://api.deepseek.com";
-    modelInput.placeholder = "选厂商后自动填入，可手填覆盖";
-    transportHint.textContent = "默认按 Base URL 推断；如有歧义可手动指定";
-    baseUrlResetBtn.title = "重置为厂商默认 URL";
-    apiNoteText.textContent = "选择模型预设后会自动填入 Provider、Base URL 和模型名；你只需要填写对应平台的 API Key。配置只保存在本机 Electron 用户数据目录。";
+    modelInput.placeholder = "Auto-filled after selecting a provider; can be overridden";
+    transportHint.textContent = "Inferred from Base URL by default; override if needed";
+    baseUrlResetBtn.title = "Reset to provider default URL";
+    apiNoteText.textContent = "After selecting a preset, Provider, Base URL and model are auto-filled. Just enter your API Key. Config is saved locally on this machine.";
     return;
   }
 
@@ -1397,19 +1346,19 @@ function applyCustomEndpointUI(preset: ModelPreset): void {
   });
 
   customEndpointSummary.textContent = mode === "local"
-    ? "填写本机 OpenAI 兼容服务地址；不扫描端口，也不探测模型能力。"
-    : "接入 OpenAI 兼容的云端服务或第三方代理，能力由服务提供方决定。";
-  apiKeyLabel.textContent = presentation.apiKeyOptional ? "API Key（可选）" : "API Key";
+    ? "Enter local OpenAI-compatible endpoint; does not scan ports or probe models."
+    : "Connect to OpenAI-compatible cloud or proxy; capabilities depend on provider.";
+  apiKeyLabel.textContent = presentation.apiKeyOptional ? "API Key (optional)" : "API Key";
   apiKeyHint.textContent = presentation.apiKeyOptional
-    ? "本地服务无需鉴权时可留空；如网关要求令牌，请在此填写"
-    : "填写自定义服务或第三方代理提供的 API Key";
-  apiKeyInput.placeholder = presentation.apiKeyOptional ? "无需鉴权时留空" : "sk-...";
+    ? "Leave empty if local service requires no auth; enter token if required by gateway"
+    : "or API Key";
+  apiKeyInput.placeholder = presentation.apiKeyOptional ? "Leave empty if no auth required" : "sk-...";
   baseUrlInput.placeholder = presentation.baseUrlPlaceholder;
-  modelInput.placeholder = "填写服务实际提供的模型 ID";
+  modelInput.placeholder = "Enter the model ID provided by the service";
   transportSelect.value = presentation.transport;
-  transportHint.textContent = "自定义端点仅提供 OpenAI 兼容协议；不会探测或自动升级能力档位";
-  baseUrlResetBtn.title = "清空自定义 Base URL";
-  apiNoteText.textContent = "自定义端点按保守兼容模式运行。保存后请先测试连接；连接成功不代表结构化输出、工具调用或思考模式一定可用。";
+  transportHint.textContent = "Custom endpoints use OpenAI-compatible protocol only; capability tier is not auto-detected";
+  baseUrlResetBtn.title = "Clear custom Base URL";
+  apiNoteText.textContent = "Custom endpoint runs in conservative compatibility mode. Test connection after saving — success does not guarantee structured output, tool calls, or reasoning mode.";
 }
 
 function applyPreset(
@@ -1424,29 +1373,29 @@ function applyPreset(
 ): void {
   const preset = findPreset(providerName);
 
-  // 模式按钮已删除——ChatGPT / Claude 这种没预设型号的厂商，input 框空着让用户手填，
-  // datalist 没建议也不影响（用户知道自己型号）。
+  // Delete——ChatGPT / Claude ，input ，
+  // datalist （).
 
   setActivePresetCard(preset.providerName);
 
-  // 昵称：优先用传入的（用户自定义过）；否则用厂商 shortName 作默认。
-  // 留空显示厂商短名——但这里主动填 shortName 让用户看到默认值，可改可清。
+  // ：（)； shortName .
+  // —— shortName ，.
   displayNameInput.value = preferredDisplayName ?? preset.shortName;
 
-  // baseUrl：优先用缓存（用户自定义过），其次用 preset 默认
+  // baseUrl：（)， preset 
   baseUrlInput.value = preferredBaseUrl ?? preset.baseUrl;
 
   fillModelOptions(preset, preferredModel);
 
-  // apiKey：优先用缓存；否则**显式清空**——避免上一家厂商的 key 残留在输入框里被用户误点保存。
-  // 这是 v1 切厂商行为里的关键不变量：apiKey 永远只跟当前厂商绑定。
+  // apiKey：；****—— key .
+  //  v1 ：apiKey .
   const customMode = getCustomEndpointMode(preset.providerName);
   apiKeyInput.value = customMode === "local" && preferredApiKey === LOCAL_ENDPOINT_AUTH_FALLBACK
     ? ""
     : (preferredApiKey ?? "");
 
-  // explicitTransport：优先用缓存（用户自定义过），其次默认 "auto"
-  // （切厂商时上一家的 explicitTransport 不应该延续，preset 自带 capabilities transport 兜底）
+  // explicitTransport：（)， "auto"
+  // （ explicitTransport ，preset  capabilities transport )
   transportSelect.value = preferredExplicitTransport ?? "auto";
   applyCustomEndpointUI(preset);
 
@@ -1456,7 +1405,7 @@ function applyPreset(
     multimodalToggle.checked = preset.supportsVision === true && preset.independentVision !== true;
   }
 
-  // 视觉三框：始终写入值（从 preferredVision 或 preset 默认），不受开关影响
+  // ：（ preferredVision or preset )，
   if (preferredVision) {
     visionBaseUrlInput.value = preferredVision.baseUrl;
     visionApiKeyInput.value = preferredVision.apiKey;
@@ -1469,10 +1418,10 @@ function applyPreset(
 
   fillVisionModelOptions(preset);
 
-  // 官网链接：有 websiteUrl 就显示并指向，没有就隐藏。
+  // ： websiteUrl ，.
   if (preset.websiteUrl) {
     presetWebsiteLink.href = preset.websiteUrl;
-    presetWebsiteLink.title = `前往 ${preset.shortName} 官网`;
+    presetWebsiteLink.title = `Visit ${preset.shortName} website`;
     presetWebsiteLink.style.display = "";
   } else {
     presetWebsiteLink.style.display = "none";
@@ -1486,8 +1435,8 @@ async function loadConfig(): Promise<void> {
   try {
     fillPresetOptions();
     const cfg = await window.settings!.getConfig();
-    // 模式按钮已删除——mode 字段不再用 UI 控制，直接忽略 cfg.mode
-    // 把 main 进程返回的 perProvider 灌进渲染端内存缓存，切厂商时用到
+    // Delete——mode  UI ， cfg.mode
+    //  main  perProvider ，
     if (cfg.perProvider && typeof cfg.perProvider === "object") {
       for (const [key, value] of Object.entries(cfg.perProvider)) {
         if (value && typeof value === "object") {
@@ -1535,16 +1484,16 @@ async function loadConfig(): Promise<void> {
     citaRepairBudgetSecInput.value = String(cfg.citaRepairBudgetSec ?? 8);
     actionGateRepairBudgetSecInput.value = String(cfg.actionGateRepairBudgetSec ?? 10);
 
-    // 视觉模型配置已并入 applyPreset（preferredVision 参数）。
+    //  applyPreset（preferredVision ).
 
-    setSaveStatus("等待保存");
-    setCyreneSaveStatus("等待保存");
+    setSaveStatus("Pending save");
+    setCyreneSaveStatus("Pending save");
   } catch {
     fillPresetOptions();
-    // 默认厂商已从 DeepSeek 改为 MiniMax（v1 vendor adapter 第一家落地的）
-    applyPreset("MiniMax（稀宇科技）");
-    setSaveStatus("读取配置失败", "is-error");
-    setCyreneSaveStatus("读取配置失败", "is-error");
+    //  DeepSeek  MiniMax（v1 vendor adapter )
+    applyPreset("MiniMax");
+    setSaveStatus("Failed to load config", "is-error");
+    setCyreneSaveStatus("Failed to load config", "is-error");
   }
 }
 
@@ -1594,13 +1543,13 @@ async function loadGeneralSettings(): Promise<void> {
       .then((status: unknown) => renderProactiveDeliveryAvailability(status as Record<string, { phase?: string }>))
       .catch(() => renderProactiveDeliveryAvailability({}));
     applyLanguageSelection("en-US");
-    setPreferencesSaveStatus("等待保存");
-    setAppearanceSaveStatus("等待保存");
-    setGeneralSaveStatus("等待保存");
+    setPreferencesSaveStatus("Pending save");
+    setAppearanceSaveStatus("Pending save");
+    setGeneralSaveStatus("Pending save");
   } catch {
-    setPreferencesSaveStatus("读取偏好失败", "is-error");
-    setAppearanceSaveStatus("读取外观失败", "is-error");
-    setGeneralSaveStatus("读取设置失败", "is-error");
+    setPreferencesSaveStatus("", "is-error");
+    setAppearanceSaveStatus("", "is-error");
+    setGeneralSaveStatus("", "is-error");
   }
 }
 
@@ -1609,15 +1558,15 @@ runtimeSyncSelect.querySelectorAll<HTMLButtonElement>(".option-block").forEach((
     const value = button.dataset.value as "off" | "local" | "llm";
     applyRuntimeSyncSelection(value);
     window.settings?.previewRuntimeSync(value);
-    setCyreneSaveStatus("有未保存的更改");
+    setCyreneSaveStatus("Unsaved changes");
   });
 });
 
 stickerEnabledInput.addEventListener("change", () => {
-  setCyreneSaveStatus("有未保存的更改");
+  setCyreneSaveStatus("Unsaved changes");
 });
 
-// 高级运行设置折叠
+// 
 advancedToggle.addEventListener("click", () => {
   const expanded = advancedToggle.getAttribute("aria-expanded") === "true";
   const next = !expanded;
@@ -1626,25 +1575,25 @@ advancedToggle.addEventListener("click", () => {
   else advancedFieldsWrap.setAttribute("hidden", "");
 });
 
-// 任何高级字段改动都标记"有未保存的更改"
+// "Unsaved changes"
 [
   chatRequestTimeoutSecInput, maxIterationsInput, maxReplansInput, maxRefreshInput,
   perCallTimeoutSecInput, citaRepairBudgetSecInput, actionGateRepairBudgetSecInput,
 ].forEach((el) => {
-  el.addEventListener("input", () => setCyreneSaveStatus("有未保存的更改"));
+  el.addEventListener("input", () => setCyreneSaveStatus("Unsaved changes"));
 });
 
 stickerSizeSelect.querySelectorAll<HTMLButtonElement>(".option-block").forEach((button) => {
   button.addEventListener("click", () => {
     const value = button.dataset.value;
     applyStickerSizeSelection(value === "small" || value === "large" ? value : "standard");
-    setCyreneSaveStatus("有未保存的更改");
+    setCyreneSaveStatus("Unsaved changes");
   });
 });
 
 stickerThresholdInput.addEventListener("input", () => {
   stickerThresholdVal.textContent = parseFloat(stickerThresholdInput.value).toFixed(2);
-  setCyreneSaveStatus("有未保存的更改");
+  setCyreneSaveStatus("Unsaved changes");
 });
 
 sidebarVisibleInput.addEventListener("change", () => {
@@ -1661,20 +1610,20 @@ tasksVisibleInput.addEventListener("change", () => {
 
 musicEnabledInput.addEventListener("change", () => {
   syncMusicPlayback();
-  setGeneralSaveStatus("有未保存的更改");
+  setGeneralSaveStatus("Unsaved changes");
 });
 
 musicVolumeInput.addEventListener("input", () => {
   syncMusicPlayback();
-  setGeneralSaveStatus("有未保存的更改");
+  setGeneralSaveStatus("Unsaved changes");
 });
 
-soundEnabledInput.addEventListener("change", () => setGeneralSaveStatus("有未保存的更改"));
-soundVolumeInput.addEventListener("input", () => setGeneralSaveStatus("有未保存的更改"));
+soundEnabledInput.addEventListener("change", () => setGeneralSaveStatus("Unsaved changes"));
+soundVolumeInput.addEventListener("input", () => setGeneralSaveStatus("Unsaved changes"));
 
 petAlwaysOnTopInput.addEventListener("change", () => {
   window.settings?.setPetAlwaysOnTop(petAlwaysOnTopInput.checked);
-  setAppearanceSaveStatus("已应用", "is-ok");
+  setAppearanceSaveStatus("Applied", "is-ok");
 });
 
 uiFontImportButton.addEventListener("click", async () => {
@@ -1682,13 +1631,13 @@ uiFontImportButton.addEventListener("click", async () => {
     const sourcePath = await window.settings?.pickUiFont();
     if (!sourcePath) return;
     uiFontImportButton.disabled = true;
-    setAppearanceSaveStatus("正在导入字体…");
+    setAppearanceSaveStatus("…");
     const font = await window.settings!.importUiFont(sourcePath);
     renderUiFont(font);
-    setAppearanceSaveStatus("字体已应用", "is-ok");
+    setAppearanceSaveStatus("", "is-ok");
   } catch (error) {
-    console.error("导入字体失败:", error);
-    setAppearanceSaveStatus("导入字体失败", "is-error");
+    console.error(":", error);
+    setAppearanceSaveStatus("", "is-error");
   } finally {
     uiFontImportButton.disabled = false;
   }
@@ -1699,10 +1648,10 @@ uiFontResetButton.addEventListener("click", async () => {
     uiFontResetButton.disabled = true;
     const font = await window.settings!.resetUiFont();
     renderUiFont(font);
-    setAppearanceSaveStatus("已恢复思源黑体", "is-ok");
+    setAppearanceSaveStatus("", "is-ok");
   } catch (error) {
-    console.error("恢复默认字体失败:", error);
-    setAppearanceSaveStatus("恢复默认字体失败", "is-error");
+    console.error("Failed to restore default font:", error);
+    setAppearanceSaveStatus("Failed to restore default font", "is-error");
   } finally {
     uiFontResetButton.disabled = false;
   }
@@ -1714,33 +1663,33 @@ uiIconSelect.querySelectorAll<HTMLButtonElement>(".appearance-icon-option").forE
     try {
       await window.settings!.saveGeneral({ uiIcon: icon });
       renderUiIcon(icon);
-      setAppearanceSaveStatus("图标已应用", "is-ok");
+      setAppearanceSaveStatus("Icon applied", "is-ok");
     } catch (error) {
-      console.error("应用图标失败:", error);
-      setAppearanceSaveStatus("应用图标失败", "is-error");
+      console.error("Failed to apply icon:", error);
+      setAppearanceSaveStatus("Failed to apply icon", "is-error");
     }
   });
 });
 
 petVisibleInput.addEventListener("change", () => {
   window.settings?.setPetVisible(petVisibleInput.checked);
-  setAppearanceSaveStatus("已应用", "is-ok");
+  setAppearanceSaveStatus("Applied", "is-ok");
 });
 petZoomInput.addEventListener("input", () => {
   petZoomVal.textContent = Math.round(Number(petZoomInput.value) * 100) + "%";
 });
 petZoomInput.addEventListener("change", () => {
   window.settings?.setPetZoom(Number(petZoomInput.value));
-  setAppearanceSaveStatus("已应用", "is-ok");
+  setAppearanceSaveStatus("Applied", "is-ok");
 });
 
-// 行间距滑块
+// 
 chatLineHeightInput.addEventListener("input", () => {
   const val = Number(chatLineHeightInput.value);
   chatLineHeightVal.textContent = val.toFixed(2);
   document.documentElement.style.setProperty("--rb-chat-line-height", String(val));
 });
-// 段间距滑块
+// 
 chatParaSpacingInput.addEventListener("input", () => {
   const val = Number(chatParaSpacingInput.value);
   chatParaSpacingVal.textContent = val.toFixed(2) + "em";
@@ -1751,28 +1700,28 @@ uiThemeSelect.querySelectorAll<HTMLButtonElement>(".option-block").forEach((butt
   button.addEventListener("click", () => {
     const theme = normalizeUiTheme(button.dataset.theme);
     applyUiThemeSelection(theme);
-    setAppearanceSaveStatus("有未保存的更改");
+    setAppearanceSaveStatus("Unsaved changes");
   });
 });
 
 defaultChatModeSelect.querySelectorAll<HTMLButtonElement>(".option-block").forEach((button) => {
   button.addEventListener("click", () => {
     applyDefaultChatModeSelection(normalizeDefaultChatMode(button.dataset.value));
-    setPreferencesSaveStatus("有未保存的更改");
+    setPreferencesSaveStatus("Unsaved changes");
   });
 });
 
 segmentedOutputSelect.querySelectorAll<HTMLButtonElement>(".option-block").forEach((button) => {
   button.addEventListener("click", () => {
     applySegmentedOutputSelection(normalizeSegmentedOutputMode(button.dataset.value));
-    setPreferencesSaveStatus("有未保存的更改");
+    setPreferencesSaveStatus("Unsaved changes");
   });
 });
 
 mobileMessageSegmentationSelect.querySelectorAll<HTMLButtonElement>(".option-block").forEach((button) => {
   button.addEventListener("click", () => {
     applyMobileMessageSegmentationSelection(normalizeMobileMessageSegmentationMode(button.dataset.value));
-    setPreferencesSaveStatus("有未保存的更改");
+    setPreferencesSaveStatus("Unsaved changes");
   });
 });
 
@@ -1780,7 +1729,7 @@ proactiveChatSelect.querySelectorAll<HTMLButtonElement>(".option-block").forEach
   button.addEventListener("click", () => {
     applyProactiveChatSelection(normalizeProactiveChatMode(button.dataset.value));
     renderProactiveDeliveryVisibility();
-    setPreferencesSaveStatus("有未保存的更改");
+    setPreferencesSaveStatus("Unsaved changes");
   });
 });
 
@@ -1788,16 +1737,16 @@ proactiveDeliverySelect.querySelectorAll<HTMLButtonElement>(".option-block").for
   button.addEventListener("click", () => {
     if (button.disabled) return;
     applyProactiveDeliverySelection(normalizeProactiveDeliveryTarget(button.dataset.value));
-    setPreferencesSaveStatus("有未保存的更改");
+    setPreferencesSaveStatus("Unsaved changes");
   });
 });
 
 citaEnabledInput.addEventListener("change", () => {
-  setPreferencesSaveStatus("有未保存的更改");
+  setPreferencesSaveStatus("Unsaved changes");
 });
 
-// ── 截图热键捕获 ──
-// 聚焦时临时挂起全局快捷键（防止录入时触发截图），失焦恢复。
+// ──  ──
+// （)，.
 const MODIFIER_KEYS = new Set(["Control", "Alt", "Shift", "Meta"]);
 
 screenshotHotkeyInput?.addEventListener("focus", async () => {
@@ -1826,21 +1775,21 @@ screenshotHotkeyInput?.addEventListener("keydown", (e) => {
   if (e.shiftKey) parts.push("Shift");
   if (e.metaKey) parts.push("Super");
 
-  // 纯修饰键不提交
+  // 
   if (MODIFIER_KEYS.has(e.key)) return;
 
   const keyName = e.key.length === 1 ? e.key.toUpperCase() : e.key;
   parts.push(keyName);
 
-  // 至少需要一个修饰键
+  // 
   if (parts.length < 2) return;
 
   screenshotHotkeyInput!.value = parts.join("+");
-  setPreferencesSaveStatus("有未保存的更改");
+  setPreferencesSaveStatus("Unsaved changes");
 });
 
 chatSocialContextEnabledInput.addEventListener("change", () => {
-  setPreferencesSaveStatus("有未保存的更改");
+  setPreferencesSaveStatus("Unsaved changes");
 });
 
 customStyleSamplingBtn?.addEventListener("click", () => {
@@ -1851,18 +1800,18 @@ customStylePromptBtn?.addEventListener("click", async () => {
   try {
     const result = await window.settings?.openCustomStylePrompt?.();
     if (!result?.ok) {
-      setPreferencesSaveStatus("打开 Prompt 文件失败", "is-error");
+      setPreferencesSaveStatus("Failed to open prompt file", "is-error");
       return;
     }
-    setPreferencesSaveStatus("已打开 Prompt 文件位置", "is-ok");
+    setPreferencesSaveStatus("Prompt file directory opened", "is-ok");
   } catch {
-    setPreferencesSaveStatus("打开 Prompt 文件失败", "is-error");
+    setPreferencesSaveStatus("Failed to open prompt file", "is-error");
   }
 });
 
 preferencesForm.addEventListener("submit", async (e) => {
   e.preventDefault();
-  setPreferencesSaveStatus("保存中…");
+  setPreferencesSaveStatus("Saving…");
   try {
     await window.settings!.saveGeneral({
       citaEnabled: citaEnabledInput.checked,
@@ -1875,9 +1824,9 @@ preferencesForm.addEventListener("submit", async (e) => {
       proactiveDeliveryTarget: getProactiveDeliveryValue(),
       screenshotHotkey: screenshotHotkeyInput?.value || "Alt+Shift+S",
     });
-    setPreferencesSaveStatus("已保存", "is-ok");
+    setPreferencesSaveStatus("Saved", "is-ok");
   } catch {
-    setPreferencesSaveStatus("保存失败", "is-error");
+    setPreferencesSaveStatus("Save failed", "is-error");
   }
 });
 
@@ -1887,15 +1836,15 @@ openStickerManagerBtn.addEventListener("click", async () => {
     const result = await window.settings?.openStickerManager();
     if (!result?.ok) {
       console.error("[settings] open sticker manager failed", result?.error);
-      window.alert("表情包管理窗口打开失败，请查看终端日志。" + (result?.error ? `\n${result.error}` : ""));
+      await showAlert("Failed to open sticker manager. Check terminal log." + (result?.error ? `\n${result.error}` : ""));
     }
   } catch (error) {
     console.error("[settings] open sticker manager error", error);
-    window.alert("表情包管理窗口打开失败，请查看终端日志。");
+    await showAlert("Failed to open sticker manager. Check terminal log.");
   }
 });
 
-// ── 添加表情包弹窗 ──
+// ──  ──
 const stickerAddOverlay = document.getElementById("sticker-add-overlay") as HTMLElement;
 const stickerAddPickBtn = document.getElementById("sticker-add-pick-btn") as HTMLButtonElement;
 const stickerAddFileName = document.getElementById("sticker-add-file-name") as HTMLElement;
@@ -1910,7 +1859,7 @@ let stickerAddPickedPath: string | null = null;
 
 function openStickerAddModal(): void {
   stickerAddPickedPath = null;
-  stickerAddFileName.textContent = "未选择";
+  stickerAddFileName.textContent = "None selected";
   stickerAddId.value = "";
   stickerAddDesc.value = "";
   stickerAddPhrases.value = "";
@@ -1942,30 +1891,30 @@ stickerAddConfirm.addEventListener("click", async () => {
   stickerAddError.classList.add("is-hidden");
 
   if (!stickerAddPickedPath) {
-    stickerAddError.textContent = "请先选择图片文件";
+    stickerAddError.textContent = "Please select an image file first";
     stickerAddError.classList.remove("is-hidden");
     return;
   }
   const id = stickerAddId.value.trim();
   if (!id) {
-    stickerAddError.textContent = "请填写英文名称";
+    stickerAddError.textContent = "Please enter a name (letters only)";
     stickerAddError.classList.remove("is-hidden");
     return;
   }
   if (!/^[a-zA-Z0-9_-]+$/.test(id)) {
-    stickerAddError.textContent = "名称只能用英文字母、数字、下划线和连字符";
+    stickerAddError.textContent = "Name must use only letters, digits, underscores and hyphens";
     stickerAddError.classList.remove("is-hidden");
     return;
   }
   const description = stickerAddDesc.value.trim();
   if (!description) {
-    stickerAddError.textContent = "请填写图片描述";
+    stickerAddError.textContent = "Please enter an image description";
     stickerAddError.classList.remove("is-hidden");
     return;
   }
   const phrases = stickerAddPhrases.value.split("\n").map((s) => s.trim()).filter(Boolean);
   if (phrases.length === 0) {
-    stickerAddError.textContent = "请至少写一行相近语义";
+    stickerAddError.textContent = "Please enter at least one semantic phrase";
     stickerAddError.classList.remove("is-hidden");
     return;
   }
@@ -1974,30 +1923,30 @@ stickerAddConfirm.addEventListener("click", async () => {
     await window.settings?.stickerAdd?.({ sourcePath: stickerAddPickedPath, id, description, phrases });
     closeStickerAddModal();
   } catch (err) {
-    stickerAddError.textContent = "添加失败：" + (err as Error).message;
+    stickerAddError.textContent = "Add failed: " + (err as Error).message;
     stickerAddError.classList.remove("is-hidden");
   }
 });
 
-// ── 插件开关事件 ──────────────────────────────────────────
-// 文档检索/用户记忆/世界书/联网搜索为常驻工具，无开关，显示绿灯。
-// 天气查询/联网搜索有独立配置卡片（下方）。
+// ──  ──────────────────────────────────────────
+// ///，None，.
+// /（).
 
-// ── 天气插件（Open-Meteo / 高德天气）──
+// ── （Open-Meteo / )──
 const weatherEnabledCheckbox = document.getElementById("plugin-weather-enabled") as HTMLInputElement | null;
 const weatherConfig = document.getElementById("plugin-weather-config") as HTMLElement | null;
 const weatherSourceSelect = document.getElementById("weather-source") as HTMLSelectElement | null;
 const amapFields = document.getElementById("amap-fields");
 const amapKeyInput = document.getElementById("amap-key") as HTMLInputElement | null;
+const weatherCityInput = document.getElementById("weather-city-input") as HTMLInputElement | null;
 
-// 启用开关：勾上才展开配置区
+// Enable Weather switch
 function syncWeatherConfigVisibility(): void {
   if (weatherConfig) weatherConfig.style.display = weatherEnabledCheckbox?.checked ? "block" : "none";
   syncWeatherFieldsVisibility();
 }
 function syncWeatherFieldsVisibility(): void {
   const src = weatherSourceSelect?.value ?? "open-meteo";
-  // 选高德才显示高德 Key 输入框
   if (amapFields) amapFields.style.display = src === "amap" ? "block" : "none";
 }
 weatherEnabledCheckbox?.addEventListener("change", () => {
@@ -2011,7 +1960,6 @@ weatherSourceSelect?.addEventListener("change", () => {
 amapKeyInput?.addEventListener("change", () => {
   void saveWeatherField("amapKey", amapKeyInput.value.trim());
 });
-// 防抖保存：粘贴后 800ms 自动保存
 amapKeyInput?.addEventListener("input", () => {
   clearTimeout(amapKeyDebounceTimer);
   amapKeyDebounceTimer = setTimeout(() => {
@@ -2020,12 +1968,22 @@ amapKeyInput?.addEventListener("input", () => {
 });
 let amapKeyDebounceTimer: ReturnType<typeof setTimeout> | undefined;
 
+if (weatherCityInput) {
+  const saveWeatherCity = (): void => {
+    const value = weatherCityInput.value.trim() || "Hanoi";
+    if (userDefaultCityInput) userDefaultCityInput.value = value;
+    void window.user?.saveProfile({ defaultCity: value });
+  };
+  weatherCityInput.addEventListener("change", saveWeatherCity);
+  weatherCityInput.addEventListener("blur", saveWeatherCity);
+}
+
 async function saveWeatherField(field: string, value: unknown): Promise<void> {
   if (!window.tts) return;
   try {
     await window.tts.saveSettings({ [field]: value });
   } catch (err) {
-    console.warn("[plugins] 保存天气配置失败:", field, err);
+    console.warn("[plugins] Failed to save weather settings:", field, err);
   }
 }
 
@@ -2041,14 +1999,18 @@ async function loadWeatherConfig(): Promise<void> {
     if (cfg && amapKeyInput) {
       amapKeyInput.value = String(cfg.amapKey ?? "");
     }
+    const profile = await window.user?.getProfile();
+    if (weatherCityInput && profile) {
+      weatherCityInput.value = String(profile.defaultCity || "Hanoi");
+    }
     syncWeatherConfigVisibility();
   } catch (err) {
-    console.warn("[plugins] 加载天气配置失败", err);
+    console.warn("[plugins] Failed to load weather settings", err);
   }
 }
 void loadWeatherConfig();
 
-// ── 🚗出行工具 ──
+// ── 🚗 ──
 const travelEnabledCheckbox = document.getElementById("plugin-travel-enabled") as HTMLInputElement | null;
 const travelConfig = document.getElementById("plugin-travel-config") as HTMLElement | null;
 const travelAmapKeyInput = document.getElementById("travel-amap-key") as HTMLInputElement | null;
@@ -2061,10 +2023,10 @@ travelEnabledCheckbox?.addEventListener("change", () => {
   void saveTravelField("travelEnabled", travelEnabledCheckbox.checked);
 });
 travelAmapKeyInput?.addEventListener("change", () => {
-  // 存到同一个 amapKey 字段（与天气查询共用）
+  //  amapKey （)
   void saveTravelField("amapKey", travelAmapKeyInput.value.trim());
 });
-// 防抖保存：粘贴后 800ms 自动保存
+// ： 800ms 
 let travelAmapKeyDebounceTimer: ReturnType<typeof setTimeout> | undefined;
 travelAmapKeyInput?.addEventListener("input", () => {
   clearTimeout(travelAmapKeyDebounceTimer);
@@ -2078,7 +2040,7 @@ async function saveTravelField(field: string, value: unknown): Promise<void> {
   try {
     await window.tts.saveSettings({ [field]: value });
   } catch (err) {
-    console.warn("[plugins] 保存出行配置失败:", field, err);
+    console.warn("[plugins] Failed to save travel settings:", field, err);
   }
 }
 
@@ -2093,12 +2055,12 @@ async function loadTravelConfig(): Promise<void> {
     }
     syncTravelConfigVisibility();
   } catch (err) {
-    console.warn("[plugins] 加载出行配置失败", err);
+    console.warn("[plugins] Failed to load travel settings", err);
   }
 }
 void loadTravelConfig();
 
-// ── ✉️邮件发送插件 ──
+// ── ✉️ ──
 const emailEnabledCheckbox = document.getElementById("plugin-email-enabled") as HTMLInputElement | null;
 const emailConfig = document.getElementById("plugin-email-config") as HTMLElement | null;
 const emailSmtpHostInput = document.getElementById("email-smtp-host") as HTMLInputElement | null;
@@ -2116,7 +2078,7 @@ emailEnabledCheckbox?.addEventListener("change", () => {
   void saveEmailField("emailEnabled", emailEnabledCheckbox.checked);
 });
 
-// 防抖保存：每个字段独立 timer，避免连续填写多个字段时只有最后一个被保存
+// ： timer，
 let emailSmtpHostTimer: ReturnType<typeof setTimeout> | undefined;
 let emailSmtpPortTimer: ReturnType<typeof setTimeout> | undefined;
 let emailSmtpUserTimer: ReturnType<typeof setTimeout> | undefined;
@@ -2135,7 +2097,7 @@ async function saveEmailField(field: string, value: unknown): Promise<void> {
   try {
     await window.tts.saveSettings({ [field]: value });
   } catch (err) {
-    console.warn("[plugins] 保存邮件配置失败:", field, err);
+    console.warn("[plugins] Failed to save email settings:", field, err);
   }
 }
 
@@ -2165,12 +2127,12 @@ async function loadEmailConfig(): Promise<void> {
     }
     syncEmailConfigVisibility();
   } catch (err) {
-    console.warn("[plugins] 加载邮件配置失败", err);
+    console.warn("[plugins] Failed to load email settings", err);
   }
 }
 void loadEmailConfig();
 
-// ── 🎧ASR 设置 ──
+// ── 🎧ASR  ──
 const asrEngineSelect = document.getElementById("asr-engine") as HTMLSelectElement | null;
 const asrAliyunConfig = document.getElementById("asr-aliyun-config");
 const asrAliyunAppKeyInput = document.getElementById("asr-aliyun-app-key") as HTMLInputElement | null;
@@ -2192,7 +2154,7 @@ asrEngineSelect?.addEventListener("change", () => {
   syncAsrVisibility();
   void saveAsrField("asrEngine", asrEngineSelect.value);
 });
-// 防抖保存：每个字段独立 timer，避免连续填写多个字段时只有最后一个被保存
+// ： timer，
 let asrAliyunAppKeyTimer: ReturnType<typeof setTimeout> | undefined;
 let asrAliyunAccessKeyIdTimer: ReturnType<typeof setTimeout> | undefined;
 let asrAliyunAccessKeySecretTimer: ReturnType<typeof setTimeout> | undefined;
@@ -2216,7 +2178,7 @@ async function saveAsrField(field: string, value: unknown): Promise<void> {
   try {
     await window.tts.saveSettings({ [field]: value });
   } catch (err) {
-    console.warn("[asr] 保存 ASR 配置失败:", field, err);
+    console.warn("[asr] Failed to save ASR settings:", field, err);
   }
 }
 
@@ -2239,12 +2201,12 @@ async function loadAsrConfig(): Promise<void> {
     }
     syncAsrVisibility();
   } catch (err) {
-    console.warn("[asr] 加载 ASR 配置失败", err);
+    console.warn("[asr] Failed to load ASR settings", err);
   }
 }
 void loadAsrConfig();
 
-// ── 联网搜索插件（博查/Tavily/火山/MiniMax）──
+// ── （/Tavily//MiniMax)──
 const searchEnabledCheckbox = document.getElementById("plugin-search-enabled") as HTMLInputElement | null;
 const searchConfig = document.getElementById("plugin-search-config") as HTMLElement | null;
 const searchEngineSelect = document.getElementById("search-engine") as HTMLSelectElement | null;
@@ -2287,7 +2249,7 @@ function syncSearchEngineRows(): void {
 
 searchEnabledCheckbox?.addEventListener("change", () => {
   syncSearchConfigVisibility();
-  // 开关变化时，若开启则把 searchEngine 从 off 改成第一个有 key 的源（或 bocha）
+  // ， searchEngine  off  key （or bocha)
   if (searchEnabledCheckbox.checked && searchEngineSelect?.value === "off") {
     searchEngineSelect.value = "ddg";
     syncSearchEngineRows();
@@ -2302,14 +2264,14 @@ searchEngineSelect?.addEventListener("change", () => {
   void saveSearchField("searchEngine", searchEngineSelect.value);
 });
 
-// 各源 key 输入：失焦保存 + 输入时防抖保存（防粘贴后未失焦就丢失）
+//  key ： + （)
 const searchKeyDebounceTimers: Record<string, ReturnType<typeof setTimeout> | undefined> = {};
 for (const [engine, input] of Object.entries(SEARCH_KEY_INPUT_MAP)) {
   if (!input) continue;
   const field = SEARCH_KEY_FIELD_MAP[engine];
   input.addEventListener("change", () => { void saveSearchField(field, input.value.trim()); });
   input.addEventListener("blur", () => { void saveSearchField(field, input.value.trim()); });
-  // 输入时防抖保存：粘贴或打字后 800ms 自动保存，不依赖失焦
+  // ：or 800ms ，
   input.addEventListener("input", () => {
     clearTimeout(searchKeyDebounceTimers[engine]);
     searchKeyDebounceTimers[engine] = setTimeout(() => {
@@ -2323,7 +2285,7 @@ async function saveSearchField(field: string, value: unknown): Promise<void> {
   try {
     await window.tts.saveSettings({ [field]: value });
   } catch (err) {
-    console.warn("[plugins] 保存搜索配置失败:", field, err);
+    console.warn("[plugins] Failed to save search settings:", field, err);
   }
 }
 
@@ -2336,18 +2298,18 @@ async function loadSearchConfig(): Promise<void> {
     if (searchBochaKeyInput) searchBochaKeyInput.value = String(cfg.searchBochaKey ?? "");
     if (searchTavilyKeyInput) searchTavilyKeyInput.value = String(cfg.searchTavilyKey ?? "");
     if (searchMinimaxKeyInput) searchMinimaxKeyInput.value = String(cfg.searchMinimaxKey ?? "");
-    // 开关状态：engine 不是 off 就算启用
+    // ：engine  off Enable
     if (searchEnabledCheckbox) searchEnabledCheckbox.checked = engine !== "off";
     syncSearchConfigVisibility();
   } catch (err) {
-    console.warn("[plugins] 加载搜索配置失败", err);
+    console.warn("[plugins] Failed to load search settings", err);
   }
 }
 void loadSearchConfig();
 
-// ── 🌐 内置 MCP 工具开关 ──────────────────────────────────────
-// Playwright MCP（浏览器自动化）通过 playwrightMcpEnabled 控制，
-// main 端的 syncPlaywrightMcp() 会监听字段变化自动注册 / 移除 MCP server。
+// ── 🌐  MCP  ──────────────────────────────────────
+// Playwright MCP（) playwrightMcpEnabled ，
+// main  syncPlaywrightMcp()  / MCP server.
 const playwrightMcpCheckbox = document.getElementById("plugin-playwright-mcp-enabled") as HTMLInputElement | null;
 
 async function saveBuiltinMcpField(field: string, value: unknown): Promise<void> {
@@ -2355,7 +2317,7 @@ async function saveBuiltinMcpField(field: string, value: unknown): Promise<void>
   try {
     await window.tts.saveSettings({ [field]: value });
   } catch (err) {
-    console.warn(`[settings] 保存 ${field} 失败:`, err);
+    console.warn(`[settings]  ${field} :`, err);
   }
 }
 
@@ -2367,21 +2329,21 @@ async function loadBuiltinMcpToggles(): Promise<void> {
   try {
     const cfg = await window.tts?.loadSettings();
     if (cfg && playwrightMcpCheckbox) {
-      // 默认关闭 —— 启用会下载 Chromium，约 150MB
+      //  —— Enable Chromium， 150MB
       playwrightMcpCheckbox.checked = Boolean(cfg.playwrightMcpEnabled);
     }
   } catch (err) {
-    console.warn("[settings] 加载内置 MCP 开关失败:", err);
+    console.warn("[settings] Failed to load built-in MCP switches:", err);
   }
 }
 void loadBuiltinMcpToggles();
 
-// ── MCP Server 管理 UI ──────────────────────────────────────
+// ── MCP Server  UI ──────────────────────────────────────
 const pluginAddBtn = document.querySelector(".plugin-add-btn") as HTMLButtonElement | null;
-console.log("[settings] plugin-add-btn 查询结果:", pluginAddBtn ? "找到" : "未找到");
+console.log("[settings] plugin-add-btn query result:", pluginAddBtn ? "" : "");
 
 
-// 简易命令行解析：支持引号包裹的参数
+// ：
 function parseCommandLine(input: string): { command: string; args: string[] } {
   const trimmed = input.trim();
   if (!trimmed) return { command: "", args: [] };
@@ -2412,33 +2374,33 @@ function parseCommandLine(input: string): { command: string; args: string[] } {
   return { command: parts[0] || "", args: parts.slice(1) };
 }
 pluginAddBtn?.addEventListener("click", async () => {
-  console.log("[settings] ＋ 按钮被点击，弹出输入框…");
+  console.log("[settings] + button clicked, opening prompt...");
   const command = await showInputModal({
-    title: "添加 MCP Server",
-    message: "输入启动命令，例如：node C:\\my-mcp-server\\index.js",
+    title: "Add MCP Server",
+    message: "Enter start command, e.g.: node C:\\my-mcp-server\\index.js",
     placeholder: "node path\\to\\server.js --flag",
     icon: "🧩",
   });
   if (!command || !command.trim()) {
-    console.log("[settings] 用户取消或命令为空");
+    console.log("[settings] User cancelled or command is empty");
     return;
   }
 
   const nameInput = await showInputModal({
-    title: "MCP Server 名称",
-    message: "给这个 MCP server 起个名字（仅用于展示）",
-    placeholder: "例如：天气工具",
+    title: "MCP Server Name",
+    message: "Give this MCP server a name (display only)",
+    placeholder: "e.g.: weather-tools",
     icon: "🏷️",
   });
-  const name = (nameInput && nameInput.trim()) || "未命名 MCP";
+  const name = (nameInput && nameInput.trim()) || "Unnamed MCP";
   const serverId = "mcp-" + Date.now();
   const parsed = parseCommandLine(command.trim());
   if (!parsed.command) {
-    await showModal({ title: "添加失败", message: "请输入有效的启动命令", icon: "⚠️" });
+    await showModal({ title: "Failed to Add", message: "Please enter a valid start command", icon: "⚠️" });
     return;
   }
 
-  console.log("[settings] 添加 MCP server:", name, serverId, command.trim());
+  console.log("[settings] Add MCP Server:", name, serverId, command.trim());
 
   try {
     const result = await window.settings?.addMcpServer?.({
@@ -2450,44 +2412,52 @@ pluginAddBtn?.addEventListener("click", async () => {
     });
 
     if (result?.ok) {
-      console.log("[settings] MCP server 添加成功，工具数:", result.toolIds?.length);
+      console.log("[settings] MCP server added successfully, tool count:", result.toolIds?.length);
       await showModal({
-        title: "添加成功",
-        message: '"' + name + '" 已连接，发现 ' + (result.toolIds?.length || 0) + " 个工具。详情见终端日志。",
+        title: "Added Successfully",
+        message: '"' + name + '" connected, found ' + (result.toolIds?.length || 0) + " tools. Details.",
         icon: "✅",
       });
     } else {
-      console.error("[settings] MCP server 添加失败:", result?.error);
+      console.error("[settings] Failed to add MCP server:", result?.error);
       await showModal({
-        title: "添加失败",
-        message: (result?.error || "未知错误") + "（详情见终端日志）",
+        title: "Failed to Add",
+        message: (result?.error || "Unknown error") + " (see terminal log for details)",
         icon: "⚠️",
       });
     }
   } catch (err) {
-    console.error("[settings] MCP server 添加异常:", err);
+    console.error("[settings] Error adding MCP server:", err);
     await showModal({
-      title: "添加异常",
-      message: "调用过程中发生错误，详情见终端日志。",
+      title: "Error Adding",
+      message: "An error occurred during execution. See terminal logs for details.",
       icon: "⚠️",
     });
   }
 });
 
 clearChatHistoryBtn.addEventListener("click", async () => {
-  if (!window.confirm("清空所有聊天会话？\n此操作会删除全部历史对话，无法恢复。")) return;
+  const confirmed = await showConfirm({
+    title: "Clear All Chat Sessions",
+    message: "Clear all chat sessions?\nThis will delete all conversations and cannot be undone.",
+    confirmText: "Clear All",
+    cancelText: "Cancel",
+    icon: "🗑️",
+    danger: true,
+  });
+  if (!confirmed) return;
   try {
     const sessions = await window.chatStore?.list();
     if (sessions && sessions.length > 0) {
-      // 串行删除（store 不支持批量删除；会话数量不会大，可接受）
+      // Delete（store Delete；，)
       for (const s of sessions) {
         await window.chatStore?.delete(s.id);
       }
     }
-    setGeneralSaveStatus("所有聊天会话已清空", "is-ok");
+    setGeneralSaveStatus("All chat sessions cleared", "is-ok");
   } catch (err) {
-    console.warn("[settings] 清空聊天会话失败:", err);
-    setGeneralSaveStatus("清空失败，请查看终端日志", "is-error");
+    console.warn("[settings] Failed to clear chat sessions:", err);
+    setGeneralSaveStatus("Failed to clear sessions, check terminal logs", "is-error");
   }
 });
 
@@ -2497,13 +2467,13 @@ presetCards?.addEventListener("click", (e) => {
   const cardProviderName = card.dataset.provider;
   if (!cardProviderName) return;
 
-  // 切厂商前先把当前厂商的输入值快照进缓存，避免覆盖丢失
+  // ，
   captureActiveProviderProfile();
 
   const providerName = getCustomEndpointMode(cardProviderName)
     ? getCustomEndpointProvider(customEndpointMode)
     : cardProviderName;
-  // 从缓存里取目标厂商的旧配置；没有缓存就用 preset 默认值
+  // ； preset 
   const cached = providerProfileCache[providerName];
   applyPreset(
     providerName,
@@ -2513,7 +2483,7 @@ presetCards?.addEventListener("click", (e) => {
     cached?.displayName,
     cached?.explicitTransport,
   );
-  setSaveStatus(cached ? "已切回上次配置" : "已应用预设，填写 API Key 后保存");
+  setSaveStatus(cached ? "Reverted to previous config" : "Preset applied — enter API Key and save");
 });
 
 customEndpointControls?.addEventListener("click", (e) => {
@@ -2533,9 +2503,9 @@ customEndpointControls?.addEventListener("click", (e) => {
     cached?.displayName,
     cached?.explicitTransport,
   );
-  setSaveStatus(cached ? "已切回上次配置" : nextMode === "local"
-    ? "请填写本地服务地址和模型 ID"
-    : "请填写云端服务地址、API Key 和模型 ID");
+  setSaveStatus(cached ? "Reverted to previous config" : nextMode === "local"
+    ? "Please enter local service URL and model ID"
+    : "Please enter cloud service URL, API Key, and model ID");
 });
 
 const CUSTOM_ENDPOINT_GUIDE_BODY = [
@@ -2570,37 +2540,35 @@ const CUSTOM_ENDPOINT_GUIDE_BODY = [
 
 customEndpointGuideBtn?.addEventListener("click", () => {
   void showHtmlModal({
-    title: "模型服务接入说明",
+    title: "Model Service Integration Guide",
     icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 10.5V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="7.25" r="1.1" fill="currentColor"/></svg>',
     htmlBody: CUSTOM_ENDPOINT_GUIDE_BODY,
   });
 });
 
-// ── 模型厂商 Work 流程适配说明 ──────────────────────────────
-// 展示各厂商结构化输出档位与实测兼容性；「详细文档」在 app 内本地渲染完整实测报告。
-const WORK_FLOW_COMPAT_MD = `## 模型兼容性
+// ──  Work  ──────────────────────────────
+// ；"" app .
+const WORK_FLOW_COMPAT_MD = `## Model Compatibility
 
-> Cyrene 会根据不同厂商自动选择对应的 Structured Output Profile。
+> Cyrene automatically selects the corresponding Structured Output Profile based on the provider.
 
-| 厂商 | 支持状态 | 档位 | 已实测模型 | 说明 |
-|------|:-------:|:---:|------------|------|
-| OpenAI | ⚠️ 文档适配 | A | - | 已完成官方协议适配，等待实测。 |
-| Claude | ⚠️ 文档适配 | A | - | 已完成官方协议适配，等待实测。 |
-| 豆包 | ✅ 已实测 | A | Seed 2.1 Turbo / Pro | 推荐使用，完整 Work 流程稳定。 |
-| Kimi | ✅ 已实测 | A | K2.6、K2.7 Code | 推荐普通 API，Coding 端点不建议用于 Work。 |
-| DeepSeek | ✅ 已实测 | B | V4 Flash、V4 Pro | 推荐，速度快、稳定。 |
-| Qwen | ✅ 已实测 | B | Qwen3.7 Max | 推荐，表现稳定。 |
-| GLM | ✅ 已实测 | B | GLM 5.1、5.2 | 推荐，4.7 不建议。 |
-| MiMo | ✅ 已实测 | B | MiMo 2.5、2.5 Pro | 推荐，表现稳定。 |
-| MiniMax | ✅ 已实测 | M | MiniMax M3 | 推荐，需使用 M 档适配。 |
-| 其他模型 | ⚠️ 文档适配 | D | - | 使用通用兼容模式，请自行验证。 |
+| Provider | Support Status | Tier | Tested Models | Notes |
+| OpenAI | Documented | A | - | Protocol implemented, ready for testing. |
+| Claude | Documented | A | - | Protocol implemented, ready for testing. |
+| Doubao | Verified | A | Seed 2.1 Turbo / Pro | Recommended, stable workflow execution. |
+| Kimi | Verified | A | K2.6, K2.7 Code | Recommended with standard API. |
+| DeepSeek | Verified | B | V4 Flash, V4 Pro | Recommended, fast and stable. |
+| Qwen | Verified | B | Qwen3.7 Max | Recommended, stable performance. |
+| GLM | Verified | B | GLM 5.1, 5.2 | Recommended. |
+| MiMo | Verified | B | MiMo 2.5, 2.5 Pro | Recommended, stable performance. |
+| MiniMax | Verified | M | MiniMax M3 | Recommended, requires Tier M adaptation. |
+| Other | Documented | D | - | Generic compatibility mode. |
 
-### 档位说明
-
-- **A**：原生 JSON Schema / Function Calling
-- **B**：JSON Object + 本地校验
-- **M**：MiniMax 专用适配
-- **D**：通用兼容模式（未知模型 / 自定义端点）
+### Tier Descriptions
+- **A**: Native JSON Schema / Function Calling
+- **B**: JSON Object + Local Validation
+- **M**: MiniMax dedicated adapter
+- **D**: Generic compatibility mode (unknown models / custom endpoints)
 `;
 
 function buildWorkFlowAdaptBody(): string {
@@ -2608,13 +2576,13 @@ function buildWorkFlowAdaptBody(): string {
   const tableHtml = rendered.mode === "html" ? rendered.content : "";
   return [
     '<div class="custom-endpoint-guide-warning work-flow-adapt-meta">',
-    "  <strong>模型厂商 Work 流程适配</strong>",
-    '  <span class="work-flow-adapt-date">最新更新于 2026/7/24</span>',
-    '  <p class="work-flow-adapt-disclaimer">本项目为个人业余开发项目，以下兼容性结论基于有限实测，仅供参考；完整测试方法与判定规则见详细文档。</p>',
+    "  <strong>Model Provider Workflow Adaptation</strong>",
+    '  <span class="work-flow-adapt-date">Updated July 2026</span>',
+    '  <p class="work-flow-adapt-disclaimer">Compatibility conclusions based on tests for reference; full details in documentation..</p>',
     "</div>",
     '<p class="work-flow-adapt-doc-line">',
-    '  完整实测链路与判定规则见',
-    '  <button type="button" class="work-flow-adapt-doc-link" id="work-flow-adapt-doc-link">详细文档 ↗</button>',
+    '  Full test pipeline and evaluation rules available at',
+    '  <button type="button" class="work-flow-adapt-doc-link" id="work-flow-adapt-doc-link"> ↗</button>',
     "</p>",
     `<div class="work-flow-adapt-table">${tableHtml}</div>`,
   ].join("\n");
@@ -2622,11 +2590,11 @@ function buildWorkFlowAdaptBody(): string {
 
 workFlowAdaptBtn?.addEventListener("click", () => {
   void showHtmlModal({
-    title: "模型厂商 Work 流程适配",
+    title: "Model Provider Workflow Adaptation",
     icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 10.5V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="7.25" r="1.1" fill="currentColor"/></svg>',
     htmlBody: buildWorkFlowAdaptBody(),
   });
-  // 「详细文档」在 app 内本地渲染完整实测报告（?raw 内联 md + renderMarkdown）
+  // "" app （?raw  md + renderMarkdown)
   const docLink = document.querySelector(
     "#cy-html-modal-body #work-flow-adapt-doc-link",
   ) as HTMLButtonElement | null;
@@ -2634,11 +2602,11 @@ workFlowAdaptBtn?.addEventListener("click", () => {
     const rendered = renderMarkdown(workFlowDocMd);
     const docHtml = rendered.mode === "html" ? rendered.content : "";
     void showHtmlModal({
-      title: "详细文档",
+      title: "Detailed Documentation",
       icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M14 3v4a1 1 0 0 0 1 1h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 3h9l5 5v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>',
       htmlBody: `<div class="work-flow-doc">${docHtml}</div>`,
     });
-    // 代码块复制按钮（设置窗未初始化 chat 的 code-block controller，这里就近绑定）
+    // （ chat  code-block controller，)
     const copyBtns = document.querySelectorAll<HTMLButtonElement>(
       "#cy-html-modal-body .code-block__copy",
     );
@@ -2648,7 +2616,7 @@ workFlowAdaptBtn?.addEventListener("click", () => {
           btn.closest(".code-block")?.querySelector(".code-block__code")?.textContent ?? "";
         void navigator.clipboard.writeText(code).then(() => {
           const orig = btn.textContent;
-          btn.textContent = "已复制";
+          btn.textContent = "Copied";
           window.setTimeout(() => {
             btn.textContent = orig;
           }, 1200);
@@ -2658,7 +2626,7 @@ workFlowAdaptBtn?.addEventListener("click", () => {
   });
 });
 
-// 测试连接按钮：调用厂商 adapter 的真实连接测试
+// ： adapter 
 if (testConnectionBtn) {
   testConnectionBtn.addEventListener("click", async () => {
     const provider = activeProvider;
@@ -2671,8 +2639,8 @@ if (testConnectionBtn) {
     }
     const apiKey = getApiKeyForRequest();
     if (!apiKey) { setSaveStatus("Enter an API key before testing.", "is-error"); return; }
-    if (!model) { setSaveStatus("请先选择/填写模型再测试", "is-error"); return; }
-    setSaveStatus("测试连接中…");
+    if (!model) { setSaveStatus("Please select/enter a model before testing", "is-error"); return; }
+    setSaveStatus("Testing connection…");
     testConnectionBtn.disabled = true;
     try {
       const result = await window.settings!.testConnection({
@@ -2683,33 +2651,33 @@ if (testConnectionBtn) {
         explicitTransport: transportSelect.value as ProviderProfile["explicitTransport"],
         reasoning: providerProfileCache[activeProvider]?.reasoning,
       });
-      if (result.ok) setSaveStatus("连接成功 " + result.latency + "ms · " + (result.sample ?? ""), "is-ok");
-      else setSaveStatus("连接失败：" + (result.error ?? "未知错误"), "is-error");
+      if (result.ok) setSaveStatus("Connected " + result.latency + "ms · " + (result.sample ?? ""), "is-ok");
+      else setSaveStatus("Connection failed: " + (result.error ?? "Unknown error"), "is-error");
     } catch (e) {
-      setSaveStatus("连接失败：" + (e instanceof Error ? e.message : String(e)), "is-error");
+      setSaveStatus("Connection failed: " + (e instanceof Error ? e.message : String(e)), "is-error");
     } finally {
       testConnectionBtn.disabled = false;
     }
   });
 }
 
-// ── 视觉模型配置事件 ──────────────────────────────────────
-// 多模态开关：ON 隐藏视觉配置区，OFF 显示
+// ──  ──────────────────────────────────────
+// ：ON ，OFF 
 multimodalToggle.addEventListener("change", () => {
   applyMultimodalUI();
-  setSaveStatus("有未保存的更改");
+  setSaveStatus("Unsaved changes");
 });
 
-// Base URL 重置按钮：一键复原厂商默认 baseUrl
+// Base URL ： baseUrl
 baseUrlResetBtn.addEventListener("click", () => {
   const preset = findPreset(activeProvider);
   if (preset) {
     baseUrlInput.value = preset.baseUrl;
-    setSaveStatus("已重置为厂商默认 URL");
+    setSaveStatus("Reset to provider default URL");
   }
 });
 
-// 测试视觉模型按钮（仅在多模态开关 OFF 时可见）
+// （ OFF )
 testVisionBtn.addEventListener("click", async () => {
   const baseUrl = visionBaseUrlInput.value;
   const apiKey = visionApiKeyInput.value;
@@ -2717,12 +2685,12 @@ testVisionBtn.addEventListener("click", async () => {
   const isLocal = !baseUrl || baseUrl.includes("localhost") || baseUrl.includes("127.0.0.1") || baseUrl.includes("::1");
   if (!apiKey && !isLocal) { visionTestStatus.textContent = "Enter an API key first."; return; }
   if (!model) { visionTestStatus.textContent = "Enter a vision model first."; return; }
-  visionTestStatus.textContent = "测试中…";
+  visionTestStatus.textContent = "Testing…";
   testVisionBtn.disabled = true;
   try {
     const result = await window.settings!.testVision?.({ baseUrl, apiKey, model });
-    if (result?.ok) visionTestStatus.textContent = "✅ 连接成功 " + result.latency + "ms · " + (result.sample ?? "");
-    else visionTestStatus.textContent = "❌ " + (result?.error ?? "未知错误");
+    if (result?.ok) visionTestStatus.textContent = "✅ Connected " + result.latency + "ms · " + (result.sample ?? "");
+    else visionTestStatus.textContent = "❌ " + (result?.error ?? "Unknown error");
   } catch (e) {
     visionTestStatus.textContent = "❌ " + (e instanceof Error ? e.message : String(e));
   } finally {
@@ -2742,20 +2710,20 @@ function isValidTimeOfDay(value: string): boolean {
 }
 
 function formatSchedulerDate(value: string | null | undefined): string {
-  if (!value) return "未安排";
+  if (!value) return "Unscheduled";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "时间无效";
+  if (Number.isNaN(date.getTime())) return "Invalid time";
   return date.toLocaleString();
 }
 
 function describeSchedule(schedule: ScheduleConfig): string {
-  if (schedule.kind === "once") return "仅一次 " + formatSchedulerDate(schedule.runAt);
-  if (schedule.kind === "daily") return "每天 " + schedule.timeOfDay;
+  if (schedule.kind === "once") return "Once " + formatSchedulerDate(schedule.runAt);
+  if (schedule.kind === "daily") return "Daily " + schedule.timeOfDay;
   if (schedule.kind === "weekly") {
-    const names = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+    const names = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     return `${names[schedule.dayOfWeek]} ${schedule.timeOfDay}`;
   }
-  return `每隔 ${schedule.every} ${schedule.unit === "minutes" ? "分钟" : "小时"}`;
+  return `Every ${schedule.every} ${schedule.unit === "minutes" ? "minutes" : "hours"}`;
 }
 
 function setSchedulerStatus(text: string, className = ""): void {
@@ -2777,7 +2745,7 @@ function renderSchedulerTools(selectedIds: string[] = []): void {
     checkbox.checked = selected.has(tool.id);
     checkbox.addEventListener("change", updateSchedulerConditionalFields);
     const copy = document.createElement("span");
-    copy.textContent = `${tool.name} (${tool.id}) · ${tool.risk}${tool.enabled ? "" : " · 已全局禁用"}`;
+    copy.textContent = `${tool.name} (${tool.id}) · ${tool.risk}${tool.enabled ? "" : " · globally disabled"}`;
     label.appendChild(checkbox);
     label.appendChild(copy);
     schedulerToolPicker.appendChild(label);
@@ -2803,37 +2771,37 @@ async function renderSchedulerList(): Promise<void> {
     if (strong) strong.textContent = task.title;
     const badge = card.querySelector(".scheduler-badge") as HTMLSpanElement | null;
     if (badge) {
-      badge.textContent = task.enabled ? "已启用" : "已停用";
+      badge.textContent = task.enabled ? "Enabled" : "Disabled";
       badge.classList.toggle("is-disabled", !task.enabled);
     }
     const meta = card.querySelector(".scheduler-card__meta");
-    if (meta) meta.textContent = `${describeSchedule(task.schedule)} · 下次运行：${formatSchedulerDate(task.nextFireAt)} · 工具：${task.toolMode === "all-enabled" ? "全部已启用工具" : task.allowedToolIds.join(", ") || "无"}`;
+    if (meta) meta.textContent = `${describeSchedule(task.schedule)} · Next run: ${formatSchedulerDate(task.nextFireAt)} · Tools: ${task.toolMode === "all-enabled" ? "All enabled tools" : task.allowedToolIds.join(", ") || "None"}`;
     const actions = card.querySelector(".scheduler-card__actions") as HTMLDivElement | null;
     if (actions) {
       const fireBtn = document.createElement("button");
       fireBtn.type = "button";
       fireBtn.className = "ghost-btn";
-      fireBtn.textContent = "立即运行";
+      fireBtn.textContent = "Run Now";
       fireBtn.addEventListener("click", () => void fireSchedulerTask(task.id));
       const editBtn = document.createElement("button");
       editBtn.type = "button";
       editBtn.className = "ghost-btn";
-      editBtn.textContent = "编辑";
+      editBtn.textContent = "Edit";
       editBtn.addEventListener("click", () => void openSchedulerEditor(task));
       const toggleBtn = document.createElement("button");
       toggleBtn.type = "button";
       toggleBtn.className = "ghost-btn";
-      toggleBtn.textContent = task.enabled ? "停用" : "启用";
+      toggleBtn.textContent = task.enabled ? "Disable" : "Enable";
       toggleBtn.addEventListener("click", () => void toggleSchedulerTask(task.id, !task.enabled));
       const historyBtn = document.createElement("button");
       historyBtn.type = "button";
       historyBtn.className = "ghost-btn";
-      historyBtn.textContent = "历史";
+      historyBtn.textContent = "History";
       historyBtn.addEventListener("click", () => void toggleSchedulerHistory(task.id, card));
       const deleteBtn = document.createElement("button");
       deleteBtn.type = "button";
       deleteBtn.className = "ghost-btn";
-      deleteBtn.textContent = "删除";
+      deleteBtn.textContent = "Delete";
       deleteBtn.addEventListener("click", () => void deleteSchedulerTask(task.id));
       actions.append(fireBtn, editBtn, toggleBtn, historyBtn, deleteBtn);
     }
@@ -2843,7 +2811,7 @@ async function renderSchedulerList(): Promise<void> {
 
 appearanceForm.addEventListener("submit", async (e) => {
   e.preventDefault();
-  setAppearanceSaveStatus("保存中…");
+  setAppearanceSaveStatus("Saving…");
   try {
     await window.settings!.saveGeneral(buildAppearanceSettingsPatch({
       uiTheme: getUiThemeValue(),
@@ -2854,15 +2822,15 @@ appearanceForm.addEventListener("submit", async (e) => {
       chatLineHeight: Number(chatLineHeightInput.value),
       chatParaSpacing: Number(chatParaSpacingInput.value),
     }));
-    setAppearanceSaveStatus("已保存", "is-ok");
+    setAppearanceSaveStatus("Saved", "is-ok");
   } catch {
-    setAppearanceSaveStatus("保存失败", "is-error");
+    setAppearanceSaveStatus("Save failed", "is-error");
   }
 });
 
 generalForm.addEventListener("submit", async (e) => {
   e.preventDefault();
-  setGeneralSaveStatus("保存中…");
+  setGeneralSaveStatus("Saving…");
   try {
     await window.settings!.saveGeneral({
       musicEnabled: musicEnabledInput.checked,
@@ -2874,15 +2842,15 @@ generalForm.addEventListener("submit", async (e) => {
       launchAtLogin: launchAtLoginInput.checked,
       language: "en-US",
     });
-    setGeneralSaveStatus("已保存", "is-ok");
+    setGeneralSaveStatus("Saved", "is-ok");
   } catch {
-    setGeneralSaveStatus("保存失败", "is-error");
+    setGeneralSaveStatus("Save failed", "is-error");
   }
 });
 
 cyrenePanel.addEventListener("submit", async (e) => {
   e.preventDefault();
-  setCyreneSaveStatus("保存中…");
+  setCyreneSaveStatus("Saving…");
   try {
     const parsedTimeoutSec = Math.max(30, Math.min(1800, parseInt(chatRequestTimeoutSecInput.value, 10) || 300));
     const parsedMaxIterations = Math.max(5, Math.min(30, parseInt(maxIterationsInput.value, 10) || 12));
@@ -2904,9 +2872,9 @@ cyrenePanel.addEventListener("submit", async (e) => {
       citaRepairBudgetSec: parsedCitaSec,
       actionGateRepairBudgetSec: parsedAgSec,
     });
-    setCyreneSaveStatus("已保存", "is-ok");
+    setCyreneSaveStatus("Saved", "is-ok");
   } catch {
-    setCyreneSaveStatus("保存失败", "is-error");
+    setCyreneSaveStatus("Save failed", "is-error");
   }
 });
 
@@ -2917,13 +2885,13 @@ apiForm.addEventListener("submit", async (e) => {
     setSaveStatus(customValidationError, "is-error");
     return;
   }
-  setSaveStatus("保存中…");
+  setSaveStatus("Saving…");
   try {
-    // 保存前把当前输入快照进 perProvider 缓存（main 进程也会做一次，但渲染端先做一遍，
-    // 是为了下一次切厂商再切回来不依赖磁盘往返）
+    //  perProvider （main ，，
+    // )
     captureActiveProviderProfile();
-    // mode 字段在 UI 层已删除，但仍传给 main 进程保留向后兼容（旧配置文件可能有该字段）。
-    // 默认 "manual"（baseUrl 永远可改、模型名永远可填，行为等同原 Manual）。
+    // mode  UI Delete， main （).
+    //  "manual"（baseUrl 、， Manual).
     await window.settings!.saveConfig({
       mode: "manual",
       provider: activeProvider,
@@ -2935,16 +2903,16 @@ apiForm.addEventListener("submit", async (e) => {
       reasoning: providerProfileCache[activeProvider]?.reasoning,
       perProvider: { ...providerProfileCache },
       multimodal: multimodalToggle.checked,
-      // 视觉配置始终传三框值，不论开关状态（开关 ON 时保留但不使用）
+      // ，（ ON )
       vision: {
         baseUrl: visionBaseUrlInput.value.trim(),
         apiKey: visionApiKeyInput.value.trim(),
         model: visionModelInput.value.trim(),
       },
     });
-    setSaveStatus("已保存", "is-ok");
+    setSaveStatus("Saved", "is-ok");
   } catch {
-    setSaveStatus("保存失败", "is-error");
+    setSaveStatus("Save failed", "is-error");
   }
 });
 
@@ -2962,12 +2930,12 @@ async function loadSchedulerPanel(): Promise<void> {
 async function openSchedulerEditor(task?: ScheduledTask): Promise<void> {
   editingSchedulerTaskId = task?.id ?? null;
   schedulerEditor?.classList.remove("is-hidden");
-  // 确保工具列表已加载
+  // 
   if (schedulerTools.length === 0) {
     const toolsResult = await window.cyreneScheduler!.getTools();
     if (toolsResult.ok) schedulerTools = toolsResult.value ?? [];
   }
-  if (schedulerEditorTitle) schedulerEditorTitle.textContent = task ? "编辑定时任务" : "新建定时任务";
+  if (schedulerEditorTitle) schedulerEditorTitle.textContent = task ? "Edit Scheduled Task" : "New Scheduled Task";
   if (schedulerTitleInput) schedulerTitleInput.value = task?.title ?? "";
   if (schedulerPromptInput) schedulerPromptInput.value = task?.prompt ?? "";
   if (schedulerEnabledInput) schedulerEnabledInput.checked = task?.enabled ?? true;
@@ -2987,7 +2955,7 @@ async function openSchedulerEditor(task?: ScheduledTask): Promise<void> {
   if (schedulerToolLimitInput) schedulerToolLimitInput.checked = task?.toolMode === "allow-list";
   renderSchedulerTools(task?.allowedToolIds ?? []);
   updateSchedulerConditionalFields();
-  setSchedulerStatus("等待操作");
+  setSchedulerStatus("Waiting for action");
 }
 
 function closeSchedulerEditor(): void {
@@ -3011,29 +2979,29 @@ function collectSchedule(): ScheduleConfig {
   const kind = schedulerKindInput?.value ?? "daily";
   if (kind === "once") {
     const value = schedulerOnceRunAtInput?.value;
-    if (!value) throw new Error("请选择一次性运行时间");
+    if (!value) throw new Error("Please select one-time run time");
     const runAt = new Date(value);
-    if (Number.isNaN(runAt.getTime())) throw new Error("一次性运行时间无效");
-    if (runAt.getTime() <= Date.now()) throw new Error("一次性任务时间必须晚于当前时间");
+    if (Number.isNaN(runAt.getTime())) throw new Error("One-time run time is invalid");
+    if (runAt.getTime() <= Date.now()) throw new Error("One-time task time must be in the future");
     return { kind: "once", runAt: runAt.toISOString() };
   }
   if (kind === "weekly") {
     const timeOfDay = schedulerTimeOfDayInput?.value || "08:00";
-    if (!isValidTimeOfDay(timeOfDay)) throw new Error("每周时间格式必须是 HH:mm");
+    if (!isValidTimeOfDay(timeOfDay)) throw new Error("Weekly time format must be HH:mm");
     const dayOfWeek = Number(schedulerDayOfWeekInput?.value ?? 1);
-    if (!Number.isInteger(dayOfWeek) || dayOfWeek < 0 || dayOfWeek > 6) throw new Error("星期必须是周一到周日");
+    if (!Number.isInteger(dayOfWeek) || dayOfWeek < 0 || dayOfWeek > 6) throw new Error("");
     return { kind: "weekly", dayOfWeek: dayOfWeek as 0 | 1 | 2 | 3 | 4 | 5 | 6, timeOfDay };
   }
   if (kind === "interval") {
     const every = Number(schedulerIntervalEveryInput?.value ?? 1);
     const unit = schedulerIntervalUnitInput?.value === "hours" ? "hours" : "minutes";
-    if (!Number.isInteger(every) || every <= 0) throw new Error("间隔必须是正整数");
-    if (unit === "minutes" && every > 1440) throw new Error("分钟间隔不能超过 1440");
-    if (unit === "hours" && every > 168) throw new Error("小时间隔不能超过 168");
+    if (!Number.isInteger(every) || every <= 0) throw new Error("Interval must be a positive integer");
+    if (unit === "minutes" && every > 1440) throw new Error("Minute interval cannot exceed 1440");
+    if (unit === "hours" && every > 168) throw new Error("Hour interval cannot exceed 168");
     return { kind: "interval", every, unit };
   }
   const timeOfDay = schedulerTimeOfDayInput?.value || "08:00";
-  if (!isValidTimeOfDay(timeOfDay)) throw new Error("每日时间格式必须是 HH:mm");
+  if (!isValidTimeOfDay(timeOfDay)) throw new Error("Daily schedule time format must be HH:mm");
   return { kind: "daily", timeOfDay };
 }
 
@@ -3044,11 +3012,11 @@ function collectAllowedToolIds(): string[] {
 
 async function saveSchedulerTask(): Promise<void> {
   try {
-    setSchedulerStatus("保存中…");
+    setSchedulerStatus("Saving…");
     const title = (schedulerTitleInput?.value ?? "").trim();
     const prompt = (schedulerPromptInput?.value ?? "").trim();
-    if (!title) throw new Error("标题不能为空");
-    if (!prompt) throw new Error("提示词不能为空");
+    if (!title) throw new Error("Title cannot be empty");
+    if (!prompt) throw new Error("Prompt cannot be empty");
     const input = {
       title,
       prompt,
@@ -3060,7 +3028,7 @@ async function saveSchedulerTask(): Promise<void> {
     const result = editingSchedulerTaskId
       ? await window.cyreneScheduler!.update(editingSchedulerTaskId, input)
       : await window.cyreneScheduler!.add(input);
-    if (!result.ok) throw new Error(result.error ?? "保存失败");
+    if (!result.ok) throw new Error(result.error ?? "Save failed");
     await loadSchedulerPanel();
     closeSchedulerEditor();
   } catch (err) {
@@ -3070,20 +3038,20 @@ async function saveSchedulerTask(): Promise<void> {
 
 async function toggleSchedulerTask(id: string, enabled: boolean): Promise<void> {
   const result = await window.cyreneScheduler!.toggle(id, enabled);
-  if (!result.ok) window.alert(result.error ?? "切换失败");
+  if (!result.ok) await showAlert(result.error ?? "Switch failed");
   await loadSchedulerPanel();
 }
 
 async function fireSchedulerTask(id: string): Promise<void> {
   const result = await window.cyreneScheduler!.fireNow(id);
-  if (!result.ok) window.alert(result.reason === "task already running" ? "该任务正在运行中" : (result.error ?? result.reason ?? "立即运行失败"));
+  if (!result.ok) await showAlert(result.reason === "task already running" ? "This task is already running" : (result.error ?? result.reason ?? "Failed to run task"));
 }
 
 async function deleteSchedulerTask(id: string): Promise<void> {
-  const ok = await showModal({ title: "删除定时任务", message: "确定删除这个定时任务吗？", icon: '<svg width="18" height="18" viewBox="0 0 48 48" fill="none" aria-hidden="true" style="vertical-align:-2px"><path fill-rule="evenodd" clip-rule="evenodd" d="M8 15H40L37 44H11L8 15Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M20.002 25.0024V35.0026" stroke="currentColor" stroke-width="4" stroke-linecap="round"/><path d="M28.0024 24.9995V34.9972" stroke="currentColor" stroke-width="4" stroke-linecap="round"/><path d="M12 14.9999L28.3242 3L36 15" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>', confirmText: "删除" });
+  const ok = await showModal({ title: "Delete Scheduled Task", message: "Delete this scheduled task?", icon: '<svg width="18" height="18" viewBox="0 0 48 48" fill="none" aria-hidden="true" style="vertical-align:-2px"><path fill-rule="evenodd" clip-rule="evenodd" d="M8 15H40L37 44H11L8 15Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M20.002 25.0024V35.0026" stroke="currentColor" stroke-width="4" stroke-linecap="round"/><path d="M28.0024 24.9995V34.9972" stroke="currentColor" stroke-width="4" stroke-linecap="round"/><path d="M12 14.9999L28.3242 3L36 15" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>', confirmText: "Delete", danger: true });
   if (!ok) return;
   const result = await window.cyreneScheduler!.delete(id);
-  if (!result.ok) window.alert(result.error ?? "删除失败");
+  if (!result.ok) await showAlert(result.error ?? "Delete failed");
   await loadSchedulerPanel();
 }
 
@@ -3098,7 +3066,7 @@ async function toggleSchedulerHistory(taskId: string, card: Element): Promise<vo
   const rows = result.value ?? [];
   box.replaceChildren();
   if (!result.ok || rows.length === 0) {
-    box.textContent = result.ok ? "暂无运行历史" : (result.error ?? "读取历史失败");
+    box.textContent = result.ok ? "No run history yet" : (result.error ?? "Failed to load history");
   } else {
     for (const row of rows) {
       const div = document.createElement("div");
@@ -3143,7 +3111,7 @@ function switchSection(section: string): void {
   if (userPanel) userPanel.classList.toggle("is-hidden", !isUser);
   const chatPanel = document.getElementById("chat-panel");
   if (chatPanel) chatPanel.classList.toggle("is-hidden", !isChat);
-  // 切到 💬 聊天面板时拉一次列表（cross-window 变化由 onChanged 监听器自己刷新）
+  //  💬 （cross-window  onChanged )
   if (isChat) void renderChatSessions();
   const tasksPanel = document.getElementById("tasks-panel");
   if (tasksPanel) tasksPanel.classList.toggle("is-hidden", !isTasks);
@@ -3191,7 +3159,7 @@ function switchSection(section: string): void {
   ) {
 	    placeholderIcon.innerHTML = label.emoji;
     placeholderTitle.textContent = label.title;
-    placeholderCopy.textContent = "这个模块先占位，等核心聊天与 API 接通后再继续扩展。";
+    placeholderCopy.textContent = "This module is reserved for future expansion.";
   }
 
   document.querySelectorAll(".nav-item").forEach((el) => {
@@ -3214,7 +3182,7 @@ schedulerKindInput?.addEventListener("change", updateSchedulerConditionalFields)
 schedulerToolLimitInput?.addEventListener("change", updateSchedulerConditionalFields);
 updateSchedulerConditionalFields();
 
-// ===== 游戏代肝插件卡（在 plugins 面板里，MCP 下、生活工具上）=====
+// ===== （ plugins ，MCP 、)=====
 function initGameBotPluginCard(): void {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const gb = (window as any).gameBot as {
@@ -3256,8 +3224,8 @@ function initGameBotPluginCard(): void {
     const refs = await gb!.listRefs(currentRecipe);
     if (refsListEl) {
       refsListEl.innerHTML = refs.length
-        ? "已就位参考图：" + refs.map((r) => "<code>" + r + "</code>").join(" ")
-        : "（目录还没有参考图，把裁好的小图按命名放进上方目录）";
+        ? "Available reference images: " + refs.map((r) => "<code>" + r + "</code>").join(" ")
+        : "(No reference images yet. Place cropped images into the directory above)";
     }
   }
 
@@ -3282,13 +3250,13 @@ function initGameBotPluginCard(): void {
     await refreshRefs();
   }
 
-  // 胶囊开关：开/关时保存 enabled 并显隐配置区
+  // ：/ enabled 
   enabledCb.addEventListener("change", async () => {
     configEl.style.display = enabledCb.checked ? "block" : "none";
     await gb.saveConfig({ enabled: enabledCb.checked });
   });
 
-  // 配置项失焦即存
+  // 
   const saveFields = () => gb.saveConfig({
     exePath: exe.value.trim(),
     activeRecipe: recipeSel.value,
@@ -3299,9 +3267,9 @@ function initGameBotPluginCard(): void {
 
   startBtn?.addEventListener("click", async () => {
     const r = await gb.start();
-    appendLog(r.ok ? "代肝已启动" : "启动失败: " + (r.error ?? ""));
+    appendLog(r.ok ? "Automation started" : "Failed to start: " + (r.error ?? ""));
   });
-  stopBtn?.addEventListener("click", () => { void gb.stop(); appendLog("已请求停止"); });
+  stopBtn?.addEventListener("click", () => { void gb.stop(); appendLog("Stop requested"); });
 
   gb.onProgress((info) => {
     const i = info as { index: number; total: number; desc: string };
@@ -3318,7 +3286,7 @@ window.settings?.onChannelsStatusChanged((status) => {
   renderProactiveDeliveryAvailability(status as Record<string, { phase?: string }>);
 });
 
-// ===== channels panel (连接手机) =====
+// ===== channels panel () =====
 const channelsWechatEnabledEl = document.getElementById("channels-wechat-enabled") as HTMLInputElement | null;
 const channelsFeishuEnabledEl = document.getElementById("channels-feishu-enabled") as HTMLInputElement | null;
 const channelsWechatStatusEl = document.getElementById("channels-wechat-status");
@@ -3331,12 +3299,12 @@ const channelsMirrorEl = document.getElementById("channels-mirror-desktop") as H
 const channelsToolSandboxOffEl = document.getElementById("channels-tool-sandbox-off") as HTMLInputElement | null;
 const channelsToolSandboxAllEl = document.getElementById("channels-tool-sandbox-all") as HTMLInputElement | null;
 const channelsToolSandboxSafeEl = document.getElementById("channels-tool-sandbox-safe") as HTMLInputElement | null;
-// 飞书配置输入框（Phase 2 长连接版：只需 App ID + App Secret）
+// （Phase 2 ： App ID + App Secret)
 const channelsFeishuAppIdEl = document.getElementById("channels-feishu-app-id") as HTMLInputElement | null;
 const channelsFeishuAppSecretEl = document.getElementById("channels-feishu-app-secret") as HTMLInputElement | null;
 const channelsFeishuAppSecretRevealBtn = document.getElementById("channels-feishu-app-secret-reveal");
 const channelsFeishuSaveBtn = document.getElementById("channels-feishu-save");
-// 微信按钮
+// 
 const channelsWechatLoginBtn = document.getElementById("channels-wechat-login");
 const channelsWechatRestartBtn = document.getElementById("channels-wechat-restart");
 const channelsWechatFeedbackEl = document.getElementById("channels-wechat-feedback");
@@ -3376,27 +3344,27 @@ async function loadChannelsPanel(): Promise<void> {
     if (channelsToolSandboxAllEl) channelsToolSandboxAllEl.checked = cfg.toolSandbox === "all";
     if (channelsToolSandboxSafeEl) channelsToolSandboxSafeEl.checked = cfg.toolSandbox === "safe-only";
 
-    // 飞书字段填充（长连接模式只需要 App ID；secret 加密存盘，UI 不回填明文）
+    // （ App ID；secret ，UI )
     if (channelsFeishuAppIdEl) channelsFeishuAppIdEl.value = cfg.feishu.appId ?? "";
     if (channelsFeishuAppSecretEl) {
       channelsFeishuAppSecretEl.value = "";
       channelsFeishuAppSecretEl.placeholder = cfg.feishu.appSecret
-        ? "已保存（输入新值会覆盖）"
-        : "点击保存配置时加密保存";
+        ? "Saved (enter a new value to overwrite)"
+        : "Encrypted when clicking Save Settings";
     }
 
-    // 拉一次渠道状态
+    // 
     const status = (await window.settings.channelsGetStatus()) as Record<string, { phase: string; message?: string }>;
     renderProactiveDeliveryAvailability(status);
     renderChannelStatus(channelsWechatStatusEl, status.wechat?.phase ?? "offline", status.wechat?.message);
     renderChannelStatus(channelsFeishuStatusEl, status.feishu?.phase ?? "offline", status.feishu?.message);
-    // Phase 3.4：拉一次消息日志
+    // Phase 3.4：
     void refreshChannelsLog();
   } catch (err) {
-    console.warn("[Channels] loadChannelsPanel 失败:", err);
+    console.warn("[Channels] Failed to load channels panel:", err);
   }
 
-  // 自动保存（debounce 200ms）
+  // （debounce 200ms)
   const scheduleSave = () => {
     if (channelsSaveTimer != null) window.clearTimeout(channelsSaveTimer);
     channelsSaveTimer = window.setTimeout(() => {
@@ -3431,7 +3399,7 @@ async function loadChannelsPanel(): Promise<void> {
     el?.addEventListener("change", scheduleSave);
   }
 
-  // 监听安装进度（Phase 1+ 才会收到）
+  // （Phase 1+ )
   window.settings.onChannelsInstallProgress((progress) => {
     const target = progress.channel === "wechat" ? channelsWechatStatusEl : progress.channel === "feishu" ? channelsFeishuStatusEl : null;
     if (target) renderChannelStatus(target, "starting", `${progress.phase} ${progress.pct}%`);
@@ -3443,44 +3411,44 @@ async function loadChannelsPanel(): Promise<void> {
     renderChannelStatus(channelsFeishuStatusEl, s.feishu?.phase ?? "offline", s.feishu?.message);
   });
 
-  // ===== 飞书交互（Phase 2 长连接版） =====
+  // ===== （Phase 2 ) =====
 
-  // 显示/隐藏 App Secret
+  // / App Secret
   channelsFeishuAppSecretRevealBtn?.addEventListener("click", () => {
     if (!channelsFeishuAppSecretEl) return;
     channelsFeishuAppSecretEl.type =
       channelsFeishuAppSecretEl.type === "password" ? "text" : "password";
   });
 
-  // 保存配置（secret 用 safeStorage 加密后落盘 + 触发长连接重连）
+  // （secret  safeStorage  + )
   channelsFeishuSaveBtn?.addEventListener("click", async () => {
-    setFeishuFeedback("info", "保存并连接中...");
+    setFeishuFeedback("info", "Saving and connecting...");
     const patch: Record<string, unknown> = {
       feishu: {
         enabled: channelsFeishuEnabledEl?.checked ?? false,
         appId: channelsFeishuAppIdEl?.value.trim() || undefined,
       },
     };
-    // 仅在用户输入了新值时才覆盖 secret（避免误清空）
+    //  secret（)
     if (channelsFeishuAppSecretEl?.value) {
       (patch.feishu as Record<string, unknown>).appSecret = channelsFeishuAppSecretEl.value;
     }
     try {
       await window.settings.channelsSaveConfig(patch);
-      // 保存后立即触发飞书 adapter 重建 + 重连长连接
+      //  adapter  + 
       await window.settings.channelsRestart();
-      setFeishuFeedback("ok", "已保存，飞书长连接正在建立…");
-      // 清空输入框（已落盘），并把 placeholder 切到"已保存"
+      setFeishuFeedback("ok", "Saved. Feishu connection establishing...");
+      // （)， placeholder "Saved"
       if (channelsFeishuAppSecretEl) {
         channelsFeishuAppSecretEl.value = "";
-        channelsFeishuAppSecretEl.placeholder = "已保存（输入新值会覆盖）";
+        channelsFeishuAppSecretEl.placeholder = "Saved (enter a new value to overwrite)";
       }
     } catch (err) {
       setFeishuFeedback("err", err instanceof Error ? err.message : String(err));
     }
   });
 
-  // ===== 微信交互（扫码登录走 iLink HTTP API，详见 src/main/channels/adapters/wechat/） =====
+  // ===== （ iLink HTTP API， src/main/channels/adapters/wechat/) =====
 
   function setWechatFeedback(kind: "info" | "ok" | "err", msg: string): void {
     if (!channelsWechatFeedbackEl) return;
@@ -3491,7 +3459,7 @@ async function loadChannelsPanel(): Promise<void> {
     else channelsWechatFeedbackEl.classList.add("channels-feedback--info");
   }
 
-  // 扫码登录：Main Process 生成 PNG → 推到 Renderer → modal 弹窗
+  // ：Main Process  PNG →  Renderer → modal 
   const channelsWechatQrEl = document.getElementById("channels-wechat-qr");
   const channelsWechatQrImgEl = document.getElementById("channels-wechat-qr-img") as HTMLImageElement | null;
   const channelsWechatQrCloseBtn = document.getElementById("channels-wechat-qr-close");
@@ -3512,7 +3480,7 @@ async function loadChannelsPanel(): Promise<void> {
     }
   }
 
-  // 关闭交互：点按钮 / 点背景 / 按 ESC
+  // ： /  /  ESC
   channelsWechatQrCloseBtn?.addEventListener("click", hideWechatQr);
   channelsWechatQrBackdrop?.addEventListener("click", hideWechatQr);
   document.addEventListener("keydown", (e) => {
@@ -3521,44 +3489,44 @@ async function loadChannelsPanel(): Promise<void> {
     }
   });
 
-  // 订阅 Main 推送的二维码（每次登录会推一次）
+  //  Main （)
   window.settings.onChannelsWechatQrcode((dataUrl) => {
     console.log("[WechatSettings] QR event received, dataUrl prefix:", dataUrl?.slice(0, 40), "len:", dataUrl?.length);
     showWechatQr(dataUrl);
-    setWechatFeedback("info", "请用微信扫描二维码");
+    setWechatFeedback("info", "Please scan QR code with WeChat");
   });
-  // 订阅 Main 推送的登录结果（成功 / 失败 / 二维码过期）
+  //  Main （ /  / )
   window.settings.onChannelsWechatLoginDone((payload) => {
     hideWechatQr();
     if (payload.ok) {
-      setWechatFeedback("ok", `已登录（botId=${payload.botId ?? "?"}）`);
+      setWechatFeedback("ok", `Logged in (botId=${payload.botId ?? "?"})`);
     } else {
-      setWechatFeedback("err", `登录失败：${payload.error ?? "未知错误"}`);
+      setWechatFeedback("err", `Login failed: ${payload.error ?? "Unknown error"}`);
     }
   });
 
   channelsWechatLoginBtn?.addEventListener("click", async () => {
     hideWechatQr();
-    setWechatFeedback("info", "正在启动扫码…");
+    setWechatFeedback("info", "Starting QR login...");
     try {
       const result = await window.settings.channelsWechatLoginStart();
       if (result.ok) {
-        // 二维码由 onChannelsWechatQrcode 推过来并显示；这里只刷个轻提示
-        setWechatFeedback("info", "等待二维码推送…");
+        //  onChannelsWechatQrcode ；Notice
+        setWechatFeedback("info", "Waiting for QR code...");
       } else {
-        setWechatFeedback("err", result.error ?? "启动失败");
+        setWechatFeedback("err", result.error ?? "Failed to start");
       }
     } catch (err) {
       setWechatFeedback("err", err instanceof Error ? err.message : String(err));
     }
   });
 
-  // 重启连接
+  // 
   channelsWechatRestartBtn?.addEventListener("click", async () => {
-    setWechatFeedback("info", "重启连接中…");
+    setWechatFeedback("info", "Reconnecting...");
     try {
       await window.settings.channelsRestart();
-      setWechatFeedback("ok", "已重启");
+      setWechatFeedback("ok", "Reconnected");
     } catch (err) {
       setWechatFeedback("err", err instanceof Error ? err.message : String(err));
     }
@@ -3574,7 +3542,7 @@ function setFeishuFeedback(kind: "info" | "ok" | "err", msg: string): void {
   else channelsFeishuFeedbackEl.classList.add("channels-feedback--info");
 }
 
-// ===== Phase 3.4：消息日志 =====
+// ===== Phase 3.4： =====
 const channelsLogListEl = document.getElementById("channels-log-list");
 const channelsLogRefreshBtn = document.getElementById("channels-log-refresh");
 const channelsLogClearBtn = document.getElementById("channels-log-clear");
@@ -3593,7 +3561,7 @@ interface LogEntry {
 function renderChannelsLog(entries: LogEntry[]): void {
   if (!channelsLogListEl) return;
   if (entries.length === 0) {
-    channelsLogListEl.innerHTML = '<p class="empty-hint">暂无消息。</p>';
+    channelsLogListEl.innerHTML = '<p class="empty-hint">No messages yet.</p>';
     return;
   }
   const html = entries
@@ -3602,7 +3570,7 @@ function renderChannelsLog(entries: LogEntry[]): void {
       const hh = String(t.getHours()).padStart(2, "0");
       const mm = String(t.getMinutes()).padStart(2, "0");
       const ss = String(t.getSeconds()).padStart(2, "0");
-      const dir = e.dir === "incoming" ? "← 收到" : "→ 回复";
+      const dir = e.dir === "incoming" ? "← Received" : "→ Reply";
       const who = e.senderName ? `${e.senderName} (${e.senderId})` : e.senderId;
       const safe = (s: string) =>
         s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -3621,25 +3589,33 @@ async function refreshChannelsLog(): Promise<void> {
     const entries = (await window.settings.channelsLogGet(100)) as LogEntry[];
     renderChannelsLog(entries);
   } catch (err) {
-    console.warn("[Channels] refreshChannelsLog 失败:", err);
+    console.warn("[Channels] Failed to refresh channels log:", err);
   }
 }
 
 channelsLogRefreshBtn?.addEventListener("click", () => void refreshChannelsLog());
 channelsLogClearBtn?.addEventListener("click", async () => {
-  if (!confirm("确认清空所有 bot 消息日志？")) return;
+  const confirmed = await showConfirm({
+    title: "Clear Logs",
+    message: "Clear all bot message logs?",
+    confirmText: "Clear",
+    cancelText: "Cancel",
+    icon: "🗑️",
+    danger: true,
+  });
+  if (!confirmed) return;
   await window.settings.channelsLogClear();
   await refreshChannelsLog();
 });
 
-// 首次进入 channels panel 时拉一次日志
-// （也可以在用户展开 details 时再拉，但保持简单直接拉）
+//  channels panel 
+// （ details ，)
 void loadChannelsPanel();
 
-// ===== Phase 2: 音乐工具面板 =====
-// 备注：window.music.* 已在 preload 中通过 contextBridge 暴露。
-// 由于 renderer 走 Vite 打包、main/preload 走 esbuild，两端类型不互通，
-// 这里直接用 (window as any).music 做弱类型化调用，避免给 global.d.ts 加一堆 cross-bundle 类型。
+// ===== Phase 2:  =====
+// ：window.music.*  preload  contextBridge .
+//  renderer  Vite 、main/preload  esbuild，，
+//  (window as any).music ， global.d.ts  cross-bundle .
 
 interface MusicSelectionTrack {
   id: string;
@@ -3712,9 +3688,9 @@ function setMusicFeedback(kind: "info" | "ok" | "err", msg: string): void {
 function renderMusicStatus(snapshot: MusicStatusSnapshot): void {
   const state = deriveNeteaseViewState(snapshot);
   const labels: Record<NeteaseViewState, string> = {
-    backend_starting: "音乐服务暂不可用", backend_error: "音乐服务暂不可用", signed_out: "尚未连接",
-    creating_qr: "正在等待扫码", waiting_scan: "正在等待扫码", waiting_confirm: "已扫码，请在手机确认",
-    login_expired: "二维码已过期", login_failed: "登录失败", connected: "网易云音乐已连接", connected_without_client: "已登录，但未检测到桌面客户端",
+    backend_starting: "Music service unavailable", backend_error: "Music service unavailable", signed_out: "Not connected",
+    creating_qr: "Waiting for scan", waiting_scan: "Waiting for scan", waiting_confirm: "Scanned, confirm on mobile",
+    login_expired: "QR code expired", login_failed: "Login failed", connected: "Connected to NetEase Music", connected_without_client: "Logged in, but desktop client not detected",
   };
   if (musicAccountStatusText) musicAccountStatusText.textContent = labels[state];
   const musicStatusDot = document.getElementById("music-status-dot");
@@ -3725,27 +3701,27 @@ function renderMusicStatus(snapshot: MusicStatusSnapshot): void {
     const button = document.createElement("button");
     button.type = "button";
     button.className = state === "signed_out" || state === "backend_error" ? "btn-primary" : "btn-secondary";
-    const actions: Partial<Record<NeteaseViewState, string>> = { signed_out: "连接网易云", creating_qr: "取消登录", waiting_scan: "取消登录", waiting_confirm: "取消登录", login_expired: "重新生成二维码", login_failed: "重新登录", connected: "断开连接", connected_without_client: "断开连接", backend_error: "重新启动音乐服务" };
+    const actions: Partial<Record<NeteaseViewState, string>> = { signed_out: "Connect NetEase", creating_qr: "Cancel", waiting_scan: "Cancel", waiting_confirm: "Cancel", login_expired: "Regenerate QR", login_failed: "Retry login", connected: "Disconnect", connected_without_client: "Disconnect", backend_error: "Restart music service" };
     if (actions[state]) { button.textContent = actions[state]!; button.addEventListener("click", () => void handleMusicAction(state)); actionHost.appendChild(button); }
   }
   const loggedIn = state === "connected" || state === "connected_without_client";
   musicSearchForm?.classList.toggle("is-hidden", !loggedIn);
-  if (musicSearchHint) musicSearchHint.textContent = loggedIn ? "搜索网易云曲库。" : "连接网易云后即可搜索歌曲和获取每日推荐。";
+  if (musicSearchHint) musicSearchHint.textContent = loggedIn ? "Search NetEase Music library." : "Connect NetEase Music to search songs and get daily recommendations.";
   musicQrBox?.classList.toggle("is-hidden", !(state === "creating_qr" || state === "waiting_scan" || state === "waiting_confirm" || state === "login_expired"));
-  if (musicQrStatus) musicQrStatus.textContent = state === "connected" || state === "connected_without_client" ? "当前状态：网易云音乐已连接" : state === "waiting_confirm" ? "当前状态：等待手机确认" : state === "login_expired" ? "当前状态：二维码过期" : "当前状态：等待扫码";
+  if (musicQrStatus) musicQrStatus.textContent = state === "connected" || state === "connected_without_client" ? "Status: NetEase Music Connected" : state === "waiting_confirm" ? "Status: Awaiting phone confirmation" : state === "login_expired" ? "Status: QR code expired" : "Status: Waiting for QR scan";
 }
 
 async function handleMusicAction(state: NeteaseViewState): Promise<void> {
-  const api = getMusicApi(); if (!api) { setMusicFeedback("err", "音乐 API 未就绪"); return; }
+  const api = getMusicApi(); if (!api) { setMusicFeedback("err", "Music API not ready"); return; }
   if (state === "signed_out" || state === "login_expired" || state === "login_failed") return void startMusicLogin();
   if (state === "connected" || state === "connected_without_client") {
-    setMusicFeedback("info", "正在断开连接…");
+    setMusicFeedback("info", "Disconnecting...");
     try {
       const r = await api.logout();
-    if (r.ok) setMusicFeedback("ok", "已断开连接");
-    else setMusicFeedback("err", "断开失败：" + r.errorCode);
+    if (r.ok) setMusicFeedback("ok", "Disconnected");
+    else setMusicFeedback("err", "Disconnect failed: " + r.errorCode);
     } catch (err) {
-      setMusicFeedback("err", "断开异常：" + (err instanceof Error ? err.message : String(err)));
+      setMusicFeedback("err", "Disconnect error: " + (err instanceof Error ? err.message : String(err)));
     }
     return;
   }
@@ -3753,13 +3729,13 @@ async function handleMusicAction(state: NeteaseViewState): Promise<void> {
 }
 
 function updateMusicActionsForAccount(account: string): void {
-  // Login-in-progress 状态：暂时还没有 IPC 通道告诉我们 creating_qr / waiting_scan / waiting_confirm，
-  // 所以这里只能根据"是否显示了二维码 + account 状态"来推断。
-  // 显示规则：
-  //   - account === "signed_in"      → 显示 断开连接
-  //   - account === "temporarily_unavailable" → 显示 连接网易云（让用户重试）
-  //   - 二维码显示中 → 显示 取消登录
-  //   - 其他 → 显示 连接网易云
+  // Login-in-progress ： IPC  creating_qr / waiting_scan / waiting_confirm，
+  // " + account ".
+  // ：
+  //   - account === "signed_in"      →  
+  //   - account === "temporarily_unavailable" →  （)
+  //   -  →  Cancel
+  //   -  →  
   const qrVisible = !!musicQrBox && !musicQrBox.classList.contains("is-hidden");
   if (musicLoginBtn) musicLoginBtn.classList.toggle("is-hidden", qrVisible || account === "signed_in");
   if (musicCancelBtn) musicCancelBtn.classList.toggle("is-hidden", !qrVisible);
@@ -3769,7 +3745,7 @@ function updateMusicActionsForAccount(account: string): void {
 function clearMusicQr(): void {
   if (musicQrImg) { musicQrImg.style.display = "none"; musicQrImg.src = ""; }
   if (musicQrBox) musicQrBox.classList.add("is-hidden");
-  if (musicQrTip) musicQrTip.textContent = "请用网易云音乐 App 扫描二维码完成登录";
+  if (musicQrTip) musicQrTip.textContent = "Scan the QR code with the NetEase Music app to log in";
   musicLastQrDataUrl = null;
 }
 
@@ -3797,18 +3773,18 @@ function startMusicLoginPolling(pollIntervalMs = 2000): void {
       if (r.ok) {
         renderMusicStatus(r.data);
         if (r.data.account === "signed_in") {
-          // 登录成功 → 关闭 QR 面板、停止轮询
+          //  →  QR 、
           clearMusicQr();
           stopMusicLoginPolling();
-          setMusicFeedback("ok", "已连接到网易云音乐");
+          setMusicFeedback("ok", "Connected to NetEase Music");
         } else if (r.data.flow === "expired" || r.data.flow === "failed" || r.data.flow === "cancelled") {
           stopMusicLoginPolling();
           if (r.data.flow !== "expired") clearMusicQr();
-          setMusicFeedback("err", r.data.flow === "expired" ? "二维码已过期，请重新生成" : "登录未完成，请重试");
+          setMusicFeedback("err", r.data.flow === "expired" ? "QR code expired, please regenerate" : "Login incomplete, please retry");
         } else if (r.data.account === "temporarily_unavailable" || r.data.account === "expired") {
           stopMusicLoginPolling();
           clearMusicQr();
-          setMusicFeedback("err", "登录失败：账户状态 " + r.data.account);
+          setMusicFeedback("err", "Login failed: account state " + r.data.account);
         }
       }
     } catch (err) {
@@ -3820,15 +3796,15 @@ function startMusicLoginPolling(pollIntervalMs = 2000): void {
 async function startMusicLogin(): Promise<void> {
   const api = getMusicApi();
   if (!api) {
-    setMusicFeedback("err", "window.music 未就绪，请确认 music plugin 已注册");
+    setMusicFeedback("err", "Music plugin not ready. Make sure the music plugin is registered.");
     return;
   }
-  setMusicFeedback("info", "正在生成二维码…");
+  setMusicFeedback("info", "Generating QR code...");
   try {
     const r = await api.beginLogin();
     if (!r.ok) {
-      setMusicFeedback("err", "启动登录失败：" + r.errorCode);
-      // 把错误状态同步渲染出来
+      setMusicFeedback("err", "Failed to start login: " + r.errorCode);
+      // 
       const snapshot: MusicStatusSnapshot = {
         backend: r.backendState ?? "unknown",
         account: r.accountState ?? "unknown",
@@ -3837,26 +3813,26 @@ async function startMusicLogin(): Promise<void> {
       renderMusicStatus(snapshot);
       return;
     }
-    // 用 qrcode 包把 qrContent 渲染成 PNG dataURL
+    //  qrcode  qrContent  PNG dataURL
     let dataUrl = "";
     try {
-      // qrcode 包没有官方 d.ts；用 require 形式确保 esbuild 能解析
-      // （renderer 走 Vite，import 形式也 OK；下面用动态 import 兼容两种打包器）
+      // qrcode  d.ts； require  esbuild 
+      // （renderer  Vite，import  OK； import )
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const qrcodeMod: any = await import(/* @vite-ignore */ "qrcode");
       dataUrl = await qrcodeMod.toDataURL(r.data.qrContent, { width: 240, margin: 1 });
     } catch (qrErr) {
-      console.error("[music] QR 渲染失败", qrErr);
-      setMusicFeedback("err", "二维码渲染失败");
+      console.error("[music] Failed to render QR", qrErr);
+      setMusicFeedback("err", "Failed to render QR code");
       return;
     }
-    showMusicQr(dataUrl, "请用网易云音乐 App 扫描二维码完成登录");
-    setMusicFeedback("info", "等待扫码…");
-    updateMusicActionsForAccount("signed_out"); // 切到"取消登录"显示
+    showMusicQr(dataUrl, "Scan the QR code with the NetEase Music app to log in");
+    setMusicFeedback("info", "Waiting for scan...");
+    updateMusicActionsForAccount("signed_out"); // "Cancel"
     startMusicLoginPolling(r.data.pollIntervalMs);
   } catch (err) {
     console.error("[music] beginLogin threw", err);
-    setMusicFeedback("err", "启动登录异常：" + (err instanceof Error ? err.message : String(err)));
+    setMusicFeedback("err", "Login error: " + (err instanceof Error ? err.message : String(err)));
   }
 }
 
@@ -3865,13 +3841,13 @@ async function cancelMusicLogin(): Promise<void> {
   if (!api) return;
   stopMusicLoginPolling();
   clearMusicQr();
-  setMusicFeedback("info", "已取消登录");
+  setMusicFeedback("info", "Login cancelled");
   try {
     await api.cancelLogin();
   } catch (err) {
     console.warn("[music] cancelLogin threw", err);
   }
-  // 重新拉一次 status 让 UI 回到初始态
+  //  status  UI 
   try {
     const r = await api.getStatus();
     if (r.ok) renderMusicStatus(r.data);
@@ -3881,11 +3857,11 @@ async function cancelMusicLogin(): Promise<void> {
 }
 
 async function disconnectMusic(): Promise<void> {
-  // 暂时没有正式的 disconnect API；先用 cancelLogin 作为近似（它会清掉 loginSession），
-  // 并把 UI 切回"未连接"。后续会接 music.disconnect。
-  setMusicFeedback("info", "正在断开…");
+  //  disconnect API； cancelLogin （ loginSession)，
+  //  UI "". music.disconnect.
+  setMusicFeedback("info", "Disconnecting...");
   await cancelMusicLogin();
-  setMusicFeedback("ok", "已断开（当前仅清空登录会话，详见说明）");
+  setMusicFeedback("ok", "Disconnected (session cleared)");
 }
 
 function renderMusicSearchResults(r: MusicIpcResult<MusicSelectionResult>, kw: string): void {
@@ -3894,7 +3870,7 @@ function renderMusicSearchResults(r: MusicIpcResult<MusicSelectionResult>, kw: s
   if (!r.ok) {
     const div = document.createElement("div");
     div.className = "music-feedback music-feedback--err";
-    div.textContent = "搜索失败：" + r.errorCode;
+    div.textContent = "Search failed: " + r.errorCode;
     musicSearchResults.appendChild(div);
     return;
   }
@@ -3902,9 +3878,9 @@ function renderMusicSearchResults(r: MusicIpcResult<MusicSelectionResult>, kw: s
   if (tracks.length === 0) {
     const p = document.createElement("p");
     p.className = "empty-hint";
-    // 安全转义
+    // 
     const safeKw = kw.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    p.textContent = `暂无结果，关键词 '${safeKw}' 未匹配到歌曲`;
+    p.textContent = `No results for '${safeKw}' — no songs matched`;
     musicSearchResults.appendChild(p);
     return;
   }
@@ -3927,11 +3903,11 @@ function renderMusicSearchResults(r: MusicIpcResult<MusicSelectionResult>, kw: s
     const playBtn = document.createElement("button");
     playBtn.type = "button";
     playBtn.className = "btn-secondary music-search-row__play";
-    playBtn.textContent = "▶ 播放";
+    playBtn.textContent = "▶ Play";
     playBtn.addEventListener("click", async () => {
       const api = getMusicApi();
       if (!api) {
-        setMusicFeedback("err", "window.music 未就绪");
+        setMusicFeedback("err", "Music plugin not ready");
         return;
       }
       playBtn.disabled = true;
@@ -3939,7 +3915,7 @@ function renderMusicSearchResults(r: MusicIpcResult<MusicSelectionResult>, kw: s
         const feedback = await requestTrackPlayback(api, t);
         setMusicFeedback(feedback.kind, feedback.message);
       } catch (err) {
-        setMusicFeedback("err", "播放请求异常：" + (err instanceof Error ? err.message : String(err)));
+        setMusicFeedback("err", "Playback error: " + (err instanceof Error ? err.message : String(err)));
       } finally {
         playBtn.disabled = false;
       }
@@ -3954,22 +3930,22 @@ function renderMusicSearchResults(r: MusicIpcResult<MusicSelectionResult>, kw: s
 async function runMusicSearch(): Promise<void> {
   const api = getMusicApi();
   if (!api) {
-    setMusicFeedback("err", "window.music 未就绪");
+    setMusicFeedback("err", "Music plugin not ready");
     return;
   }
   const kw = (musicSearchInput?.value ?? "").trim();
   if (!kw) {
-    setMusicFeedback("info", "请输入搜索关键词");
+    setMusicFeedback("info", "Please enter search keywords");
     return;
   }
-  if (musicSearchResults) musicSearchResults.innerHTML = '<p class="empty-hint">搜索中…</p>';
+  if (musicSearchResults) musicSearchResults.innerHTML = '<p class="empty-hint">Searching…</p>';
   try {
     const r = await api.search(kw, 20);
     renderMusicSearchResults(r, kw);
   } catch (err) {
     console.error("[music] search threw", err);
     if (musicSearchResults) musicSearchResults.innerHTML = "";
-    setMusicFeedback("err", "搜索异常：" + (err instanceof Error ? err.message : String(err)));
+    setMusicFeedback("err", "Search error: " + (err instanceof Error ? err.message : String(err)));
   }
 }
 
@@ -3977,54 +3953,54 @@ async function loadMusicPanel(): Promise<void> {
   if (musicPanelInitialized) return;
   musicPanelInitialized = true;
 
-  // 平台按钮（网易云 → 切到 music panel）的点击处理在文件下方模块初始化时已绑定，
-  // 这里不再重复 attach，避免多次进入面板造成重复监听。
+  // （ →  music panel)，
+  //  attach，.
 
   musicLoginBtn?.addEventListener("click", () => void startMusicLogin());
   musicCancelBtn?.addEventListener("click", () => void cancelMusicLogin());
   musicDisconnectBtn?.addEventListener("click", () => void disconnectMusic());
 
-  // 搜索
+  // 
   musicSearchBtn?.addEventListener("click", () => void runMusicSearch());
   musicSearchInput?.addEventListener("keydown", (e) => {
     if (e.key === "Enter") void runMusicSearch();
   });
 
-  // 订阅状态推送
+  // 
   const api = getMusicApi();
   if (api && typeof api.onStateChanged === "function") {
     const unsub = api.onStateChanged((s) => renderMusicStatus(s));
     if (typeof unsub === "function") musicStateUnsub = unsub;
   }
 
-  // 首次拉一次状态
+  // 
   if (api) {
     try {
       const r = await api.getStatus();
       if (r.ok) renderMusicStatus(r.data);
-      else setMusicFeedback("err", "读取状态失败：" + r.errorCode);
+      else setMusicFeedback("err", "Failed to read status: " + r.errorCode);
     } catch (err) {
       console.warn("[music] getStatus failed", err);
     }
   } else {
-    setMusicFeedback("err", "window.music 未就绪");
+    setMusicFeedback("err", "Music plugin not ready");
   }
 }
 
-// ── 网易云折叠卡片用的全局 status 订阅（不依赖切到 music 面板） ────────
-// 让 MCP 面板里的「网易云音乐 / 尚未连接」永远跟主进程状态同步。
-// 用一个独立的 unsub 句柄，跟 music 面板自己的订阅解耦。
+// ──  status （ music ) ────────
+//  MCP " / Not connected".
+//  unsub ， music .
 (() => {
   const api = getMusicApi();
   if (!api || typeof api.onStateChanged !== "function") return;
   try {
     api.onStateChanged((s) => {
-      // 只更新折叠卡片的状态文案，避免与 music 面板里的 renderMusicStatus 重复副作用
+      // ， music  renderMusicStatus 
       const el = document.getElementById("music-platform-status");
       if (!el) return;
       const state = deriveNeteaseViewState(s);
       const connected = state === "connected" || state === "connected_without_client";
-      el.textContent = connected ? "已连接" : "尚未连接";
+      el.textContent = connected ? "Connected" : "Not connected";
       el.classList.toggle("is-connected", connected);
     });
     api.getStatus().then((r) => {
@@ -4033,16 +4009,16 @@ async function loadMusicPanel(): Promise<void> {
       if (!el) return;
       const state = deriveNeteaseViewState(r.data);
       const connected = state === "connected" || state === "connected_without_client";
-      el.textContent = connected ? "已连接" : "尚未连接";
+      el.textContent = connected ? "Connected" : "Not connected";
       el.classList.toggle("is-connected", connected);
     }).catch(() => { /* ignore */ });
   } catch {
-    /* window.music 还没准备好，忽略 */
+    /* window.music ， */
   }
 })();
 
 function disposeMusicPanel(): void {
-  // 离开面板时：停止轮询、取消订阅、清掉 QR dataURL 释放内存
+  // ：、Cancel、 QR dataURL 
   stopMusicLoginPolling();
   if (musicStateUnsub) {
     try { musicStateUnsub(); } catch { /* ignore */ }
@@ -4051,11 +4027,11 @@ function disposeMusicPanel(): void {
   clearMusicQr();
   setMusicFeedback("info", "");
 }
-// 启动时读 URL hash 决定初始标签（main 通过 loadURL 带 #api 实现"切换模型按钮跳 API"）。
-// 无 hash 默认 general。
+//  URL hash （main  loadURL  #api " API").
+// None hash  general.
 const initialSection = (window.location.hash || "#general").slice(1);
 switchSection(initialSection);
-// 监听 main 发来的切标签事件（窗口已打开时，main 不重新 loadURL，改发事件）
+//  main （，main  loadURL，)
 window.settings?.onSwitchSection?.((section) => {
   switchSection(section);
 });
@@ -4083,7 +4059,7 @@ window.settings?.onSwitchSection?.((section) => {
         if (result?.ok) {
           console.log("[settings] embedding switched to", value, "cleared:", result.clearedEntries);
           if (result.clearedEntries && result.clearedEntries > 0) {
-            window.alert("已切换至 " + (value === "bgem3" ? "BGE-M3" : "MiniLM") + "。由于向量维度不同，已清除 " + result.clearedEntries + " 条旧向量记忆。");
+            await showAlert("Switched to " + (value === "bgem3" ? "BGE-M3" : "MiniLM") + ". Cleared existing data due to different vector dimensions." + result.clearedEntries + " ");
           }
         } else {
           // Rollback on failure
@@ -4093,7 +4069,7 @@ window.settings?.onSwitchSection?.((section) => {
             prevCard?.classList.add("is-active");
             localStorage.setItem(KEY, previousValue);
           }
-          window.alert("切换失败：" + (result?.error || "未知错误"));
+          await showAlert("Switch failed: " + (result?.error || "Unknown error"));
         }
       } catch (err) {
         // Rollback on error
@@ -4147,12 +4123,12 @@ window.settings?.onSwitchSection?.((section) => {
   try {
     const status = await (window as any).settings?.getRerankerStatus?.();
     if (!status) return;
-    if (lightEl) lightEl.textContent = status.light ? "已下载 · 约 23MB" : "未下载 · 可选";
-    if (standardEl) standardEl.textContent = status.standard ? "已下载 · 约 279MB" : "未下载 · 可选";
+    if (lightEl) lightEl.textContent = status.light ? "Downloaded · ~23MB" : "Not downloaded · Optional";
+    if (standardEl) standardEl.textContent = status.standard ? "Downloaded · ~279MB" : "Not downloaded · Optional";
   } catch (err) {
     console.warn("[Reranker] status check failed:", err);
-    if (lightEl) lightEl.textContent = "状态未知";
-    if (standardEl) standardEl.textContent = "状态未知";
+    if (lightEl) lightEl.textContent = "Status unknown";
+    if (standardEl) standardEl.textContent = "Status unknown";
   }
 })();
 
@@ -4163,16 +4139,16 @@ window.settings?.onSwitchSection?.((section) => {
   try {
     const status = await window.modelConfig?.getModelInstallStatus?.();
     if (!status) {
-      if (bgem3El) bgem3El.textContent = "状态未知";
-      if (minilmEl) minilmEl.textContent = "状态未知";
+      if (bgem3El) bgem3El.textContent = "Status unknown";
+      if (minilmEl) minilmEl.textContent = "Status unknown";
       return;
     }
-    if (bgem3El) bgem3El.textContent = status.embedding?.bgem3 ? "已下载 · 约 570MB" : "未下载";
-    if (minilmEl) minilmEl.textContent = status.embedding?.minilm ? "已下载 · 约 23MB" : "未下载";
+    if (bgem3El) bgem3El.textContent = status.embedding?.bgem3 ? "Downloaded · ~570MB" : "Not downloaded";
+    if (minilmEl) minilmEl.textContent = status.embedding?.minilm ? "Downloaded · ~23MB" : "Not downloaded";
   } catch (err) {
     console.warn("[Embedding] status check failed:", err);
-    if (bgem3El) bgem3El.textContent = "状态未知";
-    if (minilmEl) minilmEl.textContent = "状态未知";
+    if (bgem3El) bgem3El.textContent = "Status unknown";
+    if (minilmEl) minilmEl.textContent = "Status unknown";
   }
 })();
 
@@ -4193,58 +4169,31 @@ window.settings?.onSwitchSection?.((section) => {
   }
 
   downloadBtn?.addEventListener("click", async () => {
-    // 打开模型安装说明文档
+    // 
     await window.system?.openExternal(
       "https://github.com/Playa-0v0/Cyrene-Agent/blob/master/docs/local-models.md"
     );
   });
 
 
-  // Inline modal helper
-  function _showModal(opts: { title: string; message: string; icon?: string; confirmText?: string; cancelText?: string }): Promise<boolean> {
-    var ov = document.getElementById("cy-modal-overlay");
-    if (!ov) {
-      ov = document.createElement("div");
-      ov.id = "cy-modal-overlay";
-      ov.className = "cy-modal-overlay is-hidden";
-      ov.innerHTML = '<div class="cy-modal" role="alertdialog" aria-modal="true"><div class="cy-modal__head"><span class="cy-modal__icon" id="cy-modal-icon">📌</span><h3 class="cy-modal__title" id="cy-modal-title">提示</h3></div><hr class="cy-modal__divider"><p class="cy-modal__body" id="cy-modal-message">确认执行此操作吗？</p><div class="cy-modal__actions"><button type="button" class="ghost-btn" id="cy-modal-cancel">取消</button><button type="button" class="btn-primary" id="cy-modal-confirm">确定</button></div></div>';
-      document.body.appendChild(ov);
-    }
-    var iconEl = ov.querySelector("#cy-modal-icon") as HTMLElement;
-    var titleEl = ov.querySelector("#cy-modal-title") as HTMLElement;
-    var msgEl = ov.querySelector("#cy-modal-message") as HTMLElement;
-    var cancelBtn = ov.querySelector("#cy-modal-cancel") as HTMLButtonElement;
-    var confirmBtn = ov.querySelector("#cy-modal-confirm") as HTMLButtonElement;
-    iconEl.innerHTML = opts.icon || "📌";
-    titleEl.textContent = opts.title;
-    msgEl.textContent = opts.message;
-    cancelBtn.textContent = opts.cancelText || "取消";
-    confirmBtn.textContent = opts.confirmText || "确定";
-    ov.classList.remove("is-hidden");
-    return new Promise(function (resolve) {
-      var cleanup = function (result: boolean) {
-        ov?.classList.add("is-hidden");
-        cancelBtn.removeEventListener("click", onCancel);
-        confirmBtn.removeEventListener("click", onConfirm);
-        resolve(result);
-      };
-      var onCancel = function () { cleanup(false); };
-      var onConfirm = function () { cleanup(true); };
-      cancelBtn.addEventListener("click", onCancel);
-      confirmBtn.addEventListener("click", onConfirm);
-    });
-  }
   deleteBtn?.addEventListener("click", async () => {
     const model = getSelectedModel();
     const name = model === "minilm" ? "MiniLM" : "BGE-M3";
-    var confirmed = await _showModal({ title: "删 除 模 型", message: "确 定 删 除 " + name + " 模 型 缓 存？下 次 使 用 需 重 新 下 载。", icon: "⚠️", confirmText: "删 除", cancelText: "取 消" });
+    const confirmed = await showConfirm({
+      title: "Delete Model",
+      message: `Delete model: ${name}?`,
+      icon: "⚠️",
+      confirmText: "Delete",
+      cancelText: "Cancel",
+      danger: true,
+    });
     if (!confirmed) return;
     deleteBtn.disabled = true;
-    deleteBtn.textContent = "\u5220\u9664\u4E2D\u2026";
+    deleteBtn.textContent = "Deleting…";
     try {
       const result = await window.settings?.deleteEmbeddingModel?.(model);
       if (result?.ok) {
-        deleteBtn.textContent = "\u2705 \u5DF2\u5220\u9664";
+        deleteBtn.textContent = "✅ Deleted";
         setTimeout(() => location.reload(), 800);
       } else {
         deleteBtn.textContent = "\u274C \u5931\u8D25";
@@ -4281,15 +4230,15 @@ window.settings?.onSwitchSection?.((section) => {
 (function () {
   const updateBtn = document.getElementById("embedding-update-btn") as HTMLButtonElement | null;
   updateBtn?.addEventListener("click", () => {
-    updateBtn.textContent = "已是最新版本";
+    updateBtn.textContent = "Already up to date";
     updateBtn.disabled = true;
     setTimeout(() => {
-      updateBtn.textContent = "检查更新";
+      updateBtn.textContent = "Check for updates";
       updateBtn.disabled = false;
     }, 2000);
   });
 })();
-// ── 用户信息面板 ──
+// ──  ──
 const avatarEl = document.getElementById("user-avatar-el") as HTMLElement | null;
 const avatarImg = avatarEl?.querySelector("img") as HTMLImageElement | null;
 const avatarPlaceholder = avatarEl?.querySelector("span") as HTMLElement | null;
@@ -4340,9 +4289,9 @@ function showAvatar(dataUrl: string | null): void {
 }
 
 function formatDateTime(timestamp: number): string {
-  if (!timestamp) return "暂无时间";
+  if (!timestamp) return "No timestamp";
   const date = new Date(timestamp);
-  if (Number.isNaN(date.getTime())) return "暂无时间";
+  if (Number.isNaN(date.getTime())) return "No timestamp";
   return date.toLocaleString("en-US", {
     year: "numeric",
     month: "2-digit",
@@ -4412,11 +4361,11 @@ function renderL2List(query = ""): void {
     memoryL2List,
     filtered.map((item) => ({
       title: item.content,
-      body: item.triggerText ? `触发片段：${item.triggerText}` : "无触发片段",
-      meta: `状态：${item.status} · 权重：${item.weight.toFixed(1)} · 创建于：${formatDateTime(item.createdAt)}`,
+      body: item.triggerText ? `Trigger: ${item.triggerText}` : "No trigger text",
+      meta: `Status: ${item.status} · Weight: ${item.weight.toFixed(1)} · Created: ${formatDateTime(item.createdAt)}`,
     })),
-    normalized ? "没有匹配的事件记忆" : "暂无事件记忆",
-    normalized ? "换个关键词试试" : "聊天后昔涟会自动提炼重要信息",
+    normalized ? "No matching episodic memories" : "No episodic memories yet",
+    normalized ? "Try a different keyword" : "Cyrene automatically extracts memories after chatting",
   );
 }
 
@@ -4443,17 +4392,17 @@ async function loadMemoryPanel(): Promise<void> {
     renderInfoList(
       memoryReflectionList,
       payload.reflections,
-      "暂无阶段总结",
-      "当前项目里 Reflection 还没真正生成落地",
+      "No reflections yet",
+      "Reflections have not been generated yet",
     );
 
     if (memoryL0EditBtn) memoryL0EditBtn.disabled = false;
     if (memoryL1EditBtn) memoryL1EditBtn.disabled = false;
   } catch (err) {
     console.error("[settings] load memory panel failed", err);
-    renderEmptyState(memoryL2List, "记忆读取失败", "请查看终端日志");
-    renderEmptyState(memoryImportedList, "导入知识读取失败", "请查看终端日志");
-    renderEmptyState(memoryReflectionList, "阶段总结读取失败", "请查看终端日志");
+    renderEmptyState(memoryL2List, "Failed to load memories", "Check terminal logs");
+    renderEmptyState(memoryImportedList, "Failed to load imported knowledge", "Check terminal logs");
+    renderEmptyState(memoryReflectionList, "Failed to load reflections", "Check terminal logs");
   }
 }
 
@@ -4462,16 +4411,16 @@ async function loadUserProfile(): Promise<void> {
     const avatarDataUrl = await window.user?.getAvatar();
     if (avatarDataUrl) showAvatar(avatarDataUrl);
     if (uploadAvatarBtn) uploadAvatarBtn.disabled = false;
-    // 加载用户字段（昵称/称呼偏好/生日/默认城市/时区）
+    // （////)
     const profile = await window.user?.getProfile();
     if (profile) {
       if (userNicknameInput) userNicknameInput.value = String(profile.nickname ?? "");
       if (userCallPrefInput) userCallPrefInput.value = String(profile.callPreference ?? "");
       if (userBirthdayInput) userBirthdayInput.value = String(profile.birthday ?? "");
-      if (userDefaultCityInput) userDefaultCityInput.value = String(profile.defaultCity ?? "");
-      // 时区：白名单校验，空/非法/不在白名单都回退 FALLBACK_TIMEZONE，不直接用 ?? 兜底
+      const city = String(profile.defaultCity || "Hanoi");
+      if (userDefaultCityInput) userDefaultCityInput.value = city;
+      if (weatherCityInput) weatherCityInput.value = city;
       if (userTimezoneSelect) userTimezoneSelect.value = normalizeTimezoneOptionValue(profile.timezone);
-      // 性别：标记当前选中的按钮
       const gender = String(profile.gender ?? "secret");
       if (userGenderGroup) {
         userGenderGroup.querySelectorAll(".gender-select__btn").forEach((btn) => {
@@ -4484,7 +4433,6 @@ async function loadUserProfile(): Promise<void> {
   }
 }
 
-// 用户字段：失焦/回车保存（每个字段独立原子保存）
 function bindUserProfileSave(input: HTMLInputElement | null, field: string): void {
   if (!input) return;
   const save = (): void => { void window.user?.saveProfile({ [field]: input.value.trim() }); };
@@ -4494,17 +4442,18 @@ function bindUserProfileSave(input: HTMLInputElement | null, field: string): voi
 bindUserProfileSave(userNicknameInput, "nickname");
 bindUserProfileSave(userCallPrefInput, "callPreference");
 bindUserProfileSave(userBirthdayInput, "birthday");
-// 默认城市复用上面的 saveCity（保持原逻辑）
+
 if (userDefaultCityInput) {
   const saveCity = (): void => {
-    const value = userDefaultCityInput.value.trim();
+    const value = userDefaultCityInput.value.trim() || "Hanoi";
+    if (weatherCityInput) weatherCityInput.value = value;
     void window.user?.saveProfile({ defaultCity: value });
   };
   userDefaultCityInput.addEventListener("change", saveCity);
   userDefaultCityInput.addEventListener("blur", saveCity);
 }
 
-// 时区：白名单填充 options；保存只接受白名单 value（select 只能选白名单项，天然受限）
+// ： options； value（select ，)
 if (userTimezoneSelect) {
   for (const opt of TIMEZONE_OPTIONS) {
     const o = document.createElement("option");
@@ -4514,17 +4463,17 @@ if (userTimezoneSelect) {
   }
   userTimezoneSelect.addEventListener("change", () => {
     const raw = userTimezoneSelect.value;
-    // 防御性二次校验：即便有人手动改 DOM，保存路径也只放行白名单 value
+    // ： DOM， value
     const safe = normalizeTimezoneOptionValue(raw);
     if (safe !== raw) {
       userTimezoneSelect.value = safe;
-      return; // 不发保存请求，等用户重新选
+      return; // ，
     }
     void window.user?.saveProfile({ timezone: safe });
   });
 }
 
-// 性别：三档按钮，点击切换并原子保存
+// ：，
 if (userGenderGroup) {
   userGenderGroup.querySelectorAll(".gender-select__btn").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -4598,7 +4547,7 @@ function enterL0EditMode(): void {
   l0Editing = true;
   l0Snapshot = takeL0Snapshot();
   setL0FieldsDisabled(false);
-  if (memoryL0EditBtn) memoryL0EditBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 48 48" fill="none" aria-hidden="true" style="display:inline;vertical-align:-2px"><path d="M6 9C6 7.34315 7.34315 6 9 6H30.3363C31.132 6 31.895 6.31607 32.4576 6.87868L36.3158 10.7368L41.1213 15.5424C41.6839 16.105 42 16.868 42 17.6637V39C42 40.6569 40.6569 42 39 42H9C7.34315 42 6 40.6569 6 39V9Z" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M31 26H17C15.3431 26 14 27.3431 14 29V42H34V29C34 27.3431 32.6569 26 31 26Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M29 16H17C15.3431 16 14 14.6569 14 13V6" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg> 保存`;
+  if (memoryL0EditBtn) memoryL0EditBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 48 48" fill="none" aria-hidden="true" style="display:inline;vertical-align:-2px"><path d="M6 9C6 7.34315 7.34315 6 9 6H30.3363C31.132 6 31.895 6.31607 32.4576 6.87868L36.3158 10.7368L41.1213 15.5424C41.6839 16.105 42 16.868 42 17.6637V39C42 40.6569 40.6569 42 39 42H9C7.34315 42 6 40.6569 6 39V9Z" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M31 26H17C15.3431 26 14 27.3431 14 29V42H34V29C34 27.3431 32.6569 26 31 26Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M29 16H17C15.3431 16 14 14.6569 14 13V6" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg> Save`;
   if (memoryL0CancelBtn) memoryL0CancelBtn.classList.remove("is-hidden");
 }
 
@@ -4606,7 +4555,7 @@ function exitL0EditMode(): void {
   l0Editing = false;
   l0Snapshot = null;
   setL0FieldsDisabled(true);
-  if (memoryL0EditBtn) memoryL0EditBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 48 48" fill="none" aria-hidden="true" style="display:inline;vertical-align:-2px"><path d="M5.32497 43.4996L13.81 43.4998L44.9227 12.3871L36.4374 3.90186L5.32471 35.0146L5.32497 43.4996Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M27.9521 12.3872L36.4374 20.8725" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg> 编辑`;
+  if (memoryL0EditBtn) memoryL0EditBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 48 48" fill="none" aria-hidden="true" style="display:inline;vertical-align:-2px"><path d="M5.32497 43.4996L13.81 43.4998L44.9227 12.3871L36.4374 3.90186L5.32471 35.0146L5.32497 43.4996Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M27.9521 12.3872L36.4374 20.8725" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg> Edit`;
   if (memoryL0CancelBtn) memoryL0CancelBtn.classList.add("is-hidden");
 }
 
@@ -4621,12 +4570,12 @@ async function saveL0(): Promise<void> {
     await loadMemoryPanel();
     exitL0EditMode();
     if (memoryL0EditBtn) {
-      memoryL0EditBtn.textContent = "✅ 已保存";
-      setTimeout(() => { if (memoryL0EditBtn && !l0Editing) memoryL0EditBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 48 48" fill="none" aria-hidden="true" style="display:inline;vertical-align:-2px"><path d="M5.32497 43.4996L13.81 43.4998L44.9227 12.3871L36.4374 3.90186L5.32471 35.0146L5.32497 43.4996Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M27.9521 12.3872L36.4374 20.8725" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg> 编辑`; }, 2000);
+      memoryL0EditBtn.textContent = "✅ Saved";
+      setTimeout(() => { if (memoryL0EditBtn && !l0Editing) memoryL0EditBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 48 48" fill="none" aria-hidden="true" style="display:inline;vertical-align:-2px"><path d="M5.32497 43.4996L13.81 43.4998L44.9227 12.3871L36.4374 3.90186L5.32471 35.0146L5.32497 43.4996Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M27.9521 12.3872L36.4374 20.8725" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg> Edit`; }, 2000);
     }
   } catch (err) {
     console.error("[settings] save L0 failed", err);
-    alert("保存失败，请重试");
+    await showAlert("Save failed, please retry");
   }
 }
 
@@ -4646,7 +4595,7 @@ function enterL1EditMode(): void {
   l1Editing = true;
   l1Snapshot = takeL1Snapshot();
   setL1FieldsDisabled(false);
-  if (memoryL1EditBtn) memoryL1EditBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 48 48" fill="none" aria-hidden="true" style="display:inline;vertical-align:-2px"><path d="M6 9C6 7.34315 7.34315 6 9 6H30.3363C31.132 6 31.895 6.31607 32.4576 6.87868L36.3158 10.7368L41.1213 15.5424C41.6839 16.105 42 16.868 42 17.6637V39C42 40.6569 40.6569 42 39 42H9C7.34315 42 6 40.6569 6 39V9Z" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M31 26H17C15.3431 26 14 27.3431 14 29V42H34V29C34 27.3431 32.6569 26 31 26Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M29 16H17C15.3431 16 14 14.6569 14 13V6" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg> 保存`;
+  if (memoryL1EditBtn) memoryL1EditBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 48 48" fill="none" aria-hidden="true" style="display:inline;vertical-align:-2px"><path d="M6 9C6 7.34315 7.34315 6 9 6H30.3363C31.132 6 31.895 6.31607 32.4576 6.87868L36.3158 10.7368L41.1213 15.5424C41.6839 16.105 42 16.868 42 17.6637V39C42 40.6569 40.6569 42 39 42H9C7.34315 42 6 40.6569 6 39V9Z" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M31 26H17C15.3431 26 14 27.3431 14 29V42H34V29C34 27.3431 32.6569 26 31 26Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M29 16H17C15.3431 16 14 14.6569 14 13V6" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg> Save`;
   if (memoryL1CancelBtn) memoryL1CancelBtn.classList.remove("is-hidden");
 }
 
@@ -4654,7 +4603,7 @@ function exitL1EditMode(): void {
   l1Editing = false;
   l1Snapshot = null;
   setL1FieldsDisabled(true);
-  if (memoryL1EditBtn) memoryL1EditBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 48 48" fill="none" aria-hidden="true" style="display:inline;vertical-align:-2px"><path d="M5.32497 43.4996L13.81 43.4998L44.9227 12.3871L36.4374 3.90186L5.32471 35.0146L5.32497 43.4996Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M27.9521 12.3872L36.4374 20.8725" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg> 编辑`;
+  if (memoryL1EditBtn) memoryL1EditBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 48 48" fill="none" aria-hidden="true" style="display:inline;vertical-align:-2px"><path d="M5.32497 43.4996L13.81 43.4998L44.9227 12.3871L36.4374 3.90186L5.32471 35.0146L5.32497 43.4996Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M27.9521 12.3872L36.4374 20.8725" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg> Edit`;
   if (memoryL1CancelBtn) memoryL1CancelBtn.classList.add("is-hidden");
 }
 
@@ -4669,12 +4618,12 @@ async function saveL1(): Promise<void> {
     await loadMemoryPanel();
     exitL1EditMode();
     if (memoryL1EditBtn) {
-      memoryL1EditBtn.textContent = "✅ 已保存";
-      setTimeout(() => { if (memoryL1EditBtn && !l1Editing) memoryL1EditBtn.textContent = "✏️ 编辑"; }, 2000);
+      memoryL1EditBtn.textContent = "✅ Saved";
+      setTimeout(() => { if (memoryL1EditBtn && !l1Editing) memoryL1EditBtn.textContent = "✏ Edit"; }, 2000);
     }
   } catch (err) {
     console.error("[settings] save L1 failed", err);
-    alert("保存失败，请重试");
+    await showAlert("Save failed, please retry");
   }
 }
 
@@ -4704,7 +4653,7 @@ function renderImportedDocs(): void {
   if (!memoryImportedList) return;
 
   if (list.length === 0) {
-    renderEmptyState(memoryImportedList, "暂无导入文档", "在聊天窗口上传文件后会自动索引");
+    renderEmptyState(memoryImportedList, "No imported documents yet", "Upload files in the chat window to index them automatically");
     return;
   }
 
@@ -4712,8 +4661,8 @@ function renderImportedDocs(): void {
     .map((item) => {
       const importId = item.importId || "";
       const fileName = escapeHtml(item.fileName);
-      const chunkInfo = "已索引 " + item.chunkCount + " 个片段";
-      const timeInfo = "最近导入：" + formatDateTime(item.lastImportedAt);
+      const chunkInfo = "Indexed " + item.chunkCount + " chunks";
+      const timeInfo = "Last imported: " + formatDateTime(item.lastImportedAt);
       return [
         '<article class="memory-record memory-record--doc">',
         '  <div class="memory-record__main">',
@@ -4721,7 +4670,7 @@ function renderImportedDocs(): void {
         '    <p class="memory-record__body">' + escapeHtml(chunkInfo) + '</p>',
         '    <p class="memory-record__meta">' + escapeHtml(timeInfo) + '</p>',
         '  </div>',
-        '  <button type="button" class="memory-record__delete" data-import-id="' + escapeHtml(importId) + '" data-file-name="' + fileName + '" title="删除此导入文档"><svg width="16" height="16" viewBox="0 0 48 48" fill="none" aria-hidden="true" style="vertical-align:-2px"><path fill-rule="evenodd" clip-rule="evenodd" d="M8 15H40L37 44H11L8 15Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M20.002 25.0024V35.0026" stroke="currentColor" stroke-width="4" stroke-linecap="round"/><path d="M28.0024 24.9995V34.9972" stroke="currentColor" stroke-width="4" stroke-linecap="round"/><path d="M12 14.9999L28.3242 3L36 15" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>',
+        '  <button type="button" class="memory-record__delete" data-import-id="' + escapeHtml(importId) + '" data-file-name="' + fileName + '" title="Delete this imported document"><svg width="16" height="16" viewBox="0 0 48 48" fill="none" aria-hidden="true" style="vertical-align:-2px"><path fill-rule="evenodd" clip-rule="evenodd" d="M8 15H40L37 44H11L8 15Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M20.002 25.0024V35.0026" stroke="currentColor" stroke-width="4" stroke-linecap="round"/><path d="M28.0024 24.9995V34.9972" stroke="currentColor" stroke-width="4" stroke-linecap="round"/><path d="M12 14.9999L28.3242 3L36 15" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>',
         '</article>',
       ].join("\n");
     })
@@ -4734,14 +4683,14 @@ memoryImportedList?.addEventListener("click", async (event) => {
   if (!deleteBtn) return;
 
   const importId = deleteBtn.dataset.importId || "";
-  const fileName = deleteBtn.dataset.fileName || "未命名文档";
+  const fileName = deleteBtn.dataset.fileName || "Untitled document";
 
   const confirmed = await showModal({
-    title: "删除导入知识",
-    message: "确定删除导入知识？\n\n文件：\n《" + fileName + "》\n\n删除后不可恢复，如需使用请重新导入。",
+    title: "Delete imported knowledge",
+    message: "Delete this imported document?\n\nFile: " + fileName + "\n\nThis cannot be undone. Re-import if needed.",
     icon: "⚠️",
-    confirmText: "删除",
-    cancelText: "取消",
+    confirmText: "Delete",
+    cancelText: "Cancel",
   });
 
   if (!confirmed) return;
@@ -4760,22 +4709,22 @@ memoryImportedList?.addEventListener("click", async (event) => {
 void loadMemoryPanel();
 void loadUserProfile();
 
-// ── 权限档位 UI ───────────────────────────────────────────
+// ──  UI ───────────────────────────────────────────
 type PermissionLevel = "read-only" | "scoped" | "per-action" | "full";
 
 const permissionBlocksWrap = document.getElementById("plugin-file-permission") as HTMLElement | null;
 const permissionNote = document.getElementById("plugin-file-note") as HTMLElement | null;
 
 const PERMISSION_NOTES: Record<PermissionLevel, string> = {
-  "read-only": "只读：昔涟不会修改本地任何文件，也不能为你安装新工具。",
-  "scoped": "指定目录：昔涟只能在你授权的目录里读写文件（白名单后续在此面板配置）。",
-  "per-action": "每次审批：每次涉及文件或安装的操作，昔涟都会在聊天里弹卡片让你确认。",
-  "full": "完全访问：昔涟可以自由调用本地命令（含 git/npm/pip）。请只在你完全信任的情况下使用。",
+  "read-only": "Read-only: Cyrene will not modify any local files or install tools.",
+  "scoped": "Scoped: Cyrene can only read/write in directories you authorize (configure whitelist here).",
+  "per-action": "Per-action: Cyrene will show an approval card in chat for every file or install operation.",
+  "full": "Full access: Cyrene can freely run local commands (git/npm/pip). Only enable if you fully trust her judgment.",
 };
 
 function paintPermissionUI(level: PermissionLevel): void {
   if (!permissionBlocksWrap) return;
-  // scoped 档已从插件面板移除，回退显示只读
+  // scoped ，
   const display = level === "scoped" ? "read-only" : level;
   const blocks = permissionBlocksWrap.querySelectorAll<HTMLButtonElement>("button[data-level]");
   blocks.forEach((b) => {
@@ -4789,7 +4738,7 @@ function paintPermissionUI(level: PermissionLevel): void {
 }
 
 async function confirmFullAccess(): Promise<boolean> {
-  // 完全访问需要延迟确认 + 风险提示
+  //  + Notice
   _initModalOverlay();
   if (!_cyModalOverlay) return false;
   const iconEl = _cyModalOverlay.querySelector("#cy-modal-icon") as HTMLElement;
@@ -4798,23 +4747,23 @@ async function confirmFullAccess(): Promise<boolean> {
   const cancelBtn = _cyModalOverlay.querySelector("#cy-modal-cancel") as HTMLButtonElement;
   const confirmBtn = _cyModalOverlay.querySelector("#cy-modal-confirm") as HTMLButtonElement;
   iconEl.textContent = "⚠️";
-  titleEl.textContent = "切换到完全访问？";
-  msgEl.textContent = "这意味着昔涟可以在你的电脑上自由执行命令，包括 git clone、npm install、删除文件等。请只在你完全信任她的判断时启用。";
-  cancelBtn.textContent = "再想想";
+  titleEl.textContent = "Switch to Full Access?";
+  msgEl.textContent = "Cyrene will be able to freely run commands on your computer including git clone, npm install, and file deletion. Only enable if you fully trust her.";
+  cancelBtn.textContent = "Think again";
   _cyModalOverlay.classList.remove("is-hidden");
 
-  // 倒计时 5 秒强制等待
+  //  5 
   let remain = 5;
   confirmBtn.disabled = true;
-  confirmBtn.textContent = "我了解风险（" + remain + "）";
+  confirmBtn.textContent = "I accept the risk (" + remain + ")";
   const tick = setInterval(() => {
     remain -= 1;
     if (remain <= 0) {
       confirmBtn.disabled = false;
-      confirmBtn.textContent = "我了解风险，启用";
+      confirmBtn.textContent = "I accept the risk — Enable";
       clearInterval(tick);
     } else {
-      confirmBtn.textContent = "我了解风险（" + remain + "）";
+      confirmBtn.textContent = "I accept the risk (" + remain + ")";
     }
   }, 1000);
 
@@ -4841,46 +4790,46 @@ if (permissionBlocksWrap) {
     const target = (btn.dataset.level || "") as PermissionLevel;
     if (!target) return;
     if (btn.classList.contains("is-active")) {
-      console.log("[settings] 档位未变，不动作");
+      console.log("[settings] Permission level unchanged, no action");
       return;
     }
 
     if (target === "full") {
       const ok = await confirmFullAccess();
       if (!ok) {
-        console.log("[settings] 用户取消了完全访问");
+        console.log("[settings] User cancelled full access");
         return;
       }
     }
 
-    console.log("[settings] 切换权限档位 →", target);
+    console.log("[settings] Switch permission level →", target);
     try {
       const result = await window.settings?.setPermissionLevel?.(target);
       if (result?.ok) {
         paintPermissionUI((result.level || target) as PermissionLevel);
       } else {
-        console.warn("[settings] 切换档位失败:", result?.error);
+        console.warn("[settings] Failed to switch permission level:", result?.error);
       }
     } catch (err) {
-      console.error("[settings] 切换档位异常:", err);
+      console.error("[settings] Error switching permission level:", err);
     }
   });
 
-  // 初始化：从后端拿当前档位
+  // ：
   void (async () => {
     try {
       const result = await window.settings?.getPermissionLevel?.();
       const level = (result?.level || "read-only") as PermissionLevel;
-      console.log("[settings] 当前权限档位:", level);
+      console.log("[settings] Current permission level:", level);
       paintPermissionUI(level);
     } catch (err) {
-      console.warn("[settings] 加载权限档位失败:", err);
+      console.warn("[settings] Failed to load permission level:", err);
       paintPermissionUI("read-only");
     }
   })();
 }
 
-// ── 生活工具手风琴 ─────────────────────────────────────────
+// ──  ─────────────────────────────────────────
 const lifeToggle = document.getElementById("plugin-life-toggle") as HTMLButtonElement | null;
 const lifeCard = document.getElementById("plugin-life-card");
 const lifeBody = document.getElementById("plugin-life-body");
@@ -4891,7 +4840,7 @@ lifeToggle?.addEventListener("click", () => {
   lifeBody?.classList.toggle("is-collapsed", expanded);
 });
 
-// ── 音乐工具手风琴（跟生活工具一样的折叠逻辑）────────────────
+// ── （)────────────────
 const musicToggle = document.getElementById("plugin-music-toggle") as HTMLButtonElement | null;
 const musicAccordionCard = document.getElementById("plugin-music-card");
 const musicAccordionBody = document.getElementById("plugin-music-body");
@@ -4902,7 +4851,7 @@ musicToggle?.addEventListener("click", () => {
   musicAccordionBody?.classList.toggle("is-collapsed", expanded);
 });
 
-// ── 音乐工具路由 ──────────────────────────────────────────────
+// ──  ──────────────────────────────────────────────
 document.getElementById("music-platform-netease")?.addEventListener("click", () => {
   switchSection("music");
   musicHomeView?.classList.add("is-hidden");
@@ -4913,7 +4862,7 @@ musicReturnBtn?.addEventListener("click", () => {
 	});
 
 
-// ── Skill 面板：列 skill 开关 ──────────────────────────────
+// ── Skill ： skill  ──────────────────────────────
 async function renderSkills(): Promise<void> {
   const listEl = document.getElementById("skills-list");
   const emptyEl = document.getElementById("skills-empty");
@@ -4923,7 +4872,7 @@ async function renderSkills(): Promise<void> {
   try {
     skills = await window.settings.listSkills();
   } catch (err) {
-    console.warn("[settings] 加载 skill 列表失败:", err);
+    console.warn("[settings] Failed to load skill list:", err);
   }
 
   listEl.innerHTML = "";
@@ -4933,12 +4882,12 @@ async function renderSkills(): Promise<void> {
   }
   if (emptyEl) emptyEl.classList.add("is-hidden");
 
-  // MiniMax 办公合集 id 列表
+  // MiniMax  id 
   const officeGroupIds = new Set(["docx", "pdf", "pptx-generator", "xlsx"]);
   const officeSkills = skills.filter((s) => officeGroupIds.has(s.id));
   const otherSkills = skills.filter((s) => !officeGroupIds.has(s.id));
 
-  // 渲染单条 skill
+  //  skill
   function renderSkillRow(s: typeof skills[number]): HTMLDivElement {
     const row = document.createElement("div");
     row.className = "skill-row";
@@ -4946,7 +4895,7 @@ async function renderSkills(): Promise<void> {
     label.className = "skill-row__info";
     const title = document.createElement("div");
     title.className = "skill-row__title";
-    title.textContent = s.name + (s.source === "user" ? " （用户）" : "");
+    title.textContent = s.name + (s.source === "user" ? "  (user)" : "");
     const desc = document.createElement("div");
     desc.className = "skill-row__desc";
     const short = s.description.length > 120 ? s.description.slice(0, 120) + "…" : s.description;
@@ -4963,7 +4912,7 @@ async function renderSkills(): Promise<void> {
       try {
         await window.settings?.setSkillEnabled?.(s.id, toggle.checked);
       } catch (err) {
-        console.warn("[settings] 切换 skill 失败:", err);
+        console.warn("[settings] Failed to toggle skill:", err);
         toggle.checked = !toggle.checked;
       }
     });
@@ -4973,12 +4922,12 @@ async function renderSkills(): Promise<void> {
     return row;
   }
 
-  // 渲染其他（非合集）skill
+  // （)skill
   for (const s of otherSkills) {
     listEl.appendChild(renderSkillRow(s));
   }
 
-  // MiniMax 办公合集折叠组
+  // MiniMax 
   if (officeSkills.length > 0) {
     const group = document.createElement("div");
     group.className = "skill-group";
@@ -4993,7 +4942,7 @@ async function renderSkills(): Promise<void> {
     gTitle.textContent = "MiniMAX-office-skills";
     const gDesc = document.createElement("span");
     gDesc.className = "skill-group__desc";
-    gDesc.textContent = "MiniMax开源的办公文档Skills合集";
+    gDesc.textContent = "MiniMax open-source office document skills collection";
     header.appendChild(arrow);
     header.appendChild(gTitle);
     header.appendChild(gDesc);
@@ -5022,14 +4971,14 @@ async function renderSkills(): Promise<void> {
 
 
 /* ============================================================
-   💬 聊天面板：会话列表
-   - 渲染 chatStore.list 返回的会话元数据，按 updatedAt desc 排序（store 已排）
-   - 微信式时间：刚刚 / N 分钟前 / 今天 HH:mm / 昨天 HH:mm / N 天前 / MM-DD
-   - 点击列表项 = 在聊天窗口里打开（窗口未开则开窗）
-   - 双击标题 = 改名（contentEditable + Enter/Esc/blur 提交）
-   - 点🗑️ = 删除（活跃会话给出"正在阅读这个会话"差异化提示）
-   - 跨窗口同步：onChanged 触发重渲；onActiveSessionChanged 更新高亮态
-   - HTML/CSS 已在 index.html / settings.css 里就位（见 chat-sessions__*）
+   💬 ：
+   -  chatStore.list ， updatedAt desc （store )
+   - ： / N  /  HH:mm /  HH:mm / N  / MM-DD
+   -  = （)
+   -  = （contentEditable + Enter/Esc/blur )
+   - 🗑️ = Delete（""Notice)
+   - ：onChanged ；onActiveSessionChanged 
+   - HTML/CSS  index.html / settings.css （ chat-sessions__*)
    ============================================================ */
 
 declare global {
@@ -5056,7 +5005,7 @@ async function renderChatSessions(): Promise<void> {
   const emptyEl = document.getElementById("chat-sessions-empty");
   if (!listEl || !window.chatStore) return;
 
-  // 第一次渲染前如果还不知道活跃 sessionId，主动拉一次
+  //  sessionId，
   if (chatSessionsActiveId === null) {
     try { chatSessionsActiveId = (await window.chatStore.getActiveSession()) ?? null; } catch { /* ignore */ }
   }
@@ -5065,7 +5014,7 @@ async function renderChatSessions(): Promise<void> {
   try {
     sessions = await window.chatStore.list();
   } catch (err) {
-    console.warn("[settings] 加载聊天会话列表失败:", err);
+    console.warn("[settings] Failed to load chat sessions:", err);
   }
 
   listEl.innerHTML = "";
@@ -5089,7 +5038,7 @@ function buildChatSessionItem(session: ChatSessionMetaUI): HTMLLIElement {
 
   const titleEl = document.createElement("div");
   titleEl.className = "chat-sessions__title";
-  titleEl.textContent = session.title || "新对话";
+  titleEl.textContent = session.title || "New Chat";
 
   const metaEl = document.createElement("div");
   metaEl.className = "chat-sessions__meta";
@@ -5101,7 +5050,7 @@ function buildChatSessionItem(session: ChatSessionMetaUI): HTMLLIElement {
 
   metaEl.appendChild(timeEl);
 
-  // 左侧主区：标题 + meta
+  // ： + meta
   const mainEl = document.createElement("div");
   mainEl.className = "chat-sessions__main";
   mainEl.appendChild(titleEl);
@@ -5110,33 +5059,33 @@ function buildChatSessionItem(session: ChatSessionMetaUI): HTMLLIElement {
   const deleteBtn = document.createElement("button");
   deleteBtn.type = "button";
   deleteBtn.className = "chat-sessions__delete";
-  deleteBtn.title = "删除会话";
-  deleteBtn.setAttribute("aria-label", "删除会话");
+  deleteBtn.title = "Delete session";
+  deleteBtn.setAttribute("aria-label", "Delete session");
   deleteBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 48 48" fill="none" aria-hidden="true" style="display:inline;vertical-align:-2px"><path fill-rule="evenodd" clip-rule="evenodd" d="M8 15H40L37 44H11L8 15Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M20.002 25.0024V35.0026" stroke="currentColor" stroke-width="4" stroke-linecap="round"/><path d="M28.0024 24.9995V34.9972" stroke="currentColor" stroke-width="4" stroke-linecap="round"/><path d="M12 14.9999L28.3242 3L36 15" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
   const renameBtn = document.createElement("button");
   renameBtn.type = "button";
   renameBtn.className = "chat-sessions__rename";
-  renameBtn.title = "重命名";
-  renameBtn.setAttribute("aria-label", "重命名会话");
+  renameBtn.title = "Rename";
+  renameBtn.setAttribute("aria-label", "Rename session");
   renameBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 48 48" fill="none" aria-hidden="true" style="display:inline;vertical-align:-2px"><path d="M5.32497 43.4996L13.81 43.4998L44.9227 12.3871L36.4374 3.90186L5.32471 35.0146L5.32497 43.4996Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M27.9521 12.3872L36.4374 20.8725" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
-  // 编辑态确认/取消按钮（默认隐藏，进入编辑态时显示，替换 ✏️/🗑️ 的位置）
+  // Edit/Cancel（，Edit， ✏️/🗑️ )
   const confirmRenameBtn = document.createElement("button");
   confirmRenameBtn.type = "button";
   confirmRenameBtn.className = "chat-sessions__confirm-rename is-hidden";
-  confirmRenameBtn.title = "确认（Enter）";
-  confirmRenameBtn.setAttribute("aria-label", "确认重命名");
+  confirmRenameBtn.title = "Confirm (Enter)";
+  confirmRenameBtn.setAttribute("aria-label", "Confirm rename");
   confirmRenameBtn.textContent = "✓";
 
   const cancelRenameBtn = document.createElement("button");
   cancelRenameBtn.type = "button";
   cancelRenameBtn.className = "chat-sessions__cancel-rename is-hidden";
-  cancelRenameBtn.title = "取消（Esc）";
-  cancelRenameBtn.setAttribute("aria-label", "取消重命名");
+  cancelRenameBtn.title = "Cancel (Esc)";
+  cancelRenameBtn.setAttribute("aria-label", "Cancel rename");
   cancelRenameBtn.textContent = "✕";
 
-  // 右侧操作区：✏️ 🗑️（常规）/ ✓ ✕（编辑态）
+  // ：✏️ 🗑️（)/ ✓ ✕（Edit)
   const actionsEl = document.createElement("div");
   actionsEl.className = "chat-sessions__actions";
   actionsEl.appendChild(renameBtn);
@@ -5144,8 +5093,8 @@ function buildChatSessionItem(session: ChatSessionMetaUI): HTMLLIElement {
   actionsEl.appendChild(cancelRenameBtn);
   actionsEl.appendChild(deleteBtn);
 
-  // —— 交互绑定 ——
-  // 点列表项 = 在聊天窗口里打开（编辑态时禁用，避免切走会话）
+  // ——  ——
+  //  = （Edit，)
   li.addEventListener("click", (e) => {
     const target = e.target as HTMLElement;
     if (target.closest(".chat-sessions__actions")) return;
@@ -5153,13 +5102,13 @@ function buildChatSessionItem(session: ChatSessionMetaUI): HTMLLIElement {
     void window.chatStore?.openInChatWindow(session.id);
   });
 
-  // ✏️ 按钮进入改名态
+  // ✏️ 
   renameBtn.addEventListener("click", (e) => {
     e.stopPropagation();
     enterRenameMode(titleEl, session, { renameBtn, deleteBtn, confirmRenameBtn, cancelRenameBtn });
   });
 
-  // 🗑️ 删除（含活跃会话差异化提示）
+  // 🗑️ Delete（Notice)
   deleteBtn.addEventListener("click", (e) => {
     e.stopPropagation();
     void deleteChatSession(session);
@@ -5170,8 +5119,8 @@ function buildChatSessionItem(session: ChatSessionMetaUI): HTMLLIElement {
   return li;
 }
 
-// 进入改名态：把 ✏️/🗑️ 隐藏，显示 ✓/✕；title 变 contentEditable 并聚焦全选。
-// 提交走 ✓ 按钮 / Enter；取消走 ✕ 按钮 / Esc / 失焦。失焦=取消（避免点别处误提交）。
+// ： ✏️/🗑️ ， ✓/✕；title  contentEditable .
+//  ✓  / Enter；Cancel ✕  / Esc / .=Cancel（).
 function enterRenameMode(
   titleEl: HTMLElement,
   session: ChatSessionMetaUI,
@@ -5184,7 +5133,7 @@ function enterRenameMode(
 ): void {
   const original = titleEl.textContent || "";
 
-  // 切换按钮可见性
+  // 
   btns.renameBtn.classList.add("is-hidden");
   btns.deleteBtn.classList.add("is-hidden");
   btns.confirmRenameBtn.classList.remove("is-hidden");
@@ -5192,10 +5141,10 @@ function enterRenameMode(
 
   titleEl.contentEditable = "true";
   titleEl.classList.add("is-editing");
-  // 用 requestAnimationFrame 等按钮 click 冒泡完再聚焦，避免焦点抢夺导致 blur 误触发
+  //  requestAnimationFrame  click ， blur 
   requestAnimationFrame(() => {
     titleEl.focus();
-    // 全选当前文本，方便用户直接覆盖
+    // ，
     const range = document.createRange();
     range.selectNodeContents(titleEl);
     const sel = window.getSelection();
@@ -5222,9 +5171,9 @@ function enterRenameMode(
     cleanup();
     if (newTitle && newTitle !== original) {
       void window.chatStore?.rename(session.id, newTitle);
-      // rename 成功后 main 广播 chats:changed → 列表重渲，无需手动改 DOM
+      // rename  main  chats:changed → ，None DOM
     } else {
-      titleEl.textContent = original; // 空内容或未变：还原
+      titleEl.textContent = original; // empty or unchanged: restore original
     }
   };
 
@@ -5242,13 +5191,13 @@ function enterRenameMode(
       cancel();
     }
   };
-  // 失焦=取消（点别处想放弃编辑的心智模型）
+  // =Cancel（Edit)
   const onBlur = () => cancel();
   const onConfirm = (e: MouseEvent) => { e.stopPropagation(); commit(); };
   const onCancel = (e: MouseEvent) => { e.stopPropagation(); cancel(); };
-  // 关键：mousedown 时 preventDefault，阻止 ✓/✕ 按钮抢焦点，
-  // 否则顺序是 mousedown→titleEl blur(cancel 还原内容)→click(commit 读到原值)→改不了名。
-  // 阻止焦点转移后，titleEl 保持聚焦，blur 不触发，click 正常执行 commit/cancel。
+  // ：mousedown  preventDefault， ✓/✕ ，
+  //  mousedown→titleEl blur(cancel )→click(commit )→.
+  // ，titleEl ，blur ，click  commit/cancel.
   const suppressFocus = (e: MouseEvent) => e.preventDefault();
 
   titleEl.addEventListener("keydown", onKey);
@@ -5262,20 +5211,28 @@ function enterRenameMode(
 async function deleteChatSession(session: ChatSessionMetaUI): Promise<void> {
   const isActive = session.id === chatSessionsActiveId;
   const prompt = isActive
-    ? `「${session.title || "新对话"}」正在聊天窗口里打开，确定删除？\n删除后聊天窗口会跳到最新一条会话或自动新建。`
-    : `确定删除「${session.title || "新对话"}」？\n删除后无法恢复。`;
-  if (!window.confirm(prompt)) return;
+    ? `"${session.title || "New Chat"}" is open in the chat window. Delete it? The chat will switch to the latest session.`
+    : `Delete "${session.title || "New Chat"}"?\nThis cannot be undone.`;
+  const ok = await showConfirm({
+    title: "Delete Session",
+    message: prompt,
+    confirmText: "Delete",
+    cancelText: "Cancel",
+    icon: "🗑️",
+    danger: true,
+  });
+  if (!ok) return;
   try {
     await window.chatStore?.delete(session.id);
-    // 删除成功后 main 广播 chats:changed → 列表重渲；
-    // 聊天窗口若在显示该会话也会通过 onChanged 自动 fallback。
+    // Delete main  chats:changed → ；
+    //  onChanged  fallback.
   } catch (err) {
-    console.warn("[settings] 删除会话失败:", err);
-    window.alert("删除失败，请查看终端日志。");
+    console.warn("[settings] Failed to delete session:", err);
+    await showAlert("Delete failed. Check the terminal log.");
   }
 }
 
-// —— 顶部"+新对话"按钮 ——
+// —— "+New Chat" ——
 const chatNewBtn = document.getElementById("chat-new-btn") as HTMLButtonElement | null;
 chatNewBtn?.addEventListener("click", async () => {
   if (!window.chatStore) return;
@@ -5283,20 +5240,20 @@ chatNewBtn?.addEventListener("click", async () => {
     const session = await window.chatStore.create({ identityId: null });
     if (session?.id) await window.chatStore.openInChatWindow(session.id);
   } catch (err) {
-    console.warn("[settings] 新建会话失败:", err);
-    window.alert("新建会话失败，请查看终端日志。");
+    console.warn("[settings] Failed to create new session:", err);
+    await showAlert("Failed to create new session. Check the terminal log.");
   }
 });
 
-// —— 底部"打开存储位置"按钮 ——
+// —— "" ——
 const chatOpenFolderBtn = document.getElementById("chat-open-folder-btn") as HTMLButtonElement | null;
 chatOpenFolderBtn?.addEventListener("click", () => {
   void window.chatStore?.openFolder();
 });
 
-// —— 跨窗口同步 ——
-// 任意会话变动（创建/追加/改名/删除）：重渲列表
-// 仅在面板可见时刷新，节省 DOM 写入；不可见时下次切到面板会重新拉
+// ——  ——
+// （///Delete)：
+// ， DOM ；
 window.chatStore?.onChanged(() => {
   const panel = document.getElementById("chat-panel");
   if (panel && !panel.classList.contains("is-hidden")) {
@@ -5304,7 +5261,7 @@ window.chatStore?.onChanged(() => {
   }
 });
 
-// 活跃 sessionId 变化：仅更新 is-active 高亮，不重新拉列表（轻量）
+//  sessionId ： is-active ，（)
 window.chatStore?.onActiveSessionChanged((sessionId) => {
   chatSessionsActiveId = sessionId;
   const listEl = document.getElementById("chat-sessions-list");
@@ -5315,10 +5272,10 @@ window.chatStore?.onActiveSessionChanged((sessionId) => {
 });
 
 /* ============================================================
-   📊 Token 用量面板：指标卡片 + 柱状图 + Chart.js 波浪图
-   - 时间范围 7d/14d/30d 切换，切换后调 IPC 拉真实数据并重渲
-   - hover 柱子/波浪节点 → tooltip 显示当天 输入/输出/命中/未命中
-   - 全空时显示空态（暂无用量数据）
+   📊 Token ： +  + Chart.js 
+   -  7d/14d/30d ， IPC 
+   - hover / → tooltip  ///
+   - （None)
    ============================================================ */
 
 import { Chart, registerables, type ChartConfiguration } from "chart.js";
@@ -5326,12 +5283,12 @@ import { Chart, registerables, type ChartConfiguration } from "chart.js";
 Chart.register(...registerables);
 
 interface TokenDayData {
-  date: string;       // ISO 日期 "06-15"
-  weekday: string;    // "周日"
+  date: string;       // ISO  "06-15"
+  weekday: string;    // ""
   input: number;
   output: number;
-  hit: number;        // 缓存命中（占位 0）
-  miss: number;       // 缓存未命中（占位 0）
+  hit: number;        // （ 0)
+  miss: number;       // （ 0)
   requests: number;
 }
 
@@ -5343,8 +5300,8 @@ declare global {
   }
 }
 
-// 根据天数生成假数据（带随机波动，模拟真实趋势）
-// 柱状图：根据数据动态生成柱子（复用 chart.css 的 .chart-bar 样式）
+// （，)
+// ：（ chart.css  .chart-bar )
 function renderTokenBarChart(data: TokenDayData[]): void {
   const container = document.getElementById("token-bar-chart");
   if (!container) return;
@@ -5354,13 +5311,13 @@ function renderTokenBarChart(data: TokenDayData[]): void {
   const peakIdx = data.reduce((peak, d, i, arr) =>
     (d.input + d.output) > (arr[peak].input + arr[peak].output) ? i : peak, 0);
 
-  // 柱状图最多显示 14 根（30d 时隔天显示），避免太挤
+  //  14 （30d )，
   const displayData = data.length > 14
     ? data.filter((_, i) => i % 2 === 0)
     : data;
 
-  // 容器实际可用高度（mini-chart 高度 112px - padding-top 18px - 底部 label 区 18px ≈ 76px）
-  // 用固定像素高度，避免 flex 百分比高度在 padding 容器里不可靠
+  // （mini-chart  112px - padding-top 18px -  label  18px ≈ 76px)
+  // ， flex  padding 
   const chartHeight = 76;
 
   for (let i = 0; i < displayData.length; i++) {
@@ -5369,18 +5326,18 @@ function renderTokenBarChart(data: TokenDayData[]): void {
     const barH = Math.max(6, Math.round((total / maxVal) * chartHeight));
     const bar = document.createElement("div");
     bar.className = "token-bar";
-    // 峰值柱加标记
+    // 
     const origIdx = data.indexOf(d);
     if (origIdx === peakIdx) bar.classList.add("token-bar--peak");
 
-    // 真实 fill div（不用伪元素，直接控制像素高度）
+    //  fill div（，)
     const fill = document.createElement("div");
     fill.className = "token-bar__fill";
     fill.style.height = barH + "px";
 
     const label = document.createElement("span");
     label.className = "token-bar__label";
-    label.textContent = d.date.split("-")[1]; // 只显示日
+    label.textContent = d.date.split("-")[1]; // 
     bar.appendChild(fill);
     bar.appendChild(label);
 
@@ -5392,11 +5349,11 @@ function renderTokenBarChart(data: TokenDayData[]): void {
     container.appendChild(bar);
   }
 
-  // 日均标签
+  // 
   const avgEl = document.getElementById("token-avg-label");
   if (avgEl) {
     const avg = Math.round(data.reduce((s, d) => s + d.input + d.output, 0) / data.length);
-    avgEl.textContent = `日均 ${formatTokenShort(avg)}`;
+    avgEl.textContent = `Daily avg: ${formatTokenShort(avg)}`;
   }
 }
 
@@ -5405,16 +5362,16 @@ function formatTokenShort(n: number): string {
   return String(n);
 }
 
-// tooltip 显示/移动/隐藏
+// tooltip //
 function showTokenTooltip(e: MouseEvent, d: TokenDayData): void {
   const tip = document.getElementById("token-tooltip");
   if (!tip) return;
   tip.innerHTML = `
     <div class="token-tooltip__date">${d.date} ${d.weekday}</div>
-    <div class="token-tooltip__row"><span>📥 输入</span><span>${d.input.toLocaleString()}</span></div>
-    <div class="token-tooltip__row"><span>📤 输出</span><span>${d.output.toLocaleString()}</span></div>
-    <div class="token-tooltip__row"><span>🎯 命中</span><span>${d.hit > 0 ? d.hit.toLocaleString() : "N/A"}</span></div>
-    <div class="token-tooltip__row"><span>❌ 未命中</span><span>${d.miss > 0 ? d.miss.toLocaleString() : "N/A"}</span></div>
+    <div class="token-tooltip__row"><span>📥 Input</span><span>${d.input.toLocaleString()}</span></div>
+    <div class="token-tooltip__row"><span>📤 Output</span><span>${d.output.toLocaleString()}</span></div>
+    <div class="token-tooltip__row"><span>🎯 Cache Hit</span><span>${d.hit > 0 ? d.hit.toLocaleString() : "N/A"}</span></div>
+    <div class="token-tooltip__row"><span>❌ Cache Miss</span><span>${d.miss > 0 ? d.miss.toLocaleString() : "N/A"}</span></div>
   `;
   tip.hidden = false;
   moveTokenTooltip(e);
@@ -5426,7 +5383,7 @@ function moveTokenTooltip(e: MouseEvent): void {
   const offset = 14;
   let x = e.clientX + offset;
   let y = e.clientY + offset;
-  // 防止超出视口右边
+  // 
   const tipW = tip.offsetWidth;
   if (x + tipW > window.innerWidth) x = e.clientX - tipW - offset;
   tip.style.left = x + "px";
@@ -5438,14 +5395,14 @@ function hideTokenTooltip(): void {
   if (tip) tip.hidden = true;
 }
 
-// Chart.js 波浪面积图
+// Chart.js 
 let tokenTrendChart: Chart | null = null;
 
 function renderTokenTrendChart(data: TokenDayData[]): void {
   const canvas = document.getElementById("token-trend-chart") as HTMLCanvasElement | null;
   if (!canvas) return;
 
-  // 销毁旧实例避免重叠
+  // 
   if (tokenTrendChart) { tokenTrendChart.destroy(); tokenTrendChart = null; }
 
   const labels = data.map((d) => d.date);
@@ -5458,7 +5415,7 @@ function renderTokenTrendChart(data: TokenDayData[]): void {
       labels,
       datasets: [
         {
-          label: "📥 输入",
+          label: "📥 Input",
           data: inputData,
           borderColor: "#3b82f6",
           backgroundColor: "rgba(59, 130, 246, 0.15)",
@@ -5470,7 +5427,7 @@ function renderTokenTrendChart(data: TokenDayData[]): void {
           pointHoverBackgroundColor: "#3b82f6",
         },
         {
-          label: "📤 输出",
+          label: "📤 Output",
           data: outputData,
           borderColor: "#ff8ccc",
           backgroundColor: "rgba(255, 140, 204, 0.15)",
@@ -5494,7 +5451,7 @@ function renderTokenTrendChart(data: TokenDayData[]): void {
           labels: { color: "rgba(235, 229, 245, 0.7)", font: { size: 11 }, boxWidth: 12, boxHeight: 12 },
         },
         tooltip: {
-          // 用 Chart.js 自带 tooltip，显示输入/输出/命中/未命中
+          //  Chart.js  tooltip，///
           backgroundColor: "rgba(30, 20, 45, 0.95)",
           borderColor: "rgba(255, 182, 220, 0.3)",
           borderWidth: 1,
@@ -5514,14 +5471,14 @@ function renderTokenTrendChart(data: TokenDayData[]): void {
               const d = data[idx];
               const which = item.datasetIndex === 0 ? "input" : "output";
               const val = which === "input" ? d.input : d.output;
-              return `${which === "input" ? "📥 输入" : "📤 输出"}: ${val.toLocaleString()}`;
+              return `${which === "input" ? "📥 Input" : "📤 Output"}: ${val.toLocaleString()}`;
             },
             afterBody: (items) => {
               const idx = items[0].dataIndex;
               const d = data[idx];
               return [
-                `🎯 命中: ${d.hit > 0 ? d.hit.toLocaleString() : "N/A"}`,
-                `❌ 未命中: ${d.miss > 0 ? d.miss.toLocaleString() : "N/A"}`,
+                `🎯 Cache Hit: ${d.hit > 0 ? d.hit.toLocaleString() : "N/A"}`,
+                `❌ Cache Miss: ${d.miss > 0 ? d.miss.toLocaleString() : "N/A"}`,
               ];
             },
           },
@@ -5548,7 +5505,7 @@ function renderTokenTrendChart(data: TokenDayData[]): void {
   tokenTrendChart = new Chart(canvas, config);
 }
 
-// 更新指标卡片
+// 
 function updateTokenStats(data: TokenDayData[]): void {
   const totalInput = data.reduce((s, d) => s + d.input, 0);
   const totalOutput = data.reduce((s, d) => s + d.output, 0);
@@ -5566,13 +5523,13 @@ function updateTokenStats(data: TokenDayData[]): void {
   set("token-hit", "N/A");
 }
 
-// 刷新整个面板：调 IPC 拉真实数据 → 有数据渲染图表，无数据显示空态
+// ： IPC  → ，None
 async function refreshTokenPanel(days: number): Promise<void> {
   let data: TokenDayData[] = [];
   try {
     data = await window.tokenUsage?.get(days) ?? [];
   } catch (err) {
-    console.warn("[settings] 拉取 Token 用量失败:", err);
+    console.warn("[settings] Failed to fetch token usage:", err);
   }
 
   const hasData = data.some((d) => d.input > 0 || d.output > 0 || d.requests > 0);
@@ -5580,7 +5537,7 @@ async function refreshTokenPanel(days: number): Promise<void> {
   const chartsEl = document.getElementById("token-charts");
 
   if (!hasData) {
-    // 空态：隐藏图表区，显示空态提示，指标卡片归零
+    // ：，Notice，
     if (emptyEl) emptyEl.classList.remove("is-hidden");
     if (chartsEl) chartsEl.classList.add("is-hidden");
     const set = (id: string, val: string) => { const el = document.getElementById(id); if (el) el.textContent = val; };
@@ -5592,7 +5549,7 @@ async function refreshTokenPanel(days: number): Promise<void> {
     return;
   }
 
-  // 有数据：显示图表区，隐藏空态
+  // ：，
   if (emptyEl) emptyEl.classList.add("is-hidden");
   if (chartsEl) chartsEl.classList.remove("is-hidden");
   updateTokenStats(data);
@@ -5600,7 +5557,7 @@ async function refreshTokenPanel(days: number): Promise<void> {
   renderTokenTrendChart(data);
 }
 
-// 时间范围按钮交互
+// 
 document.querySelectorAll<HTMLButtonElement>(".token-range__btn").forEach((btn) => {
   btn.addEventListener("click", () => {
     document.querySelectorAll(".token-range__btn").forEach((b) => {
@@ -5614,16 +5571,16 @@ document.querySelectorAll<HTMLButtonElement>(".token-range__btn").forEach((btn) 
   });
 });
 
-// 初始渲染
+// 
 void refreshTokenPanel(7);
 
 /* ============================================================
-   🎙️ TTS 设置面板交互
-   - 配置加载/保存（存 general settings，跟其他设置一起）
-   - 引擎选择卡片切换：选中哪个展开哪个配置表单
-   - 语速/音量滑块实时显示数值 + 自动保存
-   - MiniMax 测试发音：调 synthesize 合成固定文本并播放
-   - 音色快速复刻：选文件→上传→训练→自动填入 voice_id
+   🎙️ TTS 
+   - /（ general settings，)
+   - ：
+   - / + 
+   - MiniMax ： synthesize 
+   - ：→→→ voice_id
    ============================================================ */
 
 interface TtsApi {
@@ -5638,8 +5595,8 @@ interface TtsApi {
     apiKey: string; voiceId: string; text: string;
     speed?: number; volume?: number; pitch?: number;
     model?: string; format?: "mp3" | "wav" | "pcm";
-  }) => Promise<string>; // base64 音频
-  // GPT-SoVITS（返回 base64 + cacheKey + cached + format）
+  }) => Promise<string>; // base64 
+  // GPT-SoVITS（ base64 + cacheKey + cached + format)
   synthesizeGptsovits: (payload: {
     baseUrl: string; refAudioPath: string; promptText: string; text: string;
     speed?: number; format?: "wav" | "mp3";
@@ -5649,7 +5606,7 @@ interface TtsApi {
     speed?: number; format?: "wav" | "mp3";
     expectedCacheKey?: string;
   }) => Promise<{ base64: string; cacheKey: string; cached: boolean; format: "wav" | "mp3" }>;
-  // 自定义云端（返回 base64 + cacheKey + cached + format）
+  // （ base64 + cacheKey + cached + format)
   synthesizeCustomCloud: (payload: {
     endpointUrl: string; apiKey?: string; voiceId?: string; text: string;
     speed?: number; volume?: number; format?: "wav" | "mp3"; timeoutMs?: number;
@@ -5659,7 +5616,7 @@ interface TtsApi {
     speed?: number; volume?: number; format?: "wav" | "mp3"; timeoutMs?: number;
     expectedCacheKey?: string;
   }) => Promise<{ base64: string; cacheKey: string; cached: boolean; format: "wav" | "mp3" }>;
-  // 小米 MiMo（返回 base64 + cacheKey + cached + format）
+  //  MiMo（ base64 + cacheKey + cached + format)
   synthesizeMimo: (payload: {
     apiKey: string; voiceAudioPath?: string; text: string; stylePrompt?: string;
   }) => Promise<{ base64: string; cacheKey: string; cached: boolean; format: "wav" }>;
@@ -5667,7 +5624,7 @@ interface TtsApi {
     apiKey: string; voiceAudioPath?: string; text: string; stylePrompt?: string;
     expectedCacheKey?: string;
   }) => Promise<{ base64: string; cacheKey: string; cached: boolean; format: "wav" }>;
-  // Mossland（api.mosi.cn）
+  // Mossland（api.mosi.cn)
   synthesizeMossland: (payload: {
     apiKey: string; voiceId: string; text: string;
     speed?: number; volume?: number; model?: string;
@@ -5686,6 +5643,7 @@ interface TtsApi {
     apiKey: string; limit?: number;
   }) => Promise<{ voices: Array<{ id: string; name: string; createdAt: number }> }>;
   pickAudioFile: () => Promise<string | null>;
+  synthesizeOnline?: (payload: { text: string; lang?: string }) => Promise<{ base64: string; format: string } | null>;
   saveSettings: (tts: Record<string, unknown>) => Promise<unknown>;
   loadSettings: () => Promise<Record<string, unknown>>;
 }
@@ -5696,27 +5654,27 @@ declare global {
   }
 }
 
-const TTS_TEST_TEXT = "你好，我是昔涟，很高兴见到你。";
+const TTS_TEST_TEXT = "Hello, I am Cyrene. It is wonderful to meet you.";
 
-// 获取 DOM 元素的辅助函数
+//  DOM 
 function ttsEl(id: string): HTMLInputElement {
   return document.getElementById(id) as HTMLInputElement;
 }
 
-// 当前加载的 TTS 配置（内存缓存，改一个字段就存一次）
+//  TTS （，)
 let ttsConfig: Record<string, unknown> = {};
 
-// 加载配置并填充表单
+// 
 async function loadTtsConfig(): Promise<void> {
   if (!window.tts) return;
   try {
     ttsConfig = await window.tts.loadSettings() as Record<string, unknown>;
   } catch (err) {
-    console.warn("[TTS] 加载配置失败:", err);
+    console.warn("[TTS] Failed to load config:", err);
     return;
   }
 
-  // 引擎选择
+  // 
   const engine = String(ttsConfig.ttsEngine || "off");
   document.querySelectorAll<HTMLButtonElement>(".tts-engine").forEach((btn) => {
     const isActive = btn.dataset.engine === engine;
@@ -5729,7 +5687,7 @@ async function loadTtsConfig(): Promise<void> {
     if (config) config.hidden = false;
   }
 
-  // 播放交互
+  // 
   ttsEl("tts-auto-read").checked = Boolean(ttsConfig.ttsAutoRead);
   ttsEl("tts-speed").value = String(ttsConfig.ttsSpeed ?? 1);
   ttsEl("tts-volume").value = String(ttsConfig.ttsVolume ?? 1);
@@ -5743,9 +5701,9 @@ async function loadTtsConfig(): Promise<void> {
   ttsEl("tts-streaming").checked = ttsConfig.ttsStreaming !== false;
 
   // GPT-SoVITS
-  ttsEl("tts-gptsovits-url").value = String(ttsConfig.ttsGptsovitsBaseUrl ?? "http://localhost:9880");
+  ttsEl("tts-gptsovits-url").value = String(ttsConfig.ttsGptsovitsBaseUrl ?? "http://127.0.0.1:9880");
   ttsEl("tts-gptsovits-ref-audio").value = String(ttsConfig.ttsGptsovitsRefAudioPath ?? "");
-  ttsEl("tts-gptsovits-prompt-text").value = String(ttsConfig.ttsGptsovitsPromptText ?? "");
+  ttsEl("tts-gptsovits-prompt-text").value = String(ttsConfig.ttsGptsovitsPromptText || "开拓者，希琳一直都在这里陪着你哦。");
   (ttsEl("tts-gptsovits-format") as HTMLSelectElement).value =
     ttsConfig.ttsGptsovitsFormat === "mp3" ? "mp3" : "wav";
   const languageMode = document.getElementById("tts-gptsovits-lang-mode") as HTMLSelectElement | null;
@@ -5765,7 +5723,7 @@ async function loadTtsConfig(): Promise<void> {
   const rvcPitch = document.getElementById("tts-rvc-pitch") as HTMLInputElement | null;
   if (rvcPitch) rvcPitch.value = String(ttsConfig.ttsRvcPitch ?? 0);
 
-  // 自定义云端
+  // 
   ttsEl("tts-custom-cloud-url").value = String(ttsConfig.ttsCustomCloudEndpointUrl ?? "");
   ttsEl("tts-custom-cloud-key").value = String(ttsConfig.ttsCustomCloudApiKey ?? "");
   ttsEl("tts-custom-cloud-voice").value = String(ttsConfig.ttsCustomCloudVoiceId ?? "");
@@ -5773,12 +5731,12 @@ async function loadTtsConfig(): Promise<void> {
     ttsConfig.ttsCustomCloudFormat === "wav" ? "wav" : "mp3";
   ttsEl("tts-custom-cloud-timeout").value = String(ttsConfig.ttsCustomCloudTimeoutMs ?? 30000);
 
-  // 小米 MiMo
+  //  MiMo
   ttsEl("tts-mimo-key").value = String(ttsConfig.ttsMimoKey ?? "");
   ttsEl("tts-mimo-voice-audio").value = String(ttsConfig.ttsMimoVoiceAudioPath ?? "");
   ttsEl("tts-mimo-style").value = String(ttsConfig.ttsMimoStylePrompt ?? "Gentle, natural, and warmly conversational.");
 
-  // Mossland（UI 骨架已就位，IPC 第二步接通；字段值已写入 ttsConfig 以便保存）
+  // Mossland（UI ，IPC ； ttsConfig )
   ttsEl("tts-mossland-key").value = String(ttsConfig.ttsMosslandKey ?? "");
   ttsEl("tts-mossland-voice").value = String(ttsConfig.ttsMosslandVoiceId ?? "");
   (ttsEl("tts-mossland-model") as HTMLSelectElement).value = "moss-tts";
@@ -5793,7 +5751,7 @@ async function loadTtsConfig(): Promise<void> {
   ttsConfig.ttsMosslandTestText  = String(ttsEl("tts-mossland-text").value);
   ttsConfig.ttsMosslandFormat    = (ttsEl("tts-mossland-format") as HTMLSelectElement).value;
 
-  // 加载完成后清掉所有 Provider 的脏态（按钮隐藏，status 清空）
+  //  Provider （，status )
   for (const provider of Object.keys(TTS_PROVIDER_FIELDS)) {
     const ui = ttsProviderUi[provider];
     if (!ui) continue;
@@ -5809,7 +5767,7 @@ function updateTtsSliderLabels(): void {
   if (volVal) volVal.textContent = Math.round(Number(ttsEl("tts-volume").value) * 100) + "%";
 }
 
-// 保存单个 TTS 配置字段
+//  TTS 
 async function saveTtsField(field: string, value: unknown): Promise<void> {
   if (!window.tts) return;
   ttsConfig[field] = value;
@@ -5820,7 +5778,7 @@ async function saveTtsField(field: string, value: unknown): Promise<void> {
   }
 }
 
-// 播放 base64 音频。format 决定 Blob MIME（minimax 默认 mp3，gptsovits 默认 wav）
+//  base64 .format  Blob MIME（minimax  mp3，gptsovits  wav)
 function playTtsAudio(base64: string, format: "wav" | "mp3" = "mp3"): void {
   try {
     const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
@@ -5835,10 +5793,10 @@ function playTtsAudio(base64: string, format: "wav" | "mp3" = "mp3"): void {
   }
 }
 
-// 引擎选择切换
-// 只匹配带 data-engine 的按钮（即 TTS 厂商按钮）——主动开口档位按钮虽然
-// 共用 .tts-engine 视觉 class，但只有 data-mode 没有 data-engine，
-// 用属性选择器避免误触把它们当作 TTS 厂商处理。
+// 
+//  data-engine （ TTS )——
+//  .tts-engine  class， data-mode  data-engine，
+//  TTS .
 document.querySelectorAll<HTMLButtonElement>("[data-engine]").forEach((btn) => {
   btn.addEventListener("click", () => {
     const engine = btn.dataset.engine || "off";
@@ -5857,22 +5815,22 @@ document.querySelectorAll<HTMLButtonElement>("[data-engine]").forEach((btn) => {
   });
 });
 
-// 自动朗读开关
+// 
 ttsEl("tts-auto-read").addEventListener("change", () => {
   void saveTtsField("ttsAutoRead", ttsEl("tts-auto-read").checked);
 });
 
-// 语速/音量滑块（change 时保存，input 时实时显示）
+// /（change ，input )
 ttsEl("tts-speed").addEventListener("input", updateTtsSliderLabels);
 ttsEl("tts-speed").addEventListener("change", () => saveTtsField("ttsSpeed", Number(ttsEl("tts-speed").value)));
 ttsEl("tts-volume").addEventListener("input", updateTtsSliderLabels);
 ttsEl("tts-volume").addEventListener("change", () => saveTtsField("ttsVolume", Number(ttsEl("tts-volume").value)));
 
-// ── TTS 文本输入框：按 Provider 分组 + 手动保存 ──
-// 之前这里有 input/change 自动 saveTtsField（settings.ts:4270–4295），
-// 但每次 input 都会触发 IPC，IME 组字过程会被打断，用户反馈"打着打着输入法被打断"。
-// 现在改为：文本框只 mark dirty，真正保存只发生在用户点击 Provider 自己的"保存配置"按钮。
-// switch / slider / select / 引擎选择 / Opener 档位仍然走立即保存（保持即时反馈）。
+// ── TTS ： Provider  +  ──
+//  input/change  saveTtsField（settings.ts:4270–4295)，
+//  input  IPC，IME ，"".
+// ： mark dirty， Provider "".
+// switch / slider / select /  / Opener （).
 const TTS_FIELD_MAP: Record<string, string> = {
   "tts-minimax-key":          "ttsMinimaxKey",
   "tts-minimax-voice":        "ttsMinimaxVoiceId",
@@ -5894,7 +5852,7 @@ const TTS_FIELD_MAP: Record<string, string> = {
   "tts-mossland-format":      "ttsMosslandFormat",
 };
 
-// 每个 Provider 自己负责的文本输入框列表（不含 switch/slider/select，复刻子区块也不在此）
+//  Provider （ switch/slider/select，)
 const TTS_PROVIDER_FIELDS: Record<string, string[]> = {
   minimax:        ["tts-minimax-key", "tts-minimax-voice"],
   gptsovits:      ["tts-gptsovits-url", "tts-gptsovits-ref-audio", "tts-gptsovits-prompt-text"],
@@ -5903,8 +5861,8 @@ const TTS_PROVIDER_FIELDS: Record<string, string[]> = {
   mossland:       ["tts-mossland-key", "tts-mossland-voice", "tts-mossland-model", "tts-mossland-text", "tts-mossland-format"],
 };
 
-// Provider ID → { 保存按钮, 状态 div }
-// 用 ttsEl() 安全获取：拿不到时返回 null，不让整个 settings.ts 初始化崩。
+// Provider ID → { ,  div }
+//  ttsEl() ： null， settings.ts .
 function safeGet(id: string): HTMLElement | null {
   return document.getElementById(id);
 }
@@ -5926,12 +5884,12 @@ const ttsProviderUi: Record<string, { btn: HTMLButtonElement; status: HTMLElemen
                     : null,
 };
 
-// 输入框触发脏态：只显示按钮和"有未保存的更改"，不发 IPC
+// ："Unsaved changes"， IPC
 function markTtsProviderDirty(provider: string): void {
   const ui = ttsProviderUi[provider];
   if (!ui) return;
   ui.btn.classList.remove("is-hidden");
-  ui.status.textContent = "有未保存的更改";
+  ui.status.textContent = "Unsaved changes";
   ui.status.className = "save-status";
 }
 
@@ -5942,13 +5900,13 @@ for (const [provider, elIds] of Object.entries(TTS_PROVIDER_FIELDS)) {
   }
 }
 
-// 保存某个 Provider 的所有文本配置
+//  Provider 
 async function saveTtsProvider(provider: string): Promise<void> {
   const ui = ttsProviderUi[provider];
   if (!ui) return;
   const fields = TTS_PROVIDER_FIELDS[provider] ?? [];
   ui.btn.disabled = true;
-  ui.status.textContent = "保存中…";
+  ui.status.textContent = "Saving…";
   ui.status.className = "save-status";
   try {
     const payload: Record<string, unknown> = {};
@@ -5956,7 +5914,7 @@ async function saveTtsProvider(provider: string): Promise<void> {
       const field = TTS_FIELD_MAP[elId];
       if (!field) continue;
       const el = ttsEl(elId);
-      // 数字字段（timeout）转 Number；无效则跳过该字段但继续保存其他字段
+      // （timeout) Number；None
       let value: unknown = el.value;
       if (elId === "tts-custom-cloud-timeout") {
         const num = Number(el.value);
@@ -5964,32 +5922,32 @@ async function saveTtsProvider(provider: string): Promise<void> {
         value = num;
       }
       payload[field] = value;
-      ttsConfig[field] = value;   // 同步内存中的 ttsConfig 缓存
+      ttsConfig[field] = value;   //  ttsConfig 
     }
     if (Object.keys(payload).length === 0) {
-      ui.status.textContent = "没有可保存的更改";
+      ui.status.textContent = "Nothing to save";
       ui.status.className = "save-status";
       return;
     }
     await window.tts!.saveSettings(payload);
-    ui.status.textContent = "已保存";
+    ui.status.textContent = "Saved";
     ui.status.className = "save-status is-ok";
     ui.btn.classList.add("is-hidden");
     setTimeout(() => { ui.status.textContent = ""; }, 2000);
   } catch (e) {
-    ui.status.textContent = "保存失败：" + (e instanceof Error ? e.message : String(e));
+    ui.status.textContent = "Save failed: " + (e instanceof Error ? e.message : String(e));
     ui.status.className = "save-status is-error";
   } finally {
     ui.btn.disabled = false;
   }
 }
 
-// 注册点击 handler
+//  handler
 for (const [provider, ui] of Object.entries(ttsProviderUi)) {
   ui?.btn.addEventListener("click", () => void saveTtsProvider(provider));
 }
 
-// GPT-SoVITS 格式选择（select，change 时直接保存）
+// GPT-SoVITS （select，change )
 (ttsEl("tts-gptsovits-format") as HTMLSelectElement).addEventListener("change", () => {
   void saveTtsField("ttsGptsovitsFormat", (ttsEl("tts-gptsovits-format") as HTMLSelectElement).value as "wav" | "mp3");
 });
@@ -6013,17 +5971,17 @@ document.getElementById("tts-rvc-pitch")?.addEventListener("change", () => {
   void saveTtsField("ttsRvcPitch", Number((document.getElementById("tts-rvc-pitch") as HTMLInputElement).value) || 0);
 });
 
-// 自定义云端格式选择
+// 
 (ttsEl("tts-custom-cloud-format") as HTMLSelectElement).addEventListener("change", () => {
   void saveTtsField("ttsCustomCloudFormat", (ttsEl("tts-custom-cloud-format") as HTMLSelectElement).value as "wav" | "mp3");
 });
 
-// MiniMax 流式播放开关
+// MiniMax 
 ttsEl("tts-streaming").addEventListener("change", () => {
   void saveTtsField("ttsStreaming", ttsEl("tts-streaming").checked);
 });
 
-// GPT-SoVITS 选择参考音频
+// GPT-SoVITS 
 document.getElementById("tts-gptsovits-ref-pick")?.addEventListener("click", async () => {
   if (!window.tts) return;
   const filePath = await window.tts.pickAudioFile();
@@ -6033,16 +5991,14 @@ document.getElementById("tts-gptsovits-ref-pick")?.addEventListener("click", asy
   }
 });
 
-// GPT-SoVITS 测试发音
+// GPT-SoVITS 
 document.getElementById("tts-gptsovits-test")?.addEventListener("click", async () => {
   if (!window.tts) return;
   const baseUrl = ttsEl("tts-gptsovits-url").value.trim();
   const refAudioPath = ttsEl("tts-gptsovits-ref-audio").value.trim();
   const promptText = ttsEl("tts-gptsovits-prompt-text").value.trim();
   const format = (ttsEl("tts-gptsovits-format") as HTMLSelectElement).value as "wav" | "mp3";
-  if (!baseUrl) { window.alert("Enter the GPT-SoVITS API address first."); return; }
-  if (!refAudioPath) { window.alert("Select a reference audio file first."); return; }
-  if (!promptText) { window.alert("Enter the reference audio transcript first."); return; }
+  if (!baseUrl) { await showAlert("Enter the GPT-SoVITS API address first."); return; }
 
   const btn = document.getElementById("tts-gptsovits-test") as HTMLButtonElement;
   btn.disabled = true;
@@ -6053,14 +6009,55 @@ document.getElementById("tts-gptsovits-test")?.addEventListener("click", async (
     });
     playTtsAudio(result.base64, result.format);
   } catch (err) {
-    window.alert("Voice test failed: " + (err instanceof Error ? err.message : String(err)));
+    await showAlert("Voice test failed: " + (err instanceof Error ? err.message : String(err)));
   } finally {
     btn.disabled = false;
     btn.textContent = "Test Voice";
   }
 });
 
-// 小米 MiMo 选择昔涟克隆参考音频
+// Edge Neural Test
+document.getElementById("tts-edge-test")?.addEventListener("click", async () => {
+  if (!window.tts) return;
+  const btn = document.getElementById("tts-edge-test") as HTMLButtonElement | null;
+  const statusEl = document.getElementById("tts-edge-test-status");
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Synthesizing...";
+  }
+  if (statusEl) {
+    statusEl.textContent = "Synthesizing...";
+    statusEl.className = "save-status";
+  }
+  try {
+    const res = await window.tts.synthesizeOnline?.({
+      text: "开拓者，希琳一直都在这里陪着你哦。",
+      lang: "zh-CN",
+    });
+    if (res && res.base64) {
+      playTtsAudio(res.base64, (res.format as "wav" | "mp3") || "mp3");
+      if (statusEl) {
+        statusEl.textContent = "Playing";
+        statusEl.className = "save-status is-ok";
+        setTimeout(() => { if (statusEl) statusEl.textContent = ""; }, 3000);
+      }
+    } else {
+      throw new Error("No audio returned");
+    }
+  } catch (err) {
+    if (statusEl) {
+      statusEl.textContent = "Test failed: " + (err instanceof Error ? err.message : String(err));
+      statusEl.className = "save-status is-error";
+    }
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "Test Voice";
+    }
+  }
+});
+
+//  MiMo 
 document.getElementById("tts-mimo-voice-pick")?.addEventListener("click", async () => {
   if (!window.tts) return;
   const filePath = await window.tts.pickAudioFile();
@@ -6070,7 +6067,7 @@ document.getElementById("tts-mimo-voice-pick")?.addEventListener("click", async 
   }
 });
 
-// 自定义云端测试发音
+// 
 document.getElementById("tts-custom-cloud-test")?.addEventListener("click", async () => {
   if (!window.tts) return;
   const endpointUrl = ttsEl("tts-custom-cloud-url").value.trim();
@@ -6078,11 +6075,11 @@ document.getElementById("tts-custom-cloud-test")?.addEventListener("click", asyn
   const voiceId = ttsEl("tts-custom-cloud-voice").value.trim();
   const format = (ttsEl("tts-custom-cloud-format") as HTMLSelectElement).value as "wav" | "mp3";
   const timeoutMs = Number(ttsEl("tts-custom-cloud-timeout").value) || 30000;
-  if (!endpointUrl) { window.alert("Enter the custom cloud endpoint URL first."); return; }
+  if (!endpointUrl) { await showAlert("Enter the custom cloud endpoint URL first."); return; }
 
   const btn = document.getElementById("tts-custom-cloud-test") as HTMLButtonElement;
   btn.disabled = true;
-  btn.textContent = "合成中…";
+  btn.textContent = "Synthesizing…";
   try {
     const result = await window.tts.synthesizeCustomCloud({
       endpointUrl, apiKey, voiceId, text: TTS_TEST_TEXT,
@@ -6093,42 +6090,42 @@ document.getElementById("tts-custom-cloud-test")?.addEventListener("click", asyn
     });
     playTtsAudio(result.base64, result.format);
   } catch (err) {
-    window.alert("测试失败: " + (err instanceof Error ? err.message : String(err)));
+    await showAlert("Test failed: " + (err instanceof Error ? err.message : String(err)));
   } finally {
     btn.disabled = false;
-    btn.textContent = "🔊 测试发音";
+    btn.textContent = "▶ Test Voice";
   }
 });
 
-// 小米 MiMo 测试发音
+//  MiMo 
 document.getElementById("tts-mimo-test")?.addEventListener("click", async () => {
   if (!window.tts) return;
   const apiKey = ttsEl("tts-mimo-key").value.trim();
   const voiceAudioPath = ttsEl("tts-mimo-voice-audio").value.trim();
   const stylePrompt = ttsEl("tts-mimo-style").value.trim();
-  if (!apiKey) { window.alert("Enter the Xiaomi MiMo API key first."); return; }
-  if (!voiceAudioPath) { window.alert("请先选择昔涟克隆参考音频"); return; }
+  if (!apiKey) { await showAlert("Enter the Xiaomi MiMo API key first."); return; }
+  if (!voiceAudioPath) { await showAlert("Please select a reference audio file first"); return; }
 
   const btn = document.getElementById("tts-mimo-test") as HTMLButtonElement;
   btn.disabled = true;
-  btn.textContent = "合成中…";
+  btn.textContent = "Synthesizing…";
   try {
     const result = await window.tts.synthesizeMimo({
       apiKey, voiceAudioPath, stylePrompt, text: TTS_TEST_TEXT,
     });
     playTtsAudio(result.base64, result.format);
   } catch (err) {
-    window.alert("测试失败: " + (err instanceof Error ? err.message : String(err)));
+    await showAlert("Test failed: " + (err instanceof Error ? err.message : String(err)));
   } finally {
     btn.disabled = false;
-    btn.textContent = "🔊 测试发音";
+    btn.textContent = "▶ Test Voice";
   }
 });
 
 // ── Mossland ──
-// 当前为 UI 骨架：所有按钮触发"功能开发中"占位 modal，
+//  UI ："" modal，
 // ── Mossland ──
-// 第二步已接通：所有按钮走真实 IPC 调用，错误抛到 status / alert。
+// ： IPC ， status / alert.
 function setMosslandStatus(text: string, type: "ok" | "error" | "loading"): void {
   const el = document.getElementById("tts-mossland-clone-status");
   if (!el) return;
@@ -6143,7 +6140,7 @@ function setMosslandListStatus(text: string, type: "ok" | "error" | "loading"): 
   el.className = "tts-clone-status" + (type ? " is-" + type : "");
 }
 
-/** 把拉到的 voices 列表渲染成 `<ul>`；每行有一个"使用此 voice"按钮，点击回填到 #tts-mossland-voice */
+/**  voices  `<ul>`；" voice"， #tts-mossland-voice */
 function renderMosslandVoiceList(voices: Array<{ id: string; name: string }>): void {
   const ul = document.getElementById("tts-mossland-voice-list");
   if (!ul) return;
@@ -6159,7 +6156,7 @@ function renderMosslandVoiceList(voices: Array<{ id: string; name: string }>): v
     const useBtn = document.createElement("button");
     useBtn.type = "button";
     useBtn.className = "voice-use";
-    useBtn.textContent = "使用";
+    useBtn.textContent = "Use";
     useBtn.addEventListener("click", () => {
       ttsEl("tts-mossland-voice").value = v.id;
     });
@@ -6168,7 +6165,7 @@ function renderMosslandVoiceList(voices: Array<{ id: string; name: string }>): v
   }
 }
 
-// 测试发音：走 window.tts.synthesizeMossland
+// ： window.tts.synthesizeMossland
 document.getElementById("tts-mossland-test")?.addEventListener("click", async () => {
   if (!window.tts) return;
   const apiKey = ttsEl("tts-mossland-key").value.trim();
@@ -6176,15 +6173,15 @@ document.getElementById("tts-mossland-test")?.addEventListener("click", async ()
   const text = ttsEl("tts-mossland-text").value.trim();
   const model = (ttsEl("tts-mossland-model") as HTMLSelectElement).value;
   const format = (ttsEl("tts-mossland-format") as HTMLSelectElement).value as "mp3" | "wav" | "pcm";
-  if (!apiKey) { window.alert("Enter the Mossland API key first."); return; }
-  if (!voiceId) { window.alert("Enter a voice ID or fetch the voice list below."); return; }
-  if (!text) { window.alert("Enter preview text first."); return; }
+  if (!apiKey) { await showAlert("Enter the Mossland API key first."); return; }
+  if (!voiceId) { await showAlert("Enter a voice ID or fetch the voice list below."); return; }
+  if (!text) { await showAlert("Enter preview text first."); return; }
 
   const btn = document.getElementById("tts-mossland-test") as HTMLButtonElement;
   btn.disabled = true;
-  btn.textContent = "合成中…";
+  btn.textContent = "Synthesizing…";
   const statusEl = document.getElementById("tts-mossland-test-status");
-  if (statusEl) { statusEl.textContent = "合成中…"; statusEl.className = "tts-clone-status is-loading"; }
+  if (statusEl) { statusEl.textContent = "Synthesizing…"; statusEl.className = "tts-clone-status is-loading"; }
   try {
     const result = await window.tts.synthesizeMossland({
       apiKey, voiceId, text, model, format,
@@ -6193,7 +6190,7 @@ document.getElementById("tts-mossland-test")?.addEventListener("click", async ()
     });
     playTtsAudio(result.base64, result.format);
     if (statusEl) {
-      statusEl.textContent = "✅ 合成成功";
+      statusEl.textContent = "✓ Success";
       statusEl.className = "tts-clone-status is-ok";
       setTimeout(() => { statusEl.textContent = ""; }, 2000);
     }
@@ -6202,146 +6199,146 @@ document.getElementById("tts-mossland-test")?.addEventListener("click", async ()
       statusEl.textContent = "❌ " + (err instanceof Error ? err.message : String(err));
       statusEl.className = "tts-clone-status is-error";
     } else {
-      window.alert("合成失败: " + (err instanceof Error ? err.message : String(err)));
+      await showAlert("Synthesis failed: " + (err instanceof Error ? err.message : String(err)));
     }
   } finally {
     btn.disabled = false;
-    btn.textContent = "测试发音";
+    btn.textContent = "Test Voice";
   }
 });
 
 
-// 克隆子区块：选择文件（用现有 pickAudio）
+// ：（ pickAudio)
 document.getElementById("tts-mossland-clone-pick")?.addEventListener("click", async () => {
   if (!window.tts) return;
   const filePath = await window.tts.pickAudio();
   if (filePath) ttsEl("tts-mossland-clone-file").value = filePath;
 });
 
-// 克隆子区块：开始上传（multipart）
+// ：（multipart)
 document.getElementById("tts-mossland-clone-start")?.addEventListener("click", async () => {
   if (!window.tts) return;
   const apiKey = ttsEl("tts-mossland-key").value.trim();
   const filePath = ttsEl("tts-mossland-clone-file").value.trim();
   const name = ttsEl("tts-mossland-clone-name").value.trim();
   const description = ttsEl("tts-mossland-clone-desc").value.trim();
-  if (!apiKey) { window.alert("Enter the Mossland API key first."); return; }
-  if (!filePath) { window.alert("请先选择参考音频"); return; }
+  if (!apiKey) { await showAlert("Enter the Mossland API key first."); return; }
+  if (!filePath) { await showAlert("Please select a reference audio file first"); return; }
 
-  setMosslandStatus("正在上传并创建音色…", "loading");
+  setMosslandStatus("Uploading and creating voice...", "loading");
   try {
     const result = await window.tts.cloneMossland({
       apiKey, filePath,
       name: name || undefined,
       description: description || undefined,
     });
-    // 自动填到上方「音色 ID」+ 同步写到 ttsConfig（让保存按钮 / chat 调度都能用）
+    // " ID"+  ttsConfig（ / chat )
     ttsEl("tts-mossland-voice").value = result.voiceId;
     void saveTtsField("ttsMosslandVoiceId", result.voiceId);
-    setMosslandStatus(`✅ 克隆成功！voice_id「${result.voiceId}」已自动填入音色 ID 框。`, "ok");
+    setMosslandStatus(`✅ Clone successful! voice_id: ${result.voiceId} has been auto-filled.`, "ok");
   } catch (err) {
     setMosslandStatus("❌ " + (err instanceof Error ? err.message : String(err)), "error");
   }
 });
 
-// 拉取音色列表：调 listMosslandVoices + 渲染
+// ： listMosslandVoices + 
 document.getElementById("tts-mossland-list-voices")?.addEventListener("click", async () => {
   if (!window.tts) return;
   const apiKey = ttsEl("tts-mossland-key").value.trim();
-  if (!apiKey) { window.alert("Enter the Mossland API key first."); return; }
+  if (!apiKey) { await showAlert("Enter the Mossland API key first."); return; }
 
-  setMosslandListStatus("正在拉取音色列表…", "loading");
+  setMosslandListStatus("Fetching voice list...", "loading");
   try {
     const result = await window.tts.listMosslandVoices({ apiKey, limit: 50 });
     if (result.voices.length === 0) {
-      setMosslandListStatus("账号下还没有已克隆的音色，请先到上方「音色克隆」创建一个。", "error");
+      setMosslandListStatus("No cloned voices found. Create one using Voice Clone above.", "error");
     } else {
       renderMosslandVoiceList(result.voices);
-      setMosslandListStatus(`✅ 拉到 ${result.voices.length} 个音色。点击右侧「使用」可填入音色 ID 框。`, "ok");
+      setMosslandListStatus(`✅ Found ${result.voices.length}  voice(s). Click "Use" to fill the voice ID.`, "ok");
     }
   } catch (err) {
     setMosslandListStatus("❌ " + (err instanceof Error ? err.message : String(err)), "error");
   }
 });
 
-// 克隆须知 modal（富文本，复用 showHtmlModal 复用 MiniMax 那套样式）
+//  modal（， showHtmlModal  MiniMax )
 document.getElementById("tts-mossland-clone-info-btn")?.addEventListener("click", () => {
   void showHtmlModal({
-    title: "Mossland 音色克隆 · 完整规格",
+    title: "Voice Clone Specifications",
     icon: "ⓘ",
     htmlBody: [
       '<div class="tts-clone-spec-block">',
-      '  <h4><svg class="tts-clone-spec-icon" width="18" height="18" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M24 44C35.0457 44 44 35.0457 44 24C44 12.9543 35.0457 4 24 4C12.9543 4 4 12.9543 4 24C4 35.0457 12.9543 44 24 44Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M18 22H30" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M18 28H30" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M24.0083 22V34" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M30 15L24 21L18 15" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg> 费用</h4>',
-      '  <p>请参阅 Mossland 平台定价页（文档未提供具体单价）。每次成功创建 voice_id 都会计费。',
-      '     与 MiniMax 不同：<strong>Mossland 没有「7 天过期」</strong>，voice_id 永久有效。</p>',
+      '  <h4><svg class="tts-clone-spec-icon" width="18" height="18" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M24 44C35.0457 44 44 35.0457 44 24C44 12.9543 35.0457 4 24 4C12.9543 4 4 12.9543 4 24C4 35.0457 12.9543 44 24 44Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M18 22H30" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M18 28H30" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M24.0083 22V34" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M30 15L24 21L18 15" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg> Cost</h4>',
+      '  <p>Please refer to the Mossland platform pricing page. Each created voice_id incurs charges.</p>',
+      '     Unlike MiniMax: <strong>Mossland has no"7-day expiry"</strong>. voice_id is permanent.</p>',
       '</div>',
       '<div class="tts-clone-spec-block">',
-      '  <h4><svg class="tts-clone-spec-icon" width="18" height="18" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M7 4H41" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 44H41" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M11 44C13.6667 30.6611 18 23.9944 24 24C30 24.0056 34.3333 30.6722 37 44H11Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M37 4C34.3333 17.3389 30 24.0056 24 24C18 23.9944 13.6667 17.3278 11 4H37Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M21 15H27" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M19 38H29" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg> 持久化规则</h4>',
-      '  <p>创建的 voice_id <strong>永久有效</strong>，无过期、无冷却。直接复制到「音色 ID」即可永久复用。</p>',
+      '  <h4><svg class="tts-clone-spec-icon" width="18" height="18" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M7 4H41" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 44H41" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M11 44C13.6667 30.6611 18 23.9944 24 24C30 24.0056 34.3333 30.6722 37 44H11Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M37 4C34.3333 17.3389 30 24.0056 24 24C18 23.9944 13.6667 17.3278 11 4H37Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M21 15H27" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M19 38H29" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg> </h4>',
+      '  <p>Created voice_id is <strong>permanent</strong> with no expiration or cooldown. Copy directly to Voice ID for permanent use. reuse.</p>',
       '</div>',
       '<div class="tts-clone-spec-block">',
-      '  <h4><svg class="tts-clone-spec-icon" width="18" height="18" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M8 44V4H31L40 14.5V44H8Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M32 14L26 16.9688V31.5" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="20.5" cy="31.5" r="5.5" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg> 参考音频 <code>audio_sample</code></h4>',
+      '  <h4><svg class="tts-clone-spec-icon" width="18" height="18" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M8 44V4H31L40 14.5V44H8Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M32 14L26 16.9688V31.5" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="20.5" cy="31.5" r="5.5" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>  <code>audio_sample</code></h4>',
       '  <ul>',
-      '    <li>请求格式：<strong>multipart/form-data</strong>（不支持 JSON / URL / base64）</li>',
-      '    <li>字段名：<code>audio_sample</code>（必填）</li>',
-      '    <li>字段名：<code>name</code>（可选，给音色起名）</li>',
-      '    <li>字段名：<code>description</code>（可选，描述音色）</li>',
-      '    <li>时长限制：≤ 60 秒（实测，官方文档未标注）</li>',
-      '    <li>格式：文档示例为 wav</li>',
+      '    <li>Request format: <strong>multipart/form-data</strong> (JSON/URL/base64 not supported)</li>',
+      '    <li>Field: <code>audio_sample</code> (required)</li>',
+      '    <li>Field: <code>name</code> (optional, voice name)</li>',
+      '    <li>Field: <code>description</code> (optional, description)</li>',
+      '    <li>Duration: ≤ 60 seconds</li>',
+      '    <li>Format: wav (per docs)</li>',
       '  </ul>',
       '</div>',
       '<div class="tts-clone-spec-block">',
-      '  <h4><svg class="tts-clone-spec-icon" width="18" height="18" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="24" cy="24" r="18" fill="none" stroke="currentColor" stroke-width="4"/><path d="M24 14V16" stroke="currentColor" stroke-width="4" stroke-linecap="round"/><circle cx="24" cy="32" r="2.5" fill="currentColor"/></svg> 后续合成</h4>',
+      '  <h4><svg class="tts-clone-spec-icon" width="18" height="18" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="24" cy="24" r="18" fill="none" stroke="currentColor" stroke-width="4"/><path d="M24 14V16" stroke="currentColor" stroke-width="4" stroke-linecap="round"/><circle cx="24" cy="32" r="2.5" fill="currentColor"/></svg> </h4>',
       '  <ul>',
-      '    <li>拿到 voice_id 后，调用 <code>POST /v1/audio/speech</code>，body 形如 <code>{ model: "moss-tts", input: "...", voice_id: "..." }</code></li>',
-      '    <li>可选 <code>delivery_method: "audio" \| "url"</code>（默认 audio，二进制流；url 返回 JSON 含 URL）</li>',
-      '    <li><code>version</code> 字段为预留能力，当前请不传，服务端使用默认版本</li>',
+      '    <li>After getting voice_id, call <code>POST /v1/audio/speech</code> with body: <code>{ model: "moss-tts", input: "...", voice_id: "..." }</code></li>',
+      '    <li>Optional <code>delivery_method: "audio" \| "url"</code> (default: audio binary stream; url returns JSON with URL)</li>',
+      '    <li><code>version</code> field is reserved — omit for now, server uses default version</li>',
       '  </ul>',
       '</div>',
     ].join("\n"),
   });
 });
 
-// MiniMax 测试发音
+// MiniMax 
 document.getElementById("tts-minimax-test")?.addEventListener("click", async () => {
   if (!window.tts) return;
   const apiKey = ttsEl("tts-minimax-key").value.trim();
   const voiceId = ttsEl("tts-minimax-voice").value.trim();
   const modelSelect = ttsEl("tts-minimax-model") as HTMLSelectElement;
   const model = modelSelect.value === "speech-2.8-hd" ? "speech-2.8-hd" : "speech-2.8-turbo";
-  if (!apiKey) { window.alert("Enter the MiniMax API key first."); return; }
-  if (!voiceId) { window.alert("Enter a voice ID or train a cloned voice below."); return; }
+  if (!apiKey) { await showAlert("Enter the MiniMax API key first."); return; }
+  if (!voiceId) { await showAlert("Enter a voice ID or train a cloned voice below."); return; }
 
   const btn = document.getElementById("tts-minimax-test") as HTMLButtonElement;
   btn.disabled = true;
-  btn.textContent = "合成中…";
+  btn.textContent = "Synthesizing…";
   try {
     const base64 = await window.tts.synthesize({ apiKey, voiceId, text: TTS_TEST_TEXT, model });
     playTtsAudio(base64);
   } catch (err) {
-    window.alert("测试失败: " + (err instanceof Error ? err.message : String(err)));
+    await showAlert("Test failed: " + (err instanceof Error ? err.message : String(err)));
   } finally {
     btn.disabled = false;
-    btn.textContent = "🔊 测试发音";
+    btn.textContent = "▶ Test Voice";
   }
 });
 
-// ── 音色快速复刻 ──
-// 选择配音文件
+// ──  ──
+// Voice file
 document.getElementById("tts-clone-pick")?.addEventListener("click", async () => {
   if (!window.tts) return;
   const filePath = await window.tts.pickAudio();
   if (filePath) ttsEl("tts-clone-file").value = filePath;
 });
 
-// 选择示例音频
+// 
 document.getElementById("tts-clone-prompt-pick")?.addEventListener("click", async () => {
   if (!window.tts) return;
   const filePath = await window.tts.pickAudio();
   if (filePath) ttsEl("tts-clone-prompt-file").value = filePath;
 });
 
-// 设置复刻状态文案
+// 
 function setCloneStatus(text: string, type: "ok" | "error" | "loading"): void {
   const el = document.getElementById("tts-clone-status");
   if (!el) return;
@@ -6349,7 +6346,7 @@ function setCloneStatus(text: string, type: "ok" | "error" | "loading"): void {
   el.className = "tts-clone-status" + (type ? " is-" + type : "");
 }
 
-// 开始复刻
+// 
 document.getElementById("tts-clone-start")?.addEventListener("click", async () => {
   if (!window.tts) return;
   const apiKey = ttsEl("tts-minimax-key").value.trim();
@@ -6359,51 +6356,51 @@ document.getElementById("tts-clone-start")?.addEventListener("click", async () =
   const cloneText = ttsEl("tts-clone-text").value.trim();
   const voiceId = ttsEl("tts-clone-voice-id").value.trim();
 
-  if (!apiKey) { window.alert("Enter the MiniMax API key first."); return; }
-  if (!cloneFile) { window.alert("请选择配音文件"); return; }
-  if (!cloneText) { window.alert("请填写复刻文本"); return; }
-  if (!voiceId) { window.alert("请填写音色命名"); return; }
+  if (!apiKey) { await showAlert("Enter the MiniMax API key first."); return; }
+  if (!cloneFile) { await showAlert("Please select a voice audio file"); return; }
+  if (!cloneText) { await showAlert("Please enter the clone text"); return; }
+  if (!voiceId) { await showAlert("Please enter a voice ID"); return; }
 
   const btn = document.getElementById("tts-clone-start") as HTMLButtonElement;
   btn.disabled = true;
-  setCloneStatus("正在上传配音文件…", "loading");
+  setCloneStatus("Uploading voice file...", "loading");
 
   try {
-    // 步骤1: 上传配音文件
+    // 1: Voice file
     const cloneUpload = await window.tts.upload(apiKey, cloneFile, "voice_clone");
-    setCloneStatus("配音文件上传完成 (file_id: " + cloneUpload.file_id + ")，正在上传示例音频…", "loading");
+    setCloneStatus("Voice file uploaded (file_id: " + cloneUpload.file_id + "). Uploading sample audio...", "loading");
 
-    // 步骤2: 上传示例音频（可选）
+    // 2: （Optional)
     let promptFileId: string | undefined;
     if (promptFile) {
       const promptUpload = await window.tts.upload(apiKey, promptFile, "prompt_audio");
       promptFileId = promptUpload.file_id;
-      setCloneStatus("示例音频上传完成，正在训练音色…", "loading");
+      setCloneStatus("Sample audio uploaded. Training voice model...", "loading");
     } else {
-      setCloneStatus("正在训练音色…", "loading");
+      setCloneStatus("Training voice model...", "loading");
     }
 
-    // 步骤3: 音色克隆
+    // 3: 
     const result = await window.tts.clone({
       apiKey, fileId: cloneUpload.file_id, voiceId,
       promptAudioId: promptFileId, promptText: promptText || undefined,
       text: cloneText,
     });
 
-    // 自动填入音色 ID
+    //  ID
     ttsEl("tts-minimax-voice").value = result.voiceId;
     void saveTtsField("ttsMinimaxVoiceId", result.voiceId);
 
-    setCloneStatus("✅ 复刻成功！音色 ID「" + result.voiceId + "」已自动填入。", "ok");
+    setCloneStatus("✅ Clone successful! Voice ID: " + result.voiceId + " has been auto-filled.", "ok");
 
-    // 如果有试听音频，播放
+    // ，
     if (result.audioDemo) {
       try {
         const resp = await fetch(result.audioDemo);
         const buf = await resp.arrayBuffer();
         const base64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
         playTtsAudio(base64);
-      } catch { /* 试听音频播放失败不影响主流程 */ }
+      } catch { /* preview audio playback failure does not affect main flow */ }
     }
   } catch (err) {
     setCloneStatus("❌ " + (err instanceof Error ? err.message : String(err)), "error");
@@ -6412,9 +6409,9 @@ document.getElementById("tts-clone-start")?.addEventListener("click", async () =
   }
 });
 
-// ── 音色快速复刻：规格说明模态框 ──
-// 摘要见 C:\Users\13575\Desktop\minimax-tts文档摘要.md（音色快速复刻 / Voice Clone）
-// 字段顺序：file_id → voice_id → clone_prompt(prompt_audio / prompt_text) → text(试听)
+// ── ： ──
+//  C:\Users\13575\Desktop\minimax-tts.md（ / Voice Clone)
+// ：file_id → voice_id → clone_prompt(prompt_audio / prompt_text) → text()
 const CLONE_SPEC_BODY = [
   '<div class="tts-clone-spec-block">',
   '  <h4>',
@@ -6425,10 +6422,10 @@ const CLONE_SPEC_BODY = [
   '      <path d="M24.0083 22V34" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>',
   '      <path d="M30 15L24 21L18 15" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>',
   '    </svg>',
-  '    费用',
+  '    Cost',
   '  </h4>',
-  '  <p>每次成功发起复刻将收取 <span class="tts-clone-fee">¥9.9</span>。',
-  '     试听（<code>text</code> + <code>model</code>）按字符数另计 T2A 费用，与平台其他 T2A 接口同价。</p>',
+  '  <p>Each successful clone costs <span class="tts-clone-fee">¥9.9</span>.',
+  '     Preview (<code>text</code> + <code>model</code>) charges standard T2A character cost.</p>',
   '</div>',
   '<div class="tts-clone-spec-block">',
   '  <h4>',
@@ -6440,9 +6437,9 @@ const CLONE_SPEC_BODY = [
   '      <path d="M21 15H27" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>',
   '      <path d="M19 38H29" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>',
   '    </svg>',
-  '    过期规则',
+  '    Expiry Policy',
   '  </h4>',
-  '  <p>复刻得到的音色若 <strong>7 天内</strong>无任何调用，将被系统自动删除。如需长期保留音色，平时不定期点一下「🔊 测试发音」即可续命。</p>',
+  '  <p>Cloned voices without calls for <strong>7 days</strong> will be automatically deleted by the platform. Call occasionally to retain."▶ Test Voice" to keep them active.</p>',
   '</div>',
   '<div class="tts-clone-spec-block">',
   '  <h4>',
@@ -6451,12 +6448,12 @@ const CLONE_SPEC_BODY = [
   '      <path d="M32 14L26 16.9688V31.5" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>',
   '      <circle cx="20.5" cy="31.5" r="5.5" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>',
   '    </svg>',
-  '    配音文件 <code>file_id</code>（必填）',
+  '    Voice file <code>file_id</code> (required)',
   '  </h4>',
   '  <ul>',
-  '    <li>格式：mp3 / m4a / wav</li>',
-  '    <li>时长：10 秒 ~ 5 分钟</li>',
-  '    <li>大小：≤ 20 MB</li>',
+  '    <li>Format: mp3 / m4a / wav</li>',
+  '    <li>Duration: 10 sec – 5 min</li>',
+  '    <li>Size: ≤ 20 MB</li>',
   '  </ul>',
   '</div>',
   '<div class="tts-clone-spec-block">',
@@ -6467,14 +6464,14 @@ const CLONE_SPEC_BODY = [
   '      <circle cx="24" cy="24" r="4" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>',
   '      <path d="M20 34H28" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>',
   '    </svg>',
-  '    自定义 voice_id（必填）',
+  '    Custom voice_id (required)',
   '  </h4>',
   '  <ul>',
-  '    <li>长度范围：8 ~ 256 个字符</li>',
-  '    <li>首字符必须为英文字母</li>',
-  '    <li>允许：数字、字母、<code>-</code>、<code>_</code></li>',
-  '    <li>末位字符不可为 <code>-</code> 或 <code>_</code></li>',
-  '    <li>不得与已有 voice_id 重复</li>',
+  '    <li>Length: 8 – 256 characters</li>',
+  '    <li>Must start with a letter</li>',
+  '    <li>Allowed: letters, digits, <code>-</code>、<code>_</code></li>',
+  '    <li>Cannot end with <code>-</code> or <code>_</code></li>',
+  '    <li>Must be unique</li>',
   '  </ul>',
   '</div>',
   '<div class="tts-clone-spec-block">',
@@ -6487,14 +6484,14 @@ const CLONE_SPEC_BODY = [
   '      <path d="M12 22V26" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>',
   '      <path d="M24 14V34" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>',
   '    </svg>',
-  '    示例音频 clone_prompt（可选，强烈推荐）',
+  '    Sample audio clone_prompt (optional, highly recommended)',
   '  </h4>',
-  '  <p>提供一段示例音频可显著增强合成音色的相似度与稳定性。</p>',
+  '  <p>Providing a sample audio significantly improves voice similarity and stability.</p>',
   '  <ul>',
-  '    <li>格式：mp3 / m4a / wav</li>',
-  '    <li>时长：&lt; 8 秒</li>',
-  '    <li>大小：≤ 20 MB</li>',
-  '    <li>须填写对应的示例文本 <code>prompt_text</code>，句末需有标点</li>',
+  '    <li>Format: mp3 / m4a / wav</li>',
+  '    <li>Duration: &lt; 8 seconds</li>',
+  '    <li>Size: ≤ 20 MB</li>',
+  '    <li>Must include matching <code>prompt_text</code>, ending with punctuation</li>',
   '  </ul>',
   '</div>',
   '<div class="tts-clone-spec-block">',
@@ -6506,15 +6503,15 @@ const CLONE_SPEC_BODY = [
   '      <path d="M23 44L40 23" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>',
   '      <path d="M16 24H24" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>',
   '    </svg>',
-  '    复刻文本 <code>text</code>（试听用，建议 ≤1000 字符）',
+  '    Clone text <code>text</code> (preview use, ≤1000 chars)',
   '  </h4>',
-  '  <p>模型会用克隆后的音色朗读这段文本并返回试听音频链接，便于人工核对相似度。</p>',
+  '  <p>The model will read this text in the cloned voice and return a preview audio link.</p>',
   '</div>',
 ].join("\n");
 
 function showCloneSpecModal(): void {
   void showHtmlModal({
-    title: "🎙️ 音色快速复刻 · 完整规格",
+    title: "Voice Clone Full Specs",
     icon: "ⓘ",
     htmlBody: CLONE_SPEC_BODY,
   });
@@ -6523,7 +6520,7 @@ function showCloneSpecModal(): void {
 document.getElementById("tts-clone-info-btn")?.addEventListener("click", showCloneSpecModal);
 document.getElementById("tts-clone-info-link")?.addEventListener("click", showCloneSpecModal);
 
-// 初始加载配置
+// 
 void loadTtsConfig();
 
 

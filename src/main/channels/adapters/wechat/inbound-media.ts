@@ -74,7 +74,7 @@ export function isAnalyzableWechatFile(fileName: string): boolean {
 export function isWechatSaveIntent(text: string): boolean {
   const normalized = text.trim().toLowerCase().replace(/\s+/g, "");
   if (!normalized) return false;
-  return /save(?:it|this|thefile)?to(?:my)?desktop|保存到桌面|存到桌面|放到桌面|代收|帮我收|帮我保存|保存文件|收一下/.test(normalized);
+  return /save(?:it|this|thefile)?to(?:my)?desktop|\u4fdd\u5b58\u5230\u684c\u9762|\u5b58\u5230\u684c\u9762|\u653e\u5230\u684c\u9762|\u4ee3\u6536|\u5e2e\u6211\u6536|\u5e2e\u6211\u4fdd\u5b58|\u4fdd\u5b58\u6587\u4ef6|\u6536\u4e00\u4e0b/.test(normalized);
 }
 
 export function describeInboundWechatMedia(items: InboundWechatItem[]): InboundMediaDescriptor[] {

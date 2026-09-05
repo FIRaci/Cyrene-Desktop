@@ -3,11 +3,11 @@ import type { ContextPackage } from "./contracts";
 import { buildCitaContextBlock } from "./context-package";
 
 const fixture: ContextPackage = {
-  originalQuery: "第一首吧",
-  contextualizedQuery: "选择当前候选中的第一首。",
+  originalQuery: "the first one please",
+  contextualizedQuery: "Select the first song among current candidates.",
   rewriteStatus: "rewritten",
   resolvedReferences: [{
-    surface: "第一首",
+    surface: "the first one",
     targetRef: "candidate-1",
     relation: "candidate_position",
   }],
@@ -16,7 +16,7 @@ const fixture: ContextPackage = {
     conversationId: "conversation-a",
     domain: "music",
     kind: "candidate",
-    label: "胆小鬼 - 梁咏琪",
+    label: "Coward - Gigi Leung",
     lifecycle: "active",
     source: "tool_result",
   }],

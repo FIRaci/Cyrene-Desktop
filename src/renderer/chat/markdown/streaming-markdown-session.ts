@@ -1,21 +1,21 @@
 /**
- * 流式 Markdown 渲染会话。
+ * Streaming Markdown rendering session.
  *
- * 每条正在流式生成的助手消息维护一个独立的 session。
+ * Maintains an independent session for each streaming assistant message.
  *
- * DOM 结构：
+ * DOM structure:
  * <div class="markdown-stream">
- *   <div class="markdown-stream__stable"></div>   ← committed blocks（只追加）
- *   <div class="markdown-stream__active"></div>    ← mutable tail（可替换）
+ *   <div class="markdown-stream__stable"></div>   ← committed blocks (append-only)
+ *   <div class="markdown-stream__active"></div>    ← mutable tail (replaceable)
  * </div>
  *
- * 流程：
- *   delta 到达 -> session.append(delta) -> scheduleRender()
- *   节流渲染 -> parse blocks -> split committed/mutable
- *   -> 新 committed block 渲染并追加到 stableRoot
- *   -> mutable tail 渲染并写入 activeRoot
- *   流结束 -> flush() -> cancel timers
- *   终态 -> render() 全量替换（由 main.ts 控制）
+ * Flow:
+ *   delta arrives -> session.append(delta) -> scheduleRender()
+ *   throttled render -> parse blocks -> split committed/mutable
+ *   -> new committed blocks rendered and appended to stableRoot
+ *   -> mutable tail rendered and written to activeRoot
+ *   stream ends -> flush() -> cancel timers
+ *   final state -> render() full replacement (controlled by main.ts)
  */
 
 import type MarkdownIt from "markdown-it";
@@ -32,30 +32,30 @@ import {
 } from "./streaming-render-scheduler";
 
 export interface StreamingMarkdownSession {
-  /** 消息 ID */
+  /** Message ID */
   messageId: string;
-  /** 修订号（每次 append 递增，防止旧渲染写入） */
+  /** Revision counter (incremented on each append to prevent stale writes) */
   revision: number;
-  /** 原始 markdown 累积文本 */
+  /** Accumulated raw markdown text */
   raw: string;
-  /** 是否已销毁 */
+  /** Whether destroyed/disposed */
   disposed: boolean;
 
-  /** 追加 delta 文本 */
+  /** Append delta text */
   append(delta: string): void;
-  /** 强制 flush 最后一次渲染 */
+  /** Force flush final render */
   flush(): void;
-  /** 销毁 session，取消所有 pending */
+  /** Destroy session and cancel pending renders */
   dispose(): void;
 }
 
 /**
- * 创建流式 Markdown 渲染会话。
+ * Creates a streaming Markdown rendering session.
  *
- * @param md markdown-it 实例（已配置 KaTeX + 自定义 fence renderer）
- * @param bubble 消息气泡 DOM 元素（session 会在内部创建 stable/active root）
- * @param messageId 消息 ID
- * @param scrollContainer 滚动容器（用于滚动保护），可选
+ * @param md markdown-it instance (configured with KaTeX + custom fence renderer)
+ * @param bubble Message bubble DOM element (session creates stable/active roots inside)
+ * @param messageId Message ID
+ * @param scrollContainer Scroll container (for scroll anchoring), optional
  */
 export function createStreamingMarkdownSession(
   md: MarkdownIt,
@@ -67,15 +67,15 @@ export function createStreamingMarkdownSession(
   let raw = "";
   let disposed = false;
 
-  // 上一次解析的 committed blocks（用于 fingerprint 对比）
+  // Committed blocks from previous parse (for fingerprint comparison)
   let lastCommitted: StreamMarkdownBlock[] = [];
   let lastActiveHtml = "";
   let renderFailureCount = 0;
   let degraded = false;
-  /** committed 部分已渲染的字符 offset（用于降级时避免重复显示） */
+  /** Rendered character offset of committed portion (prevents duplicate display upon fallback) */
   let committedOffset = 0;
 
-  // 创建 DOM 结构
+  // Create DOM structure
   bubble.hidden = false;
   bubble.innerHTML = "";
 
@@ -92,7 +92,7 @@ export function createStreamingMarkdownSession(
   streamRoot.appendChild(activeRoot);
   bubble.appendChild(streamRoot);
 
-  // 滚动保护
+  // Scroll protection
   const isNearBottom = (): boolean => {
     if (!scrollContainer) return true;
     const threshold = 100;
@@ -105,7 +105,7 @@ export function createStreamingMarkdownSession(
     }
   };
 
-  // 调度器
+  // Scheduler
   const scheduler: StreamingRenderScheduler = createStreamingRenderScheduler({
     messageId,
     render: doRender,
@@ -115,23 +115,23 @@ export function createStreamingMarkdownSession(
   function doRender(): void {
     if (disposed) return;
 
-    // 降级模式：整条消息用 textContent，不做 block reconciliation
+    // Degraded mode: entire message rendered as textContent without block reconciliation
     if (degraded) {
-      return; // 终态 render() 会接管
+      return; // Final render() takes over
     }
 
     try {
       const currentRevision = revision;
 
-      // 解析 blocks
+      // Parse blocks
       let blocks: StreamMarkdownBlock[];
       try {
         blocks = parseStreamingBlocks(md, raw);
       } catch (parseErr) {
-      console.error("[streaming-session] parseStreamingBlocks failed:", parseErr);
+        console.error("[streaming-session] parseStreamingBlocks failed:", parseErr);
         renderFailureCount++;
         checkDegraded();
-        // 降级：只更新 activeRoot（不含已 committed 的部分，避免重复）
+        // Fallback: update activeRoot only (excluding committed portions to prevent duplication)
         const activeRaw = raw.slice(committedOffset);
         activeRoot.textContent = activeRaw;
         return;
@@ -139,7 +139,7 @@ export function createStreamingMarkdownSession(
 
       const { committed, mutable } = splitCommittedAndMutable(blocks, 2);
 
-      // 处理新 committed blocks（只追加新增的）
+      // Process newly committed blocks (append new ones only)
       const newCommitted = committed.slice(lastCommitted.length);
       for (const block of newCommitted) {
         const html = renderCommittedBlock(md, block);
@@ -154,14 +154,14 @@ export function createStreamingMarkdownSession(
       }
       lastCommitted = committed;
 
-      // 渲染 mutable tail
+      // Render mutable tail
       const activeHtml = renderMutableTail(md, mutable);
       if (activeHtml !== lastActiveHtml) {
         activeRoot.innerHTML = activeHtml;
         lastActiveHtml = activeHtml;
       }
 
-      // 成功渲染，重置失败计数
+      // Successful render resets failure count
       renderFailureCount = 0;
 
       followScroll();
@@ -170,22 +170,22 @@ export function createStreamingMarkdownSession(
       renderFailureCount++;
       checkDegraded();
 
-      // 降级：只更新 activeRoot（不含已 committed 的部分，避免重复）
+      // Fallback: update activeRoot only
       try {
         const activeRaw = raw.slice(committedOffset);
         activeRoot.textContent = activeRaw;
       } catch {
-        // 最后兜底
+        // Safe catch-all
       }
     }
   }
 
-  /** 检查是否需要进入降级模式（连续 3 次失败） */
+  /** Check whether degraded fallback mode is needed (3 consecutive failures) */
   function checkDegraded(): void {
     if (renderFailureCount >= 3 && !degraded) {
       degraded = true;
-        console.warn("[streaming-session] Rendering failed three times; entering fallback mode");
-      // 清空 stableRoot，用完整 raw 作为 textContent
+      console.warn("[streaming-session] Rendering failed three times; entering fallback mode");
+      // Clear stableRoot and use full raw as textContent
       stableRoot.innerHTML = "";
       activeRoot.textContent = raw;
       committedOffset = 0;

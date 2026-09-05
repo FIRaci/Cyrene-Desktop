@@ -1,36 +1,33 @@
-// ToolContext —— 工具执行时调度层注入的上下文。
-// 让工具能拿到"用户当前问题"，而不是自己去翻消息历史。
-// 地基通用：当前只服务于 read_image（视觉），未来其他工具按需声明 needsContext 接入。
+// ToolContext - Context injected by dispatcher during tool execution.
+// Allows tools to receive "current user query" without parsing message history.
+// Foundation: currently serves read_image (vision); other tools declare needsContext as needed.
 
 import type { ChatMessage } from "./vendors";
 import { ContextRefRegistry } from "./context-ref-registry";
 
 export const contextRefRegistry = new ContextRefRegistry();
 
-/** 工具上下文。userQuery 是当前唯一稳定字段；metadata 留未来扩展（PDF/音频等），现在不填。 */
+/** Tool context. userQuery is currently sole stable field; metadata reserved for extensions (PDF/audio). */
 export interface ToolContext {
-  /** 用户当前问题（最后一条 user 消息文本）。最核心字段。 */
+  /** Current user query (latest user message text). Primary field. */
   userQuery: string;
-  /** 当前聊天会话 ID；需要跨轮隔离状态的工具必须使用该字段。 */
+  /** Current chat session ID; required by tools needing cross-turn isolated state. */
   conversationId?: string;
   /** One Agent execution; resolved-only candidates must not cross this boundary. */
   runId?: string;
   /** Tool Runtime-owned opaque reference registry. */
   contextRefs?: ContextRefRegistry;
-  /** 未来扩展兜底；当前为空对象，不预设字段。遵循"地基通用，上层克制"。 */
+  /** Future extension placeholder; empty object currently. */
   metadata?: Record<string, unknown>;
 }
 
 /**
- * 从对话历史取最后一条 role:"user" 消息的文本，作为工具的用户问题上下文。
+ * Extracts latest role:"user" message text from conversation history as tool query context.
  *
- * 边界规则：
- * - content 是字符串 → 直接用
- * - content 是数组（未来上传图片后的多模态消息）→ 拼接所有 type:"text" 块的文本
- * - 都不是或无 user 消息 → 返回空串
- *
- * 已知边界（不解决）：多轮 function-calling 后用户追问（如"那第二张呢？"），
- * 取到的是追问片段而非原始意图。视觉模型通常仍能结合图片+片段理解，所以不处理。
+ * Boundary rules:
+ * - string content -> use directly
+ * - array content (multimodal messages) -> concatenate text blocks
+ * - neither or missing -> return empty string
  */
 export function extractLastUserQuery(messages: ChatMessage[]): string {
   for (let i = messages.length - 1; i >= 0; i--) {
@@ -38,9 +35,9 @@ export function extractLastUserQuery(messages: ChatMessage[]): string {
     if (m.role !== "user") continue;
     const content = m.content;
     if (typeof content === "string") return content;
-    // 多模态数组：拼 text 块（未来用，当前 content 永远是 string）。
-    // ChatMessage.content 当前类型只有 string，这里用 unknown 中转避免 TS 收窄成 never；
-    // 未来 content 改成 string | ContentBlock[] 后可去掉断言。
+    // Multimodal array: concatenate text blocks.
+    // ChatMessage.content is currently string; unknown bridge avoids TS narrowing to never;
+    // assertion can be removed if content becomes string | ContentBlock[].
     const arr = content as unknown;
     if (Array.isArray(arr)) {
       return (arr as Array<{ type?: string; text?: string }>)

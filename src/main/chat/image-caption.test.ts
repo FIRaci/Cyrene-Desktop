@@ -20,12 +20,12 @@ describe("validateCaptionImagePath", () => {
     expect(validateCaptionImagePath(123)).toEqual({ ok: false, error: "filePath must be a string" });
   });
 
-  it("拒绝不存在的图片文件", () => {
+  it("rejects non-existent image file", () => {
     const missing = path.join(os.tmpdir(), "cyrene-missing-image.png");
     expect(validateCaptionImagePath(missing)).toEqual({ ok: false, error: "File does not exist" });
   });
 
-  it("拒绝非图片扩展名", () => {
+  it("rejects non-image extensions", () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "cyrene-image-caption-"));
     try {
       const fp = path.join(tmpDir, "note.txt");
@@ -36,7 +36,7 @@ describe("validateCaptionImagePath", () => {
     }
   });
 
-  it("拒绝超过大小限制的图片", () => {
+  it("rejects images exceeding size limit", () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "cyrene-image-caption-"));
     try {
       const fp = path.join(tmpDir, "large.png");
@@ -47,7 +47,7 @@ describe("validateCaptionImagePath", () => {
     }
   });
 
-  it("返回合法图片的 mime 和 buffer", () => {
+  it("returns mime and buffer for valid images", () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "cyrene-image-caption-"));
     try {
       const fp = path.join(tmpDir, "ok.png");

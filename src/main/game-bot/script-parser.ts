@@ -1,12 +1,12 @@
-// script-parser —— YAML 文本 → GameRecipe 解析 + 校验。
-// 纯函数模块，不依赖 electron，便于单测。校验失败返回 {ok:false,error}。
+// script-parser — YAML text -> GameRecipe parsing + validation.
+// Pure function module, independent of electron. Returns {ok: false, error} on validation failure.
 
 import * as yaml from "js-yaml";
 import type { GameRecipe, Step } from "./types";
 
 export type ParseResult = { ok: true; recipe: GameRecipe } | { ok: false; error: string };
 
-/** 时长 → 毫秒：数字当 ms；"60s"→60000；"250ms"→250；"500"→500。非法抛错。 */
+/** Duration -> milliseconds: number as ms; "60s"->60000; "250ms"->250; "500"->500. Throws on invalid format. */
 function parseDuration(val: unknown, field: string): number {
   if (typeof val === "number" && Number.isFinite(val)) return Math.round(val);
   if (typeof val === "string") {
@@ -36,8 +36,8 @@ function optNum(v: unknown): number | undefined {
 }
 
 /**
- * 解析单个步骤（YAML 单键对象 {opName: params}）→ Step。校验失败抛错。
- * branch.then/else 递归调用 parseStep。
+ * Parses single step (YAML single-key object {opName: params}) -> Step. Throws on validation failure.
+ * branch.then/else recursively calls parseStep.
  */
 function parseStep(raw: unknown): Step {
   if (!raw || typeof raw !== "object") throw new Error("Each step must be an object");

@@ -6,8 +6,8 @@ import { describe, expect, it } from "vitest";
 const HAN = /[\u3400-\u9fff\uf900-\ufaff]/u;
 const FILES = ["build-options.ts", "environment.ts", "context-manager.ts", "cyrene-agent.ts"];
 const LEGACY_CONTEXT_MARKERS = new Set([
-  "【本轮文件】", "【文档内容】", "【图片视觉信息】", "【图片附件】",
-  "\n\n【本轮文件】", "\n\n【文档内容】", "\n\n【图片视觉信息】", "\n\n【图片附件】",
+  "\u3010\u672c\u8f6e\u6587\u4ef6\u3011", "\u3010\u6587\u6863\u5185\u5bb9\u3011", "\u3010\u56fe\u7247\u89c6\u89c9\u4fe1\u606f\u3011", "\u3010\u56fe\u7247\u9644\u4ef6\u3011",
+  "\n\n\u3010\u672c\u8f6e\u6587\u4ef6\u3011", "\n\n\u3010\u6587\u6863\u5185\u5bb9\u3011", "\n\n\u3010\u56fe\u7247\u89c6\u89c9\u4fe1\u606f\u3011", "\n\n\u3010\u56fe\u7247\u9644\u4ef6\u3011",
 ]);
 
 describe("core orchestrator English runtime contract", () => {
@@ -21,7 +21,7 @@ describe("core orchestrator English runtime contract", () => {
         if (ts.isStringLiteralLike(node) || ts.isTemplateHead(node) || ts.isTemplateMiddle(node) || ts.isTemplateTail(node)) {
           const text = node.text;
           const isLegacyInputAlias = relative === "build-options.ts" && LEGACY_CONTEXT_MARKERS.has(text);
-          const isCanonicalFeelingKey = relative === "build-options.ts" && text === "平静";
+          const isCanonicalFeelingKey = relative === "build-options.ts" && text === "\u5e73\u9759";
           if (HAN.test(text) && !isLegacyInputAlias && !isCanonicalFeelingKey) {
             const line = tree.getLineAndCharacterOfPosition(node.getStart(tree)).line + 1;
             violations.push(`${relative}:${line}: ${JSON.stringify(text)}`);

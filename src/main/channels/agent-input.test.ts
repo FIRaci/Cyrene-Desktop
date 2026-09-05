@@ -8,9 +8,9 @@ describe("buildChannelAttachmentInputs", () => {
       channel: "wechat",
       senderId: "wx-user-1",
       chatId: "wx-user-1",
-      text: "看看这些",
+      text: "Look at these",
       attachments: [
-        { kind: "image", filePath: "C:/cache/pic.png", mime: "image/png", caption: "微信图片" },
+        { kind: "image", filePath: "C:/cache/pic.png", mime: "image/png", caption: "WeChat image" },
         { kind: "file", filePath: "C:/cache/report.pdf", mime: "application/pdf", caption: "report.pdf" },
       ],
       at: new Date(0),
@@ -21,7 +21,7 @@ describe("buildChannelAttachmentInputs", () => {
         { name: "report.pdf", text: "The user sent a file through WeChat: C:/cache/report.pdf" },
       ],
       imageAttachments: [
-        { name: "微信图片", filePath: "C:/cache/pic.png", mime: "image/png" },
+        { name: "WeChat image", filePath: "C:/cache/pic.png", mime: "image/png" },
       ],
     });
   });
@@ -31,21 +31,21 @@ describe("buildChannelAttachmentInputs", () => {
       channel: "wechat",
       senderId: "wx-user-1",
       chatId: "wx-user-1",
-      text: "看看这个",
+      text: "Look at this",
       attachments: [
-        { kind: "image", filePath: "C:/cache/pic.png", mime: "image/png", caption: "微信图片" },
+        { kind: "image", filePath: "C:/cache/pic.png", mime: "image/png", caption: "WeChat image" },
       ],
       at: new Date(0),
     };
 
     await expect(buildChannelAttachmentInputs(msg, {
       imageMode: "caption",
-      captionImage: async () => ({ ok: true, caption: "画面里是一张聊天截图" }),
+      captionImage: async () => ({ ok: true, caption: "The screen shows a chat screenshot" }),
     })).resolves.toEqual({
       attachments: [
         {
-          name: "微信图片",
-          text: "[Image context]\nThe user sent an image through WeChat: 微信图片\n画面里是一张聊天截图",
+          name: "WeChat image",
+          text: "[Image context]\nThe user sent an image through WeChat: WeChat image\nThe screen shows a chat screenshot",
         },
       ],
       imageAttachments: undefined,

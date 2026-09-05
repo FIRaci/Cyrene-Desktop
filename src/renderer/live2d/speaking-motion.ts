@@ -41,7 +41,7 @@ export class SpeakingMotionController {
 
   private triggerSwing(): void {
     // Raw model expression IDs are internal wiring and must match model3.json exactly.
-    const expression = this.nextSide === "left" ? "拽秋千1" : "拽秋千2";
+    const expression = this.nextSide === "left" ? "\u62fd\u79cb\u53431" : "\u62fd\u79cb\u53432";
     this.nextSide = this.nextSide === "left" ? "right" : "left";
     void this.applyExpression(expression);
     if (this.resetId !== null) window.clearTimeout(this.resetId);
@@ -52,7 +52,7 @@ export class SpeakingMotionController {
   }
 
   private async resetSwing(): Promise<void> {
-    await this.applyExpression("拽秋千回正");
+    await this.applyExpression("\u62fd\u79cb\u5343\u56de\u6b63");
   }
 
   private async applyExpression(name: string): Promise<void> {

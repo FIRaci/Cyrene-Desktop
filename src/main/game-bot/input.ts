@@ -1,12 +1,12 @@
-// input —— 键鼠控制（@nut-tree-fork/nut-js）。
-// 高风险操作：真实控制用户鼠标键盘。仅供 game-bot 引擎调用，走权限网关。
+// input — keyboard and mouse control (@nut-tree-fork/nut-js).
+// High-risk operation: controls user mouse and keyboard. Used solely by game-bot engine behind permission gateway.
 //
-// 注意：nut.js 是 native 模块，Electron 需 electron-rebuild 重编译。
-// 若启动报 native 模块错误，备选 koffi + user32 SendInput（见 plan Task 6/13 验证点）。
+// Note: nut.js is a native module requiring electron-rebuild.
+// If native module errors occur, koffi + user32 SendInput serves as fallback.
 
 import { mouse, Point, keyboard, Key } from "@nut-tree-fork/nut-js";
 
-/** 特殊键名 → nut.js Key。单字母（A-Z）走动态解析。 */
+/** Special key name -> nut.js Key. Single letters (A-Z) parsed dynamically. */
 const KEY_MAP: Record<string, Key> = {
   F1: Key.F1, F2: Key.F2, F3: Key.F3, F4: Key.F4, F5: Key.F5, F6: Key.F6,
   F7: Key.F7, F8: Key.F8, F9: Key.F9, F10: Key.F10, F11: Key.F11, F12: Key.F12,
@@ -16,7 +16,7 @@ const KEY_MAP: Record<string, Key> = {
   Win: Key.LeftSuper, Meta: Key.LeftSuper,
 };
 
-/** 键名 → Key。支持 F1-12 / Escape / Enter / 修饰键 / 单字母 A-Z。未知返回 null。 */
+/** Key name -> Key. Supports F1-12 / Escape / Enter / modifiers / letters A-Z. Returns null if unknown. */
 function resolveKey(name: string): Key | null {
   const upper = name.trim();
   if (KEY_MAP[upper] !== undefined) return KEY_MAP[upper];
@@ -27,18 +27,18 @@ function resolveKey(name: string): Key | null {
   return null;
 }
 
-/** 移动到 (x,y) 并左键单击一次。 */
+/** Moves to (x,y) and clicks left mouse button once. */
 export async function click(x: number, y: number): Promise<void> {
   await mouse.setPosition(new Point(x, y));
   await mouse.leftClick();
 }
 
-/** 点击屏幕中心。 */
+/** Clicks screen center. */
 export async function clickCenter(width: number, height: number): Promise<void> {
   await click(Math.floor(width / 2), Math.floor(height / 2));
 }
 
-/** 按组合键。combo 形如 "F4" / "Alt+F4" / "Escape" / "V"。 */
+/** Presses key combo. combo shaped like "F4" / "Alt+F4" / "Escape" / "V". */
 export async function keyPress(combo: string): Promise<void> {
   const parts = combo.split("+").map(s => s.trim());
   const keys = parts.map(resolveKey).filter((k): k is Key => k !== null);

@@ -84,8 +84,8 @@ describe("turn document imports", () => {
 
 describe("user memory retrieval", () => {
   it("creates a distinct vector for every L2 even when contents are identical", async () => {
-    const firstId = await addL2MemoryVector("用户喜欢香菇", "l2_first", { source: "test" });
-    const secondId = await addL2MemoryVector("用户喜欢香菇", "l2_second", { source: "test" });
+    const firstId = await addL2MemoryVector("User likes mushrooms", "l2_first", { source: "test" });
+    const secondId = await addL2MemoryVector("User likes mushrooms", "l2_second", { source: "test" });
 
     expect(secondId).not.toBe(firstId);
     expect(getEntriesBySource("user_memory").map((entry) => ({ id: entry.id, l2Id: entry.metadata?.l2Id })))
@@ -96,8 +96,8 @@ describe("user memory retrieval", () => {
   });
 
   it("deletes only the requested user memory vectors", async () => {
-    const firstId = await addL2MemoryVector("第一条", "l2_first");
-    const secondId = await addL2MemoryVector("第二条", "l2_second");
+    const firstId = await addL2MemoryVector("First entry", "l2_first");
+    const secondId = await addL2MemoryVector("Second entry", "l2_second");
 
     expect(deleteUserMemoryVectors([firstId])).toBe(1);
     expect(getEntriesBySource("user_memory").map((entry) => entry.id)).toEqual([secondId]);

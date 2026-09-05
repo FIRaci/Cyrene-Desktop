@@ -95,6 +95,8 @@ models/Xenova/
 **/*.onnx_data
 **/*.bin
 **/*.safetensors
+**/*.ckpt
+**/*.pth
 
 # Local opener voice pack files. Keep the directory and installation note tracked.
 opener-pack/*

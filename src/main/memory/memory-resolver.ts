@@ -184,14 +184,14 @@ export function buildResolverMessages(payload: ResolverPayload): Array<{ role: "
     `- quote: ${item.quoteSnippet}\n  conversationId: ${item.conversationId ?? "unknown"}\n  sourceStatus: ${item.sourceStatus}`
   )).join("\n")
   const userPrompt = [
-    "请判断以下两条用户记忆的关系，并只输出 JSON。",
+    "Please determine the relationship between the following two user memories, and output JSON only.",
     "",
-    "旧记忆：",
+    "Historical memory:",
     `summary: ${payload.oldMemory.content}`,
     "evidence:",
     evidenceLines(payload.oldEvidence) || "- none",
     "",
-    "新记忆：",
+    "New memory:",
     `summary: ${payload.newMemory.content}`,
     "evidence:",
     evidenceLines(payload.newEvidence) || "- none",
@@ -199,12 +199,12 @@ export function buildResolverMessages(payload: ResolverPayload): Array<{ role: "
     `conflictScore: ${payload.conflictScore}`,
     `scoringSignals: ${JSON.stringify(payload.scoringSignals ?? {})}`,
     "",
-    "JSON 格式：",
-    '{"resolutionType":"unrelated|context_difference|preference_evolution|direct_conflict|uncertain","resolvedSummary":"可选","currentSummary":"可选","historicalSummary":"可选","reason":"原因","confidence":0.0,"actions":{"createResolvedMemory":false,"oldMemoryStatus":"active|aging|archived|superseded|merged","newMemoryStatus":"active|aging|archived|superseded|merged","shouldUpdateCoreMemory":false,"shouldAskUser":false,"clarificationNeeded":false}}',
+    "JSON format:",
+    '{"resolutionType":"unrelated|context_difference|preference_evolution|direct_conflict|uncertain","resolvedSummary":"optional","currentSummary":"optional","historicalSummary":"optional","reason":"explanation","confidence":0.0,"actions":{"createResolvedMemory":false,"oldMemoryStatus":"active|aging|archived|superseded|merged","newMemoryStatus":"active|aging|archived|superseded|merged","shouldUpdateCoreMemory":false,"shouldAskUser":false,"clarificationNeeded":false}}',
   ].join("\n")
 
   return [
-    { role: "system", content: "你是谨慎的用户记忆冲突 Resolver。你只根据 summary 和 evidence 判断，不要编造事实，只输出 JSON。" },
+    { role: "system", content: "You are a prudent user memory conflict Resolver. Judge only based on summary and evidence without hallucinating facts. Output JSON only." },
     { role: "user", content: userPrompt },
   ]
 }

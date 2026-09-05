@@ -133,7 +133,7 @@ class MemoryStoreManager {
       try {
         backupMemoryFile(filePath)
       } catch {
-        // 如果连备份也失败，仍然生成干净默认文件，避免主流程被记忆文件阻塞。
+        // If even backup fails, still generate clean default file to avoid blocking main flow.
       }
       this.cache = cloneDefaultStore()
       await this.save(this.cache)
@@ -398,7 +398,7 @@ class MemoryStoreManager {
     }
     if (!store.reflectionLogs) store.reflectionLogs = []
     store.reflectionLogs.push(entry)
-    // 最多保留 50 条日志，防止文件膨胀
+    // Retain at most 50 logs to prevent file bloat
     if (store.reflectionLogs.length > 50) {
       store.reflectionLogs = store.reflectionLogs.slice(-50)
     }
@@ -617,7 +617,7 @@ class MemoryStoreManager {
     return log
   }
 
-  /** 批量更新 L2 条目的 status */
+  /** Batch update status of L2 items */
   async updateL2Status(ids: string[], status: L2Memory["status"]): Promise<void> {
     const store = await this.load()
     for (const mem of store.l2) {
@@ -668,7 +668,7 @@ class MemoryStoreManager {
     return changed
   }
 
-  /** 批量插入新的 L2 条目（压缩总结用） */
+  /** Batch insert new L2 items (used for compression summaries) */
   async addL2Batch(inputs: L2Input[]): Promise<L2Memory[]> {
     const store = await this.load()
     const results: L2Memory[] = []

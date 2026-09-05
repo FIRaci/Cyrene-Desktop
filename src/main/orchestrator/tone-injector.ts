@@ -1,7 +1,7 @@
-// 语气注入器 —— 硬约束：embedding 匹配场景，强制注入语气规则到 system prompt。
-// 不依赖 LLM 主动调用 invoke_skill，不需要模型判断是否需要查风格。
-// 注入的语气规则以「必须遵守」的指令形式出现在 system prompt 末尾。
-// 场景样本仅作参考，模型按昔涟的语气表达相同意思。
+// Tone injector - Hard constraint: matches scene via embedding, injecting tone rules into system prompt.
+// Does not depend on LLM actively calling invoke_skill; does not require model to deliberate on style lookup.
+// Injected tone rules appear at the end of system prompt as mandatory instructions.
+// Scene samples serve as reference only; model expresses same intent in Cyrene's persona.
 
 import * as fs from "fs";
 import * as path from "path";
@@ -9,10 +9,10 @@ import { app } from "electron";
 import { matchScene, type SceneId, type SceneIndex } from "../scene-embedder";
 import { type EmbeddingProvider } from "../rag/embedding";
 
-/** 场景匹配阈值——贴着 farewell 最低分 0.722 收紧，所有正确命中都能过。 */
+/** Scene matching threshold -- tightened against farewell lower bound of 0.722; all correct hits pass. */
 const SCENE_MATCH_THRESHOLD = 0.72;
 
-/** 每个场景的展示名（注入 prompt 时用）。 */
+/** Display name for each scene (used in prompt injection). */
 const SCENE_NAMES: Record<string, string> = {
   greeting: "greeting or meeting",
   comfort: "comfort and companionship",
@@ -23,7 +23,7 @@ const SCENE_NAMES: Record<string, string> = {
   daily: "casual conversation",
 };
 
-// 通用语气规则（无论哪个场景都注入）—— 从 prompts/tone-rules.md 读取
+// Common tone rules (injected regardless of scene) -- loaded from prompts/tone-rules.md
 const DEFAULT_RULES = `## Language and tone
 
 - Respond only in natural English, including speech, emotes, and status text.
@@ -40,13 +40,13 @@ const DEFAULT_RULES = `## Language and tone
 - Stop when a sentence already conveys the meaning.
 - Never reveal private chain-of-thought; provide only concise activity status when needed.`;
 
-/** 从 prompts/tone-rules.md 加载语气规则，文件不存在时用内置默认值。 */
+/** Load tone rules from prompts/tone-rules.md; uses built-in default when file is absent. */
 function loadToneRules(): string {
   try {
     const rulesPath = path.join(app.getAppPath(), "prompts", "tone-rules.md");
     if (fs.existsSync(rulesPath)) {
       const content = fs.readFileSync(rulesPath, "utf8").trim();
-      // 去掉 frontmatter（如果有）
+      // Strip frontmatter if present
       const body = content.startsWith("---")
         ? content.replace(/^---[\s\S]*?---\n?/, "").trim()
         : content;
@@ -60,7 +60,7 @@ function loadToneRules(): string {
   return "## Tone rules\n\n" + DEFAULT_RULES;
 }
 
-/** 加载场景样本文件中的台词。 */
+/** Load dialogue lines from scene sample files. */
 function loadSceneSamples(scene: SceneId): string {
   if (!scene) return "";
   try {
@@ -73,7 +73,7 @@ function loadSceneSamples(scene: SceneId): string {
   }
 }
 
-/** 把样本台词加工成参考指令（非强制引用，而是参照语气）。 */
+/** Process sample dialogue into reference instructions (tone guide, not mandatory quote). */
 function buildSampleInstruction(samples: string, scene: SceneId): string {
   if (!samples) return "";
   const lines = samples
@@ -87,13 +87,13 @@ function buildSampleInstruction(samples: string, scene: SceneId): string {
 }
 
 /**
- * 主入口：构建语气注入段。
+ * Main entry: build tone injection block.
  *
- * @param userInput 用户本轮输入
- * @param recentMessages 最近几轮消息（{ role, content }[]），用于拼上下文（方案 A）
+ * @param userInput User input for this turn
+ * @param recentMessages Recent messages ({ role, content }[]) for context concatenation
  * @param provider embedding provider
- * @param sceneIndex 启动时建好的场景索引
- * @returns 注入 system prompt 末尾的不可选指令段（空串表示无匹配场景）
+ * @param sceneIndex Prebuilt scene index from startup
+ * @returns Mandatory instruction block appended to system prompt (empty string if no scene matched)
  */
 export async function buildToneInjection(
   userInput: string,
@@ -101,7 +101,7 @@ export async function buildToneInjection(
   provider: EmbeddingProvider,
   sceneIndex: SceneIndex,
 ): Promise<string> {
-  // embedding 匹配场景（拼最近 3 轮上下文）
+  // Embedding matches scene (concatenates recent 3 turns of context)
   const match = await matchScene(
     userInput,
     provider,
@@ -111,7 +111,7 @@ export async function buildToneInjection(
   );
   const scene: SceneId = match?.scene ?? "";
   if (!scene) {
-    // 没命中任何场景，只注入通用语气规则
+    // No scene hit, inject generic tone rules only
     return loadToneRules();
   }
 

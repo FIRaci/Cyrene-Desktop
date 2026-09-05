@@ -1,4 +1,4 @@
-// MCP Manager — 管理多个 MCP server 的生命周期、配置持久化、启动自动连接
+// MCP Manager: manages lifecycle, configuration persistence, and auto-connection for MCP servers
 import * as fs from "fs";
 import * as path from "path";
 import { app } from "electron";
@@ -16,12 +16,12 @@ function loadConfigs(): McpServerConfig[] {
     const raw = fs.readFileSync(getConfigPath(), "utf-8");
     const configs = JSON.parse(raw);
     if (Array.isArray(configs)) {
-      console.log(LOG_PREFIX, "加载了 " + configs.length + " 个 MCP server 配置");
+      console.log(LOG_PREFIX, "Loaded " + configs.length + " MCP server configs");
       return configs;
     }
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
-      console.error(LOG_PREFIX, "读取配置失败:", (err as Error).message);
+      console.error(LOG_PREFIX, "Failed to read configs:", (err as Error).message);
     }
   }
   return [];
@@ -34,17 +34,17 @@ function saveConfigs(configs: McpServerConfig[]): void {
       fs.mkdirSync(dir, { recursive: true });
     }
     fs.writeFileSync(getConfigPath(), JSON.stringify(configs, null, 2), "utf-8");
-    console.log(LOG_PREFIX, "已保存 " + configs.length + " 个 MCP server 配置");
+    console.log(LOG_PREFIX, "Saved " + configs.length + " MCP server configs");
   } catch (err) {
-    console.error(LOG_PREFIX, "保存配置失败:", (err as Error).message);
+    console.error(LOG_PREFIX, "Failed to save configs:", (err as Error).message);
   }
 }
 
 /**
- * 一次性清理已下架的内置 MCP server 配置（id 白名单模式）。
- * 幂等：条目不存在时不报错、不写盘。
- * 只删除传入的固定 id，不会误删用户自定义 MCP。
- * 返回被实际移除的 id 列表（用于日志）。
+ * Clean up decommissioned builtin MCP server configs.
+ * Idempotent: does not write to disk or error if entries do not exist.
+ * Only deletes specified fixed IDs, never touches user custom MCPs.
+ * Returns list of removed IDs for logging.
  */
 export async function pruneMcpServersByIds(serverIds: string[]): Promise<string[]> {
   const configs = loadConfigs();
@@ -59,7 +59,7 @@ export async function pruneMcpServersByIds(serverIds: string[]): Promise<string[
   if (removed.length > 0) {
     saveConfigs(kept);
   }
-  // 如果有已连接的实例也断开（启动期通常还没连，但如果早期注册过会存在）
+  // Disconnect if already connected
   for (const id of removed) {
     try {
       await disconnectMcpServer(id);
@@ -71,7 +71,7 @@ export async function pruneMcpServersByIds(serverIds: string[]): Promise<string[
 }
 
 /**
- * 启动时自动连接所有已保存的 MCP server。
+ * Automatically connect all saved MCP servers on startup.
  */
 export async function initMcpManager(): Promise<void> {
   console.log(LOG_PREFIX, "Initializing MCP Manager...");
@@ -99,7 +99,7 @@ export async function initMcpManager(): Promise<void> {
 }
 
 /**
- * 添加一个新的 MCP server 配置，连接并持久化。
+ * Add a new MCP server configuration, connect and persist.
  */
 export async function addMcpServer(config: McpServerConfig): Promise<{
   ok: boolean;
@@ -108,7 +108,7 @@ export async function addMcpServer(config: McpServerConfig): Promise<{
 }> {
   console.log(LOG_PREFIX, "Adding MCP server:", config.name);
 
-  // 检查是否已存在
+  // Check if already exists
   const configs = loadConfigs();
   if (configs.some(c => c.id === config.id)) {
     return { ok: false, error: "MCP server with identical ID already exists: " + config.id };
@@ -126,7 +126,7 @@ export async function addMcpServer(config: McpServerConfig): Promise<{
 }
 
 /**
- * 移除一个 MCP server，断开连接并持久化。
+ * Remove an MCP server, disconnect and persist.
  */
 export async function removeMcpServer(serverId: string): Promise<{ ok: boolean; error?: string }> {
   console.log(LOG_PREFIX, "Removing MCP server:", serverId);
@@ -142,7 +142,7 @@ export async function removeMcpServer(serverId: string): Promise<{ ok: boolean; 
 }
 
 /**
- * 获取所有 MCP server 的状态列表。
+ * Get status list of all MCP servers.
  */
 export function listMcpServers(): Array<{
   id: string;

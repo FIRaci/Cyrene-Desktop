@@ -1,13 +1,13 @@
 /**
- * think-filter 单元测试
+ * think-filter unit tests
  *
- * 覆盖 GPT 建议的 12 条测试场景中的核心路径。
+ * Core test scenarios covering streaming think filter.
  */
 
 import { describe, expect, test } from "vitest";
 import { createThinkFilter, stripThinkBlocks, type ThinkFilterMode } from "./think-filter";
 
-/** 辅助：把字符串拆成单字符 chunk 喂给 filter，模拟流式 */
+/** Helper: feeds string char-by-char to simulate streaming */
 function feedByChar(filter: ReturnType<typeof createThinkFilter>, text: string): string {
   let result = "";
   for (const char of text) {
@@ -17,7 +17,7 @@ function feedByChar(filter: ReturnType<typeof createThinkFilter>, text: string):
   return result;
 }
 
-/** 辅助：把字符串按指定大小拆 chunk */
+/** Helper: feeds string in chunks of specified size */
 function feedByChunks(filter: ReturnType<typeof createThinkFilter>, text: string, chunkSize: number): string {
   let result = "";
   for (let i = 0; i < text.length; i += chunkSize) {
@@ -27,77 +27,77 @@ function feedByChunks(filter: ReturnType<typeof createThinkFilter>, text: string
   return result;
 }
 
-describe("think-filter - leading-only mode (默认)", () => {
+describe("think-filter - leading-only mode (default)", () => {
   const mode: ThinkFilterMode = "leading-only";
 
-  test("消息以 <think> 开头：过滤 think 块，保留后续正文", () => {
+  test("message starts with <think>: filters think block, keeps subsequent body", () => {
     const filter = createThinkFilter(mode);
-    const result = feedByChar(filter, "<think>这是思考</think>这是回答");
-    expect(result).toBe("这是回答");
+    const result = feedByChar(filter, "<think>thinking process</think>this is the answer");
+    expect(result).toBe("this is the answer");
   });
 
-  test("消息不以 <think> 开头：原样透传", () => {
+  test("message does not start with <think>: passes through as-is", () => {
     const filter = createThinkFilter(mode);
-    const result = feedByChar(filter, "这是普通回答");
-    expect(result).toBe("这是普通回答");
+    const result = feedByChar(filter, "this is a normal answer");
+    expect(result).toBe("this is a normal answer");
   });
 
-  test("正文讨论 <think> 标签时不误删", () => {
+  test("does not accidentally strip <think> tag mentioned in text", () => {
     const filter = createThinkFilter(mode);
-    const result = feedByChar(filter, "这个模型会输出 `<think>...</think>` 标签。");
-    expect(result).toBe("这个模型会输出 `<think>...</think>` 标签。");
+    const result = feedByChar(filter, "This model outputs `<think>...</think>` tags.");
+    expect(result).toBe("This model outputs `<think>...</think>` tags.");
   });
 
-  test("消息以空白 + <think> 开头：仍过滤（保留前导空白）", () => {
+  test("message starts with whitespace + <think>: still filters (preserves leading whitespace)", () => {
     const filter = createThinkFilter(mode);
-    const result = feedByChar(filter, "\n\n<think>思考</think>回答");
-    expect(result).toBe("\n\n回答");
+    const result = feedByChar(filter, "\n\n<think>thinking</think>answer");
+    expect(result).toBe("\n\nanswer");
   });
 
-  test("多个 <think> 块（开头模式触发后全部过滤）", () => {
+  test("multiple <think> blocks (all filtered once leading mode triggers)", () => {
     const filter = createThinkFilter(mode);
-    const result = feedByChar(filter, "<think>思考1</think>回答1<think>思考2</think>回答2");
-    expect(result).toBe("回答1回答2");
+    const result = feedByChar(filter, "<think>thought 1</think>answer 1<think>thought 2</think>answer 2");
+    expect(result).toBe("answer 1answer 2");
   });
 
-  test("跨 chunk 拆分 <think> 标签", () => {
+  test("<think> tag split across chunks", () => {
     const filter = createThinkFilter(mode);
-    const result = feedByChunks(filter, "<think>思考</think>回答", 3);
-    expect(result).toBe("回答");
+    const result = feedByChunks(filter, "<think>thinking</think>answer", 3);
+    expect(result).toBe("answer");
   });
 
-  test("逐字符拆分 <think> 标签", () => {
+  test("<think> tag split char by char", () => {
     const filter = createThinkFilter(mode);
     const result = feedByChar(filter, "<think>abc</think>def");
     expect(result).toBe("def");
   });
 
-  test("同一 chunk 同时包含思考和回答", () => {
+  test("single chunk containing both thinking and answer", () => {
     const filter = createThinkFilter(mode);
-    const pushed = filter.push("<think>思考</think>回答");
+    const pushed = filter.push("<think>thinking</think>answer");
     const flushed = filter.flush();
-    expect(pushed + flushed).toBe("回答");
+    expect(pushed + flushed).toBe("answer");
   });
 
-  test("<think> 没有正常闭合：丢弃后续内容", () => {
+  test("unclosed <think>: discard subsequent content", () => {
     const filter = createThinkFilter(mode);
-    const result = feedByChar(filter, "<think>未闭合的思考");
+    const result = feedByChar(filter, "<think>unclosed thinking");
     expect(result).toBe("");
   });
 
-  test("空消息", () => {
+  test("empty message", () => {
     const filter = createThinkFilter(mode);
     expect(filter.push("")).toBe("");
     expect(filter.flush()).toBe("");
   });
 
-  test("纯空白消息", () => {
+  test("whitespace-only message", () => {
     const filter = createThinkFilter(mode);
     const result = feedByChar(filter, "   \n\n  ");
     expect(result).toBe("   \n\n  ");
   });
 
-  test("以 < 但不是 <think> 开头：原样透传", () => {
+  test("starts with < but not <think>: passes through as-is", () => {
     const filter = createThinkFilter(mode);
     const result = feedByChar(filter, "<div>hello</div>");
     expect(result).toBe("<div>hello</div>");
@@ -107,105 +107,115 @@ describe("think-filter - leading-only mode (默认)", () => {
 describe("think-filter - strict mode", () => {
   const mode: ThinkFilterMode = "strict";
 
-  test("过滤全文所有 <think> 块", () => {
+  test("filters all <think> blocks in full text", () => {
     const filter = createThinkFilter(mode);
-    const result = feedByChar(filter, "前面<think>思考</think>中间<think>更多</think>后面");
-    expect(result).toBe("前面中间后面");
+    const result = feedByChar(filter, "prefix<think>thought</think>mid<think>more</think>suffix");
+    expect(result).toBe("prefixmidsuffix");
   });
 
-  test("不以 <think> 开头也过滤", () => {
+  test("filters even when not starting with <think>", () => {
     const filter = createThinkFilter(mode);
-    const result = feedByChar(filter, "回答<think>思考</think>");
-    expect(result).toBe("回答");
+    const result = feedByChar(filter, "answer<think>thought</think>");
+    expect(result).toBe("answer");
   });
 
-  test("正文讨论 <think> 标签时也会被过滤（strict 特性）", () => {
+  test("strips <think> tag mentioned in body (strict feature)", () => {
     const filter = createThinkFilter(mode);
-    const result = feedByChar(filter, "这个模型会输出 <think>xxx</think> 标签");
-    expect(result).toBe("这个模型会输出  标签");
+    const result = feedByChar(filter, "this model outputs <think>xxx</think> tags");
+    expect(result).toBe("this model outputs  tags");
   });
 });
 
 describe("think-filter - disabled mode", () => {
   const mode: ThinkFilterMode = "disabled";
 
-  test("原样透传", () => {
+  test("passes through as-is", () => {
     const filter = createThinkFilter(mode);
-    const result = feedByChar(filter, "<think>思考</think>回答");
-    expect(result).toBe("<think>思考</think>回答");
+    const result = feedByChar(filter, "<think>thinking</think>answer");
+    expect(result).toBe("<think>thinking</think>answer");
   });
 });
 
-describe("think-filter - FC 循环场景", () => {
-  test("模拟两次 LLM 调用：第一次 think 未闭合不影响第二次", () => {
-    // 第一次消息（未闭合 think）
+describe("think-filter - FC loop scenarios", () => {
+  test("two LLM calls: unclosed think in first call does not affect second", () => {
+    // First message (unclosed think)
     const filter1 = createThinkFilter("leading-only");
-    const result1 = feedByChar(filter1, "<think>我要调用工具");
-    expect(result1).toBe(""); // think 内容被过滤
+    const result1 = feedByChar(filter1, "<think>I want to call a tool");
+    expect(result1).toBe(""); // think content filtered
 
-    // 第二次消息（新的 filter，独立状态）
+    // Second message (new filter, independent state)
     const filter2 = createThinkFilter("leading-only");
-    const result2 = feedByChar(filter2, "已经向网易云发送播放请求。");
-    expect(result2).toBe("已经向网易云发送播放请求。");
+    const result2 = feedByChar(filter2, "Playback request dispatched.");
+    expect(result2).toBe("Playback request dispatched.");
   });
 
-  test("工具调用后第二次输出仍能正常显示", () => {
+  test("second output displays normally after tool call", () => {
     const filter = createThinkFilter("leading-only");
-    // 第一次 LLM 输出
-    const r1 = filter.push("<think>调用工具</think>");
+    // First LLM output
+    const r1 = filter.push("<think>call tool</think>");
     filter.flush();
-    // 模拟新的 TEXT_MESSAGE_START 创建新 filter
+    // Simulate new filter for TEXT_MESSAGE_START
     const filter2 = createThinkFilter("leading-only");
-    const r2 = feedByChar(filter2, "工具执行完成，这是最终回答。");
-    expect(r2).toBe("工具执行完成，这是最终回答。");
+    const r2 = feedByChar(filter2, "Tool execution completed, here is final answer.");
+    expect(r2).toBe("Tool execution completed, here is final answer.");
   });
 });
 
-describe("think-filter - 边界情况", () => {
-  test("空 delta 不产生输出", () => {
+describe("think-filter - edge cases", () => {
+  test("empty delta produces no output", () => {
     const filter = createThinkFilter("leading-only");
     expect(filter.push("")).toBe("");
     expect(filter.push("")).toBe("");
   });
 
-  test("flush 在 passthrough 态返回空", () => {
+  test("flush in passthrough state returns empty", () => {
     const filter = createThinkFilter("leading-only");
-    filter.push("普通文本");
+    filter.push("normal text");
     expect(filter.flush()).toBe("");
   });
 
-  test("flush 在 buffering 态返回全部缓冲", () => {
+  test("flush in buffering state returns full buffer", () => {
     const filter = createThinkFilter("leading-only");
-    filter.push("<thi"); // 不够 7 字符，还在 buffering
+    filter.push("<thi"); // under 7 chars, still buffering
     const result = filter.flush();
     expect(result).toBe("<thi");
   });
 
-  test("大小写不敏感", () => {
+  test("case insensitive", () => {
     const filter = createThinkFilter("leading-only");
-    const result = feedByChar(filter, "<THINK>思考</THINK>回答");
-    expect(result).toBe("回答");
+    const result = feedByChar(filter, "<THINK>thinking</THINK>answer");
+    expect(result).toBe("answer");
+  });
+
+  test("onThinkChunk receives thinking delta chunks while streaming", () => {
+    let capturedThinking = "";
+    const filter = createThinkFilter("leading-only", (chunk) => {
+      capturedThinking += chunk;
+    });
+    const result = feedByChunks(filter, "<think>pondering the secrets of the universe</think>here is the truth", 5);
+    expect(result).toBe("here is the truth");
+    expect(capturedThinking).toBe("pondering the secrets of the universe");
   });
 });
 
-describe("stripThinkBlocks (非流式)", () => {
-  test("剥离闭合的 think 块", () => {
-    expect(stripThinkBlocks("<think>思考</think>回答")).toBe("回答");
+describe("stripThinkBlocks (non-streaming)", () => {
+  test("strip closed think block", () => {
+    expect(stripThinkBlocks("<think>thinking</think>answer")).toBe("answer");
   });
 
-  test("剥离未闭合的 think 块", () => {
-    expect(stripThinkBlocks("<think>未闭合")).toBe("");
+  test("strip unclosed think block", () => {
+    expect(stripThinkBlocks("<think>unclosed")).toBe("");
   });
 
-  test("多个 think 块", () => {
+  test("multiple think blocks", () => {
     expect(stripThinkBlocks("a<think>x</think>b<think>y</think>c")).toBe("abc");
   });
 
-  test("无 think 块", () => {
-    expect(stripThinkBlocks("普通文本")).toBe("普通文本");
+  test("no think blocks", () => {
+    expect(stripThinkBlocks("normal text")).toBe("normal text");
   });
 
-  test("大小写不敏感", () => {
+  test("case insensitive", () => {
     expect(stripThinkBlocks("<Think>x</Think>y")).toBe("y");
   });
 });

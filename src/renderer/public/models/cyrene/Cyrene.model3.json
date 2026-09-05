@@ -7,10 +7,10 @@
     ],
     "Physics": "model.physics3.json",
     "Motions": {
-      "动作#6": [
+      "\u52a8\u4f5c#6": [
         {
-          "Name": "动作回正",
-          "File": "motions/动作_6_0.motion3.json",
+          "Name": "\u52a8\u4f5c\u56de\u6b63",
+          "File": "motions/\u52a8\u4f5c_6_0.motion3.json",
           "WrapMode": 2,
           "VarFloats": [
             {
@@ -22,7 +22,7 @@
         },
         {
           "Name": "Wink~",
-          "File": "motions/动作_6_1.motion3.json",
+          "File": "motions/\u52a8\u4f5c_6_1.motion3.json",
           "WrapMode": 2,
           "VarFloats": [
             {
@@ -33,8 +33,8 @@
           ]
         },
         {
-          "Name": "我可爱吧~",
-          "File": "motions/动作_6_2.motion3.json",
+          "Name": "\u6211\u53ef\u7231\u5427~",
+          "File": "motions/\u52a8\u4f5c_6_2.motion3.json",
           "WrapMode": 2,
           "VarFloats": [
             {
@@ -45,8 +45,8 @@
           ]
         },
         {
-          "Name": "笑一笑吧~",
-          "File": "motions/动作_6_3.motion3.json",
+          "Name": "\u7b11\u4e00\u7b11\u5427~",
+          "File": "motions/\u52a8\u4f5c_6_3.motion3.json",
           "WrapMode": 2,
           "VarFloats": [
             {
@@ -57,10 +57,10 @@
           ]
         }
       ],
-      "绳子开关#5": [
+      "\u7ef3\u5b50\u5f00\u5173#5": [
         {
-          "Name": "开/回正",
-          "Expression": "开",
+          "Name": "\u5f00/\u56de\u6b63",
+          "Expression": "\u5f00",
           "VarFloats": [
             {
               "Name": "off/on",
@@ -70,8 +70,8 @@
           ]
         },
         {
-          "Name": "关",
-          "Expression": "关",
+          "Name": "\u5173",
+          "Expression": "\u5173",
           "VarFloats": [
             {
               "Name": "off/on",
@@ -81,73 +81,73 @@
           ]
         }
       ],
-      "表情3#4": [
+      "\u8868\u60c53#4": [
         {
-          "Name": "表情回正",
-          "Expression": "表情回正",
-          "NextMtn": "表情2#3:表情回正"
+          "Name": "\u8868\u60c5\u56de\u6b63",
+          "Expression": "\u8868\u60c5\u56de\u6b63",
+          "NextMtn": "\u8868\u60c52#3:\u8868\u60c5\u56de\u6b63"
         },
         {
-          "Name": "闪耀",
-          "Expression": "闪耀"
+          "Name": "\u95ea\u8000",
+          "Expression": "\u95ea\u8000"
         }
       ],
-      "表情2#3": [
+      "\u8868\u60c52#3": [
         {
-          "Name": "表情回正",
-          "Expression": "表情回正",
-          "NextMtn": "表情#2:表情回正"
+          "Name": "\u8868\u60c5\u56de\u6b63",
+          "Expression": "\u8868\u60c5\u56de\u6b63",
+          "NextMtn": "\u8868\u60c5#2:\u8868\u60c5\u56de\u6b63"
         },
         {
-          "Name": "问号",
-          "Expression": "问号"
+          "Name": "\u95ee\u53f7",
+          "Expression": "\u95ee\u53f7"
         }
       ],
-      "表情#2": [
+      "\u8868\u60c5#2": [
         {
-          "Name": "表情回正",
-          "Expression": "表情回正"
+          "Name": "\u8868\u60c5\u56de\u6b63",
+          "Expression": "\u8868\u60c5\u56de\u6b63"
         },
         {
-          "Name": "墨镜",
-          "Expression": "墨镜"
+          "Name": "\u58a8\u955c",
+          "Expression": "\u58a8\u955c"
         },
         {
-          "Name": "星星眼",
-          "Expression": "星星眼"
+          "Name": "\u661f\u661f\u773c",
+          "Expression": "\u661f\u661f\u773c"
         },
         {
-          "Name": "圈圈眼",
-          "Expression": "圈圈眼"
+          "Name": "\u5708\u5708\u773c",
+          "Expression": "\u5708\u5708\u773c"
         },
         {
-          "Name": "开心眼",
-          "Expression": "开心眼"
+          "Name": "\u5f00\u5fc3\u773c",
+          "Expression": "\u5f00\u5fc3\u773c"
         }
       ],
-      "秋千#1": [
+      "\u79cb\u5343#1": [
         {
-          "Name": "拽秋千0",
+          "Name": "\u62fd\u79cb\u53430",
           "WrapMode": 2,
-          "Expression": "拽秋千回正"
+          "Expression": "\u62fd\u79cb\u5343\u56de\u6b63"
         },
         {
-          "Name": "拽秋千1",
+          "Name": "\u62fd\u79cb\u53431",
           "WrapMode": 2,
-          "Expression": "拽秋千1",
-          "NextMtn": "秋千#1:拽秋千0"
+          "Expression": "\u62fd\u79cb\u53431",
+          "NextMtn": "\u79cb\u5343#1:\u62fd\u79cb\u53430"
         },
         {
-          "Name": "拽秋千2",
+          "Name": "\u62fd\u79cb\u53432",
           "WrapMode": 2,
-          "Expression": "拽秋千2",
-          "NextMtn": "秋千#1:拽秋千0"
+          "Expression": "\u62fd\u79cb\u53432",
+          "NextMtn": "\u79cb\u5343#1:\u62fd\u79cb\u53430"
         }
       ],
       "Tick3": [
         {
-          "Name": "Wink（待机）",
-          "File": "motions/动作_6_1.motion3.json",
+          "Name": "Wink\uff08\u5f85\u673a\uff09",
+          "File": "motions/\u52a8\u4f5c_6_1.motion3.json",
           "WrapMode": 2,
           "VarFloats": [
             {
@@ -158,8 +158,8 @@
           ]
         },
         {
-          "Name": "可爱（待机）",
-          "File": "motions/动作_6_2.motion3.json",
+          "Name": "\u53ef\u7231\uff08\u5f85\u673a\uff09",
+          "File": "motions/\u52a8\u4f5c_6_2.motion3.json",
           "WrapMode": 2,
           "VarFloats": [
             {
@@ -170,8 +170,8 @@
           ]
         },
         {
-          "Name": "微笑（待机）",
-          "File": "motions/动作_6_3.motion3.json",
+          "Name": "\u5fae\u7b11\uff08\u5f85\u673a\uff09",
+          "File": "motions/\u52a8\u4f5c_6_3.motion3.json",
           "WrapMode": 2,
           "VarFloats": [
             {
@@ -182,7 +182,7 @@
           ]
         },
         {
-          "Name": "荡秋千（待机）",
+          "Name": "\u8361\u79cb\u5343\uff08\u5f85\u673a\uff09",
           "File": "motions/Tick3_3.motion3.json",
           "WrapMode": 2,
           "VarFloats": [
@@ -196,8 +196,8 @@
       ],
       "Start": [
         {
-          "Name": "初始化",
-          "Expression": "开",
+          "Name": "\u521d\u59cb\u5316",
+          "Expression": "\u5f00",
           "VarFloats": [
             {
               "Name": "off/on",
@@ -215,51 +215,51 @@
     },
     "Expressions": [
       {
-        "Name": "表情回正",
+        "Name": "\u8868\u60c5\u56de\u6b63",
         "File": "expressions/0.exp3.json"
       },
       {
-        "Name": "墨镜",
+        "Name": "\u58a8\u955c",
         "File": "expressions/1.exp3.json"
       },
       {
-        "Name": "问号",
+        "Name": "\u95ee\u53f7",
         "File": "expressions/2.exp3.json"
       },
       {
-        "Name": "闪耀",
+        "Name": "\u95ea\u8000",
         "File": "expressions/3.exp3.json"
       },
       {
-        "Name": "星星眼",
+        "Name": "\u661f\u661f\u773c",
         "File": "expressions/4.exp3.json"
       },
       {
-        "Name": "圈圈眼",
+        "Name": "\u5708\u5708\u773c",
         "File": "expressions/5.exp3.json"
       },
       {
-        "Name": "开心眼",
+        "Name": "\u5f00\u5fc3\u773c",
         "File": "expressions/6.exp3.json"
       },
       {
-        "Name": "拽秋千1",
+        "Name": "\u62fd\u79cb\u53431",
         "File": "expressions/7.exp3.json"
       },
       {
-        "Name": "拽秋千2",
+        "Name": "\u62fd\u79cb\u53432",
         "File": "expressions/8.exp3.json"
       },
       {
-        "Name": "拽秋千回正",
+        "Name": "\u62fd\u79cb\u5343\u56de\u6b63",
         "File": "expressions/9.exp3.json"
       },
       {
-        "Name": "开",
+        "Name": "\u5f00",
         "File": "expressions/10.exp3.json"
       },
       {
-        "Name": "关",
+        "Name": "\u5173",
         "File": "expressions/11.exp3.json"
       }
     ]
@@ -267,49 +267,49 @@
   "Groups": [],
   "HitAreas": [
     {
-      "Name": "左侧秋千",
+      "Name": "\u5de6\u4fa7\u79cb\u5343",
       "Id": "ArtMesh11",
-      "Motion": "秋千#1:拽秋千1"
+      "Motion": "\u79cb\u5343#1:\u62fd\u79cb\u53431"
     },
     {
-      "Name": "右侧秋千",
+      "Name": "\u53f3\u4fa7\u79cb\u5343",
       "Id": "ArtMesh12",
-      "Motion": "秋千#1:拽秋千2"
+      "Motion": "\u79cb\u5343#1:\u62fd\u79cb\u53432"
     },
     {
-      "Name": "表情回正花",
+      "Name": "\u8868\u60c5\u56de\u6b63\u82b1",
       "Id": "ArtMesh15",
-      "Motion": "表情3#4:表情回正"
+      "Motion": "\u8868\u60c53#4:\u8868\u60c5\u56de\u6b63"
     },
     {
-      "Name": "星星眼1坠",
+      "Name": "\u661f\u661f\u773c1\u5760",
       "Id": "ArtMesh77",
-      "Motion": "表情#2:星星眼"
+      "Motion": "\u8868\u60c5#2:\u661f\u661f\u773c"
     },
     {
-      "Name": "圈圈眼2坠",
+      "Name": "\u5708\u5708\u773c2\u5760",
       "Id": "ArtMesh78",
-      "Motion": "表情#2:圈圈眼"
+      "Motion": "\u8868\u60c5#2:\u5708\u5708\u773c"
     },
     {
-      "Name": "开心眼1叶",
+      "Name": "\u5f00\u5fc3\u773c1\u53f6",
       "Id": "ArtMesh16",
-      "Motion": "表情#2:开心眼"
+      "Motion": "\u8868\u60c5#2:\u5f00\u5fc3\u773c"
     },
     {
-      "Name": "墨镜刘海",
+      "Name": "\u58a8\u955c\u5218\u6d77",
       "Id": "ArtMesh20",
-      "Motion": "表情#2:墨镜"
+      "Motion": "\u8868\u60c5#2:\u58a8\u955c"
     },
     {
-      "Name": "闪耀1枝",
+      "Name": "\u95ea\u80001\u679d",
       "Id": "ArtMesh116",
-      "Motion": "表情3#4:闪耀"
+      "Motion": "\u8868\u60c53#4:\u95ea\u8000"
     },
     {
-      "Name": "问号2枝",
+      "Name": "\u95ee\u53f72\u679d",
       "Id": "ArtMesh115",
-      "Motion": "表情2#3:问号"
+      "Motion": "\u8868\u60c52#3:\u95ee\u53f7"
     }
   ],
   "Layout": {},

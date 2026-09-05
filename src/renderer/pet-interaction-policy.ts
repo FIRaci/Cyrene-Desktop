@@ -14,7 +14,7 @@ export function nextPetZoom(current: number, wheelDeltaY: number): number {
 }
 
 export function shouldStartPetDrag(event: Pick<PointerEvent, "altKey" | "button">): boolean {
-  return event.altKey && event.button === 0;
+  return event.altKey && (event.button === 0 || event.button === 2);
 }
 
 export function shouldStartPetZoomDrag(event: Pick<PointerEvent, "altKey" | "button">): boolean {

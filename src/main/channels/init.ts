@@ -1,44 +1,43 @@
-// init-channels —— channels 模块的主入口。由 index.ts 在 app.whenReady() 调一次。
+// init-channels - Main entrypoint for the channels module. Called once in app.whenReady().
 //
-// 当前阶段：
-//   - Phase 0: 骨架 + dispatcher + inbound-server
-//   - Phase 2: 接入 FeishuAdapter（自建飞书应用 + 事件订阅）
-//
-// 注意：initChannels 必须晚于 initRAG / initMcpManager / loadModelSettings。
-import { app, BrowserWindow, ipcMain } from "electron";
+// Phases:
+//   - Phase 0: Scaffolding + dispatcher + inbound-server
+//   - Phase 2: FeishuAdapter (custom Feishu bot app + event subscription)
+// Note: initChannels must run after initRAG / initMcpManager / loadModelSettings.
+import { ipcMain, BrowserWindow } from "electron";
 import { IPC } from "../../shared/ipc-channels";
+import { channelManager } from "./manager";
+import { channelDispatcher } from "./dispatcher";
+import { startInboundServer, stopInboundServer } from "./inbound-server";
 import {
   loadChannelsSettings,
   saveChannelsSettings,
 } from "./settings-store";
-import { channelManager } from "./manager";
-import { channelDispatcher } from "./dispatcher";
-import { startInboundServer, stopInboundServer } from "./inbound-server";
 import { FeishuAdapter } from "./adapters/feishu";
-import { ILinkBotAdapter, loadCredentials } from "./adapters/wechat/ilink-bot-adapter";
+import { ILinkBotAdapter } from "./adapters/wechat/ilink-bot-adapter";
 import { getRecentLog, clearLog } from "./message-log";
 
 const LOG = "[ChannelsInit]";
 
 let initialized = false;
 let conversationLifecycle: {
-  onUserMessage(): void;
-  onConversationStarted(): void;
-  onConversationEnded(): void;
+  onUserMessage: () => void;
+  onConversationStarted: () => void;
+  onConversationEnded: () => void;
 } | null = null;
 
 export function setChannelsConversationLifecycle(lifecycle: typeof conversationLifecycle): void {
   conversationLifecycle = lifecycle;
 }
-/** 微信 adapter 全局引用（UI 登录按钮需要） */
+/** Global reference to WeChat adapter (needed by UI login button) */
 let wxAdapter: ILinkBotAdapter | null = null;
 
-/** app.whenReady() 调一次。idempotent。 */
+/** Called once during app.whenReady(). Idempotent. */
 export async function initChannels(): Promise<void> {
   if (initialized) return;
   initialized = true;
 
-  // 注入 dispatcher 到 manager
+  // Inject dispatcher into manager
   channelManager.setDispatcher(async (msg) => {
     conversationLifecycle?.onUserMessage();
     conversationLifecycle?.onConversationStarted();
@@ -49,10 +48,10 @@ export async function initChannels(): Promise<void> {
     }
   });
 
-  // 注册全局 IPC
+  // Register global IPC
   registerChannelsIpc();
 
-  // 启动 inbound-server
+  // Start inbound-server
   try {
     const handle = await startInboundServer();
     console.log(LOG, `Inbound server listening on http://127.0.0.1:${handle.port}`);
@@ -60,30 +59,29 @@ export async function initChannels(): Promise<void> {
     console.error(LOG, "Failed to start inbound server:", err);
   }
 
-  // 注册 adapter
+  // Register adapters
   const feishuAdapter = new FeishuAdapter();
   channelManager.register(feishuAdapter);
 
-  // 注册微信 adapter（iLink 直连微信，不依赖 OpenClaw Gateway）
-  // 改为 module-level handle，UI 登录按钮也能拿到
+  // Register WeChat adapter (direct iLink connection, no dependency on OpenClaw Gateway)
   wxAdapter = new ILinkBotAdapter();
   channelManager.register(wxAdapter);
 
-  // 启动所有已注册 adapter
+  // Start all registered adapters
   await channelManager.startAll();
 
   console.log(LOG, "Channels module ready");
   broadcastChannelsStatus();
 }
 
-/** app.on('before-quit') 调 */
+/** Called during app.on('before-quit') */
 export async function shutdownChannels(): Promise<void> {
   await channelManager.stopAll();
   await stopInboundServer();
   initialized = false;
 }
 
-/** IPC 注册 */
+/** IPC registration */
 function registerChannelsIpc(): void {
   ipcMain.handle(IPC.CHANNELS_GET_CONFIG, () => loadChannelsSettings());
 
@@ -102,50 +100,49 @@ function registerChannelsIpc(): void {
     return { ok: true };
   });
 
-  // ── 微信 IPC (iLink 直连版) ───────────────────────────────────────────────────────
+  // -- WeChat IPC (iLink direct version) --------------------------------------
 
   ipcMain.handle(IPC.CHANNELS_WECHAT_RUNTIME_DETECT, () => {
-    // iLink Bot API 是腾讯的远程协议，不需本地安装
+    // iLink Bot API is Tencent's remote protocol and does not require local installation
     return { installed: true, version: "ilink/1.0.0" };
   });
 
-	  // 扫码登录：Main Process 生成 PNG dataURL，推给 Renderer 显示 <img>
-	  ipcMain.handle(IPC.CHANNELS_WECHAT_LOGIN_START, async () => {
+  // QR login: Main Process generates PNG dataURL and pushes to Renderer for <img> display
+  ipcMain.handle(IPC.CHANNELS_WECHAT_LOGIN_START, async () => {
     if (!wxAdapter) return { ok: false, error: "The WeChat adapter is not initialized." };
-	    try {
-	      const { fetchQrCode } = await import("./adapters/wechat/ilink-protocol-client");
-	      const { createQrDataUrl } = await import("./adapters/wechat/qr");
+    try {
+      const { fetchQrCode } = await import("./adapters/wechat/ilink-protocol-client");
+      const { createQrDataUrl } = await import("./adapters/wechat/qr");
 
-	      // 1. 拿原始 qrcode 字符串 + liteapp 二维码 URL
-	      //    - qrcode: 32 hex ticket（轮询 get_qrcode_status 用）
-	      //    - qrcode_img_content: liteapp.weixin.qq.com/q/... URL（扫了会拉起 iLink 灰度插件）
-	      const { qrcode, qrcode_img_content } = await fetchQrCode();
+      // 1. Fetch raw qrcode string + liteapp QR URL
+      //    - qrcode: 32 hex ticket (for polling get_qrcode_status)
+      //    - qrcode_img_content: liteapp.weixin.qq.com/q/... URL
+      const { qrcode, qrcode_img_content } = await fetchQrCode();
 
-	      // 2. Main Process 生成 PNG dataURL（用 liteapp URL 而不是裸 ticket，
-	      //    否则微信只识别为纯文本、不会触发 iLink 确认流程）
-	      const dataUrl = await createQrDataUrl(qrcode_img_content, 256);
+      // 2. Main Process generates PNG dataURL using liteapp URL
+      const dataUrl = await createQrDataUrl(qrcode_img_content, 256);
 
-	      // 3. 推给 Renderer
-	      const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
-	      win?.webContents.send(IPC.CHANNELS_WECHAT_QRCODE, dataUrl);
+      // 3. Push to Renderer
+      const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+      win?.webContents.send(IPC.CHANNELS_WECHAT_QRCODE, dataUrl);
 
-	      // 4. 后台轮询扫码状态
-	      void (async () => {
-	        try {
-	          const creds = await wxAdapter!.login(qrcode);
-	          await wxAdapter!.stop();
-	          await wxAdapter!.start();
-	          win?.webContents.send(IPC.CHANNELS_WECHAT_LOGIN_DONE, { ok: true, botId: creds.ilinkBotId });
-	        } catch (err) {
-	          win?.webContents.send(IPC.CHANNELS_WECHAT_LOGIN_DONE, { ok: false, error: String(err) });
-	        }
-	      })();
+      // 4. Poll QR scan status in background
+      void (async () => {
+        try {
+          const creds = await wxAdapter!.login(qrcode);
+          await wxAdapter!.stop();
+          await wxAdapter!.start();
+          win?.webContents.send(IPC.CHANNELS_WECHAT_LOGIN_DONE, { ok: true, botId: creds.ilinkBotId });
+        } catch (err) {
+          win?.webContents.send(IPC.CHANNELS_WECHAT_LOGIN_DONE, { ok: false, error: String(err) });
+        }
+      })();
 
       return { ok: true, hint: "Scan the QR code with WeChat." };
-	    } catch (err) {
-	      return { ok: false, error: String(err) };
-	    }
-	  });
+    } catch (err) {
+      return { ok: false, error: String(err) };
+    }
+  });
 
   ipcMain.handle(IPC.CHANNELS_WECHAT_LOGIN_CANCEL, () => {
     return { ok: true };
@@ -162,7 +159,6 @@ function registerChannelsIpc(): void {
   });
 
   ipcMain.handle(IPC.CHANNELS_WECHAT_PAIRING_LIST, () => {
-    // iLink 模式没有 pairing 概念
     return [];
   });
 
@@ -188,7 +184,7 @@ function registerChannelsIpc(): void {
     return { ok: true, phase: "ready" };
   });
 
-  // Phase 2 长连接：测试连接 = 重建 LarkChannel（SDK 内部会自动跑 WSS handshake）
+  // Phase 2 persistent connection: test connection = rebuild LarkChannel
   ipcMain.handle(IPC.CHANNELS_FEISHU_TEST_CONNECTION, async () => {
     const adapter = channelManager.getAdapter("feishu") as FeishuAdapter | undefined;
     if (!adapter) return { ok: false, error: "The Feishu adapter is not registered." };
@@ -201,15 +197,14 @@ function registerChannelsIpc(): void {
       await adapter.rebuild();
       const s = adapter.getStatus();
       if (s.phase === "running") {
-      return { ok: true, message: "The WSS connection is established." };
+        return { ok: true, message: "The WSS connection is established." };
       }
-    return { ok: false, error: s.message ?? "The handshake is not complete." };
+      return { ok: false, error: s.message ?? "The handshake is not complete." };
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) };
     }
   });
 
-  // 长连接模式不需要 webhook URL —— 这个 IPC 保留但返回 ok 提示用户用长连接
   ipcMain.handle(IPC.CHANNELS_FEISHU_TEST_WEBHOOK_REACHABLE, async () => {
     return {
       ok: true,
@@ -217,7 +212,7 @@ function registerChannelsIpc(): void {
     };
   });
 
-  // Phase 3.4：消息日志
+  // Phase 3.4: Message log
   ipcMain.handle(IPC.CHANNELS_LOG_GET, (_e, limit: unknown) => {
     const n = typeof limit === "number" && limit > 0 ? limit : 100;
     return getRecentLog(n);
@@ -228,7 +223,7 @@ function registerChannelsIpc(): void {
   });
 }
 
-/** 工具：把所有 BrowserWindow 广播 channels 状态变更（UI 轮询用）。 */
+/** Utility: Broadcast channel status change to all BrowserWindows (for UI polling). */
 export function broadcastChannelsStatus(): void {
   const status = channelManager.getAllStatus();
   for (const win of BrowserWindow.getAllWindows()) {
@@ -241,7 +236,7 @@ export function broadcastChannelsStatus(): void {
   }
 }
 
-/** 工具：把所有 BrowserWindow 广播安装进度。 */
+/** Utility: Broadcast installation progress to all BrowserWindows. */
 export function broadcastChannelsInstallProgress(progress: {
   channel: string;
   phase: string;

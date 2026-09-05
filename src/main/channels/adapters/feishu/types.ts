@@ -1,24 +1,24 @@
-// 飞书事件订阅的原始 payload 与回包类型。
-// 参考飞书官方文档：
-//   - 事件订阅概述：https://open.feishu.cn/document/server-docs/event-subscription-guide/overview
-//   - 接收消息 v1：https://open.feishu.cn/document/server-docs/im-v1/message-events/receive
+// Raw payload and response types for Feishu event subscriptions.
+// Reference Feishu official documentation:
+//   - Event subscription overview: https://open.feishu.cn/document/server-docs/event-subscription-guide/overview
+//   - Receive message v1: https://open.feishu.cn/document/server-docs/im-v1/message-events/receive
 //
-// 字段命名严格按 snake_case，因为它们来自飞书服务器，不能改。
+// Field naming adheres strictly to snake_case as required by Feishu server protocol.
 
-/** 飞书事件订阅的顶层 envelope。可能是加密（encrypt）或明文。 */
+/** Top-level envelope for Feishu event subscriptions. May be encrypted or plaintext. */
 export interface FeishuEventEnvelope {
-  /** "url_verification" | "event_callback" | "challenge" (旧版) */
+  /** "url_verification" | "event_callback" | "challenge" (legacy) */
   type?: string;
-  /** challenge 校验时回包用 */
+  /** Returned during challenge verification */
   challenge?: string;
-  /** 加密字段。存在时需要用 Encrypt Key 解密 */
+  /** Encrypted field. Requires decryption with Encrypt Key when present. */
   encrypt?: string;
-  /** 明文 payload（未加密时存在） */
+  /** Plaintext payload (present when unencrypted) */
   header?: FeishuEventHeader;
   event?: unknown;
 }
 
-/** 事件头（v2 新协议） */
+/** Event header (v2 protocol) */
 export interface FeishuEventHeader {
   event_id?: string;
   event_type?: string;
@@ -28,14 +28,14 @@ export interface FeishuEventHeader {
   token?: string;
 }
 
-/** 解密后的明文 envelope（v2） */
+/** Decrypted envelope (v2) */
 export interface FeishuDecryptedEnvelope {
   schema?: string;
   header?: FeishuEventHeader;
   event?: FeishuImMessageEvent | Record<string, unknown>;
 }
 
-/** im.message.receive_v1 事件内容 */
+/** im.message.receive_v1 event content */
 export interface FeishuImMessageEvent {
   sender?: {
     sender_id?: { open_id?: string; user_id?: string; union_id?: string };
@@ -49,43 +49,43 @@ export interface FeishuImMessageEvent {
     chat_id?: string;
     chat_type?: "p2p" | "group" | "channel" | string;
     message_type?: "text" | "image" | "file" | "audio" | "video" | "post" | "interactive" | string;
-    content?: string; // JSON 字符串（飞书把文本/富文本都塞这里）
+    content?: string; // JSON string containing message content
     mentions?: Array<{ key: string; id: { open_id?: string; user_id?: string } }>;
   };
   timestamp?: string;
 }
 
-/** 解密后的文本消息 content（message_type === "text"） */
+/** Decrypted text message content (message_type === "text") */
 export interface FeishuTextContent {
   text?: string;
 }
 
-/** 解密后的图片消息 content（message_type === "image"） */
+/** Decrypted image message content (message_type === "image") */
 export interface FeishuImageContent {
   image_key?: string;
 }
 
-/** 解密后的文件消息 content */
+/** Decrypted file message content */
 export interface FeishuFileContent {
   file_key?: string;
   file_name?: string;
 }
 
-/** 解密后的语音消息 content（message_type === "audio"） */
+/** Decrypted voice message content (message_type === "audio") */
 export interface FeishuAudioContent {
   file_key?: string;
   duration?: number;
 }
 
-/** tenant_access_token 响应 */
+/** tenant_access_token response */
 export interface FeishuTokenResponse {
   code: number;
   msg: string;
   tenant_access_token?: string;
-  expire?: number; // 秒
+  expire?: number; // seconds
 }
 
-/** 发送消息响应 */
+/** Send message response */
 export interface FeishuSendMessageResponse {
   code: number;
   msg: string;
@@ -96,7 +96,7 @@ export interface FeishuSendMessageResponse {
   };
 }
 
-/** 飞书 IM v1 消息内容联合类型（发消息用） */
+/** Feishu IM v1 message content union type */
 export type FeishuOutboundContent =
   | { text: string }
   | { image_key: string }
@@ -105,7 +105,7 @@ export type FeishuOutboundContent =
   | FeishuInteractiveCard;
 
 export interface FeishuInteractiveCard {
-  /** 飞书 interactive 卡片 schema，通常是 2.0 */
+  /** Feishu interactive card schema, typically 2.0 */
   schema?: string;
   header?: { title?: { tag?: string; content?: string }; template?: string };
   elements?: unknown[];

@@ -1,20 +1,20 @@
-// 主动聊天触发器
+// Proactive chat trigger
 //
-// 设计目标：
-// - 60s 周期扫描，调用 `proactiveChatService.evaluateCandidate({sceneId, score, sceneCooldownMs})`
-// - 候选生成使用用户时区（避免被机器系统时区干扰）
-// - 场景清单：第一版只实现 morning_greeting / evening_checkin / back_from_away / work_break
-// - 天气场景仅保留 sceneId 占位 + 可选 getWeatherContext 注入；未实现天气候选生成
+// Design goals:
+// - 60s periodic scan, calling `proactiveChatService.evaluateCandidate({sceneId, score, sceneCooldownMs})`
+// - Candidate generation uses user timezone (avoid machine system timezone interference)
+// - Scenario list: Initial version only implements morning_greeting / evening_checkin / back_from_away / work_break
+// - Weather scenario only keeps sceneId placeholder + optional getWeatherContext injection; weather candidate generation not implemented
 //
-// 边界（按 §2.2 文档）：
-// - 不修改 proactive-service.ts / proactive-policy.ts / proactive-state-store.ts / ProactiveCandidate
-// - 不实现 fallback / Function Calling / MCP / 主动刷新外部信息
-// - 不新增 desire-engine / 概率门
-// - 不实现天气缓存、TTL、expiresAt、跨日期判断
+// Boundaries (per §2.2 doc):
+// - Do not modify proactive-service.ts / proactive-policy.ts / proactive-state-store.ts / ProactiveCandidate
+// - Do not implement fallback / Function Calling / MCP / proactive external refresh
+// - Do not add desire-engine / probability gates
+// - Do not implement weather cache, TTL, expiresAt, cross-date checks
 //
-// 未来接入天气缓存时：只需让 deps.getWeatherContext 返回非空 WeatherContext，
-// 并在 generateWeatherCandidates 内部加判断。本文件其它结构（定时循环、候选排序、
-// evaluateCandidate 接线）无需改动。
+// When integrating weather cache in the future: only need deps.getWeatherContext to return non-null WeatherContext,
+// and add checks inside generateWeatherCandidates. Other structures in this file (periodic loop, candidate ranking,
+// evaluateCandidate wiring) require no changes.
 
 import type {
   ProactiveCandidate,
@@ -22,35 +22,35 @@ import type {
   ProactiveState,
 } from "./proactive-types";
 
-/** 天气上下文。当前实现为占位；未来缓存模块接入时由该模块定义实际字段。 */
+/** Weather context. Current implementation is a placeholder; defined by future cache module. */
 export interface WeatherContext {
-  // 形状由未来缓存模块决定；当前实现不读取任何字段。
+  // Shape determined by future cache module; current implementation reads no fields.
   readonly _placeholder?: never;
 }
 
-/** 候选生成需要的快照 + 用户时区信息（一次性打包，便于纯函数）。 */
+/** Snapshot + user timezone information required for candidate generation (packaged for pure functions). */
 export interface ProactiveTriggerContext {
   now: number;
   timezone: string;
-  /** 用户时区下的"当前日期"。 */
+  /** "Current date" in user timezone. */
   localDate: string;
-  /** 用户时区下的当前小时（0-23）。 */
+  /** Current hour (0-23) in user timezone. */
   localHour: number;
-  /** 用户时区下的当前分钟（0-59）。 */
+  /** Current minute (0-59) in user timezone. */
   localMinute: number;
 
   snapshot: ProactiveRuntimeSnapshot;
   state: ProactiveState;
 
-  /** 上一轮 tick 时的 idleSec；首轮为 null（用于判断 back_from_away）。 */
+  /** idleSec during previous tick; null on initial round (used for detecting back_from_away). */
   previousIdleSec: number | null;
-  /** 用户活跃会话起始时间；idle > 60 时重置。 */
+  /** User active session start timestamp; reset when idle > 60. */
   activeSessionStartedAt: number | null;
 
   weather: WeatherContext | null;
 }
 
-/** 内部候选类型（额外带 reason 用于日志）。 */
+/** Internal candidate type (with extra reason field for logging). */
 interface ProactiveOpportunity {
   sceneId: string;
   score: number;
@@ -62,13 +62,13 @@ export interface ProactiveTriggerDependencies {
   evaluateCandidate: (candidate: ProactiveCandidate) => Promise<unknown>;
   getRuntimeSnapshot: () => ProactiveRuntimeSnapshot;
   getProactiveState: () => ProactiveState;
-  /** 已 resolver 后的有效用户时区（保证是合法 IANA）。 */
+  /** Resolved valid user timezone (guaranteed valid IANA). */
   getTimezone: () => string;
   /**
-   * 可选：未来缓存模块接入时填。当前实现：未传 / 传 null / 传空对象都不生成天气候选。
+   * Optional: populated when future cache module integrates. Current: omitted / null / empty object generates no candidates.
    */
   getWeatherContext?: () => WeatherContext | null;
-  /** 触发器内部 backoff Map（由控制器持有），用于测试断言状态。 */
+  /** Trigger internal backoff Map (held by controller), used for test state assertions. */
   getLastEvaluatedAtByScene: () => Map<string, number>;
   setLastEvaluatedAtByScene: (next: Map<string, number>) => void;
 }
@@ -76,11 +76,11 @@ export interface ProactiveTriggerDependencies {
 export interface ProactiveTriggerController {
   start(): void;
   stop(): void;
-  /** 立即跑一轮（不经过定时器）。 */
+  /** Immediately run one round (bypassing timer). */
   evaluateNow(reason?: string): Promise<void>;
 }
 
-// ── 常量 ───────────────────────────────────────────────────────────────
+// ── Constants ───────────────────────────────────────────────────────────
 const TRIGGER_INTERVAL_MS = 60_000;
 const INITIAL_DELAY_MS = 90_000;
 const INTERVAL_JITTER_MS = 10_000;
@@ -97,14 +97,14 @@ const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
 
 const LOG_PREFIX = "[ProactiveTrigger]";
 
-/** 评分夹值。 */
+/** Score clamp helper. */
 function clamp(value: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, value));
 }
 
 /**
- * 用 Intl 把日期拆成 {year, month, day, hour, minute}（按 timezone）。
- * 不依赖 toLocaleString 的本地化标点和顺序。
+ * Split date into {year, month, day, hour, minute} using Intl (by timezone).
+ * Independent of toLocaleString localized punctuation and ordering.
  */
 export function getZonedDateParts(
   date: Date,
@@ -122,7 +122,7 @@ export function getZonedDateParts(
       hourCycle: "h23",
     }).formatToParts(date);
   } catch {
-    // 非法 timezone 时降级到 system-local（仅 debug 时出现；resolver 已保证 timezone 合法）
+    // Fallback to system-local on invalid timezone (only in debug; resolver guarantees valid timezone)
     return {
       year: date.getFullYear(),
       month: date.getMonth() + 1,
@@ -142,7 +142,7 @@ export function getZonedDateParts(
   };
 }
 
-/** 用户时区下的日期字符串 YYYY-MM-DD（用于跨日判断）。 */
+/** Date string YYYY-MM-DD in user timezone (for cross-day checks). */
 function formatLocalDate(date: Date, timezone: string): string {
   const p = getZonedDateParts(date, timezone);
   const mm = String(p.month).padStart(2, "0");
@@ -150,10 +150,10 @@ function formatLocalDate(date: Date, timezone: string): string {
   return `${p.year}-${mm}-${dd}`;
 }
 
-// ── 评分组件 ──────────────────────────────────────────────────────────
+// ── Scoring components ──────────────────────────────────────────────────
 /**
- * 时间窗口匹配分（0-15）：离窗口中段越近分越高，边缘线性下降，窗口外为 0。
- * 窗口用闭区间 [startMin, endMin]（分钟数 0-1439）；endMin < startMin 表示跨午夜。
+ * Time window fit score (0-15): closer to middle yields higher score, decreases linearly towards edges, 0 outside.
+ * Window uses closed interval [startMin, endMin] (minutes 0-1439); endMin < startMin indicates cross-midnight.
  */
 function timeWindowFit(
   hour: number,
@@ -169,9 +169,9 @@ function timeWindowFit(
     const half = (endMin - startMin) / 2;
     dist = Math.abs(current - center);
   } else {
-    // 跨午夜：例如 22:00(1320) → 02:00(120) → 跨天窗口
+    // Cross-midnight: e.g. 22:00(1320) -> 02:00(120) -> spans midnight window
     if (current >= startMin || current <= endMin) {
-      // 在窗口内：把 endMin + 1440 便于计算距离
+      // Inside window: endMin + 1440 for convenient distance calculation
       const center = startMin <= 720
         ? (startMin + (endMin + 1440)) / 2
         : ((startMin + (endMin + 1440)) / 2) - 1440;
@@ -181,20 +181,20 @@ function timeWindowFit(
       return 0;
     }
   }
-  // 距离 0 → 15；距离 = half → 0
+  // Distance 0 -> 15; distance = half -> 0
   const half = (endMin >= startMin ? endMin - startMin : (1440 - startMin) + endMin) / 2;
   if (half <= 0) return current >= startMin && current <= (endMin >= startMin ? endMin : endMin + 1440 - 1440) ? 15 : 0;
   return clamp(Math.round((1 - dist / half) * 15), 0, 15);
 }
 
-/** 事件紧迫度（0-20）。普通时间问候为 0。 */
+/** Event urgency (0-20). Regular time greetings score 0. */
 function eventUrgency(sceneId: string, ctx: ProactiveTriggerContext): number {
   switch (sceneId) {
     case "back_from_away":
-      // 离开越久分越高，但封顶 20
+      // Higher score the longer away, capped at 20
       return clamp(Math.round(ctx.snapshot.idleSec / 60), 0, 20);
     case "work_break":
-      // 活跃 90min 起，每多 30min 加 4，封顶 20
+      // Starting from 90min active, +4 every 30min, capped at 20
       const activeMs = ctx.activeSessionStartedAt !== null ? ctx.now - ctx.activeSessionStartedAt : 0;
       if (activeMs < WORK_BREAK_MIN_MS) return 0;
       return clamp(Math.round((activeMs - WORK_BREAK_MIN_MS) / (30 * 60 * 1000)) * 4, 0, 20);
@@ -203,15 +203,15 @@ function eventUrgency(sceneId: string, ctx: ProactiveTriggerContext): number {
   }
 }
 
-/** 新鲜度奖励（0-10）。仅缓存事件使用；当前未实现，返回 0。 */
+/** Freshness bonus (0-10). Currently returns 0. */
 function freshnessBonus(sceneId: string): number {
-  // 占位：未来 weather 候选启用时根据 cache.expiresAt - now 计算
+  // Placeholder: calculate from cache.expiresAt - now when weather candidates enabled
   void sceneId;
   return 0;
 }
 
-/** 沉默奖励（0-12）：距用户上一次活动越久分越高。
- * 边界：从未活跃过的新用户视为"沉默无穷大"，直接给上限 12，保证首启能触发。 */
+/** Silence bonus (0-12): higher score the longer since last user activity.
+ * Boundary: new users without prior activity receive maximum 12 to ensure trigger on first launch. */
 function silenceBonus(ctx: ProactiveTriggerContext): number {
   const lastActivity =
     ctx.state.lastNormalConversationEndedAt !== null
@@ -225,14 +225,14 @@ function silenceBonus(ctx: ProactiveTriggerContext): number {
   return clamp(Math.round(ratio * 12), 0, 12);
 }
 
-/** 未回复惩罚。 */
+/** Unanswered penalty. */
 function unansweredPenalty(unansweredCount: 0 | 1 | 2): number {
   if (unansweredCount === 0) return 0;
   if (unansweredCount === 1) return -18;
   return -100;
 }
 
-/** 评分总装：baseScore + fit + urgency + freshness + silence - unanswered。 */
+/** Score aggregation: baseScore + fit + urgency + freshness + silence - unanswered. */
 function scoreOpportunity(
   baseScore: number,
   fit: number,
@@ -250,22 +250,22 @@ function scoreOpportunity(
   return clamp(total, 0, 100);
 }
 
-// ── 场景定义 ──────────────────────────────────────────────────────────
+// ── Scenario Definitions ──────────────────────────────────────────────────────────
 interface SceneDefinition {
   sceneId: string;
   baseScore: number;
   sceneCooldownMs: number;
-  /** 场景分类（决定 tie-break 优先级；数字越小越优先）。 */
+  /** Scenario category (determines tie-break priority; lower number = higher priority). */
   priority: number;
-  /** 该场景的"是否在窗口内"判定 + 时间窗口匹配分。返回 score 增量。 */
+  /** Scenario window evaluation + time window match score. Returns score increment. */
   compute(ctx: ProactiveTriggerContext): { fit: number; urgency: number; applicable: boolean };
 }
 
 /**
- * 天气场景 ID 占位。
- * 当前实现：deps.getWeatherContext 为空/null 时不生成候选。
- * 未来接入天气缓存时，只需让 getWeatherContext 返回非空，并在下方
- * generateWeatherCandidates 中加判定逻辑。
+ * Weather scenario ID placeholder.
+ * Current: no candidate generated when deps.getWeatherContext is null/empty.
+ * When weather cache is connected, return non-empty from getWeatherContext
+ * and add logic in generateWeatherCandidates.
  */
 const WEATHER_SCENE_IDS = ["weather_rain", "weather_temperature_drop", "weather_sunny"] as const;
 type WeatherSceneId = (typeof WEATHER_SCENE_IDS)[number];
@@ -297,7 +297,7 @@ const SCENES: readonly SceneDefinition[] = [
     sceneId: "back_from_away",
     baseScore: 68,
     sceneCooldownMs: 4 * 60 * 60 * 1000,
-    priority: 1, // tie-break 最优先
+    priority: 1, // highest priority in tie-break
     compute(ctx) {
       if (ctx.previousIdleSec === null) return { fit: 0, urgency: 0, applicable: false };
       const applicable =
@@ -320,7 +320,7 @@ const SCENES: readonly SceneDefinition[] = [
   },
 ];
 
-// ── 候选生成 ──────────────────────────────────────────────────────────
+// ── Candidate Generation ──────────────────────────────────────────────────────────
 function generateTimeOpportunities(ctx: ProactiveTriggerContext): ProactiveOpportunity[] {
   const out: ProactiveOpportunity[] = [];
   for (const scene of SCENES) {
@@ -339,39 +339,39 @@ function generateTimeOpportunities(ctx: ProactiveTriggerContext): ProactiveOppor
 }
 
 /**
- * 天气候选生成（占位实现）。
- * 当前：weather 为 null/空时返回 []。
- * 未来接入天气缓存时：让 getWeatherContext 返回非空 WeatherContext，
- * 并在此函数内根据 WeatherContext 字段决定是否生成 weather_rain / weather_temperature_drop / weather_sunny 候选。
+ * Weather candidate generation (placeholder).
+ * Current: returns [] when weather is null/empty.
+ * When weather cache connected: return non-empty WeatherContext,
+ * and determine whether to generate weather candidates.
  *
- * 注意：本函数签名固定，不要改。变更只发生在函数体内。
+ * Note: function signature is fixed.
  */
 function generateWeatherOpportunities(
   ctx: ProactiveTriggerContext,
   weather: WeatherContext | null,
 ): ProactiveOpportunity[] {
-  // 显式过滤：weather 为 null / undefined / 空对象时都不生成候选
+  // Explicit filter: no candidate when weather is null / undefined / empty
   if (!weather || typeof weather !== "object") return [];
   if (Object.keys(weather).length === 0) return [];
-  // 占位：未来缓存接入时，在此处实现天气候选生成。
-  // 例如：
+  // Placeholder: implement weather candidate generation here when cache connected.
+  // e.g.:
   //   if (weather.isRaining) opportunities.push({ sceneId: "weather_rain", ... });
   //   if (weather.tempDrop) opportunities.push({ sceneId: "weather_temperature_drop", ... });
   return [];
 }
 
-/** 主候选生成入口。 */
+/** Main candidate generation entry point. */
 function generateProactiveCandidates(ctx: ProactiveTriggerContext): ProactiveOpportunity[] {
   const timeOpps = generateTimeOpportunities(ctx);
   const weatherOpps = generateWeatherOpportunities(ctx, ctx.weather);
   return [...timeOpps, ...weatherOpps];
 }
 
-/** Tie-break：场景定义 priority 数字小的优先；同 priority 时按定义顺序稳定排序。 */
+/** Tie-break: lower priority number first; stable sort for identical priority. */
 function sortCandidates(opps: ProactiveOpportunity[]): ProactiveOpportunity[] {
   const priorityByScene = new Map<string, number>();
   for (const s of SCENES) priorityByScene.set(s.sceneId, s.priority);
-  // 天气场景默认 priority 3（在时间问候之前、back_from_away/work_break 之后）
+  // Weather scenarios default priority 3 (before time greetings, after back_from_away/work_break)
   for (const id of WEATHER_SCENE_IDS) {
     if (!priorityByScene.has(id)) priorityByScene.set(id, 3);
   }
@@ -379,12 +379,12 @@ function sortCandidates(opps: ProactiveOpportunity[]): ProactiveOpportunity[] {
     const pa = priorityByScene.get(a.sceneId) ?? 99;
     const pb = priorityByScene.get(b.sceneId) ?? 99;
     if (pa !== pb) return pa - pb;
-    // 同 priority：保持生成顺序稳定（stable sort by insertion index）
+    // Identical priority: maintain stable generation order
     return opps.indexOf(a) - opps.indexOf(b);
   });
 }
 
-// ── 触发前快速过滤（不替代 policy） ──────────────────────────────────
+// ── Fast Pre-filter Before Trigger (does not replace policy) ──────────────────────────────────
 function shouldSkipFast(snapshot: ProactiveRuntimeSnapshot): boolean {
   if (!snapshot.enabled) return true;
   if (snapshot.screenLocked) return true;
@@ -393,13 +393,13 @@ function shouldSkipFast(snapshot: ProactiveRuntimeSnapshot): boolean {
   return false;
 }
 
-// ── 控制器 ────────────────────────────────────────────────────────────
+// ── Controller ────────────────────────────────────────────────────────────
 export function createProactiveTrigger(deps: ProactiveTriggerDependencies): ProactiveTriggerController {
   let timer: ReturnType<typeof setTimeout> | null = null;
   let running = false;
   let stopped = true;
 
-  // 闭包状态
+  // Closure state
   let previousIdleSec: number | null = null;
   let activeSessionStartedAt: number | null = null;
 
@@ -427,7 +427,7 @@ export function createProactiveTrigger(deps: ProactiveTriggerDependencies): Proa
     const localParts = getZonedDateParts(new Date(snapshot.now), timezone);
     const weather = deps.getWeatherContext?.() ?? null;
 
-    // 更新 activeSessionStartedAt：用户当前空闲时重置
+    // Update activeSessionStartedAt: reset when user is currently idle
     if (snapshot.idleSec >= ACTIVE_THRESHOLD_SEC) {
       activeSessionStartedAt = null;
     } else if (activeSessionStartedAt === null) {
@@ -457,7 +457,7 @@ export function createProactiveTrigger(deps: ProactiveTriggerDependencies): Proa
       return;
     }
 
-    // Backoff 检查：跳过最近 30 分钟内已评估过的场景
+    // Backoff check: skip scenarios evaluated in last 30 minutes
     const backoffMap = deps.getLastEvaluatedAtByScene();
     const candidates = sorted.filter((o) => {
       const last = backoffMap.get(o.sceneId);
@@ -476,7 +476,7 @@ export function createProactiveTrigger(deps: ProactiveTriggerDependencies): Proa
     const selected = candidates[0];
     log("selected", { sceneId: selected.sceneId, score: selected.score, reason });
 
-    // 记录评估时间（无论结果：committed / blocked / silent / fallback_unavailable）
+    // Record evaluation timestamp
     backoffMap.set(selected.sceneId, snapshot.now);
     deps.setLastEvaluatedAtByScene(backoffMap);
 
@@ -496,7 +496,7 @@ export function createProactiveTrigger(deps: ProactiveTriggerDependencies): Proa
   async function tick(): Promise<void> {
     if (stopped) return;
     if (running) {
-      // 上一轮未结束，本轮直接跳过（防并发重入）
+      // Skip if previous round has not finished (guard against re-entrancy)
       scheduleNext();
       return;
     }
@@ -512,7 +512,7 @@ export function createProactiveTrigger(deps: ProactiveTriggerDependencies): Proa
   }
 
   function start(): void {
-    if (!stopped) return; // 幂等
+    if (!stopped) return; // Idempotent
     stopped = false;
     if (timer) { clearTimeout(timer); timer = null; }
     timer = setTimeout(() => { void tick(); }, INITIAL_DELAY_MS);
@@ -526,7 +526,7 @@ export function createProactiveTrigger(deps: ProactiveTriggerDependencies): Proa
   return { start, stop, evaluateNow };
 }
 
-// ── 导出供测试使用的纯函数 / 常量 ───────────────────────────────────
+// ── Pure functions / constants exported for testing ───────────────────────────────────
 export const TRIGGER_CONSTANTS = {
   TRIGGER_INTERVAL_MS,
   INITIAL_DELAY_MS,

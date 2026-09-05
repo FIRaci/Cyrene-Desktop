@@ -1,12 +1,12 @@
-// ChannelAdapter —— 每个外部渠道（微信/飞书/...）的协议适配层接口。
+// ChannelAdapter - Protocol adapter interface for external channels (WeChat, Feishu, etc.).
 //
-// 设计原则：adapter 负责两件事：
-//   1) start(): 注册 webhook / 启动子进程 / 加载本地状态
-//   2) send(): 把统一 OutgoingMessage 翻译成平台协议发出去
-// 入站消息由 adapter 内部调用 onMessage 回调抛给 manager → dispatcher。
+// Design principles: Adapter is responsible for two tasks:
+//   1) start(): register webhooks / start child processes / load local state
+//   2) send(): translate unified OutgoingMessage into platform protocol and transmit
+// Inbound messages are dispatched to manager -> dispatcher via internal onMessage callback.
 //
-// 注意：adapter 不应该直接调 CyreneAgent；那是 dispatcher 的职责。
-// adapter 只做"翻译 + 协议收发 + 账号/凭证管理"。
+// Note: Adapter should not directly invoke CyreneAgent; that is the dispatcher's responsibility.
+// Adapter only performs "translation + protocol I/O + account/credentials management".
 import type {
   ChannelCapability,
   ChannelId,
@@ -21,23 +21,23 @@ export interface ChannelAdapter {
   readonly displayName: string;
   readonly capability: ChannelCapability;
 
-  /** 启动：注册 webhook / 启子进程 / 加载凭证 / 写运行时配置 */
+  /** Start: register webhooks / start subprocesses / load credentials / configure runtime */
   start(): Promise<void>;
 
-  /** 关闭：停止子进程 / 关闭 webhook 监听 / flush 队列 */
+  /** Stop: stop subprocesses / close webhook listeners / flush queues */
   stop(): Promise<void>;
 
-  /** Manager 在 start() 之前注入；adapter 把入站消息通过这个回调抛给 dispatcher */
+  /** Manager injects before start(); adapter passes inbound messages to dispatcher via this callback */
   onMessage: MessageHandler | null;
 
-  /** 出站：把统一 OutgoingMessage 翻译成平台协议发出去 */
+  /** Outbound: translates unified OutgoingMessage to platform protocol and transmits */
   send(msg: OutgoingMessage): Promise<{ ok: boolean; error?: string }>;
 
-  /** UI 展示用状态。轮询调用，adapter 内部缓存即可。 */
+  /** UI status display. Polled periodically, adapter caches internally. */
   getStatus(): ChannelStatus;
 }
 
-/** 工具类型：adapter 的可选 onMessage setter。 */
+/** Utility function to set adapter's onMessage handler. */
 export function setAdapterHandler(
   adapter: ChannelAdapter,
   handler: MessageHandler | null,

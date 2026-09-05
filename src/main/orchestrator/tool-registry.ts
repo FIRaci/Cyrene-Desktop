@@ -1,24 +1,24 @@
-// 工具注册表 — 统一管理所有可被 LLM Router 调度的工具
-// Worldbook 不在此注册，它走独立常驻检索路径
+// Tool registry - Unified management of all tools dispatchable by LLM Router
+// Worldbook is not registered here; it follows independent always-on retrieval
 
 import { searchMemory } from "../rag/index";
 import type { ToolRiskLevel } from "../permission";
 import type { ToolContext } from "./tool-context";
 import type { SoulProjectionConfig, SoulClaimKind } from "./soul-execution-context";
 
-/** 工具完成证据元数据：供 Planner 生成 completionCriteria 和 planVerify 校验 */
+/** Tool completion evidence metadata: used by Planner to generate completionCriteria and planVerify validation */
 export interface CapabilityCompletionEvidence {
   kind: "tool_succeeded" | "projection_claim";
   claimKind?: SoulClaimKind;
 }
 
-/** JSON Schema 片段：参数可以是简单类型，也可以是 array/object（含 items/properties）。 */
+/** JSON Schema fragment: arguments can be primitive types or array/object (including items/properties). */
 export type JsonSchemaProp =
   | { type: string; description?: string; enum?: string[] }
   | { type: "array"; description?: string; items: JsonSchemaProp }
   | { type: "object"; description?: string; properties: Record<string, JsonSchemaProp>; required?: string[] };
 
-/** 控制输入策略：简单字符串或带 kind 的对象形式 */
+/** Controlled input policy: simple string or object with kind */
 export type ControlledInputPolicy =
   | "context_ref"
   | "context_ref_array"
@@ -27,51 +27,51 @@ export type ControlledInputPolicy =
   | { type: "context_ref_array"; kind: string }
   | { type: "tool_result" };
 
-/** 从 ControlledInputPolicy 提取底层策略类型字符串 */
+/** Extract underlying policy type string from ControlledInputPolicy */
 export function controlledInputType(policy: ControlledInputPolicy): string {
   return typeof policy === "string" ? policy : policy.type;
 }
 
-/** 从 ControlledInputPolicy 提取 expectedKind（如有） */
+/** Extract expectedKind from ControlledInputPolicy if present */
 export function controlledInputKind(policy: ControlledInputPolicy): string | undefined {
   return typeof policy === "object" && "kind" in policy ? policy.kind : undefined;
 }
 
 export interface ToolDefinition {
-  id: string;           // 工具唯一标识，如 "imported_docs"
-  name: string;         // 展示名，如 "导入文档"
-  description: string;  // 一句话描述，供 LLM Router 的 Prompt 使用
-  /** 工具目录里展示的一句话用途（可选）。未填时回落 description 第一行。
-   *  只用于运行时生成的工具目录，完整参数仍走 tools Schema。 */
+  id: string;           // Unique tool identifier, e.g. "imported_docs"
+  name: string;         // Display name, e.g. "Import Documents"
+  description: string;  // One-line description used in LLM Router Prompt
+  /** One-line purpose displayed in tool catalog (optional). Falls back to description first line.
+   *  Used only for runtime-generated tool catalog; full parameters remain in tools Schema. */
   catalogHint?: string;
-  /** 可选分类标签，第一期暂不强制使用。 */
+  /** Optional category tag; not strictly enforced in Phase 1. */
   category?: string;
-  /** Action Gate 使用的稳定能力标识；未填时回落到工具 id。 */
+  /** Stable capability identifier for Action Gate; falls back to tool id if omitted. */
   capability?: string;
-  /** Runtime 校验受控参数来源；这些值不能由模型自由编造。支持带 kind 的对象形式用于类型化引用验证。 */
+  /** Runtime verification of controlled parameter origins; values cannot be invented by model. */
   controlledInput?: Record<string, ControlledInputPolicy>;
-  enabled: boolean;     // 用户是否启用（对应设置面板的开关）
-  // 危险等级：决定该工具在哪些权限档位下可调用；不填默认 "safe"
+  enabled: boolean;     // Whether user enabled tool (corresponds to settings toggle)
+  // Risk level: determines permission tiers under which tool may be invoked; defaults to "safe"
   risk?: ToolRiskLevel;
-  // MCP 兼容字段：参数 schema，后续接 MCP 时直接复用
+  // MCP compatible field: parameter schema, reused when connecting MCP
   inputSchema: {
     type: "object";
     properties: Record<string, JsonSchemaProp>;
     required?: string[];
   };
-  /** 工具若声明 needsContext，调度层执行时会传入 ToolContext。默认不声明=不传。 */
+  /** When tool declares needsContext, dispatcher passes ToolContext during execution. Defaults to false. */
   needsContext?: boolean;
-  /** Soul 上下文中替代 toolId 的安全语义名称 */
+  /** Safe semantic name replacing toolId in Soul context */
   soulActionLabel?: string;
-  /** 声明式 Soul 投影配置 */
+  /** Declarative Soul projection config */
   soulProjection?: SoulProjectionConfig;
-  /** 工具专用错误码 -> 用户安全消息 */
+  /** Tool-specific error code -> user-safe message */
   soulErrorMessages?: Record<string, string>;
-  /** 完成证据元数据：供 Planner 和 planVerify 使用。未配置的工具不能进入 Plan 步骤。 */
+  /** Completion evidence metadata: used by Planner and planVerify. */
   completionEvidence?: CapabilityCompletionEvidence[];
-  /** Plan 模式下不暴露给 Action Gate 和 Native FC（防止 Plan 步骤降级到旧 Loop）。 */
+  /** Hidden in Plan mode: not exposed to Action Gate and Native FC. */
   hideInPlanMode?: boolean;
-  // 执行器：内置工具指向本地函数，外部 MCP 工具指向 transport 调用
+  // Executor: built-in tool points to local function, external MCP tool points to transport call
   execute: (args: Record<string, unknown>, ctx?: ToolContext) => Promise<string>;
 }
 
@@ -115,10 +115,10 @@ export function isCompanionSafeTool(tool: Pick<ToolDefinition, "risk" | "id">): 
   return risk === "safe" || risk === "fs-read" || risk === "network" || risk === "input-control";
 }
 
-// 全局单例
+// Global singleton
 export const toolRegistry = new ToolRegistry();
 
-// ── 注册内置工具 ──────────────────────────────────────────
+// -- Register built-in tools --
 
 function formatMemoryResult(result: unknown): string {
   if (typeof result === "string") return result;

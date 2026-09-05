@@ -1,5 +1,5 @@
-// dispatcher.downgradeToCapability 全组合测试
-// 重点验证 8 个能力字段 × 5 个 part kind 的所有边界条件
+// dispatcher.downgradeToCapability comprehensive tests
+// Validates all boundary conditions across 8 capability fields x 5 part kinds
 import { describe, it, expect } from "vitest";
 import { buildTextOutgoingParts, ChannelDispatcher, shouldAppendChannelTtsAudio } from "./dispatcher";
 import type { ChannelCapability, OutgoingMessage, OutgoingPart } from "./types";
@@ -25,16 +25,16 @@ function makeMsg(parts: OutgoingPart[]): OutgoingMessage {
 
 describe("buildTextOutgoingParts", () => {
   it("keeps channel replies as one text part when mobile segmentation is off", () => {
-    expect(buildTextOutgoingParts("第一句。第二句？", "off")).toEqual([
-      { kind: "text", text: "第一句。第二句？" },
+    expect(buildTextOutgoingParts("First sentence! Second sentence?", "off")).toEqual([
+      { kind: "text", text: "First sentence! Second sentence?" },
     ]);
   });
 
   it("splits channel replies into text parts when mobile segmentation is on", () => {
-    expect(buildTextOutgoingParts("第一句。\n第二句？第三句！", "on")).toEqual([
-      { kind: "text", text: "第一句。" },
-      { kind: "text", text: "第二句？" },
-      { kind: "text", text: "第三句！" },
+    expect(buildTextOutgoingParts("First sentence!\nSecond sentence? Third sentence!", "on")).toEqual([
+      { kind: "text", text: "First sentence!" },
+      { kind: "text", text: "Second sentence?" },
+      { kind: "text", text: "Third sentence!" },
     ]);
   });
 });
@@ -50,18 +50,18 @@ describe("shouldAppendChannelTtsAudio", () => {
 });
 
 describe("downgradeToCapability", () => {
-  // 构造一个最简 dispatcher 实例（只测 downgradeToCapability，不碰 buildAndRunAgent）
+  // Minimal dispatcher instance for capability testing
   const stubDispatcher = new ChannelDispatcher({} as any);
 
   describe("text part", () => {
-    it("text < maxTextLength → 原样保留", () => {
-      const msg = makeMsg([{ kind: "text", text: "你好" }]);
+    it("text < maxTextLength -> preserved as-is", () => {
+      const msg = makeMsg([{ kind: "text", text: "hello" }]);
       const out = stubDispatcher.downgradeToCapability(msg, makeCap({ maxTextLength: 4000 }));
       expect(out.parts).toHaveLength(1);
-      expect(out.parts[0]).toEqual({ kind: "text", text: "你好" });
+      expect(out.parts[0]).toEqual({ kind: "text", text: "hello" });
     });
 
-    it("text > maxTextLength → 截断 + 加截断提示", () => {
+    it("text > maxTextLength -> truncated with truncation notice", () => {
       const msg = makeMsg([{ kind: "text", text: "a".repeat(5000) }]);
       const out = stubDispatcher.downgradeToCapability(msg, makeCap({ maxTextLength: 100 }));
       expect(out.parts).toHaveLength(1);
@@ -73,7 +73,7 @@ describe("downgradeToCapability", () => {
       }
     });
 
-    it("maxTextLength=0 → 不截断", () => {
+    it("maxTextLength=0 -> not truncated", () => {
       const msg = makeMsg([{ kind: "text", text: "a".repeat(1000) }]);
       const out = stubDispatcher.downgradeToCapability(msg, makeCap({ maxTextLength: 0 }));
       const p = out.parts[0];
@@ -84,28 +84,27 @@ describe("downgradeToCapability", () => {
   });
 
   describe("image part", () => {
-    it("cap.image=true → 原样保留", () => {
+    it("cap.image=true -> preserved as-is", () => {
       const msg = makeMsg([{ kind: "image", url: "https://x", caption: "cap" }]);
       const out = stubDispatcher.downgradeToCapability(msg, makeCap({ image: true }));
       expect(out.parts).toHaveLength(1);
       expect(out.parts[0].kind).toBe("image");
     });
 
-    it("cap.image=false → 降级为文字描述 [图片]", () => {
-      const msg = makeMsg([{ kind: "image", url: "https://x.png", caption: "我的截图" }]);
+    it("cap.image=false -> downgraded to text description [Image]", () => {
+      const msg = makeMsg([{ kind: "image", url: "https://x.png", caption: "my screenshot" }]);
       const out = stubDispatcher.downgradeToCapability(msg, makeCap({ image: false }));
       expect(out.parts).toHaveLength(1);
       const p = out.parts[0];
       expect(p.kind).toBe("text");
       if (p.kind === "text") {
         expect(p.text).toContain("[Image]");
-        expect(p.text).toContain("我的截图");
-        // url 兜底会包含 filePath 或 url: 当 caption 优先时, url 在 fallback
-        expect(p.text).toMatch(/https:\/\/x\.png|\[Image\] 我的截图/);
+        expect(p.text).toContain("my screenshot");
+        expect(p.text).toMatch(/https:\/\/x\.png|\[Image\] my screenshot/);
       }
     });
 
-    it("cap.image=false, 无 caption/url → [图片] + 空", () => {
+    it("cap.image=false, without caption/url -> [Image] empty fallback", () => {
       const msg = makeMsg([{ kind: "image" }]);
       const out = stubDispatcher.downgradeToCapability(msg, makeCap({ image: false }));
       const p = out.parts[0];
@@ -115,14 +114,14 @@ describe("downgradeToCapability", () => {
   });
 
   describe("audio part", () => {
-    it("cap.audio=true → 原样", () => {
+    it("cap.audio=true -> preserved as-is", () => {
       const msg = makeMsg([{ kind: "audio", filePath: "/tmp/x.mp3", mime: "audio/mpeg" }]);
       const out = stubDispatcher.downgradeToCapability(msg, makeCap({ audio: true }));
       expect(out.parts).toHaveLength(1);
       expect(out.parts[0].kind).toBe("audio");
     });
 
-    it("cap.audio=false → 降级为文字", () => {
+    it("cap.audio=false -> downgraded to text", () => {
       const msg = makeMsg([{ kind: "audio", filePath: "/tmp/x.mp3", mime: "audio/mpeg" }]);
       const out = stubDispatcher.downgradeToCapability(msg, makeCap({ audio: false }));
       const p = out.parts[0];
@@ -135,7 +134,7 @@ describe("downgradeToCapability", () => {
   });
 
   describe("file and video parts", () => {
-    it("cap.file=false → 降级为文字描述 [文件]", () => {
+    it("cap.file=false -> downgraded to text description [File]", () => {
       const msg = makeMsg([{ kind: "file", filePath: "/tmp/report.pdf", name: "report.pdf", mime: "application/pdf" }]);
       const out = stubDispatcher.downgradeToCapability(msg, makeCap({ file: false }));
       const p = out.parts[0];
@@ -146,7 +145,7 @@ describe("downgradeToCapability", () => {
       }
     });
 
-    it("cap.video=false → 降级为文字描述 [视频]", () => {
+    it("cap.video=false -> downgraded to text description [Video]", () => {
       const msg = makeMsg([{ kind: "video", filePath: "/tmp/demo.mp4", name: "demo.mp4", mime: "video/mp4" }]);
       const out = stubDispatcher.downgradeToCapability(msg, makeCap({ video: false }));
       const p = out.parts[0];
@@ -157,7 +156,7 @@ describe("downgradeToCapability", () => {
       }
     });
 
-    it("cap.file/video=true → 原样保留", () => {
+    it("cap.file/video=true -> preserved as-is", () => {
       const msg = makeMsg([
         { kind: "file", filePath: "/tmp/report.pdf", name: "report.pdf" },
         { kind: "video", filePath: "/tmp/demo.mp4", name: "demo.mp4" },
@@ -168,27 +167,26 @@ describe("downgradeToCapability", () => {
   });
 
   describe("card part", () => {
-    it("cap.card=true, markdown=true → 原样保留 card", () => {
+    it("cap.card=true, markdown=true -> preserved as-is card", () => {
       const msg = makeMsg([{ kind: "card", title: "T", markdown: "**hi**", fields: [{ key: "k", value: "v" }] }]);
       const out = stubDispatcher.downgradeToCapability(msg, makeCap({ card: true, markdown: true }));
       expect(out.parts[0].kind).toBe("card");
     });
 
-    it("cap.card=false, markdown=true → 降级为 markdown 文本", () => {
-      const msg = makeMsg([{ kind: "card", title: "天气", markdown: "晴 25°", fields: [{ key: "湿度", value: "60%" }] }]);
+    it("cap.card=false, markdown=true -> downgraded to markdown text", () => {
+      const msg = makeMsg([{ kind: "card", title: "Weather", markdown: "Sunny 25 deg", fields: [{ key: "Humidity", value: "60%" }] }]);
       const out = stubDispatcher.downgradeToCapability(msg, makeCap({ card: false, markdown: true }));
       const p = out.parts[0];
       expect(p.kind).toBe("text");
       if (p.kind === "text") {
-        // title 行 + markdown 行 + field 行（key: value）
-        expect(p.text).toContain("天气");
-        expect(p.text).toContain("晴 25°");
-        expect(p.text).toContain("湿度");
+        expect(p.text).toContain("Weather");
+        expect(p.text).toContain("Sunny 25 deg");
+        expect(p.text).toContain("Humidity");
         expect(p.text).toContain("60%");
       }
     });
 
-    it("cap.card=false, markdown=false → 纯文本", () => {
+    it("cap.card=false, markdown=false -> plain text", () => {
       const msg = makeMsg([{ kind: "card", title: "T", markdown: "**hi**" }]);
       const out = stubDispatcher.downgradeToCapability(msg, makeCap({ card: false, markdown: false }));
       const p = out.parts[0];
@@ -196,19 +194,18 @@ describe("downgradeToCapability", () => {
       if (p.kind === "text") {
         expect(p.text).toContain("T");
         expect(p.text).toContain("**hi**");
-        // 无 markdown 标记
       }
     });
   });
 
   describe("sticker part", () => {
-    it("cap.sticker=true → 原样", () => {
+    it("cap.sticker=true -> preserved as-is", () => {
       const msg = makeMsg([{ kind: "sticker", stickerId: "s1", imagePath: "/tmp/s.png" }]);
       const out = stubDispatcher.downgradeToCapability(msg, makeCap({ sticker: true }));
       expect(out.parts).toHaveLength(1);
     });
 
-    it("cap.sticker=false → 跳过 sticker part（结果空数组）", () => {
+    it("cap.sticker=false -> sticker part skipped (empty array)", () => {
       const msg = makeMsg([{ kind: "sticker", stickerId: "s1", imagePath: "/tmp/s.png" }]);
       const out = stubDispatcher.downgradeToCapability(msg, makeCap({ sticker: false }));
       expect(out.parts).toHaveLength(0);
@@ -216,20 +213,19 @@ describe("downgradeToCapability", () => {
   });
 
   describe("multi-part mix", () => {
-    it("text + image(cap.image=true) + sticker(cap.sticker=false) → text + image", () => {
+    it("text + image(cap.image=true) + sticker(cap.sticker=false) -> text + image", () => {
       const msg = makeMsg([
-        { kind: "text", text: "看这张图" },
-        { kind: "image", url: "https://x.png", caption: "截图" },
+        { kind: "text", text: "look at this picture" },
+        { kind: "image", url: "https://x.png", caption: "screenshot" },
         { kind: "sticker", stickerId: "s1", imagePath: "/tmp/s.png" },
       ]);
       const out = stubDispatcher.downgradeToCapability(msg, makeCap({ image: true, sticker: false }));
       expect(out.parts).toHaveLength(2);
-      expect(out.parts[0]).toEqual({ kind: "text", text: "看这张图" });
-      // image 保持 (cap.image=true)
+      expect(out.parts[0]).toEqual({ kind: "text", text: "look at this picture" });
       expect(out.parts[1].kind).toBe("image");
     });
 
-    it("all-cap=false (除 text) → 全降级", () => {
+    it("all-cap=false (except text) -> all downgraded", () => {
       const msg = makeMsg([
         { kind: "text", text: "hi" },
         { kind: "image", url: "x", caption: "c" },
@@ -239,7 +235,6 @@ describe("downgradeToCapability", () => {
       const out = stubDispatcher.downgradeToCapability(msg, makeCap({
         text: true, image: false, audio: false, sticker: false, card: false,
       }));
-      // 应剩下: text + [图片] + [语音] (sticker 跳过)
       expect(out.parts).toHaveLength(3);
       expect(out.parts[0].kind).toBe("text");
       expect(out.parts[1].kind).toBe("text");
@@ -248,7 +243,7 @@ describe("downgradeToCapability", () => {
   });
 
   describe("edge cases", () => {
-    it("cap=undefined → 原样不降级", () => {
+    it("cap=undefined -> not downgraded", () => {
       const msg = makeMsg([
         { kind: "text", text: "a".repeat(10000) },
         { kind: "image", url: "x" },
@@ -257,13 +252,13 @@ describe("downgradeToCapability", () => {
       expect(out).toEqual(msg);
     });
 
-    it("空 parts 数组 → 原样返回", () => {
+    it("empty parts array -> returns empty parts array", () => {
       const msg = makeMsg([]);
       const out = stubDispatcher.downgradeToCapability(msg, makeCap({ text: false }));
       expect(out.parts).toHaveLength(0);
     });
 
-    it("不修改原对象（pure function）", () => {
+    it("does not mutate original object (pure function)", () => {
       const original = makeMsg([
         { kind: "text", text: "hello" },
         { kind: "image", url: "x" },

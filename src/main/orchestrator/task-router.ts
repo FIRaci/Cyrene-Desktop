@@ -1,11 +1,11 @@
 /**
- * Task Router -- 判断当前任务的执行策略和需要加载的 Skill。
+ * Task Router -- Evaluates execution strategy and skills to load for current task.
  *
- * 输出 TaskRoute，决定后续走 direct（现有 Action Gate 流程）还是 plan（P1-4 计划执行）。
- * Router 与 Action Gate 使用独立的结构化输出 LLM 调用，职责不耦合。
+ * Outputs TaskRoute deciding between direct or plan mode.
+ * Router and Action Gate use separate structured output calls.
  *
- * Feature flag: ENABLE_TASK_ROUTER（默认 false）
- * 关闭时完全跳过 Router，走现有流程，零额外开销。
+ * Feature flag: ENABLE_TASK_ROUTER (default false)
+ * When disabled, completely skips router with zero overhead.
  */
 
 import { runStructuredOutput } from "./structured-output/runner";
@@ -14,13 +14,13 @@ import type { StructuredOutputProfile } from "./structured-output/types";
 import type { ChatMessage, ChatRequest, ChatResponse } from "./vendors/types";
 import type { ToolDefinition } from "./tool-registry";
 
-// ── 数据结构 ──────────────────────────────
+// -- Data structures --
 
 export interface TaskRoute {
   executionMode: "direct" | "plan";
-  /** Plan 创建失败降级后保留原始意图 */
+  /** Retain original intent upon plan degradation */
   requestedExecutionMode?: "plan";
-  /** 降级原因 */
+  /** Reason for degradation */
   fallbackReason?: string;
   skillIds: string[];
   reason: string;
@@ -43,7 +43,7 @@ export interface RunTaskRouterInput {
     description: string;
     hasCompletionEvidence: boolean;
   }>;
-  /** 快捷路径预选的 skillIds（精确匹配命中时传入） */
+  /** Preselected skillIds from exact match fast-path */
   preselectedSkillIds?: string[];
   profile: StructuredOutputProfile;
   generate: (request: ChatRequest, signal: AbortSignal) => Promise<ChatResponse>;
@@ -54,11 +54,11 @@ export interface RunTaskRouterInput {
 
 export const ENABLE_TASK_ROUTER = true;
 
-// ── 快捷路径：精确 Skill 匹配 ─────────────
+// -- Fast path: exact skill matching --
 
 /**
- * 检查用户消息是否精确匹配已注册 Skill 的名称、别名或 ID。
- * 只做精确匹配，不做模糊关键词路由。
+ * Check if user message exactly matches registered Skill name, alias, or ID.
+ * Performs exact matching only, no fuzzy keyword routing.
  */
 export function matchSkillByName(
   userMessage: string,
@@ -67,11 +67,15 @@ export function matchSkillByName(
   const normalized = userMessage.trim().toLowerCase();
   for (const skill of skills) {
     const id = skill.id.toLowerCase();
-    // 精确匹配 "使用 xlsx skill" / "调用 xlsx 技能" / "xlsx skill" 等模式
-    if (normalized.includes(`使用 ${id} skill`) ||
-        normalized.includes(`使用 ${id} 技能`) ||
-        normalized.includes(`调用 ${id} skill`) ||
-        normalized.includes(`调用 ${id} 技能`) ||
+    // Exact match for "use xlsx skill" / "call xlsx skill" / "xlsx skill"
+    if (normalized.includes(`use ${id} skill`) ||
+        normalized.includes(`call ${id} skill`) ||
+        normalized.includes(`invoke ${id} skill`) ||
+        normalized.includes(`\u4f7f\u7528 ${id} skill`) ||
+        normalized.includes(`\u4f7f\u7528 ${id} \u6280\u80fd`) ||
+        normalized.includes(`\u8c03\u7528 ${id} skill`) ||
+        normalized.includes(`\u8c03\u7528 ${id} \u6280\u80fd`) ||
+        normalized.includes(`\u7528 ${id} skill`) ||
         normalized.includes(`${id} skill`)) {
       return skill.id;
     }
@@ -79,7 +83,7 @@ export function matchSkillByName(
   return undefined;
 }
 
-// ── Router LLM 调用 ──────────────────────
+// -- Router LLM invocation --
 
 const ROUTER_SYSTEM_PROMPT = `You are the Task Router. Determine the execution strategy for the current request.
 
@@ -193,36 +197,36 @@ function buildRouterRequest(input: RunTaskRouterInput): ChatRequest {
     ],
     stream: false,
     maxTokens: 300,
-    // Kimi k2.6 只允许 temperature=1，发 0 会被拒。
-    // 省略让服务端用默认值，其他模型继续 temperature=0 保证确定性。
+    // Kimi k2.6 only allows temperature=1.
+    // Omit to use server default; other models use temperature=0 for determinism.
     ...(input.model.match(/^kimi-k2\.6(?:$|-)/i) ? {} : { temperature: 0 }),
     structuredOutput,
   };
 }
 
-// ── 主函数 ────────────────────────────────
+// -- Main function --
 
 export async function runTaskRouter(input: RunTaskRouterInput): Promise<TaskRoute> {
-  // 1. 快捷路径：精确 Skill 匹配
+  // 1. Fast path: exact skill matching
   const matchedSkillId = matchSkillByName(input.originalQuery, input.availableSkills);
   if (matchedSkillId) {
     const skill = input.availableSkills.find((s) => s.id === matchedSkillId);
     if (skill?.defaultExecutionMode) {
-      // Skill metadata 声明了执行模式，跳过 Router LLM
+      // Skill metadata declared execution mode, skip Router LLM
       return {
         executionMode: skill.defaultExecutionMode,
         skillIds: [matchedSkillId],
         reason: "User-selected Skill with a mode declared in metadata",
       };
     }
-    // metadata 没有声明，仍调用 Router，但预选 skillIds
+    // Metadata undeclared, call Router with preselected skillIds
     input = { ...input, preselectedSkillIds: [matchedSkillId] };
   }
 
-  // 2. LLM 调用
+  // 2. LLM call
   try {
     const result = await runStructuredOutput<TaskRoute, ChatRequest>({
-      stage: "action_gate", // 复用 action_gate stage 的 repair 策略
+      stage: "action_gate", // Reuse repair strategy
       profile: input.profile,
       signal: input.signal,
       buildRequest: () => buildRouterRequest(input),
@@ -237,13 +241,13 @@ export async function runTaskRouter(input: RunTaskRouterInput): Promise<TaskRout
       },
       parseSchema: parseTaskRoute,
       validateBusiness: (route) => {
-        // 校验 skillIds 在可用列表中
+        // Validate skillIds in available list
         const validSkillIds = new Set(input.availableSkills.map((s) => s.id));
         const filtered = route.skillIds.filter((id) => validSkillIds.has(id));
         if (filtered.length < route.skillIds.length) {
           route = { ...route, skillIds: filtered };
         }
-        // 如果有预选 skillIds，合并
+        // Merge with preselected skillIds if present
         if (input.preselectedSkillIds) {
           const merged = new Set([...filtered, ...input.preselectedSkillIds]);
           route = { ...route, skillIds: [...merged] };
@@ -256,10 +260,10 @@ export async function runTaskRouter(input: RunTaskRouterInput): Promise<TaskRout
       return result.value;
     }
   } catch {
-    // Router 失败，fallback to direct
+    // Router failed, fallback to direct
   }
 
-  // 3. Fallback: direct + 预选 skillIds（如有）
+  // 3. Fallback: direct + preselected skillIds (if any)
   return {
     executionMode: "direct",
     skillIds: input.preselectedSkillIds ?? [],
@@ -267,7 +271,7 @@ export async function runTaskRouter(input: RunTaskRouterInput): Promise<TaskRout
   };
 }
 
-// ── 辅助：从 ToolDefinition 构建能力列表 ──
+// -- Helper: build capabilities list from ToolDefinition --
 
 export function buildRouterCapabilities(tools: ToolDefinition[]): RunTaskRouterInput["availableCapabilities"] {
   return tools

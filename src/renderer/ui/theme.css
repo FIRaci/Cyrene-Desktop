@@ -155,11 +155,11 @@
   color: var(--rb-text-faint);
 }
 
-/* Chat titlebar dropdowns (模式 / 风格 / 推理).
-   Dark themes rely on their glass surfaces; pearl-white needs more
-   contrast — bump label + arrow from --rb-text-faint to --rb-text-muted
-   and value from --rb-pink-100 to --rb-pink-600 so the selected value
-   actually reads on a light titlebar. */
+/* Chat titlebar dropdowns ( / / ).
+ Dark themes rely on their glass surfaces; pearl-white needs more
+ contrast — bump label + arrow from --rb-text-faint to --rb-text-muted
+ and value from --rb-pink-100 to --rb-pink-600 so the selected value
+ actually reads on a light titlebar. */
 [data-ui-theme="pearl-white"] .dropdown-trigger {
   background: var(--rb-bg-2);
   border-color: var(--rb-border-soft);
@@ -452,8 +452,8 @@
   box-shadow: none;
 }
 
-/* .msg__speak 单独处理：默认透明背景，仅在 hover / .is-speaking 时填色。
-   这样在浅色消息气泡上不会多出一块白方块，但播放态仍能明显高亮。 */
+/* .msg__speak ：TransparentBackground， hover / .is-speaking 。
+ Bubble，Highlight。 */
 [data-ui-theme="pearl-white"] .msg__speak {
   color: var(--rb-text-muted);
   background: transparent;
@@ -466,7 +466,7 @@
   border-color: var(--rb-pink-300);
 }
 
-/* .msg__copy 同样：默认透明背景，border 用更强的色让浅色背景上仍可见 */
+/* .msg__copy ：TransparentBackground，border Background */
 [data-ui-theme="pearl-white"] .msg__copy {
   color: var(--rb-text-muted);
   background: transparent;
@@ -497,8 +497,8 @@
   border-color: var(--rb-border-strong);
 }
 
-/* 今日日程：pearl-white 下保留品牌粉作为强调色。
-   dark 主题默认是 strong/default（参见 tasks.css）；这里只覆盖白调。 */
+/* ：pearl-white 。
+ dark strong/default（ tasks.css）；。 */
 [data-ui-theme="pearl-white"] .schedule-count__unit {
   color: var(--rb-pink-600);
 }
@@ -614,7 +614,7 @@
   background: var(--rb-pink-50);
   border-color: var(--rb-pink-200);
 }
-/* .msg__speak:hover 在更上面单独定义（border-color 用更深的 pink-300 强化可见） */
+/* .msg__speak:hover （border-color pink-300 ） */
 
 [data-ui-theme="pearl-white"] .chat__preset {
   color: var(--rb-text-default);
@@ -678,9 +678,9 @@
   background: var(--rb-card-bg);
 }
 
-/* 通用 select option：在 pearl-white 下默认底是白(--rb-bg-2/#fafafc)，
-   base CSS 里 .field select option 的色是 var(--rb-text-on-pink)
-   (即 white) — 与白底融为一体导致选项看不见。这里统一强制为深色。 */
+/* select option： pearl-white (--rb-bg-2/#fafafc)，
+ base CSS .field select option var(--rb-text-on-pink)
+ ( white) — 。。 */
 [data-ui-theme="pearl-white"] .field select option {
   color: var(--rb-input-text);
   background: var(--rb-card-bg);
@@ -708,7 +708,7 @@
   color: var(--rb-text-strong);
 }
 
-/* Mossland / 未来新增的「敬请期待」卡（占位）—— pearl-white 下保持可读 */
+/* Mossland / 「Coming soon」（）—— pearl-white */
 [data-ui-theme="pearl-white"] .tts-engine__soon {
   color: #7a3d0a;
   background: #fff0d6;

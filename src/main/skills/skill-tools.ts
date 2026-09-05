@@ -1,22 +1,22 @@
-// Skill meta-tool —— 把 skill 系统暴露给 LLM 的两个工具。
-// 不把每个 skill 注册成业务 tool（skill 是指令层），而是用两个 meta-tool：
-//   invoke_skill：加载某 skill 的 SKILL.md 正文 + references 清单
-//   read_skill_reference：按需读 references 附件（带路径穿越防护）
-// 注册进现有 toolRegistry，两处 LLM 路径都从 registry 取，自动生效。
+// Skill meta-tool — two tools exposing the skill system to the LLM.
+// Rather than registering each skill as an individual tool (skills are instruction layers), two meta-tools are used:
+//   invoke_skill: loads SKILL.md body + references list for a skill
+//   read_skill_reference: reads references attachment on-demand (with path traversal defense)
+// Registered into existing toolRegistry, active across all LLM execution paths.
 
 import { toolRegistry } from "../orchestrator/tool-registry";
 import { skillRegistry } from "./skill-registry";
 
 const LOG_PREFIX = "[SkillTools]";
 
-// skill 正文 / reference 返回时的字符上限。CyreneAgent 的 FC 循环把 tool 返回值
-// 永久留在 conversation 里，超大正文（xlsx 8.5KB、skill-creator 33KB、docx 的
-// openxml_encyclopedia 单个 144KB）会顶过推理模型单轮 30s 预算导致连续超时。
-// 官方 skill 系统靠宿主 agent（Claude Code 等）的上下文压缩兜底，我们没那层，得自己截断。
+// Character limits on skill body / reference return values. CyreneAgent FC loops retain tool
+// return values in conversation permanently; giant bodies (xlsx 8.5KB, skill-creator 33KB, docx
+// openxml_encyclopedia 144KB) exceed reasoning model 30s timeout budgets.
+// Standard skill systems rely on host agent context compression; we truncate directly here.
 const SKILL_BODY_MAX_CHARS = 6000;
 const SKILL_REF_MAX_CHARS = 8000;
 
-/** 截断文本到 maxChars，超长时末尾附提示。保留前部（任务路由表/关键规则通常在前）。 */
+/** Truncates text to maxChars, appending notice on overflow. Retains start (task routing / key rules are usually at front). */
 function truncateForContext(text: string, maxChars: number, hint: string): string {
   if (text.length <= maxChars) return text;
   return text.slice(0, maxChars) +
@@ -24,19 +24,19 @@ function truncateForContext(text: string, maxChars: number, hint: string): strin
 }
 
 /**
- * 每轮对话的 reference 已读记录（skill_id + ref → true）。
- * FC 循环开始时调 resetReadRefs() 清空。防止模型在同一轮任务里重复读同一文件。
+ * Per-dialogue reference read log (skill_id + ref -> true).
+ * Reset via resetReadRefs() when starting an FC loop, preventing redundant reads in the same round.
  */
 const readRefs = new Set<string>();
 
-/** 每轮 FC 循环开始前调，清空已读记录。由 cyrene-agent.ts 在循环入口调。 */
+/** Called before each FC loop begins to clear read records. Invoked by cyrene-agent.ts at loop entry. */
 export function resetReadRefs(): void {
   readRefs.clear();
 }
 
 /**
- * 执行纪律提示，拼在 invoke_skill 返回内容末尾。
- * 约束模型"够用即执行、不重复读、不探索式遍历"，避免浪费轮数。
+ * Execution discipline prompt, appended to invoke_skill output.
+ * Constrains model to execute once sufficient, avoid duplicate reads or exploratory sweeps, saving turn budget.
  */
 const EXECUTION_DISCIPLINE =
   "\n\n---\n" +
@@ -48,9 +48,9 @@ const EXECUTION_DISCIPLINE =
   "5. When turns are limited, prioritize a deliverable over formatting refinements.";
 
 /**
- * 注册 skill 系统的两个 meta-tool 进 toolRegistry。
- * 标 risk:"safe"（只读本地 skill 文件），免权限打扰。
- * initSkills 启动时调一次。
+ * Registers the two skill system meta-tools into toolRegistry.
+ * Marked risk: "safe" (read-only on local skill files) to avoid permission prompts.
+ * Invoked once during initSkills startup.
  */
 export function registerSkillTools(): void {
   toolRegistry.register({
@@ -115,7 +115,7 @@ export function registerSkillTools(): void {
       if (!skill || !skill.enabled || !skillRegistry.isAvailable(id)) {
         return `[read_skill_reference] skill not found: ${id}`;
       }
-      // 去重：同一轮内同一 reference 不重复返回（内容已在对话历史里，再读浪费轮数+token）
+      // Deduplication: do not return same reference repeatedly within a round (already in dialogue history)
       const readKey = `${id}/${ref}`;
       if (readRefs.has(readKey)) {
         return `[read_skill_reference] "${ref}" was already read this turn. Do not read it again. ` +

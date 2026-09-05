@@ -1,8 +1,8 @@
-// game-bot 类型定义 —— 脚本原语 + GameRecipe。
-// 纯类型，无副作用。id 永远 = 脚本文件名（去 .yaml），name 仅展示。
+// game-bot type definitions — script primitives + GameRecipe.
+// Pure types without side effects. id always = script filename (stripped .yaml), name is display-only.
 
-// ── 原语 ──────────────────────────────────────────────────
-// 每个原语一个 interface；Step 是联合类型。branch.then/else 递归为 Step[]。
+// ── Primitives ──────────────────────────────────────────────────
+// One interface per primitive; Step is union type. branch.then/else recurses to Step[].
 
 export interface StepLaunch { type: "launch"; exe: string; }
 export interface StepWait { type: "wait"; ms: number; }
@@ -11,40 +11,40 @@ export interface StepClick { type: "click"; target: "center" | { x: number; y: n
 
 export interface StepVlmClick {
   type: "vlm_click";
-  ref: string;          // 参考小图名（红框裁出）
-  target?: string;      // 给 VLM 的补充描述（可选）
-  repeat?: number;      // 连点次数，默认 1
-  interval?: number;    // 连点间隔 ms，默认 1000
-  retry?: number;       // 定位失败重试次数，默认 2
-  settle?: number;      // 截图前等待 ms，覆盖引擎默认
+  ref: string;          // Reference image name (cropped from red bounding box)
+  target?: string;      // Supplementary description for VLM (optional)
+  repeat?: number;      // Repeat click count, default 1
+  interval?: number;    // Repeat click interval ms, default 1000
+  retry?: number;       // Retry count on location failure, default 2
+  settle?: number;      // Wait ms before screenshot, overrides engine default
 }
 
 export interface StepVlmSelect {
   type: "vlm_select";
-  desc: string;         // 语义描述，如"支援列表第一个"（无参考图）
-  retry?: number;       // 默认 2
+  desc: string;         // Semantic description, e.g. "first item in list" (no reference image)
+  retry?: number;       // Default 2
   settle?: number;
 }
 
 export interface StepVlmCheck {
   type: "vlm_check";
-  id: string;           // 结果绑定到变量 ${id}（布尔），供 branch.if 用
+  id: string;           // Result bound to variable ${id} (boolean), used for branch.if
   ask: string;
-  ref?: string;         // 可选状态参考图
+  ref?: string;         // Optional reference image for state
   settle?: number;
 }
 
 export interface StepVlmCompare {
   type: "vlm_compare";
-  id: string;           // 结果绑定到变量 ${id}（匹配的 ref 索引或描述）
+  id: string;           // Result bound to variable ${id} (matched ref index or description)
   ask: string;
-  refs: string[];       // 多张参考图
+  refs: string[];       // Multiple reference images
   settle?: number;
 }
 
 export interface StepBranch {
   type: "branch";
-  if: string;           // 表达式，如 "${has_update}" / "${auto_battle_state == 'off'}"
+  if: string;           // Expression, e.g. "${has_update}" / "${auto_battle_state == 'off'}"
   then: Step[];
   else?: Step[];
 }
@@ -56,7 +56,7 @@ export type Step =
 
 export interface GameRecipe {
   name: string;
-  exe: string;          // 可含 ${exe_path}
-  model?: string;       // 可含 ${vlm_config}；留空则用全局 VLM 配置
+  exe: string;          // Can contain ${exe_path}
+  model?: string;       // Can contain ${vlm_config}; leave blank to use global VLM config
   steps: Step[];
 }

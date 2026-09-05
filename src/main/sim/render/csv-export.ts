@@ -1,5 +1,4 @@
-// CSV 导出：每轮每条目一行
-// 列：round, entryId, intrinsicValue, priority, activation, userSilence, modelSilence, state, userHit, modelHit
+// CSV Export: one row per round per entry
 import * as fs from "fs";
 import * as path from "path";
 import type { SimResult } from "../sim-types";

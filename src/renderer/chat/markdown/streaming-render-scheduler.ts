@@ -1,38 +1,38 @@
 /**
- * 流式渲染调度器。
+ * Streaming render scheduler.
  *
- * 独立于 40ms 字符消费 tick，使用 requestAnimationFrame + 最小时间间隔。
+ * Operates independently of 40ms character consumption ticks, using requestAnimationFrame + minimum interval.
  *
- * 特性：
- * - 只有 raw 内容变化时才调度
- * - 同一时间最多一个 pending render
- * - 自适应间隔（根据 active tail 长度）
- * - revision 校验：旧任务不写入新消息
- * - flush 强制执行最后一次渲染
- * - cancel 取消所有 pending
+ * Features:
+ * - Schedules only when raw content changes
+ * - At most one pending render at any time
+ * - Adaptive intervals (based on active tail length)
+ * - Revision validation: prevents stale tasks from updating newer messages
+ * - Flush forces execution of final render
+ * - Cancel clears all pending tasks
  */
 
 export interface SchedulerOptions {
-  /** 消息 ID（用于 revision 校验） */
+  /** Message ID (used for revision validation) */
   messageId: string;
-  /** 渲染回调 */
+  /** Render callback */
   render: () => void;
-  /** 是否已销毁 */
+  /** Whether destroyed/disposed */
   isDisposed: () => boolean;
 }
 
 export interface StreamingRenderScheduler {
-  /** 请求调度一次渲染（节流） */
+  /** Request scheduled render (throttled) */
   schedule(): void;
-  /** 强制立即渲染（取消 pending，同步执行） */
+  /** Force immediate render (cancels pending, executes synchronously) */
   flush(): void;
-  /** 取消所有 pending */
+  /** Cancel all pending renders */
   cancel(): void;
 }
 
 /**
- * 根据 active tail 长度计算自适应渲染间隔（ms）。
- * tail 越长间隔越大，避免长文本频繁重解析。
+ * Computes adaptive render interval (ms) based on active tail length.
+ * Longer tails use larger intervals to avoid frequent re-parsing of large text.
  */
 export function getStreamingRenderInterval(activeLength: number): number {
   if (activeLength < 1_000) return 60;
@@ -64,15 +64,15 @@ export function createStreamingRenderScheduler(options: SchedulerOptions): Strea
     schedule(): void {
       if (options.isDisposed()) return;
 
-      // 已有 pending，不重复调度
+      // Do not duplicate if already pending
       if (pendingTimer !== null || pendingFrame !== null) return;
 
       const elapsed = Date.now() - lastRenderAt;
-      const interval = getStreamingRenderInterval(0); // 间隔由 session 传入 activeLength
+      const interval = getStreamingRenderInterval(0); // Interval provided via activeLength by session
 
       const delay = Math.max(0, interval - elapsed);
 
-      // 用 setTimeout 控制最小间隔，用 requestAnimationFrame 对齐帧
+      // Use setTimeout for minimum interval, requestAnimationFrame for frame alignment
       pendingTimer = setTimeout(() => {
         if (options.isDisposed()) {
           pendingTimer = null;
@@ -85,7 +85,7 @@ export function createStreamingRenderScheduler(options: SchedulerOptions): Strea
     },
 
     flush(): void {
-      // 取消 pending，立即同步执行
+      // Cancel pending, execute synchronously immediately
       if (pendingTimer !== null) {
         clearTimeout(pendingTimer);
         pendingTimer = null;

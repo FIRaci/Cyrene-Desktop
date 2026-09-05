@@ -1,15 +1,15 @@
 /**
- * 运行时执行状态 —— 独立模块，避免 cyrene-agent ↔ langgraph-agent-loop 循环依赖。
+ * Runtime execution status - Independent module avoiding cyrene-agent <-> langgraph-agent-loop circular dependencies.
  *
- * 职责：
- * - 定义 RunPhase、SuccessfulToolExecution、CreatedArtifact、RunExecutionStatus
- * - 提供 snapshotRunExecutionStatus 不可变快照
- * - 定义 AgentExecutionError（携带 executionStatus + 原始 cause）
+ * Responsibilities:
+ * - Defines RunPhase, SuccessfulToolExecution, CreatedArtifact, RunExecutionStatus
+ * - Provides snapshotRunExecutionStatus immutable snapshot
+ * - Defines AgentExecutionError (carrying executionStatus + original cause)
  */
 
-// ── Phase 类型 ─────────────────────────────
+// -- Phase types --
 
-/** 执行阶段（统一定义，旧节点名做映射） */
+/** Execution phase (unified definition, maps legacy node names) */
 export type RunPhase =
   | "context"
   | "cita"
@@ -23,39 +23,39 @@ export type RunPhase =
   | "soul"
   | "unknown";
 
-// ── 安全精简的工具执行记录 ──────────────────
+// -- Safe compact tool execution record --
 
-/** 成功工具的安全摘要（不包含完整 output） */
+/** Safe summary of successful tool (does not contain full output) */
 export interface SuccessfulToolExecution {
   capabilityId: string;
   actionLabel: string;
   completionClaims: string[];
 }
 
-/** 可信文件产物 */
+/** Trusted file artifact */
 export interface CreatedArtifact {
   path: string;
   kind?: "docx" | "pdf" | "xlsx" | "markdown" | "file";
   capabilityId: string;
 }
 
-// ── 执行状态 ──────────────────────────────
+// -- Execution status --
 
 export interface RunExecutionStatus {
   phase: RunPhase;
   successfulTools: SuccessfulToolExecution[];
   createdArtifacts: CreatedArtifact[];
   /**
-   * 整体任务是否已确认完成。
-   * 唯一来源：
+   * Whether the overall task is confirmed complete.
+   * Sole sources:
    *   - taskPlan?.status === "completed"
-   *   - directExecutionCompletionConfirmed === true（Action Gate 路由到 respond + 所有 completion evidence 满足）
-   * 不能由 createdArtifacts、工具成功数量或进入 Soul 推断。
+   *   - directExecutionCompletionConfirmed === true (Action Gate routes to respond + all completion evidence satisfied)
+   * Cannot be inferred from createdArtifacts, count of successful tools, or entering Soul.
    */
   taskCompletionConfirmed: boolean;
 }
 
-/** 创建不可变快照（防止后续变化污染错误对象） */
+/** Creates immutable snapshot (prevents subsequent mutations from polluting error object) */
 export function snapshotRunExecutionStatus(status: RunExecutionStatus): RunExecutionStatus {
   return {
     phase: status.phase,
@@ -69,9 +69,9 @@ export function snapshotRunExecutionStatus(status: RunExecutionStatus): RunExecu
   };
 }
 
-// ── 错误类型 ──────────────────────────────
+// -- Error types --
 
-/** 携带执行状态的错误（保留原始 cause） */
+/** Error carrying execution status (retaining original cause) */
 export class AgentExecutionError extends Error {
   constructor(
     message: string,

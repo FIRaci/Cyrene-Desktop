@@ -16,7 +16,7 @@ describe("plugin enabled gates", () => {
 
   beforeEach(() => {
     setWeatherConfig(
-      () => "北京",
+      () => "Beijing",
       () => "amap",
       () => "",
       undefined,
@@ -31,7 +31,7 @@ describe("plugin enabled gates", () => {
   it("does not execute weather lookup when the weather plugin is disabled", async () => {
     const weather = toolRegistry.getById("weather");
 
-    await expect(weather?.execute({ city: "北京" })).resolves.toBe("[Error] Weather feature is disabled. Please enable it in Settings.");
+    await expect(weather?.execute({ city: "Beijing" })).resolves.toBe("[Error] Weather feature is disabled. Please enable it in Settings.");
   });
 
   it("does not execute travel lookup when the travel plugin is disabled", async () => {
@@ -65,7 +65,7 @@ describe("plugin enabled gates", () => {
     }));
     const travel = toolRegistry.getById("plan_trip");
 
-    const output = await travel?.execute({ origin: "北京站", destination: "故宫", mode: "步行" });
+    const output = await travel?.execute({ origin: "\u5317\u4eac\u7ad9", destination: "\u6545\u5bab", mode: "\u6b65\u884c" });
 
     expect(output).toContain("Walking route");
     expect(output).toContain("Distance: 1.2 km");

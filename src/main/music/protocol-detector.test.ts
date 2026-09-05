@@ -16,7 +16,7 @@ beforeEach(() => {
 
 describe("ProtocolDetector", () => {
   it("returns true when Electron returns a path", async () => {
-    getAppInfo.mockResolvedValue({ path: "C:/NetEase/CloudMusic.exe", name: "网易云", icon: {} });
+    getAppInfo.mockResolvedValue({ path: "C:/NetEase/CloudMusic.exe", name: "NetEase Cloud Music", icon: {} });
     const d = new ProtocolDetector();
     expect(await d.isRegistered("orpheus")).toBe(true);
   });

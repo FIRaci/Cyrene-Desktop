@@ -3,13 +3,13 @@ import { synthesize } from "./gptsovits-engine";
 
 vi.mock("fs", () => ({ existsSync: vi.fn(() => true) }));
 
-describe("gptsovits-engine synthesize 输入校验", () => {
+describe("gptsovits-engine synthesize input validation", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
 
-  it("缺 baseUrl 时抛错", async () => {
+  it("throws when baseUrl is missing", async () => {
     await expect(synthesize({
       baseUrl: "",
       refAudioPath: "C:/x.wav",
@@ -18,7 +18,7 @@ describe("gptsovits-engine synthesize 输入校验", () => {
     })).rejects.toThrow(/API URL/);
   });
 
-  it("缺 refAudioPath 时抛错", async () => {
+  it("throws when refAudioPath is missing", async () => {
     await expect(synthesize({
       baseUrl: "http://localhost:9880",
       refAudioPath: "",
@@ -27,7 +27,7 @@ describe("gptsovits-engine synthesize 输入校验", () => {
     })).rejects.toThrow(/Reference audio/);
   });
 
-  it("缺 promptText 时抛错", async () => {
+  it("throws when promptText is missing", async () => {
     await expect(synthesize({
       baseUrl: "http://localhost:9880",
       refAudioPath: "C:/nonexistent.wav",
@@ -36,13 +36,13 @@ describe("gptsovits-engine synthesize 输入校验", () => {
     })).rejects.toThrow(/Reference audio transcript/);
   });
 
-  it("缺 text 时抛错", async () => {
+  it("throws when text is missing", async () => {
     await expect(synthesize({
       baseUrl: "http://localhost:9880",
       refAudioPath: "C:/nonexistent.wav",
       promptText: "hi",
       text: "",
-    })).rejects.toThrow(/合成文本|text/);
+    })).rejects.toThrow(/Synthesis text|text/);
   });
 
   it("defaults both synthesis and reference languages to English", async () => {

@@ -1,7 +1,7 @@
 /* ============================================================
-   Cyrene sidebar (status / feeling / model / settings)
-   跟 chat.css 同款：粉紫玻璃质感 + 同一套设计 token
-   ============================================================ */
+ Cyrene sidebar (status / feeling / model / settings)
+ chat.css ： + token
+ ============================================================ */
 
 html, body { height: 100%; }
 
@@ -76,7 +76,7 @@ body {
   white-space: nowrap;
 }
 
-/* 标题栏头像：默认主题白线条 PNG，白调主题切黑色线条 SVG。 */
+/* TitleAvatar： PNG，Pearl white theme SVG。 */
 .sidebar__name-avatar {
   display: block;
   width: 20px;
@@ -110,7 +110,7 @@ body {
 
 .sidebar__icon-btn,
 .sidebar__winbtn {
-  /* titlebar 整体是 drag 区，按钮必须 no-drag 否则点击被拖拽吞掉 */
+  /* titlebar drag ，Button no-drag */
   -webkit-app-region: no-drag;
   display: grid;
   place-items: center;
@@ -255,6 +255,28 @@ body {
 .panel-card--status,
 .panel-card--feeling {
   padding: 12px 12px;
+  cursor: pointer;
+  transition: transform 140ms ease, border-color 160ms ease, box-shadow 180ms ease, background 160ms ease;
+  user-select: none;
+}
+
+.panel-card--status:hover,
+.panel-card--feeling:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 182, 220, 0.42);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.24), 0 0 18px rgba(236, 72, 153, 0.22);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.panel-card--status:focus-visible,
+.panel-card--feeling:focus-visible {
+  outline: 2px solid #f472b6;
+  outline-offset: 2px;
+}
+
+.panel-card--status:active,
+.panel-card--feeling:active {
+  transform: translateY(0);
 }
 
 .panel-card--feeling::before {

@@ -1,13 +1,13 @@
-// 任务清单 store —— todo_write 工具背后的持久化层。
+// Todo list store - Persistence layer behind todo_write tool.
 //
-// 设计：
-// - 内存里持有当前 TodoState，每次 setTodos 持久化到 userData/current-todos.json
-// - 监听者模式：主进程其他模块（index.ts）订阅变化，转发 CUSTOM 事件给渲染端
-// - 启动时 loadTodos() 从磁盘恢复上次未完成的任务（跨重启延续）
+// Design:
+// - Holds current TodoState in memory, persists to userData/current-todos.json on each setTodos
+// - Listener pattern: other main process modules (index.ts) subscribe to changes and forward CUSTOM events to renderer
+// - loadTodos() at launch restores previous unfinished tasks from disk (persists across restarts)
 //
-// 不做的事：
-// - 不做多清单/多会话隔离（当前产品形态只有一个活跃清单够用）
-// - 不做历史版本（覆盖写，简单稳定）
+// Non-goals:
+// - No multi-list / multi-session isolation (a single active list suffices for current product)
+// - No historical versions (overwrite writes, simple and stable)
 
 import * as fs from "fs";
 import * as path from "path";
@@ -46,7 +46,7 @@ function persist(): void {
   }
 }
 
-/** 启动时调一次，从磁盘恢复未完成的任务。 */
+/** Call once at startup to restore unfinished tasks from disk. */
 export function loadTodos(): void {
   if (loaded) return;
   loaded = true;
@@ -55,16 +55,16 @@ export function loadTodos(): void {
     const parsed = JSON.parse(raw) as TodoState;
     if (parsed && Array.isArray(parsed.todos)) {
       current = parsed;
-      console.log("[TodoStore] 恢复 " + current.todos.length + " 条未完成任务");
+      console.log("[TodoStore] Restored " + current.todos.length + " unfinished tasks");
     }
   } catch {
     current = { ...EMPTY_STATE };
   }
 }
 
-/** 整体覆盖写（todo_write 工具调这个）。返回更新后的 state。 */
+/** Full overwrite write (called by todo_write tool). Returns updated state. */
 export function setTodos(todos: TodoItem[]): TodoState {
-  // 轻量校验：丢掉字段不全的项
+  // Lightweight validation: discard items missing required fields
   const valid = todos.filter(t => t && typeof t.id === "string" && typeof t.content === "string");
   current = { todos: valid, updatedAt: Date.now() };
   persist();
@@ -86,7 +86,7 @@ export function clearTodos(): void {
   }
 }
 
-/** 订阅变化。返回取消订阅函数。 */
+/** Subscribe to changes. Returns unsubscribe function. */
 export function onTodosChange(cb: (s: TodoState) => void): () => void {
   listeners.push(cb);
   return () => { listeners = listeners.filter(l => l !== cb); };

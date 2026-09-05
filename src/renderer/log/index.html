@@ -13,7 +13,12 @@
   <div class="log-window">
     <header class="log__titlebar">
       <div class="log__title">
-        <span class="log__icon" aria-hidden="true">📜</span>
+        <span class="log__icon" aria-hidden="true">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="4 17 10 11 4 5"></polyline>
+            <line x1="12" y1="19" x2="20" y2="19"></line>
+          </svg>
+        </span>
         <span class="log__name">Activity & Response Log</span>
         <span class="log__hint">Alt+4</span>
       </div>
@@ -35,20 +40,59 @@
         <button type="button" class="filter-btn is-active" data-filter="all">All (<span id="count-all">0</span>)</button>
         <button type="button" class="filter-btn" data-filter="reasoning">Thinking (<span id="count-reasoning">0</span>)</button>
         <button type="button" class="filter-btn" data-filter="response">Responses (<span id="count-response">0</span>)</button>
+        <button type="button" class="filter-btn" data-filter="user">Messages (<span id="count-user">0</span>)</button>
+        <button type="button" class="filter-btn" data-filter="kaomoji">Kaomoji (<span id="count-kaomoji">0</span>)</button>
         <button type="button" class="filter-btn" data-filter="tool">Tools (<span id="count-tool">0</span>)</button>
         <button type="button" class="filter-btn" data-filter="error">Errors (<span id="count-error">0</span>)</button>
       </div>
       <div class="log__actions">
-        <input type="text" id="log-search" class="log__search" placeholder="Filter logs..." aria-label="Search logs" />
-        <button type="button" class="action-btn" id="copy-btn" title="Copy visible logs">📋 Copy</button>
-        <button type="button" class="action-btn" id="clear-btn" title="Clear log entries">🗑️ Clear</button>
-        <button type="button" class="action-btn is-active" id="autoscroll-btn" title="Toggle autoscroll">⬇️ Auto-scroll</button>
+        <div class="log__search-box">
+          <svg class="log__search-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <input type="text" id="log-search" class="log__search" placeholder="Filter logs..." aria-label="Search logs" />
+        </div>
+        <button type="button" class="action-btn" id="copy-btn" title="Copy visible logs">
+          <span class="action-btn__icon" aria-hidden="true">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+          </span>
+          <span class="action-btn__label">Copy</span>
+        </button>
+        <button type="button" class="action-btn" id="clear-btn" title="Clear log entries">
+          <span class="action-btn__icon" aria-hidden="true">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              <line x1="10" y1="11" x2="10" y2="17"></line>
+              <line x1="14" y1="11" x2="14" y2="17"></line>
+            </svg>
+          </span>
+          <span class="action-btn__label">Clear</span>
+        </button>
+        <button type="button" class="action-btn is-active" id="autoscroll-btn" title="Toggle autoscroll">
+          <span class="action-btn__icon" aria-hidden="true">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 3v13"></path>
+              <polyline points="7 11 12 16 17 11"></polyline>
+              <line x1="4" y1="21" x2="20" y2="21"></line>
+            </svg>
+          </span>
+          <span class="action-btn__label">Auto-scroll</span>
+        </button>
       </div>
     </div>
 
     <main class="log__body" id="log-container">
       <div class="log__empty" id="log-empty">
-        <div class="log__empty-icon">🌸</div>
+        <div class="log__empty-icon" aria-hidden="true">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 12h-4l-3 9L9 3l-3 9H2"></path>
+          </svg>
+        </div>
         <div class="log__empty-title">No Activity Logs Yet</div>
         <div class="log__empty-subtitle">Send messages or interact with Cyrene to see real-time reasoning thoughts, tool executions, and response telemetry.</div>
       </div>

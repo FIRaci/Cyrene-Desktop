@@ -13,12 +13,12 @@ function preview(content: string, maxLength: number): string {
 }
 
 function getL1Field(content: string): L1Field {
-  if (/目标|想要|计划|打算/.test(content)) return "recentGoals"
+  if (/goal|want|plan|aim|intend/i.test(content)) return "recentGoals"
   return "recentPreferences"
 }
 
 function hasCorrectionIntent(text: string): boolean {
-  return ["不是这样", "你记错了", "记错了", "我现在不这样", "现在不这样"].some((phrase) => text.includes(phrase))
+  return ["not like that", "you remembered wrong", "remembered wrong", "i am not like that now", "not like that now", "that's wrong", "that is wrong"].some((phrase) => text.toLowerCase().includes(phrase))
 }
 
 function getImpactScope(memory: L2Memory): "low" | "medium" | "high" {
@@ -46,45 +46,45 @@ export class MemoryManager {
   async writeMemory(candidates: MemoryCandidate[]): Promise<void> {
     for (const candidate of candidates) {
       if (shouldSkipCandidate(candidate)) {
-        console.log("[MemoryManager] 候选标记为不写入或存在过度概括，跳过")
+        console.log("[MemoryManager] Candidate marked not to write or over-generalized, skipping")
         continue
       }
 
       if (candidate.layer === "L0") {
         if (!canWriteCoreProfile(candidate)) {
-          console.log("[MemoryManager] L0 候选不是用户明确事实，跳过自动写核心画像")
+          console.log("[MemoryManager] L0 candidate is not user explicit fact, skipping auto-write to core persona")
           continue
         }
 
-        // 如果 L0 被用户锁定，跳过
+        // If L0 is pinned by user, skip
         const l0 = await memoryStore.getL0()
         if (l0.isPinned) {
-          console.log("[MemoryManager] L0 已锁定，跳过自动更新")
+          console.log("[MemoryManager] L0 is pinned, skipping auto-update")
           continue
         }
 
-        // 从唯一事实来源获取合法字段列表
+        // Get valid fields from single source of truth
         const validFields = Object.keys(L0_FIELD_DESCRIPTIONS)
 
-        // 情况一：AI 没有输出 field 字段（理论上不该发生）
+        // Case 1: AI did not output field (theoretically shouldn't happen)
         if (!candidate.field) {
-          console.warn("[MemoryManager] L0 候选缺少 field 字段，跳过自动写核心画像")
+          console.warn("[MemoryManager] L0 candidate missing field, skipping auto-write to core persona")
           continue
         }
 
-        // 情况二：AI 输出了非法字段名（幻觉）
+        // Case 2: AI output invalid field name (hallucination)
         if (!validFields.includes(candidate.field)) {
-          console.warn(`[MemoryManager] AI 返回非法字段 "${candidate.field}"，跳过自动写核心画像`)
+          console.warn(`[MemoryManager] AI returned invalid field "${candidate.field}", skipping auto-write to core persona`)
           continue
         }
 
-        // 情况三：合法字段，直接写入
+        // Case 3: Valid field, write directly
         await memoryStore.upsertL0Field(candidate.field as L0WritableField, candidate.content)
-        console.log(`[MemoryManager] L0 更新字段: ${candidate.field} = "${candidate.content.slice(0, 20)}"`)
+        console.log(`[MemoryManager] L0 update field: ${candidate.field} = "${candidate.content.slice(0, 20)}"`)
       } else if (candidate.layer === "L1") {
         const field = getL1Field(candidate.content)
         await memoryStore.replaceL1Field(field, candidate.content)
-        console.log(`[MemoryManager] L1 更新字段: ${field}`)
+        console.log(`[MemoryManager] L1 update field: ${field}`)
       } else if (candidate.layer === "L2") {
         await this.writeL2(candidate)
       }
@@ -112,27 +112,27 @@ export class MemoryManager {
       await memoryStore.markL2SyncStatus(l2.id, "synced", ragId)
     } catch (err) {
       await memoryStore.markL2SyncStatus(l2.id, "sync_failed", undefined, err)
-      console.warn("[MemoryManager] L2 已写入，但 RAG 同步失败:", err)
+      console.warn("[MemoryManager] L2 written, but RAG sync failed:", err)
       return
     }
 
-    console.log(`[MemoryManager] L2 写入: "${preview(candidate.content, 30)}"（l2Id: ${l2.id}, ragId: ${ragId}）`)
+    console.log(`[MemoryManager] L2 write: "${preview(candidate.content, 30)}" (l2Id: ${l2.id}, ragId: ${ragId})`)
 
-    // ── 冲突检测：检查新记忆是否与现有记忆矛盾 ──
+    // ── Conflict Detection: check if new memory contradicts existing memories ──
     try {
       await this.detectAndMarkConflicts(candidate.content, l2.id, ragId, candidate.triggerText)
     } catch (err) {
-      console.warn("[MemoryManager] 冲突检测失败:", err)
+      console.warn("[MemoryManager] Conflict detection failed:", err)
     }
   }
 
-  /** 检测新记忆是否与现有 active 记忆矛盾，如有则标记 */
+  /** Detect if new memory contradicts existing active memories, mark if so */
   private async detectAndMarkConflicts(content: string, newL2Id: string, newRagId: string, triggerText: string): Promise<void> {
-    // 搜索语义相似的现有 L2 条目
+    // Search semantically similar existing L2 items
     const allL2 = await memoryStore.getAllL2()
     const activeL2 = allL2.filter((m) => (m.status === "active" || m.status === "aging") && m.ragId && m.ragId !== newRagId)
 
-    // 用 RAG entry 做向量相似度匹配，优先读取 metadata.l2Id 精确定位 L2。
+    // Use RAG entry for vector similarity match, preferring metadata.l2Id for exact L2 location
     const similarEntries = await searchMemoryEntries(content, "user_memory", 5, { recordRecall: false })
     if (similarEntries.length === 0) return
 
@@ -144,7 +144,7 @@ export class MemoryManager {
       }
     }
 
-    // 在 activeL2 中找 RAG 定位到的候选，再检查是否存在本地弱矛盾信号。
+    // Find candidates in activeL2 located by RAG, then check for local weak contradiction signals
     for (const existing of activeL2) {
       const metadataMatch = entriesByL2Id.get(existing.id)
       const textMatch = similarEntries.find((entry) => (
@@ -157,7 +157,7 @@ export class MemoryManager {
 
       const candidate = findPossibleConflictCandidate(content, existing.content)
       if (candidate.isCandidate) {
-        // 本地规则只产出疑似候选，不确认冲突真伪。
+        // Local rules only produce suspected candidates, do not confirm actual conflict
         const marked = await memoryStore.markL2Conflict(existing.id, newRagId)
         if (marked) {
           const log = await memoryStore.appendConflictLog({
@@ -181,7 +181,7 @@ export class MemoryManager {
             impactScope: getImpactScope(existing),
           })
           await memoryStore.scoreConflictLog(log.id, score)
-          console.log(`[MemoryManager] ⚠️ 发现疑似记忆冲突候选: "${preview(existing.content, 30)}" ↔ "${preview(content, 30)}"`)
+          console.log(`[MemoryManager] ⚠️ Found suspected memory conflict candidate: "${preview(existing.content, 30)}" <-> "${preview(content, 30)}"`)
         }
       }
     }
@@ -198,12 +198,12 @@ export class MemoryManager {
   }
 
   /**
-   * 手动触发的 L2 权重衰减。当前尚未挂载到生产调度；
-   * 后续会由 memory-scheduler 统一决定触发策略。
+   * Manually triggered L2 weight decay. Currently not mounted in production scheduler;
+   * Will be unified by memory-scheduler later.
    */
   async runDecay(): Promise<void> {
     const changed = await memoryStore.decayL2Weights()
-    console.log(`[MemoryManager] L2 权重衰减完成，更新 ${changed} 条`)
+    console.log(`[MemoryManager] L2 weight decay complete, updated ${changed} items`)
   }
 
   async onL2Recalled(ids: string[]): Promise<void> {

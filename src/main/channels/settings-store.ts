@@ -1,35 +1,35 @@
-// channels 配置存取：userData/channels-settings.json
+// Channels configuration storage: userData/channels-settings.json
 //
-// 照 index.ts 的 GeneralSettings 模式：load / save / normalize 三件套。
-// 唯一碰 electron（app.getPath）。
+// Follows the GeneralSettings pattern in index.ts: load / save / normalize triad.
+// Touches Electron only via app.getPath.
 //
-// 字段安全分级：
-//   - 公开字段（开关、端口、白名单）：明文存
-//   - 私密字段（飞书 AppSecret/Token/Encrypt Key）：加密落盘。
+// Field security classification:
+//   - Public fields (switches, ports, whitelists): stored in plain text
+//   - Sensitive fields (Feishu AppSecret/Token/Encrypt Key): encrypted on disk.
 //
-// 加密策略（按优先级）：
-//   1. safeStorage（OS 钥匙串：Windows DPAPI / macOS Keychain / Linux libsecret）
-//      → 存储前缀 `enc:<base64>`
-//   2. safeStorage 不可用时（headless / 沙盒 / libsecret 没装）：用机器指纹 XOR 混淆
-//      → 存储前缀 `obf:<base64>` —— 不是真加密，但能挡住 cat / grep 这种偷窥
+// Encryption strategy (by priority):
+//   1. safeStorage (OS keychain: Windows DPAPI / macOS Keychain / Linux libsecret)
+//      -> stored with prefix `enc:<base64>`
+//   2. When safeStorage is unavailable (headless / sandbox / missing libsecret): machine fingerprint XOR obfuscation
+//      -> stored with prefix `obf:<base64>` - not true encryption, but prevents trivial sniffing via cat / grep
 //
-// 为什么这样：
-//   - 单纯回退到明文会让"重启后 secret 丢失"成为静默 bug（用户根本不知道）
-//   - 混淆虽然不抗逆向，但保证 secret 至少能 round-trip（重启后能恢复）
-//   - 如果将来发现 safeStorage 不可用且用户在意安全，加一个设置项让他们输口令加密
+// Rationale:
+//   - Merely falling back to plaintext causes silent data loss on restart
+//   - Obfuscation ensures round-trip survival across restarts even if not reverse-engineering proof
+//   - If safeStorage is unavailable and user demands high security, a passphrase prompt can be added later
 import * as fs from "fs";
 import * as path from "path";
 import { app, safeStorage } from "electron";
 import type { ChannelId } from "./types";
 
-/** safeStorage 加密后的前缀。读取时遇到这个前缀就解密 */
+/** Prefix after safeStorage encryption. Decrypted upon reading when encountered */
 const ENC_PREFIX = "enc:";
-/** base64 混淆前缀（safeStorage 不可用时的兜底，可 round-trip 但不抗逆向） */
+/** Base64 obfuscation prefix (fallback when safeStorage is unavailable; preserves round-trip) */
 const OBF_PREFIX = "obf:";
-/** 明文兜底标记（旧版数据迁移用） */
+/** Plaintext fallback marker (for legacy data migration) */
 const PLAIN_PREFIX = "plain:";
 
-/** 检测当前环境 safeStorage 是否可用。Linux 无 DISPLAY 时不可用。 */
+/** Check whether safeStorage is available in the current environment. */
 let safeStorageAvailable: boolean | null = null;
 function isSafeStorageAvailable(): boolean {
   if (safeStorageAvailable !== null) return safeStorageAvailable;
@@ -41,17 +41,16 @@ function isSafeStorageAvailable(): boolean {
   return safeStorageAvailable;
 }
 
-/** 机器指纹 XOR 混淆 key —— 不抗逆向但保证 round-trip。
- *  用 userData 绝对路径 + 包名做 SHA256 → 16 字节。 */
+/** Machine fingerprint XOR obfuscation key - guarantees round-trip across restarts.
+ *  Uses userData absolute path + app name SHA-256 -> 16 bytes. */
 function getMachineKey(): Buffer {
   const seed = `${app.getPath("userData")}::${app.getName()}::cyrene-bot-secret`;
-  // 用 node 内置 crypto（避免依赖冲突）
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { createHash } = require("crypto") as typeof import("crypto");
   return createHash("sha256").update(seed).digest().subarray(0, 16);
 }
 
-/** XOR 混淆（不是真加密，仅挡 casual 偷窥）。 */
+/** XOR obfuscation (basic deterrent against casual inspection). */
 function obfuscate(plain: string): string {
   const key = getMachineKey();
   const buf = Buffer.from(plain, "utf8");
@@ -63,7 +62,7 @@ function obfuscate(plain: string): string {
   return OBF_PREFIX + out.toString("base64");
 }
 
-/** XOR 解混淆（必须和 obfuscate 用同一台机器 —— key 派生自 userData 路径）。 */
+/** XOR deobfuscation (must run on the same machine - key derived from userData path). */
 function deobfuscate(stored: string): string {
   const key = getMachineKey();
   const b64 = stored.slice(OBF_PREFIX.length);
@@ -76,7 +75,7 @@ function deobfuscate(stored: string): string {
   return out.toString("utf8");
 }
 
-/** 加密一个字符串。优先级: safeStorage > 机器指纹混淆 > 明文 */
+/** Encrypt a string. Priority: safeStorage > machine fingerprint obfuscation > plaintext */
 function encryptField(plain: string): string {
   if (!plain) return "";
   if (isSafeStorageAvailable()) {
@@ -90,13 +89,11 @@ function encryptField(plain: string): string {
   return obfuscate(plain);
 }
 
-/** 解密一个字符串。识别 enc:/obf:/plain: 前缀。空字符串返回空。 */
+/** Decrypt a string. Recognizes enc:/obf:/plain: prefixes. Returns empty string for empty input. */
 function decryptField(stored: string): string {
   if (!stored) return "";
   if (stored.startsWith(ENC_PREFIX)) {
     if (!isSafeStorageAvailable()) {
-      // safeStorage 不可用时 enc: 解不开 —— 这种情况通常意味着首次加密时也没用 safeStorage
-      // 兜底：直接 base64 解码（会拿到乱码但不会让用户丢失 secret）
       console.warn("[ChannelsSettings] safeStorage is unavailable; cannot decrypt enc: field");
       return "";
     }
@@ -119,36 +116,35 @@ function decryptField(stored: string): string {
   if (stored.startsWith(PLAIN_PREFIX)) {
     return stored.slice(PLAIN_PREFIX.length);
   }
-  // 旧数据 / 兜底：当作明文
+  // Legacy data / fallback: treat as plaintext
   return stored;
 }
 
 export interface ChannelRuntimeConfig {
-  /** 是否启用本渠道 */
+  /** Whether this channel is enabled */
   enabled: boolean;
-  /** 自定义 CLI 路径（用户手动指定时填，否则空走探测） */
+  /** Custom CLI path (populated if manually specified by user; otherwise autodetected) */
   manualCliPath?: string;
-  /** 用户填的公网回调 URL（飞书等需要公网回调的渠道用） */
+  /** Public webhook callback URL configured by the user (for Feishu etc.) */
   publicWebhookUrl?: string;
 }
 
 export interface WechatChannelConfig extends ChannelRuntimeConfig {
-  /** 待审批用户列表（Phase 1 接入 OpenClaw pairing 后实装） */
+  /** List of users awaiting approval */
   pairingPending?: Array<{ code: string; senderId: string; createdAt: number }>;
-  /** 当前扫码登录二维码（base64 PNG），会话级不持久化 */
+  /** Current QR code for login (base64 PNG), session-level, not persisted */
 }
 
 export interface FeishuChannelConfig extends ChannelRuntimeConfig {
   appId?: string;
   /**
-   * AppSecret。**已用 safeStorage 加密**。读取时直接用，不要再 decrypt。
-   * 这是 loadChannelsSettings 返回"密文形态"——上游业务层想拿明文，调 decryptFeishuSecret(cfg.appSecret)。
-   * 设置层（UI）保存时：把用户输入的明文先用 encryptField() 包裹再写。
+   * AppSecret. Encrypted on disk using safeStorage / obfuscation.
+   * Decrypted upon loading so runtime consumers receive plaintext.
    */
   appSecret?: string;
 }
 
-/** 给上层用的明文 AppSecret 读取器 */
+/** Plaintext AppSecret reader for callers */
 export function decryptFeishuSecret(cfg: FeishuChannelConfig | undefined): string {
   return decryptField(cfg?.appSecret ?? "");
 }
@@ -158,21 +154,21 @@ export type ChannelToolSandbox = "off" | "safe-only" | "all";
 export interface ChannelsSettings {
   wechat: WechatChannelConfig;
   feishu: FeishuChannelConfig;
-  /** 入站 HTTP server 绑定的端口。0 = 随机空闲。 */
+  /** Port bound by the inbound HTTP server. 0 = random free port. */
   inboundPort: number;
-  /** HMAC 共享密钥。启动时若为空则自动生成。 */
+  /** HMAC shared secret. Automatically generated on startup if empty. */
   sharedSecret: string;
-  /** 全局：每用户每分钟最多消息数 */
+  /** Global: Maximum messages per minute per user */
   rateLimitPerUser: number;
-  /** 全局：单渠道每分钟最多消息数 */
+  /** Global: Maximum messages per minute per channel */
   rateLimitPerChannel: number;
-  /** 全局：是否发送 TTS 音频消息 */
+  /** Global: Whether to send TTS audio messages */
   ttsEnabled: boolean;
-  /** 全局：是否发送 sticker */
+  /** Global: Whether to send stickers */
   stickerEnabled: boolean;
-  /** 全局：是否把 bot 会话镜像到桌面端 chatWindow */
+  /** Global: Whether to mirror bot conversations to desktop chatWindow */
   mirrorToDesktop: boolean;
-  /** 全局：Chat 关闭工具；Work 可限制工具风险等级。 */
+  /** Global: Tool execution sandbox restrictions */
   toolSandbox: ChannelToolSandbox;
 }
 
@@ -222,13 +218,12 @@ function normalize(input: Partial<ChannelsSettings> | null | undefined): Channel
           }))
         : [],
     },
-feishu: {
+    feishu: {
       enabled: safeBool(f?.enabled, false),
       manualCliPath: typeof f?.manualCliPath === "string" ? f?.manualCliPath : undefined,
       publicWebhookUrl: typeof f?.publicWebhookUrl === "string" ? f?.publicWebhookUrl : undefined,
       appId: typeof f?.appId === "string" ? f?.appId : undefined,
-      // appSecret 字段：对外 API 是明文，磁盘存储是 enc: 前缀密文。
-      // load 函数会先 decrypt 再返回；save 函数会自动 encrypt。
+      // appSecret field: external API sees plaintext, disk stores encrypted enc:/obf: prefixed string.
       appSecret: typeof f?.appSecret === "string" ? f?.appSecret : undefined,
     },
     inboundPort: safeNum(input?.inboundPort, 0, 0, 65535),
@@ -248,7 +243,7 @@ export function loadChannelsSettings(): ChannelsSettings {
     if (!fs.existsSync(p)) return { ...DEFAULT_SETTINGS };
     const raw = JSON.parse(fs.readFileSync(p, "utf8")) as Partial<ChannelsSettings>;
     const loaded = normalize(raw);
-    // 私密字段解密边界：磁盘上是 enc: 前缀密文，运行时 API 暴露明文
+    // Sensitive field decryption boundary: disk stores enc: prefix, runtime API exposes plaintext
     if (loaded.feishu.appSecret) {
       loaded.feishu.appSecret = decryptField(loaded.feishu.appSecret);
     }
@@ -264,8 +259,8 @@ export function saveChannelsSettings(patch: Partial<ChannelsSettings>): Channels
   if (patch.wechat) merged.wechat = { ...existing.wechat, ...patch.wechat };
   if (patch.feishu) merged.feishu = { ...existing.feishu, ...patch.feishu };
 
-  // 私密字段加密边界：UI 传来的是明文，写盘前要 wrap
-  // 避开"密文回传"场景：检测 enc:/obf:/plain: 前缀，避免重复加密。
+  // Sensitive field encryption boundary: UI provides plaintext, wrap before saving to disk.
+  // Avoid re-encrypting if already prefixed.
   if (typeof merged.feishu?.appSecret === "string" && merged.feishu.appSecret) {
     const v = merged.feishu.appSecret;
     if (!v.startsWith(ENC_PREFIX) && !v.startsWith(OBF_PREFIX) && !v.startsWith(PLAIN_PREFIX)) {
@@ -274,12 +269,10 @@ export function saveChannelsSettings(patch: Partial<ChannelsSettings>): Channels
   }
 
   const final = normalize(merged);
-  // 写盘时 final.appSecret / final.encryptKey 已经是密文形态（带 enc: 前缀）
-  // load 时解密，运行时给上层看到明文。
   fs.mkdirSync(path.dirname(filePath()), { recursive: true });
   fs.writeFileSync(filePath(), JSON.stringify(final, null, 2), "utf8");
 
-  // 返回给上层时再解密一次，让 API 用户拿到明文
+  // Return decrypted copy so runtime caller receives plaintext
   const out: ChannelsSettings = {
     ...final,
     feishu: {
@@ -290,7 +283,7 @@ export function saveChannelsSettings(patch: Partial<ChannelsSettings>): Channels
   return out;
 }
 
-/** 渠道字段补丁类型（用于上层调用 saveChannelsSettings 时类型安全）。 */
+/** Channel settings patch type for type-safe save operations */
 export type ChannelConfigPatch = Partial<{
   wechat: Partial<WechatChannelConfig>;
   feishu: Partial<FeishuChannelConfig>;
@@ -304,7 +297,7 @@ export type ChannelConfigPatch = Partial<{
   toolSandbox: ChannelToolSandbox;
 }>;
 
-/** 给定 channelId 返回对应的配置子集（用于 adapter 内部读取自己的开关）。 */
+/** Returns the configuration subset for a given channelId */
 export function getChannelConfig<K extends ChannelId>(
   settings: ChannelsSettings,
   channel: K,

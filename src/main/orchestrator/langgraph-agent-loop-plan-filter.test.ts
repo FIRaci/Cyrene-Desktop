@@ -1,15 +1,15 @@
 /**
- * Plan 模式下 hideInPlanMode 工具过滤测试。
+ * hideInPlanMode tool filtering tests in Plan mode.
  *
- * 独立文件：因为需要 ENABLE_TASK_ROUTER=true，而主测试文件固定为 false。
- * 测试场景：
- *   1. Plan 创建失败降级后 delegate_task 被隐藏（Action Gate + Native FC）
- *   2. 下一轮正常 direct 请求恢复 delegate_task 可见
- *   3. 工具过滤使用局部数组，不原地修改共享 enabledTools
+ * Separate file: requires ENABLE_TASK_ROUTER=true, whereas main test file fixes it to false.
+ * Test scenarios:
+ *   1. delegate_task hidden after Plan creation fails and degrades (Action Gate + Native FC)
+ *   2. Next round normal direct request restores delegate_task visibility
+ *   3. Tool filtering uses local array without mutating shared enabledTools in-place
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// Router 启用
+// Router enabled
 vi.mock("./task-router", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./task-router")>();
   return { ...actual, ENABLE_TASK_ROUTER: true };
@@ -66,12 +66,12 @@ class FakeAdapter implements ChatVendorAdapter {
   async testConnection() { return { ok: true, latency: 0 }; }
 }
 
-// ── 工具定义 ──────────────────────────────
+// -- Tool definitions --
 
 function delegateTaskTool(): ToolDefinition {
   return {
-    id: "delegate_task", capability: "delegate_task", name: "委托子任务",
-    description: "委托子任务给子代理", enabled: true,
+    id: "delegate_task", capability: "delegate_task", name: "Delegate subtask",
+    description: "Delegate subtask to subagent", enabled: true,
     inputSchema: { type: "object", properties: { task: { type: "string" } }, required: ["task"] },
     hideInPlanMode: true,
     execute: async () => "unused",
@@ -80,8 +80,8 @@ function delegateTaskTool(): ToolDefinition {
 
 function webSearchTool(): ToolDefinition {
   return {
-    id: "web_search", capability: "web.search", name: "搜索",
-    description: "搜索网页", enabled: true,
+    id: "web_search", capability: "web.search", name: "Search",
+    description: "Search web", enabled: true,
     inputSchema: { type: "object", properties: { query: { type: "string" } }, required: ["query"] },
     execute: async () => "unused",
   };
@@ -89,8 +89,8 @@ function webSearchTool(): ToolDefinition {
 
 function writeWordTool(): ToolDefinition {
   return {
-    id: "write_word", capability: "write_word", name: "写 Word",
-    description: "生成 Word 文档", enabled: true,
+    id: "write_word", capability: "write_word", name: "Write Word",
+    description: "Generate Word document", enabled: true,
     inputSchema: {
       type: "object",
       properties: { filename: { type: "string" }, title: { type: "string" }, paragraphs: { type: "array" } },
@@ -102,18 +102,18 @@ function writeWordTool(): ToolDefinition {
 
 const allTools = [delegateTaskTool(), webSearchTool(), writeWordTool()];
 
-// ── 测试辅助 ──────────────────────────────
+// -- Test helpers --
 
 function defaultOptions(adapter: FakeAdapter, tools = allTools) {
   return {
     settings: { provider: "test", baseUrl: "https://test", model: "m", apiKey: "k" },
     adapter,
-    messages: [{ role: "user" as const, content: "搜索AI新闻" }],
+    messages: [{ role: "user" as const, content: "Search AI news" }],
     tools,
     toolSystemContent: "TOOL_SYSTEM",
     soulSystemBaseContent: "SOUL_SYSTEM",
-    originalQuery: "搜索AI新闻",
-    contextualizedQuery: "搜索AI新闻",
+    originalQuery: "Search AI news",
+    contextualizedQuery: "Search AI news",
     citaContextBlock: "",
     trustedRefs: [],
     timeoutMs: 30_000,
@@ -124,7 +124,7 @@ function defaultOptions(adapter: FakeAdapter, tools = allTools) {
   };
 }
 
-/** 从 adapter 请求中提取 Action Gate 的 availableCapabilities */
+/** Extract Action Gate availableCapabilities from adapter request */
 function extractCapabilities(adapter: FakeAdapter): string[] {
   for (const req of adapter.requests) {
     const lastMsg = req.messages.at(-1);
@@ -141,9 +141,9 @@ function extractCapabilities(adapter: FakeAdapter): string[] {
   return [];
 }
 
-/** 从 adapter 请求中提取 Native FC 的 tools 列表 */
+/** Extract Native FC tools list from adapter request */
 function extractNativeFcTools(adapter: FakeAdapter): string[] {
-  // Native FC 请求：messages 中包含 tools 字段的请求
+  // Native FC request: request whose messages contain tools field
   for (const req of adapter.requests) {
     if (req.tools && req.tools.length > 0) {
       return req.tools.map((t) => t.name);
@@ -162,28 +162,28 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-// ── 测试 ──────────────────────────────────
+// -- Tests --
 
-describe("Plan 模式 delegate_task 过滤", () => {
-  it("Plan 创建失败降级后：delegate_task 从 Action Gate capabilities 中隐藏", async () => {
+describe("Plan mode delegate_task filter", () => {
+  it("after Plan creation fails and degrades: delegate_task is hidden from Action Gate capabilities", async () => {
     const adapter = new FakeAdapter();
-    // Router 返回 plan
-    adapter.enqueueJson({ executionMode: "plan", skillIds: [], reason: "多步任务" });
-    // createPlan 第一次失败（HTTP 529）
+    // Router returns plan
+    adapter.enqueueJson({ executionMode: "plan", skillIds: [], reason: "multi-step task" });
+    // createPlan first failure (HTTP 529)
     adapter.enqueueText("ERROR_SIMULATE_529");
-    // createPlan 第二次失败（重试也失败）-> fallback to direct
+    // createPlan second failure (retry also fails) -> fallback to direct
     adapter.enqueueText("ERROR_SIMULATE_529");
-    // fallback 后 Action Gate 决策 -> respond
+    // Action Gate decision after fallback -> respond
     adapter.enqueueJson({ decision: "respond", reason: "done" });
-    // Soul 回复
-    adapter.enqueueText("已完成搜索。");
+    // Soul reply
+    adapter.enqueueText("Search completed.");
 
-    // fetch 调用顺序：
-    // 1. Router LLM（应成功，返回200，消耗 enqueueJson）
-    // 2. createPlan 第一次 LLM（529）
-    // 3. createPlan 第二次 LLM（529，重试）
-    // 4. Action Gate LLM（应成功，返回200，消耗 enqueueJson）
-    // 5. Soul LLM（应成功，返回200，消耗 enqueueText）
+    // fetch call sequence:
+    // 1. Router LLM (should succeed, returns 200, consumes enqueueJson)
+    // 2. createPlan first LLM (529)
+    // 3. createPlan second LLM (529, retry)
+    // 4. Action Gate LLM (should succeed, returns 200, consumes enqueueJson)
+    // 5. Soul LLM (should succeed, returns 200, consumes enqueueText)
     let fetchCallCount = 0;
     globalThis.fetch = vi.fn(async () => {
       fetchCallCount++;
@@ -198,39 +198,39 @@ describe("Plan 模式 delegate_task 过滤", () => {
 
     await runLangGraphAgentLoop(defaultOptions(adapter));
 
-    // 从 Action Gate 请求中提取 capabilities
+    // Extract capabilities from Action Gate request
     const caps = extractCapabilities(adapter);
-    // delegate_task 不应在 capabilities 中
+    // delegate_task should not be in capabilities
     expect(caps).not.toContain("delegate_task");
-    // 但 web_search 和 write_word 应该在
+    // but web_search and write_word should be
     expect(caps).toContain("web.search");
     expect(caps).toContain("write_word");
   });
 
-  it("Plan 创建失败降级后：delegate_task 从 Native FC tools 中隐藏", async () => {
+  it("after Plan creation fails and degrades: delegate_task is hidden from Native FC tools", async () => {
     const adapter = new FakeAdapter();
-    // Router 返回 plan
-    adapter.enqueueJson({ executionMode: "plan", skillIds: [], reason: "多步任务" });
-    // createPlan 两次失败
+    // Router returns plan
+    adapter.enqueueJson({ executionMode: "plan", skillIds: [], reason: "multi-step task" });
+    // createPlan fails twice
     adapter.enqueueText("FAIL_1");
     adapter.enqueueText("FAIL_2");
-    // fallback 后 Action Gate 决策 -> act（触发 Native FC）
+    // Action Gate decision after fallback -> act (triggers Native FC)
     adapter.enqueueJson({
-      decision: "act", capability: "web.search", objective: "搜索",
+      decision: "act", capability: "web.search", objective: "search",
       targetRefs: [], afterSuccess: "respond",
     });
-    // Native FC 生成工具调用
-    adapter.enqueueToolCall("web_search", { query: "AI新闻" });
-    // Soul 回复
-    adapter.enqueueText("搜索完成。");
+    // Native FC generates tool call
+    adapter.enqueueToolCall("web_search", { query: "AI news" });
+    // Soul reply
+    adapter.enqueueText("Search completed.");
 
-    // fetch 调用顺序：
-    // 1. Router LLM（200）
-    // 2. createPlan 第一次（529）
-    // 3. createPlan 第二次（529）
-    // 4. Action Gate LLM（200）
-    // 5. Native FC LLM（200）
-    // 6. Soul LLM（200）
+    // fetch call sequence:
+    // 1. Router LLM (200)
+    // 2. createPlan first (529)
+    // 3. createPlan second (529)
+    // 4. Action Gate LLM (200)
+    // 5. Native FC LLM (200)
+    // 6. Soul LLM (200)
     let fetchCallCount = 0;
     globalThis.fetch = vi.fn(async () => {
       fetchCallCount++;
@@ -242,107 +242,107 @@ describe("Plan 模式 delegate_task 过滤", () => {
 
     await runLangGraphAgentLoop(defaultOptions(adapter));
 
-    // 从 Native FC 请求中提取 tools
+    // Extract tools from Native FC request
     const nativeTools = extractNativeFcTools(adapter);
-    // delegate_task 不应在 Native FC tools 中
+    // delegate_task should not be in Native FC tools
     expect(nativeTools).not.toContain("delegate_task");
-    // web_search 应该在
+    // web_search should be
     expect(nativeTools).toContain("web_search");
   });
 
-  it("正常 direct 请求：delegate_task 可见（恢复测试）", async () => {
+  it("normal direct request: delegate_task visible (restoration test)", async () => {
     const adapter = new FakeAdapter();
-    // Router 返回 direct
-    adapter.enqueueJson({ executionMode: "direct", skillIds: [], reason: "简单查询" });
-    // Action Gate 决策 -> respond
+    // Router returns direct
+    adapter.enqueueJson({ executionMode: "direct", skillIds: [], reason: "simple query" });
+    // Action Gate decision -> respond
     adapter.enqueueJson({ decision: "respond", reason: "done" });
-    // Soul 回复
-    adapter.enqueueText("今天天气不错。");
+    // Soul reply
+    adapter.enqueueText("Weather is nice today.");
 
     await runLangGraphAgentLoop({
       ...defaultOptions(adapter),
-      originalQuery: "查天气",
-      contextualizedQuery: "查天气",
-      messages: [{ role: "user", content: "查天气" }],
+      originalQuery: "Check weather",
+      contextualizedQuery: "Check weather",
+      messages: [{ role: "user", content: "Check weather" }],
     });
 
     const caps = extractCapabilities(adapter);
-    // delegate_task 应该在 capabilities 中（direct 模式不隐藏）
+    // delegate_task should be in capabilities (not hidden in direct mode)
     expect(caps).toContain("delegate_task");
     expect(caps).toContain("web.search");
     expect(caps).toContain("write_word");
   });
 
-  it("Plan 降级后第二轮 direct：delegate_task 恢复可见（跨轮无污染）", async () => {
-    // ── 第一轮：Plan 失败降级 ──
+  it("second round direct after Plan degrades: delegate_task restored visible (no cross-turn pollution)", async () => {
+    // -- Round 1: Plan fails and degrades --
     const adapter1 = new FakeAdapter();
-    adapter1.enqueueJson({ executionMode: "plan", skillIds: [], reason: "多步" });
+    adapter1.enqueueJson({ executionMode: "plan", skillIds: [], reason: "multi-step" });
     adapter1.enqueueText("FAIL");
     adapter1.enqueueText("FAIL");
     adapter1.enqueueJson({ decision: "respond", reason: "done" });
-    adapter1.enqueueText("降级完成。");
+    adapter1.enqueueText("Degrade completed.");
 
     let fetchCount1 = 0;
     globalThis.fetch = vi.fn(async () => {
       fetchCount1++;
-      // Router(1) 成功, createPlan(2,3) 失败, Action Gate(4) 成功, Soul(5) 成功
+      // Router(1) success, createPlan(2,3) failure, Action Gate(4) success, Soul(5) success
       if (fetchCount1 === 2 || fetchCount1 === 3) return new Response("overloaded", { status: 529 });
       return new Response("{}", { status: 200 });
     }) as unknown as typeof fetch;
 
     await runLangGraphAgentLoop(defaultOptions(adapter1));
 
-    // 第一轮：delegate_task 应被隐藏
+    // Round 1: delegate_task should be hidden
     const caps1 = extractCapabilities(adapter1);
     expect(caps1).not.toContain("delegate_task");
 
-    // ── 第二轮：正常 direct ──
+    // -- Round 2: Normal direct --
     const adapter2 = new FakeAdapter();
-    adapter2.enqueueJson({ executionMode: "direct", skillIds: [], reason: "简单" });
+    adapter2.enqueueJson({ executionMode: "direct", skillIds: [], reason: "simple" });
     adapter2.enqueueJson({ decision: "respond", reason: "done" });
-    adapter2.enqueueText("第二轮完成。");
+    adapter2.enqueueText("Round 2 completed.");
 
     globalThis.fetch = vi.fn(async () => new Response("{}", { status: 200 })) as unknown as typeof fetch;
 
     await runLangGraphAgentLoop({
       ...defaultOptions(adapter2),
-      originalQuery: "查天气",
-      contextualizedQuery: "查天气",
-      messages: [{ role: "user", content: "查天气" }],
+      originalQuery: "Check weather",
+      contextualizedQuery: "Check weather",
+      messages: [{ role: "user", content: "Check weather" }],
     });
 
-    // 第二轮：delegate_task 应恢复可见
+    // Round 2: delegate_task should be restored visible
     const caps2 = extractCapabilities(adapter2);
     expect(caps2).toContain("delegate_task");
   });
 
-  it("工具过滤不原地修改共享 enabledTools 数组", async () => {
+  it("tool filtering does not mutate shared enabledTools array in-place", async () => {
     const adapter = new FakeAdapter();
-    adapter.enqueueJson({ executionMode: "plan", skillIds: [], reason: "多步" });
+    adapter.enqueueJson({ executionMode: "plan", skillIds: [], reason: "multi-step" });
     adapter.enqueueText("FAIL");
     adapter.enqueueText("FAIL");
     adapter.enqueueJson({ decision: "respond", reason: "done" });
-    adapter.enqueueText("完成。");
+    adapter.enqueueText("Completed.");
 
     let fetchCount = 0;
     globalThis.fetch = vi.fn(async () => {
       fetchCount++;
-      // Router(1) 成功, createPlan(2,3) 失败, Action Gate(4) 成功, Soul(5) 成功
+      // Router(1) success, createPlan(2,3) failure, Action Gate(4) success, Soul(5) success
       if (fetchCount === 2 || fetchCount === 3) return new Response("overloaded", { status: 529 });
       return new Response("{}", { status: 200 });
     }) as unknown as typeof fetch;
 
-    // 传入工具数组的引用
+    // Pass reference to tool array
     const toolsCopy = [...allTools];
     await runLangGraphAgentLoop({
       ...defaultOptions(adapter),
       tools: toolsCopy,
     });
 
-    // 原始数组不应被修改（filter 创建新数组，不改原数组）
-    // 检查 toolsCopy 中每个工具对象的 hideInPlanMode 属性未被删除或修改
+    // Original array should not be modified (filter creates new array, does not mutate original)
+    // Check that hideInPlanMode property on each tool object in toolsCopy is neither deleted nor modified
     expect(toolsCopy.find((t) => t.id === "delegate_task")?.hideInPlanMode).toBe(true);
-    // 数组长度不变
+    // Array length unchanged
     expect(toolsCopy).toHaveLength(3);
   });
 });

@@ -76,11 +76,11 @@ describe("ContextRefRegistry", () => {
     const candidateRef = refs.issue({ conversationId: "c1", domain: "music", kind: "candidate", expiresAt: 200, value: payload });
     const setRef = refs.issue({ conversationId: "c1", domain: "music", kind: "selection_set", expiresAt: 200, value: { setId: "s1" } });
 
-    // candidate ref 不能用 selection_set 的 kind 去 resolve
+    // candidate ref cannot be resolved with selection_set kind
     expect(() => refs.resolve(candidateRef, "c1", "selection_set")).toThrow("E_CONTEXT_REF_KIND_MISMATCH");
-    // selection_set ref 不能用 candidate 的 kind 去 resolve
+    // selection_set ref cannot be resolved with candidate kind
     expect(() => refs.resolve(setRef, "c1", "candidate")).toThrow("E_CONTEXT_REF_KIND_MISMATCH");
-    // 不传 expectedKind 时两种都能 resolve
+    // when expectedKind is omitted, both can be resolved
     expect(refs.resolve(candidateRef, "c1")).toEqual(payload);
     expect(refs.resolve(setRef, "c1")).toEqual({ setId: "s1" });
   });

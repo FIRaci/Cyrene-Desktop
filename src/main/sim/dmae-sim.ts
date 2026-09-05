@@ -1,6 +1,4 @@
-// ── DMAE Simulator 入口 ──
-// 直接 import 真 worldbook.ts，不 mock，不重写算法。
-// 改一个参数 → 重跑 → 看曲线/统计 → 改回/保留
+// ── DMAE Simulator Entry Point ──
 import * as path from "path";
 import {
   WorldbookManager,
@@ -38,7 +36,7 @@ function parseArgs(argv: string[]): CliArgs {
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    // 兼容 --key=value 和 --key value 两种形态
+    // Supports both --key=value and --key value
     const eq = a.includes("=");
     const key = eq ? a.split("=")[0] : a;
     const valFromEq = eq ? a.split("=").slice(1).join("=") : null;
@@ -79,7 +77,6 @@ function runScenario(
   params: DmaeParams,
   debug: boolean = false
 ): SimResult {
-  // 直接用真 WorldbookManager：通过公开的 loadFromEntries 注入 entries（不反射、不破坏封装）
   const mgr = new WorldbookManager("", { params, debug: false });
   mgr.loadFromEntries(scenario.buildEntries());
 
@@ -88,9 +85,7 @@ function runScenario(
   const snapshots: EntrySnapshot[][] = [];
 
   for (const round of rounds) {
-    // 跑一整轮：manager.updateActivation(userText, modelText)
     mgr.updateActivation(round.userText, round.modelText);
-    // 拍快照
     const snap: EntrySnapshot[] = entries.map((e) => {
       const st: EntryState | undefined = mgr.getState(e.id);
       const a = st?.activation ?? 0;
@@ -125,7 +120,7 @@ function runScenario(
 
 function runSweep(scenario: Scenario, baseParams: DmaeParams, values: number[]): void {
   console.log(`\n=== Parameter Sweep: userRewardBase = [${values.join(", ")}] on ${scenario.name} ===\n`);
-  console.log("Bu       |  I=90 占用%  |  I=70 占用%  |  I=45 占用%  |  I=15 占用%  |  avgLife(I=45)");
+  console.log("Bu       |  I=90 Occ%   |  I=70 Occ%   |  I=45 Occ%   |  I=15 Occ%   |  avgLife(I=45)");
   console.log("---------|---------------|---------------|---------------|---------------|---------------");
   for (const v of values) {
     const params: DmaeParams = { ...baseParams, userRewardBase: v };
@@ -159,20 +154,20 @@ function main(): void {
   }
 
   const params: DmaeParams = { ...DEFAULT_DMAE_PARAMS, ...cli.paramOverrides };
-  console.log(`参数: ${JSON.stringify(params, null, 2)}`);
+  console.log(`Parameters: ${JSON.stringify(params, null, 2)}`);
 
   const result = runScenario(scenario, params, true);
 
   // CSV
   const csvFile = exportCsv(result, cli.outputDir);
-  console.log(`\nCSV 写入: ${csvFile}`);
+  console.log(`\nCSV written to: ${csvFile}`);
 
-  // 统计
+  // Stats
   printStats(result);
 
-  // 折线图
+  // Line Charts
   if (cli.showCharts) renderLineCharts(result);
-  // 条形图
+  // Bar Charts
   if (cli.showBars) renderBars(result);
 }
 

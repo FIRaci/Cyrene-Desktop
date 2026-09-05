@@ -13,12 +13,12 @@ import {
 import type { ToolCallResult } from "./types";
 import type { ToolDefinition } from "./tool-registry";
 
-// ── 测试辅助 ──────────────────────────────
+// ── Test helpers ──────────────────────────────
 
 function makeStep(overrides: Partial<PlanStep> = {}): PlanStep {
   return {
     id: generateStepId(),
-    objective: "测试步骤",
+    objective: "Test step",
     status: "running",
     completionPolicy: {},
     toolCallCount: 0,
@@ -32,7 +32,7 @@ function makePlan(steps: PlanStep[]): TaskPlan {
   return {
     id: "plan_test",
     conversationId: "c1",
-    goal: "测试目标",
+    goal: "Test goal",
     steps,
     status: "running",
     skillIds: [],
@@ -90,8 +90,8 @@ const musicTools: ToolDefinition[] = [
   {
     id: "music_search",
     capability: "music.search",
-    name: "搜索",
-    description: "搜索歌曲",
+    name: "Search",
+    description: "Search songs",
     enabled: true,
     inputSchema: { type: "object", properties: {} },
     execute: async () => "",
@@ -105,8 +105,8 @@ const musicTools: ToolDefinition[] = [
   {
     id: "music_play_track",
     capability: "music.play_track",
-    name: "播放",
-    description: "播放歌曲",
+    name: "Play",
+    description: "Play song",
     enabled: true,
     inputSchema: { type: "object", properties: {} },
     execute: async () => "",
@@ -122,7 +122,7 @@ const musicTools: ToolDefinition[] = [
   },
 ];
 
-// ── verifyStep 测试 ───────────────────────
+// ── verifyStep tests ───────────────────────
 
 describe("verifyStep", () => {
   it("returns completed when allOf tool_succeeded is met", () => {
@@ -225,16 +225,16 @@ describe("verifyStep", () => {
         allOf: [{ kind: "tool_succeeded", capabilityId: "music.search" }],
       },
     });
-    // 调用方过滤掉了旧步骤的结果 -> 空列表 -> running
+    // Caller filtered out results from previous steps -> empty list -> running
     expect(verifyStep(step, [], musicTools)).toEqual({ status: "running" });
 
-    // 调用方传入了当前步骤的结果 -> completed
+    // Caller passed results from current step -> completed
     const currentResults = [succeededResult("music_search", "music.search", "exec_current")];
     expect(verifyStep(step, currentResults, musicTools)).toEqual({ status: "completed" });
   });
 });
 
-// ── computeMaxIterations 测试 ─────────────
+// ── computeMaxIterations tests ─────────────
 
 describe("computeMaxIterations", () => {
   it("returns base iterations when no plan", () => {
@@ -260,7 +260,7 @@ describe("computeMaxIterations", () => {
   });
 });
 
-// ── findNextPendingStep 测试 ──────────────
+// ── findNextPendingStep tests ──────────────
 
 describe("findNextPendingStep", () => {
   it("finds first pending step", () => {
@@ -289,7 +289,7 @@ describe("findNextPendingStep", () => {
   });
 });
 
-// ── isPlanComplete 测试 ───────────────────
+// ── isPlanComplete tests ───────────────────
 
 describe("isPlanComplete", () => {
   it("returns true when all steps completed", () => {
@@ -326,46 +326,46 @@ describe("isPlanComplete", () => {
   });
 });
 
-// ── applyReplan 测试 ──────────────────────
+// ── applyReplan tests ──────────────────────
 
 describe("applyReplan", () => {
   it("marks failed step as superseded and inserts replacements", () => {
     const s1 = makeStep({ id: "s1", status: "completed" });
-    const s2 = makeStep({ id: "s2", status: "failed", failure: { message: "创建失败", failedAt: Date.now() } });
+    const s2 = makeStep({ id: "s2", status: "failed", failure: { message: "Creation failed", failedAt: Date.now() } });
     const s3 = makeStep({ id: "s3", status: "pending" });
     const s4 = makeStep({ id: "s4", status: "pending" });
     const plan = makePlan([s1, s2, s3, s4]);
 
-    const r1 = makeStep({ id: "r1", status: "pending", objective: "替代步骤1" });
-    const r2 = makeStep({ id: "r2", status: "pending", objective: "替代步骤2" });
+    const r1 = makeStep({ id: "r1", status: "pending", objective: "Replacement step 1" });
+    const r2 = makeStep({ id: "r2", status: "pending", objective: "Replacement step 2" });
 
     applyReplan(plan, s2, [r1, r2]);
 
-    // s2 应标记为 superseded
+    // s2 should be marked as superseded
     expect(s2.status).toBe("superseded");
     expect(s2.supersededBy).toEqual(["r1", "r2"]);
 
-    // s3, s4 也应标记为 superseded（在 failed 之后）
+    // s3, s4 should also be marked as superseded (after failed)
     expect(s3.status).toBe("superseded");
     expect(s4.status).toBe("superseded");
 
-    // s1 不应被修改
+    // s1 should not be modified
     expect(s1.status).toBe("completed");
 
-    // 替代步骤应插入在 s2 之后
+    // Replacement steps should be inserted after s2
     const stepIds = plan.steps.map((s) => s.id);
     expect(stepIds).toEqual(["s1", "s2", "r1", "r2", "s3", "s4"]);
   });
 
   it("preserves failure info on superseded step", () => {
-    const s1 = makeStep({ id: "s1", status: "failed", failure: { message: "测试失败", failedAt: 12345 } });
+    const s1 = makeStep({ id: "s1", status: "failed", failure: { message: "Test failure", failedAt: 12345 } });
     const plan = makePlan([s1]);
 
     const r1 = makeStep({ id: "r1", status: "pending" });
     applyReplan(plan, s1, [r1]);
 
     expect(s1.status).toBe("superseded");
-    expect(s1.failure?.message).toBe("测试失败");
+    expect(s1.failure?.message).toBe("Test failure");
     expect(s1.failure?.failedAt).toBe(12345);
   });
 });

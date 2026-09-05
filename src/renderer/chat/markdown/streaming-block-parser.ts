@@ -1,11 +1,11 @@
 /**
- * 流式 Markdown block 解析器。
+ * Streaming Markdown block parser.
  *
- * 使用 markdown-it.parse() 获取 token，提取顶层 block，
- * 计算每个 block 在原始文本中的字符 offset。
+ * Uses markdown-it.parse() to extract top-level blocks from tokens,
+ * computing character offsets for each block in the original text.
  *
- * 顶层 block 定义：nesting=0 的 block-level token 组（如 heading、paragraph_open/close、fence、list_open/close 等）。
- * 保留最后 N 个 block 为 mutable tail，其余为 committed。
+ * Top-level block definition: nesting=0 block-level token groups (such as heading, paragraph_open/close, fence, list_open/close, etc.).
+ * Keeps the last N blocks as mutable tail, marking previous ones as committed.
  */
 
 import MarkdownIt from "markdown-it";
@@ -22,27 +22,27 @@ export type StreamMarkdownBlockType =
   | "other";
 
 export interface StreamMarkdownBlock {
-  /** 唯一标识（type + index），用于跨 revision 追踪 */
+  /** Unique identifier (type + index) for cross-revision tracking */
   key: string;
   type: StreamMarkdownBlockType;
-  /** 在原始文本中的起始字符 offset */
+  /** Starting character offset in raw text */
   startOffset: number;
-  /** 在原始文本中的结束字符 offset（exclusive） */
+  /** Ending character offset in raw text (exclusive) */
   endOffset: number;
-  /** 该 block 的原始 markdown 文本 */
+  /** Raw markdown text of this block */
   raw: string;
-  /** fenced code 是否已闭合（有结束围栏） */
+  /** Whether fenced code block has closing fence */
   closed: boolean;
-  /** 指纹（type + raw），用于判断是否变化 */
+  /** Fingerprint (type + raw) used for dirty checking */
   fingerprint: string;
 }
 
 /**
- * 把原始 markdown 文本解析为顶层 block 列表。
+ * Parses raw markdown text into a list of top-level blocks.
  *
- * @param md markdown-it 实例
- * @param raw 原始 markdown 文本
- * @returns 顶层 block 列表（按出现顺序）
+ * @param md markdown-it instance
+ * @param raw Raw markdown text
+ * @returns List of top-level blocks in appearance order
  */
 export function parseStreamingBlocks(md: MarkdownIt, raw: string): StreamMarkdownBlock[] {
   if (!raw.trim()) return [];
@@ -50,7 +50,7 @@ export function parseStreamingBlocks(md: MarkdownIt, raw: string): StreamMarkdow
   const tokens = md.parse(raw, {});
   if (tokens.length === 0) return [];
 
-  // 预计算行号 -> 字符 offset 映射
+  // Precompute line index -> character offset map
   const lineOffsets = computeLineOffsets(raw);
 
   const blocks: StreamMarkdownBlock[] = [];
@@ -60,13 +60,13 @@ export function parseStreamingBlocks(md: MarkdownIt, raw: string): StreamMarkdow
   while (i < tokens.length) {
     const token = tokens[i];
 
-    // 跳过非 block-level token（如 inline）
+    // Skip non-block-level tokens (e.g. inline)
     if (token.level > 0 || token.type === "inline") {
       i++;
       continue;
     }
 
-    // 识别 block 类型
+    // Identify block type
     const blockInfo = identifyBlock(tokens, i);
     if (!blockInfo) {
       i++;
@@ -75,7 +75,7 @@ export function parseStreamingBlocks(md: MarkdownIt, raw: string): StreamMarkdow
 
     const { type, endIndex, closed } = blockInfo;
 
-    // 计算 offset
+    // Calculate offsets
     const startLine = token.map?.[0] ?? 0;
     const endToken = tokens[endIndex];
     const endLine = endToken.map?.[1] ?? startLine + 1;
@@ -83,9 +83,9 @@ export function parseStreamingBlocks(md: MarkdownIt, raw: string): StreamMarkdow
     const startOffset = lineOffsets[startLine] ?? 0;
     const endOffset = endLine < lineOffsets.length ? lineOffsets[endLine] : raw.length;
 
-    // raw 文本（包含尾部换行）
+    // Raw text (including trailing newline)
     let blockRaw = raw.slice(startOffset, endOffset);
-    // 如果是最后一个 block 且没有尾部换行，补上直到 raw 末尾
+    // If last block without trailing newline, include through end of raw
     if (endIndex >= tokens.length - 1) {
       blockRaw = raw.slice(startOffset);
     }
@@ -108,7 +108,7 @@ export function parseStreamingBlocks(md: MarkdownIt, raw: string): StreamMarkdow
 }
 
 /**
- * 识别从 index i 开始的 block 类型和结束 token index。
+ * Identifies block type and closing token index starting at index i.
  */
 function identifyBlock(
   tokens: MarkdownIt.Token[],
@@ -117,12 +117,12 @@ function identifyBlock(
   const token = tokens[i];
   const type = token.type;
 
-  // fence：单 token，自带 content 和 info
+  // fence: single token with content and info
   if (type === "fence") {
     return { type: "fence", endIndex: i, closed: true };
   }
 
-  // code_block：缩进代码
+  // code_block: indented code
   if (type === "code_block") {
     return { type: "code", endIndex: i, closed: true };
   }
@@ -158,18 +158,18 @@ function identifyBlock(
     return findClose(tokens, i, "table_close", "table");
   }
 
-  // html_block：单 token
+  // html_block: single token
   if (type === "html_block") {
     return { type: "other", endIndex: i, closed: true };
   }
 
-  // 其他未知 block token
+  // Other unknown block tokens
   return { type: "other", endIndex: i, closed: true };
 }
 
 /**
- * 找到 matching close token（处理嵌套）。
- * 如果没找到 close（未闭合），返回到最后一个 token。
+ * Finds matching close token (handling nested blocks).
+ * If close token not found (unclosed), returns last token.
  */
 function findClose(
   tokens: MarkdownIt.Token[],
@@ -187,13 +187,13 @@ function findClose(
       }
     }
   }
-  // 未闭合
+  // Unclosed
   return { type: blockType, endIndex: tokens.length - 1, closed: false };
 }
 
 /**
- * 预计算每行的起始字符 offset。
- * lineOffsets[0] = 0, lineOffsets[n] = 第 n 行的起始 offset。
+ * Precomputes character start offset for each line.
+ * lineOffsets[0] = 0, lineOffsets[n] = start offset of line n.
  */
 function computeLineOffsets(text: string): number[] {
   const offsets = [0];
@@ -206,10 +206,10 @@ function computeLineOffsets(text: string): number[] {
 }
 
 /**
- * 把 block 列表分为 committed 和 mutable tail。
+ * Splits block list into committed blocks and mutable tail.
  *
- * @param blocks 全部 block 列表
- * @param mutableCount 保留为 mutable 的 block 数量（默认 2）
+ * @param blocks All parsed blocks
+ * @param mutableCount Number of blocks reserved as mutable (default 2)
  * @returns { committed: StreamMarkdownBlock[], mutable: StreamMarkdownBlock[] }
  */
 export function splitCommittedAndMutable(

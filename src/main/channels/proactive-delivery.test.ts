@@ -19,7 +19,7 @@ const capability: ChannelCapability = {
 };
 
 function incoming(channel: "wechat" | "feishu", senderId: string, chatId = senderId): IncomingMessage {
-  return { channel, senderId, chatId, text: "你好", at: new Date() };
+  return { channel, senderId, chatId, text: "hello", at: new Date() };
 }
 
 function fakeAdapter(phase: "running" | "offline" = "running"): ChannelAdapter {
@@ -57,7 +57,7 @@ describe("proactive channel delivery", () => {
 
     const result = await sendProactiveChannelMessage({
       channel: "wechat",
-      text: "第一句。",
+      text: "First sentence!",
       mobileMessageSegmentation: "on",
       manager: { getAdapter: () => adapter },
       recipientRegistry: registry,
@@ -73,7 +73,7 @@ describe("proactive channel delivery", () => {
     const adapter = fakeAdapter();
     const result = await sendProactiveChannelMessage({
       channel: "wechat",
-      text: "第一句。",
+      text: "First sentence!",
       mobileMessageSegmentation: "off",
       manager: { getAdapter: () => adapter },
       recipientRegistry: registry,
@@ -91,7 +91,7 @@ describe("proactive channel delivery", () => {
 
     const result = await sendProactiveChannelMessage({
       channel: "wechat",
-      text: "第一句。第二句？",
+      text: "First sentence! Second sentence?",
       mobileMessageSegmentation: "off",
       manager: { getAdapter: () => adapter },
       recipientRegistry: registry,
@@ -103,7 +103,7 @@ describe("proactive channel delivery", () => {
     expect(adapter.send).toHaveBeenCalledWith({
       channel: "wechat",
       targetId: "wx-1",
-      parts: [{ kind: "text", text: "第一句。第二句？" }],
+      parts: [{ kind: "text", text: "First sentence! Second sentence?" }],
     });
   });
 
@@ -116,7 +116,7 @@ describe("proactive channel delivery", () => {
       return { ok: true };
     });
     registry.remember(incoming("wechat", "wx-1"), "session-wx-1");
-    const text = Array.from({ length: 12 }, (_, index) => `第${index + 1}句。`).join("");
+    const text = Array.from({ length: 12 }, (_, index) => `Sentence ${index + 1}!`).join("");
 
     const result = await sendProactiveChannelMessage({
       channel: "wechat",
@@ -130,8 +130,8 @@ describe("proactive channel delivery", () => {
 
     expect(result).toEqual({ kind: "committed", deliveredParts: 10, totalParts: 10 });
     expect(order).toHaveLength(10);
-    expect(order.slice(0, 2)).toEqual(["第1句。", "第2句。"]);
-    expect(order[9]).toContain("第12句。");
+    expect(order.slice(0, 2)).toEqual(["Sentence 1!", "Sentence 2!"]);
+    expect(order[9]).toContain("Sentence 12!");
   });
 
   it("cancels total failure but commits a partial delivery", async () => {
@@ -141,7 +141,7 @@ describe("proactive channel delivery", () => {
 
     const failed = await sendProactiveChannelMessage({
       channel: "wechat",
-      text: "第一句。第二句？",
+      text: "First sentence! Second sentence?",
       mobileMessageSegmentation: "on",
       manager: { getAdapter: () => adapter },
       recipientRegistry: registry,
@@ -156,7 +156,7 @@ describe("proactive channel delivery", () => {
     const appendLog = vi.fn();
     const partial = await sendProactiveChannelMessage({
       channel: "wechat",
-      text: "第一句。第二句？",
+      text: "First sentence! Second sentence?",
       mobileMessageSegmentation: "on",
       manager: { getAdapter: () => adapter },
       recipientRegistry: registry,
@@ -165,8 +165,8 @@ describe("proactive channel delivery", () => {
     });
 
     expect(partial).toEqual({ kind: "committed", deliveredParts: 1, totalParts: 2 });
-    expect(appendHistory).toHaveBeenCalledWith("session-wx-1", "assistant", "第一句。");
-    expect(appendLog).toHaveBeenCalledWith(expect.objectContaining({ text: "第一句。" }));
+    expect(appendHistory).toHaveBeenCalledWith("session-wx-1", "assistant", "First sentence!");
+    expect(appendLog).toHaveBeenCalledWith(expect.objectContaining({ text: "First sentence!" }));
   });
 
   it("stops before the next segment when the proactive generation becomes invalid", async () => {
@@ -180,7 +180,7 @@ describe("proactive channel delivery", () => {
 
     const result = await sendProactiveChannelMessage({
       channel: "wechat",
-      text: "第一句。第二句？",
+      text: "First sentence! Second sentence?",
       mobileMessageSegmentation: "on",
       manager: { getAdapter: () => adapter },
       recipientRegistry: registry,
@@ -203,7 +203,7 @@ describe("proactive channel delivery", () => {
 
     const result = await sendProactiveChannelMessage({
       channel: "wechat",
-      text: "第一句。第二句？第三句！",
+      text: "First sentence! Second sentence? Third sentence!",
       mobileMessageSegmentation: "on",
       manager: { getAdapter: () => adapter },
       recipientRegistry: registry,

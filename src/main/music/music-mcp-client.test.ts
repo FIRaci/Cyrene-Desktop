@@ -80,12 +80,12 @@ describe("MusicMcpClient", () => {
   it("calls cloud_music_play through the data MCP boundary", async () => {
     listTools.mockResolvedValue({ tools: [] });
     connect.mockResolvedValue(undefined);
-    callTool.mockResolvedValue({ content: [{ type: "text", text: "已发送播放指令: song 123" }] });
+    callTool.mockResolvedValue({ content: [{ type: "text", text: "\u5df2\u53d1\u9001\u64ad\u653e\u6307\u4ee4: song 123" }] });
     const c = new MusicMcpClient(VENDOR, RUNTIME);
     await c.connect();
 
     await expect(c.callDataTool("cloud_music_play", { id: "123", type: "song" }))
-      .resolves.toBe("已发送播放指令: song 123");
+      .resolves.toBe("\u5df2\u53d1\u9001\u64ad\u653e\u6307\u4ee4: song 123");
     expect(callTool).toHaveBeenCalledWith({
       name: "cloud_music_play",
       arguments: { id: "123", type: "song" },

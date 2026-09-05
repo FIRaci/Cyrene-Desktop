@@ -1,13 +1,13 @@
-// ILink Bot Adapter —— 用 iLinkProtocolClient 包出 ChannelAdapter。
+// ILink Bot Adapter - Wraps iLinkProtocolClient into ChannelAdapter.
 //
-// 流程：
-//   微信用户发消息
+// Flow:
+//   WeChat user sends message
 //     └─ ILinkClient.getUpdates() (long-poll 35s)
 //           └─ adapter.onMessage() → dispatcher → buildAndRunAgent → OutgoingMessage
-//                 └─ ILinkClient.sendText() → POST /sendmessage → 微信
+//                 └─ ILinkClient.sendText() -> POST /sendmessage -> WeChat
 //
-// 凭据存盘：<userData>/weixin/<botId>.json
-// （首次运行需在 UI 点"扫码登录"生成；之后自动续用）
+// Credentials stored at: <userData>/weixin/<botId>.json
+// (Generated via QR scan login in UI on first run; persisted thereafter)
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { app } from "electron";
@@ -84,15 +84,15 @@ export class ILinkBotAdapter implements ChannelAdapter {
   readonly displayName = "WeChat";
   readonly capability = CAPABILITY;
 
-  /** 由 ChannelManager.setDispatcher 注入 */
+  /** Injected by ChannelManager.setDispatcher */
   onMessage: MessageHandler | null = null;
 
   private client: ILinkClient | null = null;
   private pollAbort: AbortController | null = null;
   private pollLoopPromise: Promise<void> | null = null;
-  /** 账号是否已登录（凭证存在） */
+  /** Whether account is logged in (credentials exist) */
   isLoggedIn = false;
-  /** 当前 credentials（动态加载） */
+  /** Current credentials (dynamically loaded) */
   currentCredentials: Credentials | null = null;
   private replyContextByTarget = new Map<string, string>();
   private pendingSaveIntentByTarget = new Map<string, number>();
@@ -113,7 +113,7 @@ export class ILinkBotAdapter implements ChannelAdapter {
     this.status = { enabled: true, phase: "starting" };
     console.log(LOG_PREFIX, "Starting...");
 
-    // 1. 加载已存凭证
+    // 1. Load saved credentials
     const creds = await loadCredentials();
     if (!creds) {
       this.status = {
@@ -129,7 +129,7 @@ export class ILinkBotAdapter implements ChannelAdapter {
     this.client = new ILinkClient(creds);
     this.isLoggedIn = true;
 
-    // 2. 启动 long-poll 循环
+    // 2. Start long-poll loop
     this.pollAbort = new AbortController();
     this.pollLoopPromise = this.#pollLoop();
 
@@ -238,11 +238,11 @@ export class ILinkBotAdapter implements ChannelAdapter {
   // ── Login UI flow ────────────────────────────────────────────────────────
 
   /**
-   * 扫码登录入口（由 init.ts 调用）。
-   * init.ts 已经调用过 fetchQrCode() + createQrDataUrl() 把 PNG 推到 renderer，
-   * 这里只负责等扫码结果。
+   * QR scan login entrypoint (called by init.ts).
+   * init.ts calls fetchQrCode() + createQrDataUrl() to push PNG to renderer;
+   * this waits for the scan confirmation.
    *
-   * @param qrcode  原始 qrcode 字符串（由 init.ts 传入）
+   * @param qrcode Raw QR string passed from init.ts
    */
   async login(qrcode: string): Promise<Credentials> {
     console.log(LOG_PREFIX, "Waiting for QR scan...");
@@ -252,7 +252,7 @@ export class ILinkBotAdapter implements ChannelAdapter {
       try {
         status = await pollQrStatus(qrcode);
       } catch (err) {
-        // timeout 是正常的 long-poll，继续
+        // timeout is expected for long-poll; continue
         if ((err as Error).name === "AbortError") throw new Error("login aborted");
         continue;
       }
@@ -273,11 +273,11 @@ export class ILinkBotAdapter implements ChannelAdapter {
       if (status.status === "expired") {
         throw new Error("The QR code expired. Scan a new one.");
       }
-      // pending/scanning — 继续轮询
+      // pending/scanning - continue polling
     }
   }
 
-  /** 注销（删除凭证文件） */
+  /** Logout (deletes credentials file) */
   async logout(): Promise<void> {
     await this.stop();
     await deleteCredentials();
@@ -312,7 +312,7 @@ export class ILinkBotAdapter implements ChannelAdapter {
           break;
         }
         if (this.pollAbort?.signal.aborted) break;
-        // 网络抖一下 backoff
+        // Network retry backoff
         await new Promise((r) => setTimeout(r, 2_000));
       }
     }
@@ -573,7 +573,7 @@ async function saveInboundWechatMedia(
     if (!item.media) throw new Error("Media download parameters are missing.");
   const data = await downloadWechatMedia(item.media);
   const ext = pickInboundExtension(item, data);
-  const inboxDir = path.join(app.getPath("desktop"), "Cyrene 收件箱");
+  const inboxDir = path.join(app.getPath("desktop"), "Cyrene \u6536\u4ef6\u7bb1");
   await fs.mkdir(inboxDir, { recursive: true });
   const filePath = path.join(inboxDir, buildStoredFileName("wechat", messageId, item.fileName || item.kind, ext));
   await fs.writeFile(filePath, data);

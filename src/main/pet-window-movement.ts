@@ -11,6 +11,10 @@ type PositionLogger = (message: string, error: unknown) => void;
 export class PetWindowMoveController {
   private pendingPosition: WindowPosition | null = null;
   private moveTimer: ReturnType<typeof setTimeout> | null = null;
+  private currentX: number | null = null;
+  private currentY: number | null = null;
+  private lastAppliedX: number | null = null;
+  private lastAppliedY: number | null = null;
 
   constructor(
     private readonly getWindow: () => PetWindowLike | null,
@@ -26,8 +30,16 @@ export class PetWindowMoveController {
     const window = this.getUsableWindow();
     if (!window) return;
     try {
-      const [x, y] = window.getPosition();
-      const position = normalizeWindowPosition(x + normalizedDx, y + normalizedDy);
+      if (this.currentX === null || this.currentY === null) {
+        const [x, y] = window.getPosition();
+        this.currentX = x;
+        this.currentY = y;
+        this.lastAppliedX = x;
+        this.lastAppliedY = y;
+      }
+      this.currentX += normalizedDx;
+      this.currentY += normalizedDy;
+      const position = normalizeWindowPosition(this.currentX, this.currentY);
       if (!position) return;
       this.applyPosition(window, position);
     } catch (error) {
@@ -54,12 +66,27 @@ export class PetWindowMoveController {
     this.flushPending();
 
     const window = this.getUsableWindow();
-    if (!window) return;
+    if (!window) {
+      this.currentX = null;
+      this.currentY = null;
+      this.lastAppliedX = null;
+      this.lastAppliedY = null;
+      return;
+    }
     try {
-      const [x, y] = window.getPosition();
-      const position = normalizeWindowPosition(x, y);
+      const finalX = this.currentX ?? (this.lastAppliedX ?? window.getPosition()[0]);
+      const finalY = this.currentY ?? (this.lastAppliedY ?? window.getPosition()[1]);
+      this.currentX = null;
+      this.currentY = null;
+      this.lastAppliedX = null;
+      this.lastAppliedY = null;
+      const position = normalizeWindowPosition(finalX, finalY);
       if (position) this.persistPosition(position);
     } catch (error) {
+      this.currentX = null;
+      this.currentY = null;
+      this.lastAppliedX = null;
+      this.lastAppliedY = null;
       this.logWarning("[Cyrene] Failed to persist the pet window position:", error);
     }
   }
@@ -68,6 +95,10 @@ export class PetWindowMoveController {
     if (this.moveTimer !== null) clearTimeout(this.moveTimer);
     this.moveTimer = null;
     this.pendingPosition = null;
+    this.currentX = null;
+    this.currentY = null;
+    this.lastAppliedX = null;
+    this.lastAppliedY = null;
   }
 
   private flushPending(): void {
@@ -78,6 +109,8 @@ export class PetWindowMoveController {
     const window = this.getUsableWindow();
     if (!window) return;
     try {
+      this.currentX = position.x;
+      this.currentY = position.y;
       this.applyPosition(window, position);
     } catch (error) {
       this.logWarning("[Cyrene] Failed to move pet window:", error);
@@ -85,9 +118,14 @@ export class PetWindowMoveController {
   }
 
   private applyPosition(window: PetWindowLike, position: WindowPosition): void {
-    const currentPosition = window.getPosition();
-    const current = normalizeWindowPosition(currentPosition[0], currentPosition[1]);
-    if (current?.x === position.x && current.y === position.y) return;
+    if (this.lastAppliedX === null || this.lastAppliedY === null) {
+      const currentPosition = window.getPosition();
+      this.lastAppliedX = currentPosition[0];
+      this.lastAppliedY = currentPosition[1];
+    }
+    if (this.lastAppliedX === position.x && this.lastAppliedY === position.y) return;
+    this.lastAppliedX = position.x;
+    this.lastAppliedY = position.y;
     window.setPosition(position.x, position.y, false);
   }
 

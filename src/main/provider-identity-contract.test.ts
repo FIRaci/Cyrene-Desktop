@@ -18,15 +18,15 @@ describe("provider identity contract", () => {
     }
   });
 
-  it("migrates accidentally persisted English labels back to canonical identifiers", () => {
+  it("migrates legacy provider labels to canonical identifiers", () => {
     const mainSource = fs.readFileSync(path.join(root, "src/main/index.ts"), "utf8");
     const migrations: Record<string, string> = {
-      "MiniMax (Xiyu Tech)": "MiniMax（稀宇科技）",
-      "Doubao (Volcano Engine)": "豆包（火山方舟）",
-      "GLM (Zhipu)": "GLM（智谱）",
-      "Kimi (Moonshot)": "Kimi（月之暗面）",
-      "Qwen (Tongyi Qianwen)": "Qwen（通义千问）",
-      "MiMo (Xiaomi)": "MiMo（小米）",
+      "MiniMax (Xiyu Tech)": "MiniMax",
+      "Doubao (Volcano Engine)": "Doubao",
+      "GLM (Zhipu)": "GLM",
+      "Kimi (Moonshot)": "Kimi",
+      "Qwen (Tongyi Qianwen)": "Qwen",
+      "MiMo (Xiaomi)": "MiMo",
     };
     for (const [legacy, canonical] of Object.entries(migrations)) {
       expect(mainSource).toContain(`"${legacy}": "${canonical}"`);

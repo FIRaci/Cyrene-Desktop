@@ -16,10 +16,18 @@ declare global {
       onPetZoom: (callback: (zoom: number) => void) => () => void;
       onPetVisibilityChanged: (callback: (visible: boolean) => void) => () => void;
       showContextMenu?: () => void;
+      onToggleMiniChat?: (callback: () => void) => () => void;
+      onToggleVoice?: (callback: () => void) => () => void;
+      toggleCoWatch?: () => Promise<unknown>;
+      getCoWatchState?: () => Promise<{ active: boolean; status?: string; lastCapturedAt?: number; lastReaction?: string; errorMessage?: string }>;
+      onCoWatchStateChanged?: (callback: (state: { active: boolean; status?: string; lastCapturedAt?: number; lastReaction?: string; errorMessage?: string }) => void) => () => void;
     };
     activityLog?: {
-      getEntries: () => Promise<Array<{ timestamp: number; type: string; text: string; meta?: unknown }>>;
-      onEntry: (callback: (entry: { timestamp: number; type: string; text: string; meta?: unknown }) => void) => () => void;
+      getEntries: () => Promise<Array<{ timestamp: number; type: string; text: string; channel?: string; meta?: unknown }>>;
+      onEntry: (callback: (entry: { timestamp: number; type: string; text: string; channel?: string; meta?: unknown }) => void) => () => void;
+      onCleared?: (callback: () => void) => () => void;
+      pushEntry?: (entry: { type: string; text: string; channel?: string; meta?: unknown }) => Promise<{ success: boolean }>;
+      clear?: () => Promise<{ success: boolean }>;
       minimize: () => void;
       close: () => void;
     };

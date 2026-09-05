@@ -1,5 +1,5 @@
-// 厂商适配器工厂：按 provider 显示名或 VendorConfig 返回对应 transport 的 adapter 实例。
-// 调度层只需 getAdapter(provider) 或 getAdapterForConfig(cfg)，不关心 transport 细节。
+// Vendor adapter factory: returns adapter instance for transport by provider display name or VendorConfig.
+// Orchestration layer uses getAdapter(provider) or getAdapterForConfig(cfg), agnostic to transport details.
 import { OpenAICompatAdapter } from "./openai-adapter";
 import { AnthropicAdapter } from "./anthropic-adapter";
 import { getCapability, getCapabilityOrOpenAI, PROVIDER_CAPABILITIES } from "./capabilities";
@@ -20,7 +20,7 @@ export { detectTransport, resolveTransport } from "./transport-detector";
 
 const cache = new Map<string, ChatVendorAdapter>();
 
-/** 按 provider 显示名取适配器实例（同一 provider 复用同一实例）—— 旧路径，按 capabilities 表 transport 取。 */
+/** Get adapter by provider display name (reuses instance for same provider) -- legacy path. */
 export function getAdapter(provider: string): ChatVendorAdapter {
   const existing = cache.get(provider);
   if (existing) return existing;
@@ -34,11 +34,11 @@ export function getAdapter(provider: string): ChatVendorAdapter {
 }
 
 /**
- * 按运行时配置取适配器实例。三层 transport 解析：
- *   1. cfg.explicitTransport（用户显式）
- *   2. baseUrl 启发式（detectTransport）
- *   3. capabilities 表默认
- * cache key 用 `${provider}::${transport}`，避免显式切 transport 后命中旧实例。
+ * Get adapter instance by runtime config. Three-tiered transport resolution:
+ *   1. cfg.explicitTransport (user explicit)
+ *   2. baseUrl heuristics (detectTransport)
+ *   3. capabilities table default
+ * Cache key uses `${provider}::${transport}` to avoid stale instances when transport is changed.
  */
 export function getAdapterForConfig(cfg: VendorConfig): ChatVendorAdapter {
   const transport = resolveTransport({
@@ -59,9 +59,9 @@ export function getAdapterForConfig(cfg: VendorConfig): ChatVendorAdapter {
 }
 
 /**
- * 厂商无关的 URL 构建器 —— transport 由调用方传入（已走 resolveTransport）。
+ * Vendor-agnostic URL builder -- transport passed by caller (already through resolveTransport).
  * - OpenAI transport → {baseUrl}/chat/completions
- * - Anthropic transport → {baseUrl}/v1/messages（baseUrl 已含 /v1 时只加 /messages）
+ * - Anthropic transport -> {baseUrl}/v1/messages (only appends /messages if baseUrl already contains /v1)
  */
 export function buildVendorUrl(baseUrl: string, transport: Transport): string {
   const trimmed = baseUrl.trim().replace(/\/+$/, "");
@@ -76,9 +76,9 @@ export function buildVendorUrl(baseUrl: string, transport: Transport): string {
 }
 
 /**
- * 旧签名（保留兼容）：根据 provider 名查 transport 再调 buildVendorUrl。
- * 已有调用点（memory-judge / memory-compressor 之前的 buildVendorUrl(provider, baseUrl)）仍可用，
- * 但**新代码**建议直接用 buildVendorUrl(baseUrl, transport) + getAdapterForConfig(cfg)。
+ * Legacy signature (retained for compatibility): look up transport by provider name then call buildVendorUrl.
+ * Existing callers remain supported,
+ * but new code should use buildVendorUrl(baseUrl, transport) + getAdapterForConfig(cfg).
  */
 export function buildVendorUrlByProvider(provider: string, baseUrl: string): string {
   const cap = getCapabilityOrOpenAI(provider);
@@ -86,15 +86,15 @@ export function buildVendorUrlByProvider(provider: string, baseUrl: string): str
 }
 
 /**
- * 创建一个 AsyncIterable<StreamEvent>，按 transport 协议切分 HTTP body 字节流。
+ * Create an AsyncIterable<StreamEvent>, splitting HTTP body byte stream per transport protocol.
  *
- * - OpenAI SSE 格式：每条 event 由单个 `data: {...}` 行组成（行间用 \n\n 分隔）。
- *   → 产出 StreamEvent{ eventType: "data", data: "{...}" }
- * - Anthropic event-stream 格式：每条 event 由 `event: <type>\ndata: {...}` 两行组成。
- *   → 产出 StreamEvent{ eventType: "<type>", data: "{...}" }
+ * - OpenAI SSE format: each event consists of a single `data: {...}` line (separated by \n\n).
+ *   -> produces StreamEvent{ eventType: "data", data: "{...}" }
+ * - Anthropic event-stream format: each event consists of `event: <type>\ndata: {...}` lines.
+ *   -> produces StreamEvent{ eventType: "<type>", data: "{...}" }
  *
- * 切分规则都是按 \n\n（空行）分隔 event 块，所以两种协议可以共用同一套状态机。
- * Adapter 的 parseStreamEvent 是纯函数、无状态；所有"半行拼接"逻辑都在这里维护。
+ * Splitting rules separate event blocks by \n\n, allowing both protocols to share the state machine.
+ * Adapter parseStreamEvent is pure and stateless; all partial line buffer logic is maintained here.
  */
 export function createSseReader(
   _adapter: ChatVendorAdapter,
@@ -108,8 +108,8 @@ export function createSseReader(
     [Symbol.asyncIterator](): AsyncIterator<StreamEvent> {
       return {
         async next(): Promise<IteratorResult<StreamEvent>> {
-          // 循环：一直读到能切出一个完整 event 块为止
-          // （半行数据跨多个 chunk 时会继续 read + append buffer）
+          // Loop: keep reading until a complete event block can be split
+          // (multi-chunk partial line data will continue to read + append buffer)
           while (true) {
             const splitAt = buffer.indexOf("\n\n");
             if (splitAt !== -1) {
@@ -117,13 +117,13 @@ export function createSseReader(
               buffer = buffer.slice(splitAt + 2);
               const event = parseSseBlock(raw);
               if (event) return { value: event, done: false };
-              // 空注释块（OpenAI 心跳）跳过，继续找下一个
+              // Skip empty comment blocks (OpenAI keepalives) and continue
               continue;
             }
-            // buffer 里没有完整 event 块，需要更多字节
+            // Incomplete event block in buffer, requires more bytes
             const { value, done } = await reader.read();
             if (done) {
-              // 流结束：把 buffer 残余（如果有）当最后一个 event 处理；否则返回 done
+              // Stream ended: process remaining buffer if present; otherwise return done
               if (buffer.trim().length > 0) {
                 const event = parseSseBlock(buffer);
                 buffer = "";
@@ -144,16 +144,16 @@ export function createSseReader(
 }
 
 /**
- * 把一个 SSE event 块（一组行，可能是 `data: ...` 单行，也可能是 `event: ...\ndata: ...` 两行）
- * 解析成 StreamEvent。返回 null 表示这一块是注释（OpenAI 心跳 `: ...`）或空块。
+ * Parse an SSE event block into StreamEvent.
+ * Returns null if block is a comment (OpenAI keepalive `: ...`) or empty.
  */
 function parseSseBlock(block: string): StreamEvent | null {
-  let eventType = "data"; // OpenAI 默认
+  let eventType = "data"; // OpenAI default
   let dataLine = "";
   let hasData = false;
   for (const rawLine of block.split("\n")) {
     const line = rawLine.replace(/\r$/, "");
-    if (!line || line.startsWith(":")) continue; // 空行 / 注释行
+    if (!line || line.startsWith(":")) continue; // empty or comment line
     if (line.startsWith("event:")) {
       eventType = line.slice(6).trim();
       continue;
@@ -162,7 +162,7 @@ function parseSseBlock(block: string): StreamEvent | null {
       dataLine = line.slice(5).trimStart();
       hasData = true;
     }
-    // 其他字段（id: / retry:）当前用不到，忽略
+    // Other fields (id: / retry:) currently unused, ignore
   }
   if (!hasData) return null;
   return { eventType, data: dataLine };

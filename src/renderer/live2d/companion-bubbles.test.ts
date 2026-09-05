@@ -1,8 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   CompanionBubbleController,
   PET_SPEECH_LIMIT,
   reducePetBubbleState,
+  renderFormattedSpeech,
   truncatePetSpeech,
   type PetBubbleState,
 } from "./companion-bubbles";
@@ -61,10 +62,51 @@ describe("pet companion bubble lifecycle", () => {
     const thoughtEl = { textContent: "", hidden: true } as HTMLElement;
     const controller = new CompanionBubbleController(speechEl, thoughtEl);
 
-    controller.say("昔涟在呢~ ✨", 3000);
-    expect(speechEl.textContent).toBe("昔涟在呢~ ✨");
+    controller.say("Cyrene is here~ ✨", 3000);
+    expect(speechEl.textContent).toBe("Cyrene is here~ ✨");
     expect(speechEl.hidden).toBe(false);
     expect(thoughtEl.hidden).toBe(true);
     controller.dispose();
+  });
+
+  it("displays instant thought when think() is invoked", () => {
+    const speechEl = { textContent: "", hidden: true } as HTMLElement;
+    const thoughtEl = { textContent: "", hidden: true } as HTMLElement;
+    const controller = new CompanionBubbleController(speechEl, thoughtEl);
+
+    controller.think("Cyrene đang nhớ bạn đó... (*´˘`*)♡", 4000);
+    expect(thoughtEl.textContent).toBe("Cyrene đang nhớ bạn đó... (*´˘`*)♡");
+    expect(thoughtEl.hidden).toBe(false);
+    expect(speechEl.hidden).toBe(true);
+    controller.dispose();
+  });
+
+  it("formats asterisk actions cleanly with renderFormattedSpeech", () => {
+    vi.stubGlobal("document", {
+      createElement: (tag: string) => ({ tagName: tag, className: "", textContent: "" }),
+      createTextNode: (text: string) => ({ textContent: text }),
+    });
+
+    const children: any[] = [];
+    const fakeEl: any = {
+      textContent: "",
+      replaceChildren: () => {
+        children.length = 0;
+      },
+      appendChild: (child: any) => {
+        children.push(child);
+      },
+    };
+
+    renderFormattedSpeech(fakeEl, "*gently blinks* /so sweet.../ Thank you Master!");
+    expect(children.length).toBe(4);
+    expect(children[0].className).toBe("pet-bubble__action");
+    expect(children[0].textContent).toBe("*gently blinks*");
+    expect(children[1].textContent).toBe(" ");
+    expect(children[2].className).toBe("pet-bubble__thought-inline");
+    expect(children[2].textContent).toBe("/so sweet.../");
+    expect(children[3].textContent).toBe(" Thank you Master!");
+
+    vi.unstubAllGlobals();
   });
 });

@@ -1,17 +1,17 @@
-// 聊天会话 IPC 桥接：把 chats-store 的纯数据 API 暴露给渲染进程。
+// Chat session IPC bridge: exposes chats-store data API to renderer process.
 //
-// 写操作成功后会向渲染窗口广播 `chats:changed`，以便：
-// - 设置中心 💬聊天面板刷新列表；
-// - 聊天窗口在标题被改名等情况下同步显示。
+// Broadcasts `chats:changed` to renderer windows on successful write:
+// - Settings center chat panel refreshes list;
+// - Chat window synchronizes title and metadata.
 //
-// 来源隔离：渲染进程发起的写操作广播时会跳过发起方窗口（sender）--发起方已经
-// 持有最新状态，不需要被自己的写唤醒；只让其它窗口（以及"外部主动消息提交"这种
-// 主进程发起的写）触发的广播到达聊天窗口。这样聊天窗口的 onChanged 只会因真正的
-// 外部变更触发，避免本窗口 saveSession() 的广播回来重载当前会话、清掉 transient
-// 思考消息的竞态。
+// Source isolation: broadcast skips sender window to prevent re-entrant reset.
+// Sender already has latest state; only notify other windows.
+// Only external changes trigger chat window reload.
+// Avoids race condition with transient thought messages.
 //
-// 注意：`chats:open-in-chat-window` 涉及 BrowserWindow 创建逻辑，
-// 由 src/main/index.ts 自行注册，不在本模块；本模块只管纯数据操作。
+//
+// Note: `chats:open-in-chat-window` involves window creation logic registered in index.ts.
+// Handled in index.ts; this module only deals with pure data operations.
 
 import { BrowserWindow, ipcMain, type WebContents } from "electron";
 import { IPC } from "../../shared/ipc-channels";
@@ -23,17 +23,24 @@ const { isValidSessionId } = chatsStore;
 function broadcastChanged(senderWebContents?: WebContents | null): void {
   for (const win of BrowserWindow.getAllWindows()) {
     if (win.isDestroyed()) continue;
-    // 跳过发起方：渲染进程自己的写不需要广播回自己（来源隔离）。
+    // Skip sender: renderer writes do not need to broadcast back to itself.
     if (senderWebContents && win.webContents === senderWebContents) continue;
     try {
       win.webContents.send(IPC.CHATS_CHANGED);
     } catch {
-      // 某些刚创建/未 ready 的窗口 send 可能抛错，忽略即可
+      // Safely ignore errors from unready windows
     }
   }
 }
 
-export function registerChatsIpc(): void {
+export function registerChatsIpc(
+  onActivityLog?: (
+    type: "user" | "reasoning" | "response" | "kaomoji" | "tool" | "error" | "system",
+    text: string,
+    meta?: unknown,
+    channel?: string,
+  ) => void,
+): void {
   chatsStore.initialize();
 
   ipcMain.handle(IPC.CHATS_LIST, () => chatsStore.listSessions());
@@ -64,7 +71,17 @@ export function registerChatsIpc(): void {
     (event, payload: { id: string; message: ChatMessage }) => {
       if (!payload || !isValidSessionId(payload.id) || !payload.message) return null;
       const session = chatsStore.appendMessage(payload.id, payload.message);
-      if (session) broadcastChanged(event.sender);
+      if (session) {
+        broadcastChanged(event.sender);
+        if (onActivityLog && payload.message.content) {
+          const channel = session.title || "Main Chat";
+          const type = payload.message.role === "user" ? "user" : "response";
+          onActivityLog(type, payload.message.content, { messageId: payload.message.id }, channel);
+          if (payload.message.reasoning) {
+            onActivityLog("reasoning", payload.message.reasoning, { messageId: payload.message.id }, channel);
+          }
+        }
+      }
       return session;
     },
   );
@@ -120,9 +137,9 @@ export function registerChatsIpc(): void {
   );
 }
 
-// 给 main/index.ts 用的便捷 broadcast（删除当前活跃会话后由 index.ts 调一次；
-// 主动消息提交 commitLocalProactiveMessage 也用它）。
-// 这些都是主进程发起的写，没有 sender，广播给所有窗口（含聊天窗口）--对聊天窗口
-// 而言属于"真正的外部变更"，应当触发重载。
+// Helper broadcast for index.ts (called after deleting active session;
+// also used by commitLocalProactiveMessage).
+// Main-process writes without sender broadcast to all windows.
+//
 export { broadcastChanged as broadcastChatsChanged };
 

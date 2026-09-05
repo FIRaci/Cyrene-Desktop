@@ -33,9 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-// ── DMAE Simulator 入口 ──
-// 直接 import 真 worldbook.ts，不 mock，不重写算法。
-// 改一个参数 → 重跑 → 看曲线/统计 → 改回/保留
+// ── DMAE Simulator Entry Point ──
 const path = __importStar(require("path"));
 const worldbook_1 = require("../rag/worldbook");
 const coffee_lifecycle_1 = require("./scenarios/coffee-lifecycle");
@@ -56,7 +54,7 @@ function parseArgs(argv) {
     };
     for (let i = 0; i < argv.length; i++) {
         const a = argv[i];
-        // 兼容 --key=value 和 --key value 两种形态
+        // Supports both --key=value and --key value
         const eq = a.includes("=");
         const key = eq ? a.split("=")[0] : a;
         const valFromEq = eq ? a.split("=").slice(1).join("=") : null;
@@ -104,16 +102,13 @@ function getScenario(name) {
     throw new Error(`Unknown scenario: ${name}`);
 }
 function runScenario(scenario, params, debug = false) {
-    // 直接用真 WorldbookManager：通过公开的 loadFromEntries 注入 entries（不反射、不破坏封装）
     const mgr = new worldbook_1.WorldbookManager("", { params, debug: false });
     mgr.loadFromEntries(scenario.buildEntries());
     const rounds = scenario.buildRounds();
     const entries = mgr.getEntries();
     const snapshots = [];
     for (const round of rounds) {
-        // 跑一整轮：manager.updateActivation(userText, modelText)
         mgr.updateActivation(round.userText, round.modelText);
-        // 拍快照
         const snap = entries.map((e) => {
             const st = mgr.getState(e.id);
             const a = st?.activation ?? 0;
@@ -146,7 +141,7 @@ function runScenario(scenario, params, debug = false) {
 }
 function runSweep(scenario, baseParams, values) {
     console.log(`\n=== Parameter Sweep: userRewardBase = [${values.join(", ")}] on ${scenario.name} ===\n`);
-    console.log("Bu       |  I=90 占用%  |  I=70 占用%  |  I=45 占用%  |  I=15 占用%  |  avgLife(I=45)");
+    console.log("Bu       |  I=90 Occ%   |  I=70 Occ%   |  I=45 Occ%   |  I=15 Occ%   |  avgLife(I=45)");
     console.log("---------|---------------|---------------|---------------|---------------|---------------");
     for (const v of values) {
         const params = { ...baseParams, userRewardBase: v };
@@ -176,17 +171,17 @@ function main() {
         return;
     }
     const params = { ...worldbook_1.DEFAULT_DMAE_PARAMS, ...cli.paramOverrides };
-    console.log(`参数: ${JSON.stringify(params, null, 2)}`);
+    console.log(`Parameters: ${JSON.stringify(params, null, 2)}`);
     const result = runScenario(scenario, params, true);
     // CSV
     const csvFile = (0, csv_export_1.exportCsv)(result, cli.outputDir);
-    console.log(`\nCSV 写入: ${csvFile}`);
-    // 统计
+    console.log(`\nCSV written to: ${csvFile}`);
+    // Stats
     (0, stats_1.printStats)(result);
-    // 折线图
+    // Line Charts
     if (cli.showCharts)
         (0, ascii_line_chart_1.renderLineCharts)(result);
-    // 条形图
+    // Bar Charts
     if (cli.showBars)
         (0, ascii_bars_1.renderBars)(result);
 }

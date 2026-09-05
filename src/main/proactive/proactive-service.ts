@@ -100,7 +100,7 @@ export function createProactiveChatService(deps: ProactiveChatServiceDeps): Proa
           text = result.text;
           source = "model";
         } else {
-          // 技术失败或无效输出才允许寻找旧预设；Epoch 失效已在上方提前拦截。
+          // Only technical failures or invalid outputs allow searching presets; epoch invalidation handled above.
           const fallback = await deps.getFallback(candidate);
           if (!fallback?.text.trim()) {
             deps.log?.("fallback_unavailable", { scene: candidate.sceneId, result: result.kind });
@@ -137,8 +137,8 @@ export function createProactiveChatService(deps: ProactiveChatServiceDeps): Proa
         if (latestState.proactiveEpoch === generationEpoch) {
           markProactiveCommitted(latestState, candidate, commitSnapshot.now);
         } else {
-          // 文本已经成功写入，但用户可能在后续 TTS 等待期间发来消息。
-          // 保留更新后的 Epoch/unansweredCount，只补记这次真实发送的硬冷却时间。
+          // Text successfully written, but user may have sent message during TTS wait.
+          // Retain updated Epoch/unansweredCount, only record hard cooldown for this sent message.
           latestState.lastProactiveAt = commitSnapshot.now;
           latestState.lastProactiveScene = candidate.sceneId;
           latestState.lastFiredAt[candidate.sceneId] = commitSnapshot.now;

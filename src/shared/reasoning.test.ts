@@ -8,65 +8,65 @@ import {
   type ReasoningPreference,
 } from "./reasoning";
 
-// ── A. 规则匹配优先级 ──────────────────────────────────────
+// ── A. Rule Match Priority ──────────────────────────────────────
 
-describe("MODEL_REASONING_RULES — 规则匹配优先级", () => {
-  test("Qwen qwen3-thinking 命中 /-thinking$/ → fixed-on", () => {
+describe("MODEL_REASONING_RULES — Rule Match Priority", () => {
+  test("Qwen qwen3-thinking matches /-thinking$/ -> fixed-on", () => {
     const cap = resolveReasoningCapability("qwen", "qwen3-thinking");
     expect(cap.control).toBe("fixed-on");
   });
 
-  test("Qwen qwen3-max-thinking 命中 /-thinking$/ → fixed-on（结尾 -thinking）", () => {
+  test("Qwen qwen3-max-thinking matches /-thinking$/ -> fixed-on (suffix -thinking)", () => {
     const cap = resolveReasoningCapability("qwen", "qwen3-max-thinking");
     expect(cap.control).toBe("fixed-on");
   });
 
-  test("Qwen qwen3-max 命中 /^qwen3/ → toggle（不命中 /-thinking$/）", () => {
+  test("Qwen qwen3-max matches /^qwen3/ -> toggle (does not match /-thinking$/)", () => {
     const cap = resolveReasoningCapability("qwen", "qwen3-max");
     expect(cap.control).toBe("toggle");
   });
 
-  test("Qwen qwen-max-thinking 命中 /-thinking$/ → fixed-on", () => {
+  test("Qwen qwen-max-thinking matches /-thinking$/ -> fixed-on", () => {
     const cap = resolveReasoningCapability("qwen", "qwen-max-thinking");
     expect(cap.control).toBe("fixed-on");
   });
 
-  test("Kimi kimi-k2.6 命中精确 K2.6 正则", () => {
+  test("Kimi kimi-k2.6 matches exact K2.6 regex", () => {
     const cap = resolveReasoningCapability("kimi", "kimi-k2.6");
     expect(cap.control).toBe("toggle");
     expect(cap.keepOnTools).toBe(true);
   });
 
-  test("Kimi kimi-k2.5 命中精确 K2.5 正则，keepOnTools=false", () => {
+  test("Kimi kimi-k2.5 matches exact K2.5 regex with keepOnTools=false", () => {
     const cap = resolveReasoningCapability("kimi", "kimi-k2.5");
     expect(cap.control).toBe("toggle");
     expect(cap.keepOnTools).toBe(false);
   });
 
-  test("Kimi kimi-k2.7-code 命中精确 K2.7-Code，control=fixed-on", () => {
+  test("Kimi kimi-k2.7-code matches exact K2.7-Code with control=fixed-on", () => {
     const cap = resolveReasoningCapability("kimi", "kimi-k2.7-code");
     expect(cap.control).toBe("fixed-on");
   });
 
-  test("Kimi kimi-k2.7-code-highspeed 命中精确 K2.7-Code-HighSpeed，control=fixed-on", () => {
+  test("Kimi kimi-k2.7-code-highspeed matches exact K2.7-Code-HighSpeed with control=fixed-on", () => {
     const cap = resolveReasoningCapability("kimi", "kimi-k2.7-code-highspeed");
     expect(cap.control).toBe("fixed-on");
   });
 
-  test("Kimi kimi-k2.5 不会被通用 kimi-k2-thinking 系列误命中（精确正则优先）", () => {
+  test("Kimi kimi-k2.5 is not erroneously matched by generic kimi-k2-thinking family", () => {
     const cap = resolveReasoningCapability("kimi", "kimi-k2.5");
-    // 若是 kimi-k2-thinking 系列命中，会是 fixed-on；实际 K2.5 是 toggle
+    // If matched by kimi-k2-thinking it would be fixed-on; actual K2.5 is toggle
     expect(cap.control).toBe("toggle");
     expect(cap.control).not.toBe("fixed-on");
   });
 
-  test("MiniMax MiniMax-M3 走 anthropic-adaptive（不是 thinking-type）", () => {
+  test("MiniMax MiniMax-M3 uses anthropic-adaptive (not thinking-type)", () => {
     const cap = resolveReasoningCapability("minimax", "MiniMax-M3");
     expect(cap.control).toBe("toggle");
     expect(cap.requestStyle).toBe("anthropic-adaptive");
   });
 
-  test("兜底：未知模型 → { control: 'none', requestStyle: 'none', supportsDisable: false }", () => {
+  test("Fallback: unknown model -> { control: 'none', requestStyle: 'none', supportsDisable: false }", () => {
     const cap = resolveReasoningCapability("unknown-provider", "anything");
     expect(cap.control).toBe("none");
     expect(cap.requestStyle).toBe("none");
@@ -74,10 +74,10 @@ describe("MODEL_REASONING_RULES — 规则匹配优先级", () => {
   });
 });
 
-// ── B. 9 家全部存在性 ──────────────────────────────────────
+// ── B. All 9 Vendors Presence ──────────────────────────────────────
 
-describe("MODEL_REASONING_RULES — 9 家全部存在性", () => {
-  test("chatgpt gpt-5.6 → effort + openai-effort + supportedEfforts 含 max", () => {
+describe("MODEL_REASONING_RULES — All 9 Vendors Presence", () => {
+  test("chatgpt gpt-5.6 -> effort + openai-effort + supportedEfforts includes max", () => {
     const cap = resolveReasoningCapability("chatgpt", "gpt-5.6");
     expect(cap.control).toBe("effort");
     expect(cap.requestStyle).toBe("openai-effort");
@@ -85,7 +85,7 @@ describe("MODEL_REASONING_RULES — 9 家全部存在性", () => {
     expect(cap.supportsDisable).toBe(true);
   });
 
-  test("chatgpt gpt-5 → effort + supportedEfforts 含 minimal", () => {
+  test("chatgpt gpt-5 -> effort + supportedEfforts includes minimal", () => {
     const cap = resolveReasoningCapability("chatgpt", "gpt-5");
     expect(cap.supportedEfforts).toContain("minimal");
   });
@@ -105,12 +105,12 @@ describe("MODEL_REASONING_RULES — 9 家全部存在性", () => {
     expect(cap.control).toBe("effort");
   });
 
-  test("chatgpt gpt-4o 兜底 → none", () => {
+  test("chatgpt gpt-4o fallback -> none", () => {
     const cap = resolveReasoningCapability("chatgpt", "gpt-4o");
     expect(cap.control).toBe("none");
   });
 
-  test("claude claude-fable-5 → toggle-effort + anthropic-adaptive（2026.6 新旗舰）", () => {
+  test("claude claude-fable-5 -> toggle-effort + anthropic-adaptive", () => {
     const cap = resolveReasoningCapability("claude", "claude-fable-5");
     expect(cap.control).toBe("toggle-effort");
     expect(cap.requestStyle).toBe("anthropic-adaptive");
@@ -198,57 +198,57 @@ describe("MODEL_REASONING_RULES — 9 家全部存在性", () => {
     expect(cap.supportsDisable).toBe(true);
   });
 
-  test("未知 provider + 任意 model → none", () => {
+  test("unknown provider + any model -> none", () => {
     const cap = resolveReasoningCapability("unknown", "anything");
     expect(cap.control).toBe("none");
   });
 });
 
-// ── C. normalize 白名单 ──────────────────────────────────────
+// ── C. normalize Allowlist ──────────────────────────────────────
 
-describe("normalizeReasoningPreference — 白名单", () => {
-  test("完全合法 → 原样", () => {
+describe("normalizeReasoningPreference — Allowlist", () => {
+  test("fully valid -> as-is", () => {
     expect(normalizeReasoningPreference({ mode: "on", effort: "high" }))
       .toEqual({ mode: "on", effort: "high" });
   });
 
-  test("mode 不在白名单 → undefined", () => {
+  test("mode not in allowlist -> undefined", () => {
     expect(normalizeReasoningPreference({ mode: "banana", effort: "high" }))
       .toBeUndefined();
   });
 
-  test("effort 不在白名单 → mode 保留、effort 丢弃", () => {
+  test("effort not in allowlist -> mode kept, effort discarded", () => {
     expect(normalizeReasoningPreference({ mode: "on", effort: "ultra" }))
       .toEqual({ mode: "on" });
   });
 
-  test("effort 缺省 → 只返 mode", () => {
+  test("effort omitted -> return mode only", () => {
     expect(normalizeReasoningPreference({ mode: "auto" }))
       .toEqual({ mode: "auto" });
   });
 
-  test("effort 为 null → 只返 mode", () => {
+  test("effort is null -> return mode only", () => {
     expect(normalizeReasoningPreference({ mode: "off", effort: null }))
       .toEqual({ mode: "off" });
   });
 
-  test("完全非法对象（null）→ undefined", () => {
+  test("completely invalid object (null) -> undefined", () => {
     expect(normalizeReasoningPreference(null)).toBeUndefined();
   });
 
-  test("完全非法对象（undefined）→ undefined", () => {
+  test("completely invalid object (undefined) -> undefined", () => {
     expect(normalizeReasoningPreference(undefined)).toBeUndefined();
   });
 
-  test("非对象（字符串）→ undefined", () => {
+  test("non-object (string) -> undefined", () => {
     expect(normalizeReasoningPreference("on")).toBeUndefined();
   });
 
-  test("mode 缺省 → undefined", () => {
+  test("mode omitted -> undefined", () => {
     expect(normalizeReasoningPreference({ effort: "high" })).toBeUndefined();
   });
 
-  test("effort 合法（6 个值之一）→ 保留", () => {
+  test("valid effort (one of 6 values) -> preserved", () => {
     for (const e of ["minimal", "low", "medium", "high", "xhigh", "max"] as const) {
       expect(normalizeReasoningPreference({ mode: "on", effort: e }))
         .toEqual({ mode: "on", effort: e });
@@ -319,7 +319,7 @@ describe("resolveEffectiveReasoning", () => {
       .toEqual({ mode: "on" });
   });
 
-  test("fixed-on 不读 pref.effort（即使 pref 带 effort 也丢弃）", () => {
+  test("fixed-on ignores pref.effort (discards even if pref contains effort)", () => {
     const result = resolveEffectiveReasoning(
       { mode: "off", effort: "high" },
       fixedOnCap,
@@ -328,13 +328,13 @@ describe("resolveEffectiveReasoning", () => {
     expect(result.effort).toBeUndefined();
   });
 
-  test("toggle-effort + supportsDisable=false + { mode: 'off' } → { mode: 'off' }（第三轮修订：mode !== on 直接返回，supportsDisable 由 applyReasoningPreference 拦截）", () => {
+  test("toggle-effort + supportsDisable=false + { mode: 'off' } -> { mode: 'off' }", () => {
     expect(resolveEffectiveReasoning({ mode: "off" }, toggleEffortNoDisableCap))
       .toEqual({ mode: "off" });
   });
 
   test("toggle-effort + { mode: 'on', effort: 'max' } + supportedEfforts=[high] → { mode: 'on', effort: 'high' }", () => {
-    // supportedEfforts 不含 max（cap.6 是 ["high","max"] 包含 max，这条用单独的 cap）
+    // supportedEfforts does not contain max
     const capWithoutMax: ReasoningCapability = {
       ...toggleEffortCap,
       supportedEfforts: ["high"],
@@ -344,7 +344,7 @@ describe("resolveEffectiveReasoning", () => {
       .toEqual({ mode: "on", effort: "high" });
   });
 
-  test("toggle-effort + { mode: 'on', effort: 'xhigh' } + supportedEfforts=[high,max] → { mode: 'on', effort: 'xhigh' }（保留）", () => {
+  test("toggle-effort + { mode: 'on', effort: 'xhigh' } + supportedEfforts=[high,max] -> { mode: 'on', effort: 'xhigh' } (preserved)", () => {
     const cap: ReasoningCapability = {
       ...toggleEffortCap,
       supportedEfforts: ["high", "max", "xhigh"],
@@ -353,27 +353,27 @@ describe("resolveEffectiveReasoning", () => {
       .toEqual({ mode: "on", effort: "xhigh" });
   });
 
-  test("toggle-effort + { mode: 'on' } + defaultEffort='high' → { mode: 'on', effort: 'high' }（填默认）", () => {
+  test("toggle-effort + { mode: 'on' } + defaultEffort='high' -> { mode: 'on', effort: 'high' } (defaults filled)", () => {
     expect(resolveEffectiveReasoning({ mode: "on" }, toggleEffortCap))
       .toEqual({ mode: "on", effort: "high" });
   });
 
-  test("toggle + { mode: 'auto', effort: 'high' } → { mode: 'auto' }（mode !== on 不保留 effort）", () => {
+  test("toggle + { mode: 'auto', effort: 'high' } -> { mode: 'auto' } (effort discarded when mode !== on)", () => {
     expect(resolveEffectiveReasoning({ mode: "auto", effort: "high" }, toggleCap))
       .toEqual({ mode: "auto" });
   });
 
-  test("toggle + { mode: 'off', effort: 'high' } → { mode: 'off' }（mode !== on 不保留 effort）", () => {
+  test("toggle + { mode: 'off', effort: 'high' } -> { mode: 'off' } (effort discarded when mode !== on)", () => {
     expect(resolveEffectiveReasoning({ mode: "off", effort: "high" }, toggleCap))
       .toEqual({ mode: "off" });
   });
 
-  test("preference 缺省 → 按 { mode: 'auto' } 处理", () => {
+  test("preference omitted -> treated as { mode: 'auto' }", () => {
     expect(resolveEffectiveReasoning(undefined, toggleCap))
       .toEqual({ mode: "auto" });
   });
 
-  test("saved 与 effective 不同步：saved 仍保留原 effort", () => {
+  test("saved and effective desynchronized: saved retains original effort", () => {
     const saved: ReasoningPreference = { mode: "on", effort: "max" };
     const cap: ReasoningCapability = {
       control: "toggle-effort",
@@ -382,101 +382,101 @@ describe("resolveEffectiveReasoning", () => {
       requestStyle: "thinking-type",
       supportsDisable: true,
     };
-    // effective 用 defaultEffort "high" 替代了 "max"
+    // effective substituted defaultEffort "high" for "max"
     expect(resolveEffectiveReasoning(saved, cap)).toEqual({ mode: "on", effort: "high" });
-    // saved 不动
+    // saved unchanged
     expect(saved).toEqual({ mode: "on", effort: "max" });
   });
 });
 
-// ── E. 规则表数据完整性 ──────────────────────────────────────
+// ── E. Rules Table Data Integrity ──────────────────────────────────────
 
-describe("MODEL_REASONING_RULES — 数据完整性", () => {
-  test("所有 providerId 与 capabilities.ts 的 id 一致", () => {
+describe("MODEL_REASONING_RULES — Data Integrity", () => {
+  test("all providerId values match capabilities.ts id values", () => {
     const known = new Set([
       "chatgpt", "claude", "deepseek", "glm", "kimi",
       "qwen", "minimax", "mimo", "doubao",
     ]);
     const providerIds = new Set(MODEL_REASONING_RULES.map(r => r.providerId));
     for (const id of providerIds) {
-      expect(known.has(id), `未知 providerId: ${id}`).toBe(true);
+      expect(known.has(id), `Unknown providerId: ${id}`).toBe(true);
     }
   });
 
-  test("每条 capability 都有 supportsDisable 字段（不留空）", () => {
+  test("every capability has a supportsDisable field", () => {
     for (const rule of MODEL_REASONING_RULES) {
       expect(typeof rule.capability.supportsDisable).toBe("boolean");
     }
   });
 
-  test("正则不带 g 标志（避免 .test() 状态污染）", () => {
+  test("regexes do not have g flag to avoid .test() state pollution", () => {
     for (const rule of MODEL_REASONING_RULES) {
       expect(rule.modelPattern.flags.includes("g")).toBe(false);
     }
   });
 });
 
-// ── F. foldReasoning 三态 + 优先级（用户第三轮修订 #4）──
+// ── F. foldReasoning Tri-state + Priority ──
 
 import { foldReasoning } from "./reasoning";
 
-describe("foldReasoning — 持久化折叠（用户第三轮修订 #4）", () => {
-  test("H1 缺省（hasIncomingKey=false）→ 保留旧值", () => {
+describe("foldReasoning — Persistence Fold", () => {
+  test("H1 omitted (hasIncomingKey=false) -> keep old value", () => {
     const existing = { mode: "on" as const, effort: "high" as const };
     expect(foldReasoning(undefined, existing, false)).toEqual(existing);
   });
 
-  test("H1b 缺省 + existing 为 undefined → 返 undefined", () => {
+  test("H1b omitted + existing is undefined -> return undefined", () => {
     expect(foldReasoning(undefined, undefined, false)).toBeUndefined();
   });
 
-  test("H2 显式 auto（合法）→ 写盘为 {mode:'auto'}，清掉旧 effort", () => {
+  test("H2 explicit auto -> persisted as {mode:'auto'}, clearing old effort", () => {
     const existing = { mode: "on" as const, effort: "high" as const };
     expect(foldReasoning({ mode: "auto" }, existing, true)).toEqual({ mode: "auto" });
   });
 
-  test("H3 非法值（hasIncomingKey=true 但 normalize 后 undefined）→ 保留旧值（防覆盖）", () => {
+  test("H3 invalid value -> keeps old value to prevent overwrite", () => {
     const existing = { mode: "on" as const, effort: "high" as const };
     expect(foldReasoning({ mode: "banana" }, existing, true)).toEqual(existing);
     expect(foldReasoning("not an object", existing, true)).toEqual(existing);
   });
 
-  test("H3b 合法 mode + 非法 effort → normalize 后是 {mode}，作为更新（清掉非法 effort）", () => {
+  test("H3b valid mode + invalid effort -> normalized to {mode}, clearing invalid effort", () => {
     const existing = { mode: "on" as const, effort: "high" as const };
     expect(foldReasoning({ mode: "on", effort: "ultra" }, existing, true)).toEqual({ mode: "on" });
   });
 
-  test("H4 显式 undefined/null → 视作用户主动清空，返 undefined", () => {
+  test("H4 explicit undefined/null -> treated as user clear, returns undefined", () => {
     expect(foldReasoning(undefined, { mode: "on" as const, effort: "high" as const }, true))
       .toBeUndefined();
     expect(foldReasoning(null, { mode: "on" as const, effort: "high" as const }, true))
       .toBeUndefined();
   });
 
-  test("H5 perProfile 优先于顶层 reasoning（H5 模拟 foldReasoning 调用：选 perProfile）", () => {
-    // 模拟 saveModelSettings 决策：perProfile.reasoning 存在时 → 选 perProfile
+  test("H5 perProfile takes precedence over top-level reasoning", () => {
+    // Simulate saveModelSettings decision: when perProfile.reasoning exists -> select perProfile
     const perProfileReasoning = { mode: "off" as const };
     const topLevelReasoning = { mode: "on" as const, effort: "low" as const };
     const existing = { mode: "auto" as const };
 
-    // 决策 1：选 perProfile → foldReasoning(perProfileReasoning, existing, true)
+    // Decision 1: select perProfile -> foldReasoning(perProfileReasoning, existing, true)
     const r1 = foldReasoning(perProfileReasoning, existing, true);
     expect(r1).toEqual({ mode: "off" });
 
-    // 决策 2：没 perProfile 时选 topLevel → foldReasoning(topLevelReasoning, existing, true)
+    // Decision 2: no perProfile then select topLevel -> foldReasoning(topLevelReasoning, existing, true)
     const r2 = foldReasoning(topLevelReasoning, existing, true);
     expect(r2).toEqual({ mode: "on", effort: "low" });
 
-    // 决策 3：都没选 → foldReasoning(undefined, existing, false) → 保留旧值
+    // Decision 3: neither selected -> foldReasoning(undefined, existing, false) -> keep old value
     const r3 = foldReasoning(undefined, existing, false);
     expect(r3).toEqual(existing);
   });
 
-  test("H6 顶层 reasoning 在没有 perProfile 写入时生效", () => {
+  test("H6 top-level reasoning takes effect when no perProfile write occurs", () => {
     const topLevel = { mode: "on" as const, effort: "low" as const };
     const existing = undefined;
-    // 模拟决策：incomingProfileForReasoning 不带 reasoning → hasProfileReasoning=false，
-    // 顶层 settings.reasoning 存在 → hasTopLevelReasoning=true
+    // Simulate decision: incomingProfileForReasoning has no reasoning -> hasProfileReasoning=false,
+    // top-level settings.reasoning exists -> hasTopLevelReasoning=true
     // → foldReasoning(topLevel, undefined, true)
     expect(foldReasoning(topLevel, existing, true)).toEqual({ mode: "on", effort: "low" });
   });

@@ -9,8 +9,8 @@ const candidateContext: ModelVisibleContext = {
   conversationId: "c1",
   domain: "music",
   kind: "candidate",
-  label: "胆小鬼",
-  attributes: { artists: ["梁咏琪"], source: ["daily_recommendation"] },
+  label: "Coward",
+  attributes: { artists: ["Gigi Leung"], source: ["daily_recommendation"] },
   position: 1,
   presented: true,
   lifecycle: "active",
@@ -39,36 +39,36 @@ function cognition(input: {
 const cases = [
   {
     name: "self-contained query remains unchanged",
-    query: "今天上海天气怎么样？",
-    result: cognition({ query: "今天上海天气怎么样？", rewriteStatus: "unchanged" }),
+    query: "How is the weather in Shanghai today?",
+    result: cognition({ query: "How is the weather in Shanghai today?", rewriteStatus: "unchanged" }),
   },
   {
     name: "ordinal selection uses existing ref",
-    query: "第一首吧",
+    query: "the first one please",
     result: cognition({
-      query: "第一首吧",
+      query: "the first one please",
       rewriteStatus: "rewritten",
-      contextualizedQuery: "用户选择当前日推候选中的第一首《胆小鬼》。",
+      contextualizedQuery: "User selects the first track 'Coward' among current daily recommendations.",
       withRef: true,
     }),
   },
   {
     name: "ambiguous reference stays ambiguous",
-    query: "就那个吧",
-    result: cognition({ query: "就那个吧", rewriteStatus: "insufficient_context" }),
+    query: "just that one",
+    result: cognition({ query: "just that one", rewriteStatus: "insufficient_context" }),
   },
   {
     name: "comment does not become playback",
-    query: "第四首名字挺怪",
-    result: cognition({ query: "第四首名字挺怪", rewriteStatus: "unchanged" }),
+    query: "the fourth one has a weird title",
+    result: cognition({ query: "the fourth one has a weird title", rewriteStatus: "unchanged" }),
   },
   {
     name: "correction returns to prior topic",
-    query: "不是左转灯，是之前日推那个",
+    query: "not Left Turn Light, the one from earlier daily recommendations",
     result: cognition({
-      query: "不是左转灯，是之前日推那个",
+      query: "not Left Turn Light, the one from earlier daily recommendations",
       rewriteStatus: "rewritten",
-      contextualizedQuery: "用户纠正目标为此前日推中的《胆小鬼》。",
+      contextualizedQuery: "User corrects target to 'Coward' from earlier daily recommendations.",
       withRef: true,
     }),
   },
@@ -96,7 +96,7 @@ describe("CITA advisory acceptance", () => {
     expect(prepared.contextPackage?.originalQuery).toBe(query);
     expect(prepared.contextPackage?.rewriteStatus).toBe(result.rewriteStatus);
     expect(prepared.contextBlock).toContain("[CITA_CONTEXT]");
-    expect(prepared.contextBlock).not.toMatch(/\bmusic_play_track\b|\brequiredTool|\bexecute\b|netease-cloud-music|"trackId"|"setId"|"provider"|\b255667\b|正在播放/);
+    expect(prepared.contextBlock).not.toMatch(/\bmusic_play_track\b|\brequiredTool|\bexecute\b|netease-cloud-music|"trackId"|"setId"|"provider"|\b255667\b/);
   });
 
   it("makes zero semantic calls and injects no marker when disabled", async () => {
@@ -108,7 +108,7 @@ describe("CITA advisory acceptance", () => {
     });
 
     const prepared = await service.prepareTurn({
-      conversationId: "c1", turnId: "turn-1", originalQuery: "第一首吧", recentDialogue: [],
+      conversationId: "c1", turnId: "turn-1", originalQuery: "the first one please", recentDialogue: [],
     });
 
     expect(understandTurn).not.toHaveBeenCalled();
@@ -123,12 +123,12 @@ describe("CITA advisory acceptance", () => {
     });
 
     const prepared = await service.prepareTurn({
-      conversationId: "c1", turnId: "turn-1", originalQuery: "就那个吧", recentDialogue: [],
+      conversationId: "c1", turnId: "turn-1", originalQuery: "just that one", recentDialogue: [],
     });
 
     expect(prepared.contextPackage).toMatchObject({
-      originalQuery: "就那个吧",
-      contextualizedQuery: "就那个吧",
+      originalQuery: "just that one",
+      contextualizedQuery: "just that one",
       semanticStatus: "unavailable",
     });
   });

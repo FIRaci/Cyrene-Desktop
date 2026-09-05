@@ -1,6 +1,6 @@
-// 厂商工具调用适配层 —— 统一类型
-// 调度层（function-calling.ts）只依赖这里的统一结构，绝不出现 if (provider === "xxx")。
-// 协议事实来源：docs/vendors/tool-calling-matrix.md
+// Vendor tool calling adapter layer -- unified types
+// Orchestration layer (function-calling.ts) depends only on unified structures here, never if (provider === "xxx").
+// Protocol source of truth: docs/vendors/tool-calling-matrix.md
 
 import type { ReasoningPreference } from "../../../shared/reasoning";
 
@@ -10,21 +10,21 @@ export type ThinkingField = "reasoning_content" | "thinking" | "reasoning_detail
 export type CacheStrategy = "prompt_cache_key" | "cache_control" | "auto" | "none";
 export type TestStrategy = "text" | "text+tool";
 
-/** 调度层传入适配器的厂商运行时配置（结构兼容 main/index.ts 的 ModelSettings）。 */
+/** Vendor runtime config passed by orchestration layer (compatible with main/index.ts ModelSettings). */
 export interface VendorConfig {
-  provider: string; // 厂商显示名，如 "MiniMax（稀宇科技）"，与 capability 表的 displayName 对齐
+  provider: string; // Vendor display name, e.g. "MiniMax", aligned with capability table displayName
   baseUrl: string;
   model: string;
   apiKey: string;
   /**
-   * 用户在 settings UI 显式指定的 transport；"auto" 走 baseUrl 启发式 + capabilities fallback。
-   * resolveTransport(cfg) 负责把 auto 解析为具体 transport。
+   * Transport explicitly specified by user in settings UI; "auto" uses baseUrl heuristics + capabilities fallback.
+   * resolveTransport(cfg) resolves auto into concrete transport.
    */
   explicitTransport?: Transport | "auto";
   /**
-   * 用户保存的推理偏好。adapter buildRequest 必须透传此字段；
-   * 不传时 applyReasoningPreference 缺省按 auto 处理。
-   * commit 2 落地后由 ModelSettings 顶层镜像字段填充；commit 1 期间为可选。
+   * User reasoning preference. adapter buildRequest must pass this field;
+   * Defaults to auto when not provided.
+   * Populated by top-level mirrored field in ModelSettings; optional otherwise.
    */
   reasoning?: ReasoningPreference;
 }
@@ -35,29 +35,29 @@ export type OpenAIContentBlock =
 
 export type ChatMessageContent = string | OpenAIContentBlock[];
 
-/** 统一工具调用描述（项目内部），与 OpenAI/Anthropic wire 格式解耦。 */
+/** Unified tool call description (internal), decoupled from OpenAI/Anthropic wire format. */
 export interface ToolCall {
   id: string;
   name: string;
-  arguments: string; // JSON 字符串，沿用 OpenAI 习惯
+  arguments: string; // JSON string, following OpenAI conventions
 }
 
 /**
- * 统一消息结构。两个 transport 各自只读自己需要的字段，调度层透传。
- * - OpenAI transport 读 content / toolCalls / toolCallId / name
- * - Anthropic transport 额外读 thinking / rawAssistant（多轮必须原样回传 content block 数组）
+ * Unified message structure. Both transports read only their needed fields; orchestration layer passes through.
+ * - OpenAI transport reads content / toolCalls / toolCallId / name
+ * - Anthropic transport additionally reads thinking / rawAssistant (multi-round requires content block array)
  */
 export interface ChatMessage {
   role: "system" | "user" | "assistant" | "tool";
   content?: ChatMessageContent;
-  /** assistant 上的工具调用（统一结构，OpenAI wire 再转成 tool_calls[].function）。 */
+  /** Tool calls on assistant (unified structure, converted to tool_calls[].function in OpenAI wire). */
   toolCalls?: ToolCall[];
-  /** role:"tool" 的回填锚点（OpenAI: tool_call_id；Anthropic: tool_use_id）。 */
+  /** Backfill anchor for role:"tool" (OpenAI: tool_call_id; Anthropic: tool_use_id). */
   toolCallId?: string;
   name?: string;
-  /** 思考/推理纯文本（reasoning_content / thinking block 抽出来）。 */
+  /** Extracted thinking/reasoning text (extracted from reasoning_content / thinking block). */
   thinking?: string;
-  /** Anthropic 多轮必须原样回传 assistant.content block 数组；OpenAI transport 不读。 */
+  /** Anthropic multi-turn must return original assistant.content block array; ignored by OpenAI transport. */
   rawAssistant?: unknown;
 }
 
@@ -89,12 +89,12 @@ export type StructuredOutputRequest =
     };
 
 /**
- * Action Gate 专用：直接指定 tool_choice wire 值，绕过 resolveToolChoicePolicy。
- * Native FC 不设此字段，仍走 toolChoiceIntent + resolveToolChoicePolicy。
+ * Action Gate specific: explicitly specify tool_choice wire value, bypassing resolveToolChoicePolicy.
+ * Native FC does not set this field, still using toolChoiceIntent + resolveToolChoicePolicy.
  *
- * `none` 和 `omit` 的区别：
- * - `none`：明确发送"禁止调用工具"（wire: tool_choice: "none"）
- * - `omit`：请求里完全不出现 tool_choice 字段
+ * Difference between `none` and `omit`:
+ * - `none`: explicitly send tool inhibition (wire: tool_choice: "none")
+ * - `omit`: completely omit tool_choice field from request
  */
 export type ToolChoiceOverride =
   | { kind: "named"; toolName: string }
@@ -109,7 +109,7 @@ export interface ChatRequest {
   tools?: ToolSpec[];
   /** Runtime semantic intent; the active Adapter maps it to named/required/any/auto/omitted wire syntax. */
   toolChoiceIntent?: { mode: "must_call"; toolName: string };
-  /** Action Gate 专用：直接指定 tool_choice wire 值，绕过 resolveToolChoicePolicy。 */
+  /** Action Gate specific: explicitly specify tool_choice wire value, bypassing resolveToolChoicePolicy. */
   toolChoiceOverride?: ToolChoiceOverride;
   temperature?: number;
   topP?: number;
@@ -119,22 +119,22 @@ export interface ChatRequest {
   /** CITA/Action Gate only. Native FC keeps using real tools instead. */
   structuredOutput?: StructuredOutputRequest;
   /**
-   * 非流式调用时的 max_tokens 上限（OpenAI wire: `max_tokens`；Anthropic wire 覆盖默认 4096）。
-   * 流式时由 adapter 决定是否使用（通常不用--流式靠 finish_reason 判断）。
+   * Non-streaming max_tokens limit (OpenAI wire: `max_tokens`; Anthropic wire overrides default 4096).
+   * Decided by adapter during streaming (normally unused--streaming relies on finish_reason).
    */
   maxTokens?: number;
-  /** 透传到请求体顶层的厂商扩展字段（如 Kimi 的 prompt_cache_key）。 */
+  /** Vendor extension fields passed to top-level request body (e.g. Kimi prompt_cache_key). */
   extraBody?: Record<string, unknown>;
 }
 
 /**
- * Transport-无关的统一流式事件。
- * Reader 层（createSseReader）把 HTTP body 字节流切分成 StreamEvent 列表；
- * Adapter 层 parseStreamEvent(event) 是纯函数，无状态。
+ * Transport-agnostic unified streaming event.
+ * Reader layer (createSseReader) splits HTTP body byte stream into StreamEvent list;
+ * Adapter layer parseStreamEvent(event) is a pure, stateless function.
  *
- * - OpenAI 流式：Reader 切出的 eventType 固定为 "data"，data 是 data: {...} 行的 JSON 字符串。
- * - Anthropic 流式：eventType 是事件名（message_start / content_block_delta / message_delta /
- *   message_stop 等），data 是 data: {...} 行的 JSON 字符串。
+ * - OpenAI streaming: eventType is fixed to "data", data is the JSON string from data: {...} line.
+ * - Anthropic streaming: eventType is event name (message_start / content_block_delta / message_delta /
+ *   message_stop etc.), data is the JSON string from data: {...} line.
  */
 export interface StreamEvent {
   eventType: string;
@@ -142,12 +142,12 @@ export interface StreamEvent {
 }
 
 /**
- * 流式增量块。接口设计比当前需求宽（保留 deltaToolCalls），
- * 但本次两个 adapter 的 parseStreamEvent 实现只解析 deltaText + deltaThinking；
- * 遇到 tool delta 时静默忽略（不报错、不累积）。
+ * Streaming delta chunk. Interface design is broader than current needs (retaining deltaToolCalls),
+ * but current parseStreamEvent implementations in both adapters only parse deltaText + deltaThinking;
+ * tool deltas are silently ignored when encountered (no error, no accumulation).
  *
- * 未来若 MemoryJudge / 心情观察器想走工具调用，只改 adapter 实现，
- * 不改接口、不改调用方。
+ * Future extensions requiring tool calling only need adapter updates,
+ * without altering interfaces or callers.
  */
 export interface StreamChunk {
   deltaText?: string;
@@ -157,9 +157,9 @@ export interface StreamChunk {
   usage?: { input: number; output: number };
 }
 
-/** 适配器解析后的统一响应，调度层只看这个。 */
+/** Unified response parsed by adapter; orchestration layer only inspects this. */
 export interface ChatResponse {
-  /** 要追加进对话的 assistant 消息（保留 thinking / rawAssistant 供下轮回传）。 */
+  /** Assistant message to append to conversation (retaining thinking / rawAssistant for subsequent turns). */
   assistantMessage: ChatMessage;
   text: string;
   thinking?: string;
@@ -170,8 +170,8 @@ export interface ChatResponse {
   raw: unknown;
   /** LangChain responseFormat result; absent on the legacy adapter path. */
   structuredValue?: unknown;
-  /** API 返回的 token 用量（OpenAI: prompt_tokens/completion_tokens；Anthropic: input_tokens/output_tokens）。
-   *  未上报时为 undefined，由调用方兜底。 */
+  /** API token usage (OpenAI: prompt_tokens/completion_tokens; Anthropic: input_tokens/output_tokens).
+   *  Undefined when not reported, handled by caller fallback. */
   usage?: { input: number; output: number };
 }
 
@@ -195,8 +195,8 @@ export interface TestConnectionResult {
 }
 
 /**
- * 厂商能力表的一条记录。是 vendor adapter 的"事实来源"，
- * 避免 function-calling.ts 里散落 if (provider === "kimi")。
+ * Entry in vendor capability table. The source of truth for vendor adapters,
+ * avoiding scattered if (provider === "kimi") checks in function-calling.ts.
  */
 export interface ProviderCapability {
   id: string;
@@ -210,20 +210,20 @@ export interface ProviderCapability {
   thinkingField: ThinkingField;
   cacheStrategy: CacheStrategy;
   testStrategy: TestStrategy;
-  /** 是否支持视觉（图片）输入。非多模态模型禁止走 read_image。 */
+  /** Whether vision (image) input is supported. Non-multimodal models must not use read_image. */
   supportsVision: boolean;
   /** Supported must-call wire policies; Adapter maps required to OpenAI required / Anthropic any. */
   toolChoiceModes?: ReadonlyArray<"named" | "required" | "auto" | "omit">;
   /**
-   * 视觉模型的 OpenAI 兼容 baseUrl。仅当主聊天走 Anthropic 入口、视觉需走 OpenAI 入口时才需要标
-   * （如 MiniMax 主配 /anthropic，视觉要走 /v1）。不标 = 视觉用主配置 baseUrl。
+   * OpenAI-compatible baseUrl for vision model. Only needed when main chat uses Anthropic while vision requires OpenAI
+   * (e.g. MiniMax configured with /anthropic while vision needs /v1). If unspecified = vision uses main baseUrl.
    */
   visionBaseUrl?: string;
-  /** UI 是否允许选择（Claude 等 Anthropic adapter 未就绪前先禁用）。 */
+  /** Whether UI permits selection. */
   disabled?: boolean;
 }
 
-/** 调度层只看到这一层接口。 */
+/** Orchestration layer only interfaces with this layer. */
 export interface ChatVendorAdapter {
   readonly id: string;
   readonly transport: Transport;
@@ -233,16 +233,16 @@ export interface ChatVendorAdapter {
   appendToolResults(messages: ChatMessage[], results: ToolExecutionResult[]): ChatMessage[];
   applyCacheHints?(req: ChatRequest, cfg: VendorConfig): ChatRequest;
   /**
-   * 流式 buildRequest：与 buildRequest 同形，但 stream=true 已写进 body。
-   * 默认实现：复用 buildRequest（adapter 内部已经按 req.stream 写 body）。
+   * Streaming buildRequest: identical shape to buildRequest, but stream=true in body.
+   * Default implementation: reuse buildRequest (adapter writes body per req.stream).
    */
   buildStreamRequest(req: ChatRequest, cfg: VendorConfig): HttpRequest;
   /**
-   * 解析一个完整流式事件。纯函数，无状态——状态由调用方持有的 buffer 维护。
-   * 返回 null 表示这一事件不产生增量（心跳、注释行、未识别的 event type 等）。
+   * Parse a complete streaming event. Pure, stateless function--state is maintained by caller buffer.
+   * Returns null if event produces no delta (heartbeats, comments, unrecognized event types, etc.).
    *
-   * 命名严格对齐 StreamEvent：传进来的是 Reader 切完的"一个完整的协议事件"，
-   * 不是字节片段（Chunk）。
+   * Strictly aligned with StreamEvent: input is a complete protocol event split by Reader,
+   * not a byte chunk.
    */
   parseStreamEvent(event: StreamEvent): StreamChunk | null;
   testConnection(cfg: VendorConfig): Promise<TestConnectionResult>;

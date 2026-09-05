@@ -1,11 +1,11 @@
-// 文档生成工具 —— 让昔涟能产出可交付物（Excel/Word/PDF/Markdown）。
+// Document generation tools: create deliverables (Excel/Word/PDF/Markdown).
 //
-// 设计要点：
-// - 所有文档默认存到桌面（app.getPath("desktop")），用户最容易找到
-// - 支持桌面子目录（如 "test/report.xlsx"），自动创建父目录
-// - 文件名由模型给，强制校验扩展名（防 .exe 等危险后缀）
-// - 返回完整路径给模型，模型可以转述给用户
-// - PDF 中文字体走系统微软雅黑（Windows），找不到就降级
+// Design highlights:
+// - Documents saved to desktop by default (app.getPath("desktop"))
+// - Supports desktop subdirectories (e.g. "test/report.xlsx"), creates parent dirs automatically
+// - Filename provided by model, validates extension (guards against .exe etc.)
+// - Returns full path to model to communicate to user
+// - PDF fonts check system fonts, fallback if not found
 
 import * as fs from "fs";
 import * as path from "path";
@@ -14,38 +14,38 @@ import { toolRegistry } from "./tool-registry";
 
 const LOG_PREFIX = "[DocTools]";
 
-/** 校验文件名：必须有合法扩展名，不能有危险字符。 */
+/** Validate filename: must have valid extension and no unsafe characters. */
 function validateFilename(filename: string, ext: string): string | null {
   if (!filename || typeof filename !== "string") return null;
   if (!filename.toLowerCase().endsWith(ext)) return null;
-  // 防危险字符
+  // Guard against unsafe characters
   if (/[<>:"|?*]/.test(filename)) return null;
   return filename;
 }
 
 /**
- * 解析输出路径：filename 可含子目录（如 "test/report.xlsx"），根始终是桌面。
- * 安全校验：禁止 .. 穿越、禁止绝对路径（不能写到桌面之外）。
- * 返回绝对路径，或 null 表示校验失败。
+ * Resolve output path: filename may contain subdirectories, rooted at desktop.
+ * Security check: disallows .. traversal and absolute paths.
+ * Returns absolute path or null if validation fails.
  */
 function resolveOutputPath(filename: string): string | null {
   const normalized = path.normalize(filename).replace(/\\/g, "/");
-  // 禁止目录穿越和绝对路径
+  // Disallow directory traversal and absolute paths
   if (normalized.includes("..") || path.isAbsolute(normalized)) return null;
   const desktop = app.getPath("desktop");
   const fullPath = path.join(desktop, normalized);
-  // 最终校验：解析后必须仍在桌面下
+  // Final validation: resolved path must remain within desktop
   if (!fullPath.startsWith(desktop)) return null;
   return fullPath;
 }
 
-/** 桌面路径（旧接口，保持兼容）。 */
+/** Desktop path (legacy helper, retained for compatibility). */
 function desktopPath(filename: string): string {
   return path.join(app.getPath("desktop"), filename);
 }
 
-// ── 样式加载器（Excel + Word 共用）──
-// 从 skills/{skillId}/styles/ 目录加载 json 风格文件，带缓存。
+// -- Style loader (shared by Excel + Word) --
+// Loads JSON style files from skills/{skillId}/styles/ with caching.
 interface StyleCacheEntry { [styleId: string]: Record<string, unknown> }
 const styleCache = new Map<string, StyleCacheEntry>();
 const styleLoaded = new Set<string>();
@@ -70,26 +70,26 @@ function loadStylesDir(skillId: string): StyleCacheEntry {
       const styleId = f.replace(/\.json$/, "");
       try {
         cache[styleId] = JSON.parse(fs.readFileSync(path.join(stylesDir, f), "utf8"));
-      } catch { /* 跳过坏文件 */ }
+      } catch { /* Skip invalid files */ }
     }
     console.log(LOG_PREFIX, `Loaded ${skillId} styles:`, Object.keys(cache).join(", ") || "(none)");
-  } catch { /* 目录不存在 */ }
+  } catch { /* Directory does not exist */ }
   styleCache.set(skillId, cache);
   return cache;
 }
 
-/** 把 hex 颜色转成 ARGB（FF 前缀），docx 库用 6 位 RRGGBB 不带 FF 前缀。 */
+/** Convert hex color to ARGB (FF prefix). docx library uses 6-digit RRGGBB. */
 function toHexColor(color: string): string {
   const c = color.replace("#", "").toUpperCase();
   if (c.length === 8) return c.slice(2);  // FFRRGGBB → RRGGBB
   if (c.length === 6) return c;
-  return "1F4E79"; // 兜底
+  return "1F4E79"; // Fallback
 }
 
 export function registerDocumentTools(): void {
-  // ── 样式系统 ──
-  // 从 skills/xlsx/styles/ 目录加载预设风格 json，取代硬编码。
-  // 模型弹卡片前读 catalog.md 选风格，用户选完传 style 名给 write_excel。
+  // -- Style system --
+  // Loads style presets from skills/xlsx/styles/ instead of hardcoding.
+  // Model selects style, passing chosen style to write_excel.
   type ExcelFill = import("exceljs").Fill;
   type ExcelBorders = import("exceljs").Borders;
 
@@ -102,7 +102,7 @@ export function registerDocumentTools(): void {
     borderColor: string;    // ARGB
   }
 
-  /** 从 skills/xlsx/styles/ 加载所有风格 json（带缓存）。 */
+  /** Load all style JSONs from skills/xlsx/styles/ (cached). */
   const themeCache = new Map<string, Theme>();
   let themesLoaded = false;
 
@@ -115,7 +115,7 @@ export function registerDocumentTools(): void {
     if (themesLoaded) return;
     themesLoaded = true;
     try {
-      // 尝试多个可能的 skill 路径
+      // Try multiple possible skill paths
       const candidates = [
         path.join(app.getAppPath(), "skills", "xlsx", "styles"),
         path.join(process.cwd(), "skills", "xlsx", "styles"),
@@ -139,11 +139,11 @@ export function registerDocumentTools(): void {
             zebraFill: String(raw.zebraFill || DEFAULT_THEME.zebraFill),
             borderColor: String(raw.borderColor || DEFAULT_THEME.borderColor),
           });
-        } catch { /* 跳过坏文件 */ }
+        } catch { /* Skip invalid files */ }
       }
       console.log(LOG_PREFIX, "Loaded styles:", Array.from(themeCache.keys()).join(", ") || "(none)");
     } catch {
-      // 目录不存在，用默认主题
+      // Directory does not exist, use default theme
     }
   }
 
@@ -153,17 +153,17 @@ export function registerDocumentTools(): void {
     return themeCache.get(style) ?? themeCache.get("default") ?? DEFAULT_THEME;
   }
 
-  /** 把 hex 颜色 (#RRGGBB 或 RRGGBB) 转成 ARGB (FFRRGGBB)，已含 FF 前缀则原样返回。 */
+  /** Convert hex color (#RRGGBB or RRGGBB) to ARGB (FFRRGGBB). */
   function toArgb(color: string): string {
     const c = color.replace("#", "").toUpperCase();
     if (c.length === 8) return c;
     if (c.length === 6) return "FF" + c;
-    return "FF1F4E79"; // 兜底
+    return "FF1F4E79"; // Fallback
   }
 
   /**
-   * 用自定义颜色覆盖主题。colors 里每个字段是可选的 ARGB hex 值。
-   * 模型能把用户自然语言（"粉色""深灰"）翻译成 hex 后传进来。
+   * Override theme with custom colors. Each field in colors is an optional ARGB hex value.
+   * Model translates natural language color requests into hex.
    */
   function mergeTheme(base: Theme, colors?: {
     headerFill?: string; headerFont?: string; headerBorder?: string;
@@ -241,7 +241,7 @@ export function registerDocumentTools(): void {
       const ExcelJS = await import("exceljs");
       const workbook = new ExcelJS.Workbook();
 
-      // 选主题（预设 + 自定义颜色覆盖）
+      // Select theme (preset + custom color overrides)
       const baseTheme = getTheme(args.style ? String(args.style) : undefined);
       const colors = args.colors as {
         headerFill?: string; headerFont?: string; headerBorder?: string;
@@ -266,7 +266,7 @@ export function registerDocumentTools(): void {
       for (const s of sheets) {
         const ws = workbook.addWorksheet(s.name || "Sheet1");
 
-        // 写入数据
+        // Write data
         if (Array.isArray(s.headers)) ws.addRow(s.headers);
         for (const row of (s.rows || [])) ws.addRow(row);
 
@@ -274,8 +274,8 @@ export function registerDocumentTools(): void {
         const dataRowCount = (s.rows?.length || 0);
         const totalRows = dataRowCount + 1; // +1 for header
 
-        // 1. 表头样式：白粗体字 + 深蓝填充 + 居中 + 底部粗线
-        // 逐 cell 设置（行级 fill/font/alignment 会铺到无值的空列，导致表头蓝条超出实际列数）
+        // 1. Header style: white bold + dark blue fill + centered + bottom border
+        // Set per cell to avoid spilling into empty columns
         const headerRow = ws.getRow(1);
         headerRow.height = 24;
         headerRow.eachCell({ includeEmpty: false }, (cell) => {
@@ -285,32 +285,32 @@ export function registerDocumentTools(): void {
           cell.border = HEADER_BOTTOM_BORDER;
         });
 
-        // 2. 数据行：全表细边框 + 智能数字格式 + 斑马纹
+        // 2. Data rows: thin border + smart number format + zebra striping
         for (let r = 2; r <= totalRows; r++) {
           const row = ws.getRow(r);
-          // 斑马纹（偶数数据行 = Excel 标准交替灰）
+          // Zebra striping (even data rows = alternating gray)
           const isZebra = (r - 1) % 2 === 0;
           row.eachCell({ includeEmpty: false }, (cell, colNumber) => {
             cell.border = THIN_BORDER;
-            // 斑马纹需逐 cell 设（行级 fill 会被 eachCell 的 cell 对象覆盖）
+            // Zebra striping set per cell
             if (isZebra) {
               cell.fill = ZEBRA_FILL;
             }
-            // 智能数字格式（参考 minimax skill format.md 的格式矩阵）
+            // Smart number format
             if (typeof cell.value === "number") {
               cell.alignment = { horizontal: "right", vertical: "middle" };
-              // 按列内容推断数字格式
+              // Infer number format from column header
               const headerText = headers[colNumber - 1] ? String(headers[colNumber - 1]).toLowerCase() : "";
-              if (/年|year/.test(headerText)) {
-                cell.numFmt = "0";              // 年份：无千位分隔（2024 不是 2,024）
-              } else if (/%|率|比|ratio|rate|涨|跌|幅/.test(headerText)) {
-                cell.numFmt = "0.0%";           // 百分比
-              } else if (/\$|元|价|额|金|amount|price|cost|revenue/.test(headerText)) {
-                cell.numFmt = "#,##0.00";      // 货币：带分
+              if (/year|\u5e74/i.test(headerText)) {
+                cell.numFmt = "0";              // Year: no thousands separator
+              } else if (/%|ratio|rate|[\u7387\u6bd4\u6da8\u8dcc\u5e45]/i.test(headerText)) {
+                cell.numFmt = "0.0%";           // Percentage
+              } else if (/\$|amount|price|cost|revenue|[\u5143\u4ef7\u989d\u91d1]/i.test(headerText)) {
+                cell.numFmt = "#,##0.00";      // Currency with cents
               } else if (Number.isInteger(cell.value) && Math.abs(cell.value) >= 1000) {
-                cell.numFmt = "#,##0";          // 大整数：千位分隔无小数
+                cell.numFmt = "#,##0";          // Large integer: thousands separator without decimals
               } else {
-                cell.numFmt = "#,##0.00";       // 默认数字
+                cell.numFmt = "#,##0.00";       // Default number
               }
             } else if (cell.value instanceof Date) {
               cell.alignment = { horizontal: "center", vertical: "middle" };
@@ -321,7 +321,7 @@ export function registerDocumentTools(): void {
           });
         }
 
-        // 3. 列宽自适应：按表头 + 数据行中最大宽度计算（中文按 2 宽度估算）
+        // 3. Auto-fit column widths
         ws.columns.forEach((col, i) => {
           let maxLen = headers[i] ? Array.from(String(headers[i])).reduce((sum, ch) => sum + (ch.charCodeAt(0) > 127 ? 2 : 1), 0) + 4 : 8;
           for (const row of (s.rows || [])) {
@@ -334,10 +334,10 @@ export function registerDocumentTools(): void {
           col.width = Math.min(Math.max(maxLen, 10), 45);
         });
 
-        // 4. 冻结首行
+        // 4. Freeze header row
         ws.views = [{ state: "frozen", ySplit: 1 }];
 
-        // 5. 自动筛选：表头行加 filter（方便用户筛选排序）
+        // 5. Auto-filter on header row
         if (headers.length > 0 && dataRowCount > 0) {
           ws.autoFilter = {
             from: { row: 1, column: 1 },
@@ -346,7 +346,7 @@ export function registerDocumentTools(): void {
         }
       }
 
-      // 自动创建父目录（支持子目录写入）
+      // Create parent directory automatically
       const dir = path.dirname(outputPath);
       if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
@@ -385,7 +385,7 @@ export function registerDocumentTools(): void {
       const outputPath = resolveOutputPath(filename);
       if (!outputPath) return "[Error] Invalid path; absolute paths and directory traversal are not allowed: " + filename;
 
-      // 加载风格
+      // Load style
       const styles = loadStylesDir("docx");
       const styleId = args.style ? String(args.style) : "default";
       const theme = (styles[styleId] ?? styles["default"]) as {
@@ -395,8 +395,8 @@ export function registerDocumentTools(): void {
 
       const titleColor = toHexColor(theme?.titleColor ?? "FF1F4E79");
       const titleSize = theme?.titleSize ?? 28;
-      const titleFont = theme?.titleFont ?? "微软雅黑";
-      const bodyFont = theme?.bodyFont ?? "微软雅黑";
+      const titleFont = theme?.titleFont ?? "Microsoft YaHei";
+      const bodyFont = theme?.bodyFont ?? "Microsoft YaHei";
       const bodySize = theme?.bodySize ?? 24;
       const bodyColor = toHexColor(theme?.bodyColor ?? "FF333333");
       const lineSpacing = theme?.lineSpacing ?? 360;
@@ -473,7 +473,7 @@ export function registerDocumentTools(): void {
       const stream = fs.createWriteStream(outputPath);
       doc.pipe(stream);
 
-      // 中文字体：Windows 用微软雅黑，找不到则用默认（中文会乱码但能生成）
+      // Font fallback: Windows uses msyh.ttc or standard fonts
       const fontCandidates = [
         "C:\\Windows\\Fonts\\msyh.ttc",
         "C:\\Windows\\Fonts\\simsun.ttc",

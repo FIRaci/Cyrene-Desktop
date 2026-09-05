@@ -1,6 +1,6 @@
-// game-bot 启动入口 + IPC + agent 触发工具。
-// 汇总点：组装 BotTools（screenshot/input/vlm-locator/refs-store）→ 注册 IPC → 注册 game_bot_start 工具。
-// 唯一碰 electron 的汇总模块（ipcMain/BrowserWindow/app）；引擎本身不碰。
+// game-bot startup entry + IPC + agent trigger tool.
+// Composition root: assemble BotTools (screenshot/input/vlm-locator/refs-store) -> register IPC -> register game_bot_start tool.
+// Only composition module touching electron (ipcMain/BrowserWindow/app); engine itself does not.
 
 import * as fs from "fs";
 import * as path from "path";
@@ -40,7 +40,7 @@ function recipeFilePath(id: string, ext: ".yaml" | ".yml"): string | null {
   return candidate;
 }
 
-/** 扫描内置 game-recipes/ 目录，返回脚本元数据列表。 */
+/** Scans built-in game-recipes/ directory, returning script metadata list. */
 export function listRecipes(): { id: string; name: string }[] {
   const dir = recipesDirPath();
   const result: { id: string; name: string }[] = [];
@@ -60,7 +60,7 @@ export function listRecipes(): { id: string; name: string }[] {
   return result;
 }
 
-/** 读脚本文件 → GameRecipe。 */
+/** Reads script file -> GameRecipe. */
 function loadRecipe(id: string): GameRecipe | null {
   if (!isGameBotIdentifier(id)) return null;
   for (const ext of [".yaml", ".yml"]) {
@@ -74,11 +74,11 @@ function loadRecipe(id: string): GameRecipe | null {
   return null;
 }
 
-// ── 运行时状态 ──
+// ── Runtime State ──
 let runSignal: { aborted: boolean } | null = null;
 let runningRecipe: string | null = null;
 
-/** 组装 BotTools 实现（注入引擎）。 */
+/** Assembles BotTools implementation (injected into engine). */
 function buildTools(settings: GameBotSettings): BotTools {
   const vlmConfig = { baseUrl: settings.vlm.baseUrl, apiKey: settings.vlm.apiKey, model: settings.vlm.model };
   const curRecipe = () => runningRecipe ?? settings.activeRecipe;
@@ -130,7 +130,7 @@ function broadcastProgress(info: { index: number; total: number; desc: string })
   }
 }
 
-/** 启动代肝（设置面板 / agent 都调这个）。异步运行，不阻塞调用方。 */
+/** Starts game bot (invoked by settings panel / agent). Runs asynchronously without blocking caller. */
 export async function startGameBot(): Promise<{ ok: boolean; error?: string }> {
   if (runSignal) return { ok: false, error: "Game automation is already running." };
   const settings = loadGameBotSettings();
@@ -163,13 +163,13 @@ export async function startGameBot(): Promise<{ ok: boolean; error?: string }> {
   return { ok: true };
 }
 
-/** 停止代肝。 */
+/** Stops game bot. */
 export function stopGameBot(): { ok: boolean } {
   if (runSignal) runSignal.aborted = true;
   return { ok: true };
 }
 
-/** 注册 IPC + game_bot_start 工具。app.whenReady 后调一次。 */
+/** Registers IPC + game_bot_start tool. Called once after app.whenReady. */
 type PublicGameBotSettings = Omit<GameBotSettings, "vlm"> & {
   vlm: Omit<GameBotSettings["vlm"], "apiKey"> & { apiKey: ""; hasKey: boolean };
 };
@@ -200,7 +200,7 @@ export function initGameBot(options: { captureScreen?: () => Promise<ScreenshotR
   ipcMain.handle(IPC.GAME_BOT_SAVE_CONFIG, (event, patch: unknown) => {
     requireSettings(event);
     const saved = saveGameBotSettings(restoreGameBotSecret(patch as Partial<GameBotSettings>));
-    // enabled 开关同步到 agent 工具，关了 agent 就看不到/调不到
+    // enabled switch synchronized with agent tool; disabled prevents agent from accessing it
     toolRegistry.setEnabled("game_bot_start", saved.enabled);
     return toPublicGameBotSettings(saved);
   });
@@ -213,7 +213,7 @@ export function initGameBot(options: { captureScreen?: () => Promise<ScreenshotR
   });
   ipcMain.handle(IPC.GAME_BOT_STOP, (event) => { requireSettings(event); return stopGameBot(); });
 
-  // agent 触发工具：用户在聊天里要代肝时调用。enabled 跟随配置开关。
+  // Agent trigger tool: invoked when user requests automation in chat. enabled tracks configuration toggle.
   const initialSettings = loadGameBotSettings();
   toolRegistry.register({
     id: "game_bot_start",

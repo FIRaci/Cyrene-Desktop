@@ -14,7 +14,7 @@ describe("document send flow", () => {
     void processDocumentsWithWait({
       processDocuments,
       filePaths: ["C:\\tmp\\large.md"],
-      query: "请总结这个文档",
+      query: "Please summarize this document",
       onWaitStart,
       onWaitEnd: vi.fn(),
     });
@@ -32,7 +32,7 @@ describe("document send flow", () => {
     const result = processDocumentsWithWait({
       processDocuments: vi.fn(() => processing),
       filePaths: ["C:\\tmp\\large.md"],
-      query: "请总结这个文档",
+      query: "Please summarize this document",
       onWaitStart: vi.fn(),
       onWaitEnd,
     });
@@ -54,10 +54,10 @@ describe("document send flow", () => {
         retrievedChunks: [{ text: "deadline is Friday", score: 0.9, fileName: "large.md", chunkIndex: 0 }],
       },
     ]);
-    const context = [...documentLines, "- flow.png：图片里是一张流程图。"].join("\n\n");
+    const context = [...documentLines, "- flow.png: The image contains a flowchart."].join("\n\n");
 
     expect(context).toContain("Document large.md has been indexed (12 chunks).");
     expect(context).toContain("deadline is Friday");
-    expect(context).toContain("图片里是一张流程图。");
+    expect(context).toContain("The image contains a flowchart.");
   });
 });

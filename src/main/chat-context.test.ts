@@ -6,23 +6,23 @@ import {
 } from "../shared/chat-context";
 
 describe("buildTurnModelContext", () => {
-  it("合并文档和图片上下文，不让后处理结果覆盖前处理结果", () => {
+  it("merges document and image context without post-processing overriding previous results", () => {
     const context = buildTurnModelContext({
-      fileHints: ["文档 report.md 已建立索引 3 段"],
+      fileHints: ["Document report.md indexed with 3 chunks"],
       documentContextLines: [
-        "用户发送了文档 report.md，但文档处理失败：embedding failed。\n请诚实说明暂时无法分析该文档，不要编造文档内容。",
+        "User sent document report.md, but processing failed: embedding failed.\nPlease state honestly that the document cannot be analyzed, do not invent content.",
       ],
-      imageCaptionLines: ["- chart.png：一张销售趋势图"],
-      directImageLines: ["- photo.png：图片已随本轮消息直接发送给主模型。"],
+      imageCaptionLines: ["- chart.png: a sales trend chart"],
+      directImageLines: ["- photo.png: Image sent directly to primary model with this turn."],
     });
 
-    expect(context).toContain("文档 report.md 已建立索引 3 段");
-    expect(context).toContain("用户发送了文档 report.md，但文档处理失败：embedding failed。");
-    expect(context).toContain("- chart.png：一张销售趋势图");
-    expect(context).toContain("- photo.png：图片已随本轮消息直接发送给主模型。");
+    expect(context).toContain("Document report.md indexed with 3 chunks");
+    expect(context).toContain("User sent document report.md, but processing failed: embedding failed.");
+    expect(context).toContain("- chart.png: a sales trend chart");
+    expect(context).toContain("- photo.png: Image sent directly to primary model with this turn.");
   });
 
-  it("没有任何上下文时返回 undefined", () => {
+  it("returns undefined when there is no context", () => {
     expect(buildTurnModelContext({})).toBeUndefined();
   });
 

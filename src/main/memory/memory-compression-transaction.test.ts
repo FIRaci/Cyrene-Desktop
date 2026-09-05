@@ -22,8 +22,8 @@ function createDeps(events: string[]): CompressionTransactionDeps {
 }
 
 const input = {
-  content: "用户喜欢菌菇类食物",
-  triggerText: "我喜欢香菇",
+  content: "User likes mushroom-based foods",
+  triggerText: "I like mushrooms",
   sourceConversationId: "conv",
   sources: [
     { id: "l2_a", ragId: "rag_a", status: "active" as const },

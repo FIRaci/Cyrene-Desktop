@@ -1,5 +1,5 @@
-// 自定义云端 TTS 引擎
-// 固定 HTTP 合约：POST endpointUrl，返回音频二进制或 JSON base64。
+// Custom cloud TTS engine
+// Fixed HTTP contract: POST endpointUrl, returns audio binary or JSON base64.
 
 export interface CustomCloudSynthesizeOptions {
   endpointUrl: string;

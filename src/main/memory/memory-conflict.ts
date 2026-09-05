@@ -4,47 +4,33 @@ export interface PossibleConflictCandidate {
   confidence: number
 }
 
-/** 语义矛盾关键词对：前面的词表示正面/肯定，对应后面的是负面/否定 */
+/** Semantic contradiction keyword pairs: first word indicates positive/affirmative, mapped to negative/denial */
 const CONTRADICTION_PAIRS: Array<[string, string[]]> = [
-  ["喜欢", ["不喜欢", "讨厌", "反感", "厌恶", "不再喜欢"]],
-  ["爱", ["不爱", "讨厌", "恨"]],
-  ["想", ["不想", "别想", "不愿"]],
-  ["要", ["不要", "别要"]],
-  ["是", ["不是", "并非"]],
-  ["可以", ["不可以", "不行", "不能"]],
-  ["会", ["不会"]],
-  ["有", ["没有", "没了", "无"]],
-  ["忙", ["不忙", "闲"]],
+  ["like", ["dislike", "hate", "detest", "no longer like", "does not like", "doesn't like"]],
+  ["love", ["do not love", "hate", "doesn't love"]],
+  ["want", ["do not want", "don't want", "refuse"]],
+  ["is", ["is not", "isn't"]],
+  ["can", ["cannot", "can't", "unable to"]],
+  ["will", ["will not", "won't"]],
+  ["has", ["does not have", "doesn't have", "has no"]],
+  ["busy", ["not busy", "free", "idle"]],
 ]
 
 const STOP_TERMS = new Set([
-  "用户",
-  "一个",
-  "一种",
-  "这个",
-  "那个",
-  "自己",
-  "因为",
-  "所以",
-  "但是",
-  "没有",
-  "不是",
-  "不会",
-  "不能",
-  "不喜",
-  "喜欢",
-  "讨厌",
-  "反感",
-  "厌恶",
-  "不爱",
-  "不想",
-  "不要",
-  "不是",
-  "不行",
-  "不会",
-  "没有",
-  "没了",
-  "不忙",
+  "user",
+  "one",
+  "this",
+  "that",
+  "self",
+  "because",
+  "therefore",
+  "however",
+  "likes",
+  "like",
+  "dislike",
+  "hate",
+  "busy",
+  "free",
 ])
 
 function normalize(text: string): string {
@@ -53,17 +39,11 @@ function normalize(text: string): string {
 
 function extractTopicTerms(text: string): Set<string> {
   const terms = new Set<string>()
-  const matches = text.match(/[\u4e00-\u9fff]{2,}|[a-zA-Z0-9]{3,}/g) ?? []
+  const matches = text.match(/[a-zA-Z0-9]{3,}/g) ?? []
   for (const raw of matches) {
     const term = raw.toLowerCase()
     if (STOP_TERMS.has(term)) continue
     terms.add(term)
-    if (/^[\u4e00-\u9fff]+$/.test(term) && term.length > 2) {
-      for (let i = 0; i <= term.length - 2; i++) {
-        const gram = term.slice(i, i + 2)
-        if (!STOP_TERMS.has(gram)) terms.add(gram)
-      }
-    }
   }
   return terms
 }
@@ -100,3 +80,4 @@ export function findPossibleConflictCandidate(newContent: string, existingConten
 
   return { isCandidate: false, confidence: 0 }
 }
+

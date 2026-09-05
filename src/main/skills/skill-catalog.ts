@@ -1,14 +1,14 @@
-// Skill 清单生成 —— 把 enabled skill 拼成注入 system prompt 的清单段。
-// 纯函数，不碰 electron/registry。
+// Skill catalog generation — compiles enabled skills into catalog section for system prompt injection.
+// Pure function, does not touch electron/registry.
 
 import type { SkillEntry } from "./types";
 
 /**
- * 歧义识别策略。
- * 不"制造"歧义，而是"识别"用户需求中天然存在的多解读空间。
- * 用户说了模糊风格词（美观/好看/专业）但没给具体要求 → 弹卡片让用户选。
- * 用户说了"你自己决定" → 不弹，直接用默认样式。
- * 用户给了明确细节 → 不弹，直接做。
+ * Ambiguity resolution strategy.
+ * Do not "fabricate" ambiguity, but "recognize" inherent open interpretations in user requests.
+ * User provided vague style words (pretty/professional) without specific requirements -> show card for selection.
+ * User said "you decide" -> do not show card, use default styling.
+ * User provided explicit details -> do not show card, execute directly.
  */
 const AMBIGUITY_POLICY = [
   "",
@@ -37,8 +37,8 @@ const AMBIGUITY_POLICY = [
 ].join("\n");
 
 /**
- * 生成注入 system prompt 的 skill 清单段（拼在人格层之后）。
- * 只含 enabled skill。返回空串表示无可用 skill（调用方据此跳过拼接）。
+ * Generates skill catalog section for system prompt injection (appended after persona layer).
+ * Only includes enabled skills. Returns empty string if no skills available (caller skips concatenation).
  */
 export function buildSkillCatalog(skills: SkillEntry[]): string {
   const enabled = skills.filter(s => s.enabled);
@@ -59,8 +59,8 @@ export function buildSkillCatalog(skills: SkillEntry[]): string {
 }
 
 /**
- * 为显式声明 autoInject 的复合 Skill 注入完整规则。
- * 能力可用性已由 SkillRegistry.getEnabled() 过滤；读取失败时安全跳过。
+ * Injects full rules for composite Skills explicitly declaring autoInject.
+ * Capability availability is pre-filtered by SkillRegistry.getEnabled(); safely skipped on read failure.
  */
 export function buildAutoInjectedSkillContext(
   skills: SkillEntry[],
@@ -83,8 +83,8 @@ export function buildAutoInjectedSkillContext(
 }
 
 /**
- * Soul 阶段没有工具能力，只注入 Skill 明确声明的回复策略小节。
- * 其余工具流程仍只属于 TOOL_PHASE，避免模型把工具协议输出成聊天文本。
+ * Soul phase has no tool capabilities, only injecting reply strategy sections explicitly declared by the Skill.
+ * Remaining tool flows stay strictly in TOOL_PHASE, preventing the model from leaking tool protocols into chat.
  */
 export function buildAutoInjectedSoulContext(
   skills: SkillEntry[],
@@ -94,7 +94,7 @@ export function buildAutoInjectedSoulContext(
     .filter((skill) => skill.enabled && skill.manifest?.autoInject === true)
     .map((skill) => {
       const body = getBody(skill.id) ?? "";
-      const match = body.match(/^## (?:Soul response strategy|Soul 回复策略)\s*\r?\n([\s\S]*?)(?=^##\s|(?![\s\S]))/m);
+      const match = body.match(/^## Soul response strategy\s*\r?\n([\s\S]*?)(?=^##\s|(?![\s\S]))/m);
       const section = match?.[1]?.trim();
       return section ? `### ${skill.id}\n${section}` : "";
     })

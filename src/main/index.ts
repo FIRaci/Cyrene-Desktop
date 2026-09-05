@@ -37,7 +37,9 @@ import {
   type CustomStyleConfig,
   type StyleId,
 } from "../shared/style-sampling";
-import { STATUS_KEYWORDS } from "./status-keywords";
+import { STATUS_KEYWORDS, inferFeelingFromText } from "./status-keywords";
+import { findAction } from "../shared/live2d-actions";
+import { CoWatchService } from "./cowatch/cowatch-service";
 import {
   addL2MemoryVector,
   addMemory,
@@ -89,9 +91,9 @@ import type { ToolRiskLevel } from "./permission";
 import { loadChannelsSettings } from "./channels/settings-store";
 import { channelManager } from "./channels/manager";
 import { canStartProactiveChannelDelivery, sendProactiveChannelMessage } from "./channels/proactive-delivery";
-// 触发 built-in-tools 的副作用注册（fetch_url / run_shell / install_mcp_server）
+//  built-in-tools （fetch_url / run_shell / install_mcp_server）
 import "./orchestrator/built-in-tools";
-// 触发 fs-tools 的副作用注册（read_file / list_dir / write_file / read_image）
+//  fs-tools （read_file / list_dir / write_file / read_image）
 import "./orchestrator/fs-tools";
 import { initMcpManager, addMcpServer, removeMcpServer, listMcpServers, pruneMcpServersByIds } from "./orchestrator/mcp-manager";
 import { syncPlaywrightMcp, PLAYWRIGHT_MCP_ID, REMOVED_BUILTIN_MCP_IDS } from "./sync-mcp-builtin";
@@ -146,6 +148,7 @@ import { synthesize as customCloudSynthesize } from "./tts/custom-cloud-engine";
 import { synthesize as mimoSynthesize } from "./tts/mimo-engine";
 import { synthesize as mosslandSynthesize, cloneVoice as mosslandCloneVoice, listVoices as mosslandListVoices } from "./tts/mossland-engine";
 import { synthesizeByEngine } from "./tts/tts-dispatcher";
+import { synthesizeEdgeTts } from "./tts/edge-tts-engine";
 import { translateEnglishToMandarinSpeech } from "./tts/speech-translation";
 import { convertVoiceWithRvc } from "./tts/rvc-engine";
 import { ALLOWED_TTS_SETTING_KEYS, type GptsovitsLanguageMode } from "../shared/tts-types";
@@ -310,28 +313,31 @@ let stickerManagerWindow: BrowserWindow | null = null;
 let callWindow: BrowserWindow | null = null;
 let logWindow: BrowserWindow | null = null;
 
-interface ActivityLogItem {
+export interface ActivityLogItem {
   timestamp: number;
-  type: "user" | "reasoning" | "response" | "tool" | "error" | "system";
+  type: "user" | "reasoning" | "response" | "kaomoji" | "tool" | "error" | "system";
   text: string;
+  channel?: string;
   meta?: unknown;
 }
 
-const activityLogBuffer: ActivityLogItem[] = [];
+export const activityLogBuffer: ActivityLogItem[] = [];
 
-function pushActivityLog(
+export function pushActivityLog(
   type: ActivityLogItem["type"],
   text: string,
   meta?: unknown,
+  channel?: string,
 ): void {
   const item: ActivityLogItem = {
     timestamp: Date.now(),
     type,
     text,
+    channel,
     meta,
   };
   activityLogBuffer.push(item);
-  if (activityLogBuffer.length > 500) {
+  if (activityLogBuffer.length > 1000) {
     activityLogBuffer.shift();
   }
   if (logWindow && !logWindow.isDestroyed()) {
@@ -340,6 +346,50 @@ function pushActivityLog(
     } catch {
       // ignore
     }
+  }
+}
+
+function seedActivityLogFromChats(): void {
+  if (activityLogBuffer.length > 0) return;
+  try {
+    const sessions = chatsStore.listSessions();
+    const collected: ActivityLogItem[] = [];
+    for (const sessionMeta of sessions.slice(0, 8)) {
+      const full = chatsStore.getSession(sessionMeta.id);
+      if (!full || !full.messages || full.messages.length === 0) continue;
+      const channel = full.title || "Main Chat";
+      for (const m of full.messages.slice(-20)) {
+        if (!m.content) continue;
+        const timestamp = m.at || sessionMeta.updatedAt;
+        if (m.role === "user") {
+          collected.push({
+            timestamp,
+            type: "user",
+            text: m.content,
+            channel,
+          });
+        } else if (m.role === "model") {
+          if (m.reasoning) {
+            collected.push({
+              timestamp: timestamp - 50,
+              type: "reasoning",
+              text: m.reasoning,
+              channel,
+            });
+          }
+          collected.push({
+            timestamp,
+            type: "response",
+            text: m.content,
+            channel,
+          });
+        }
+      }
+    }
+    collected.sort((a, b) => a.timestamp - b.timestamp);
+    activityLogBuffer.push(...collected);
+  } catch (err) {
+    console.warn("[ActivityLog] Failed to seed from chat sessions:", err);
   }
 }
 
@@ -359,6 +409,8 @@ app.on("second-instance", () => {
   }
   if (mainWindow && !mainWindow.isDestroyed()) {
     if (!mainWindow.isVisible()) mainWindow.show();
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.focus();
   }
 });
 let schedulerEngine: SchedulerEngine | null = null;
@@ -374,7 +426,7 @@ let proactiveChatService: ProactiveChatService | null = null;
 let normalConversationBusyCount = 0;
 let proactiveScreenLocked = false;
 const live2dWindowLifecycle = createWindowLifecycleTracker<BrowserWindow>("live2d-main", {
-  onClosed: () => { /* no-op：原 setLive2dWindow 已随 opener 子系统一起移除 */ },
+  onClosed: () => { /* no-op： setLive2dWindow  opener  */ },
 });
 const petWindowMoveController = new PetWindowMoveController(
   () => mainWindow,
@@ -455,6 +507,67 @@ async function saveScreenshotPasteTemp(
   return { filePath };
 }
 
+let coWatchService: CoWatchService | null = null;
+
+function getCoWatchService(): CoWatchService {
+  if (!coWatchService) {
+    coWatchService = new CoWatchService({
+      captureScreen: () => captureScreenForCoWatch(),
+      loadModelSettings: () => loadModelSettings(),
+      loadVisionConfig: () => loadVisionConfig(),
+      broadcastState: (state) => {
+        for (const win of [mainWindow, chatWindow, sidebarWindow, logWindow]) {
+          if (win && !win.isDestroyed()) {
+            win.webContents.send(IPC.COWATCH_STATE_CHANGED, state);
+          }
+        }
+      },
+      deliverReaction: (text) => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send(IPC.PET_AGENT_EVENT, {
+            type: "say",
+            text,
+          });
+        }
+      },
+      pushLog: (type, text, meta) => {
+        pushActivityLog(type, text, meta, "cowatch");
+      },
+    });
+  }
+  return coWatchService;
+}
+
+async function captureScreenForCoWatch(): Promise<{ filePath: string; previewUrl: string; mime: string } | null> {
+  return runExplicitScreenCapture("vision", async () => {
+    const { desktopCapturer, screen } = await import("electron");
+    const primaryDisplay = screen.getPrimaryDisplay();
+    const { width, height } = primaryDisplay.size;
+    // Downscale for lightning fast JPEG encoding, lightweight payload, and prompt AI analysis
+    const targetWidth = Math.min(1024, width);
+    const targetHeight = Math.round(targetWidth * (height / width));
+    const sources = await desktopCapturer.getSources({
+      types: ["screen"],
+      thumbnailSize: { width: targetWidth, height: targetHeight },
+    });
+    if (sources.length === 0) return null;
+    const thumb = sources[0].thumbnail;
+    const jpegBuffer = thumb.toJPEG(75);
+    const screenshotDirectory = getScreenshotDirectory();
+    await fs.promises.mkdir(screenshotDirectory, { recursive: true });
+    const filePath = path.join(screenshotDirectory, `${randomUUID()}.jpg`);
+    await fs.promises.writeFile(filePath, jpegBuffer);
+    return {
+      filePath,
+      previewUrl: pathToFileURL(filePath).href,
+      mime: "image/jpeg",
+    };
+  }).catch((err) => {
+    console.warn("[CoWatch] Periodic capture failed:", err);
+    return null;
+  });
+}
+
 function initializeScreenshotService(initialHotkey: string): ScreenshotService {
   const screenshotDirectory = getScreenshotDirectory();
   const client = new ElectronScreenshotHelperClient({
@@ -523,6 +636,13 @@ function initializeScreenshotService(initialHotkey: string): ScreenshotService {
       return validated;
     });
   });
+
+  ipcMain.handle(IPC.COWATCH_TOGGLE, () => {
+    return getCoWatchService().toggle();
+  });
+  ipcMain.handle(IPC.COWATCH_GET_STATE, () => {
+    return getCoWatchService().getState();
+  });
   ipcMain.handle(IPC.SCREENSHOT_SAVE_TEMP, (event, base64: string, mime: string) => {
     if (chatWindow?.webContents.id !== event.sender.id) throw new Error("UNTRUSTED_SCREEN_CAPTURE_SENDER");
     return saveScreenshotPasteTemp(base64, mime);
@@ -541,8 +661,8 @@ function initializeScreenshotService(initialHotkey: string): ScreenshotService {
   service.init(initialHotkey);
   return service;
 }
-// 聊天窗口当前活跃的会话 id（通过 IPC 由聊天窗口上报）；
-// 设置面板"删除当前会话"差异化提示用。聊天窗口关闭时由 closed 事件置 null。
+//  id（ IPC ）；
+// ""。 closed  null。
 let activeChatSessionId: string | null = null;
 
 
@@ -655,15 +775,36 @@ function buildGptsovitsCacheKey(payload: {
   return "gptsovits-" + createHash("sha256").update(source, "utf8").digest("hex");
 }
 
+function getDefaultCyreneRefAudioPath(): string {
+  const base = app?.isPackaged ? process.resourcesPath : (app?.getAppPath ? app.getAppPath() : process.cwd());
+  const candidates = [
+    path.join(base, "resources", "voice", "cyrene", "ref_audio.wav"),
+    path.join(base, "voice", "cyrene", "ref_audio.wav"),
+    path.join(process.cwd(), "resources", "voice", "cyrene", "ref_audio.wav"),
+  ];
+  for (const c of candidates) {
+    if (fs.existsSync(c)) return c;
+  }
+  return candidates[0];
+}
+
 async function prepareGptsovitsVoicePayload(payload: {
-  baseUrl: string;
-  refAudioPath: string;
-  promptText: string;
+  baseUrl?: string;
+  refAudioPath?: string;
+  promptText?: string;
   text: string;
   speed?: number;
   format?: "wav" | "mp3";
 }) {
   const settings = loadGeneralSettings();
+  const defaultRefAudio = getDefaultCyreneRefAudioPath();
+  const baseUrl = (payload.baseUrl && payload.baseUrl.trim()) || settings.ttsGptsovitsBaseUrl || "http://127.0.0.1:9880";
+  const refAudioPath = (payload.refAudioPath && payload.refAudioPath.trim())
+    || (settings.ttsGptsovitsRefAudioPath && settings.ttsGptsovitsRefAudioPath.trim())
+    || (fs.existsSync(defaultRefAudio) ? defaultRefAudio : "");
+  const promptText = (payload.promptText && payload.promptText.trim())
+    || (settings.ttsGptsovitsPromptText && settings.ttsGptsovitsPromptText.trim())
+    || "开拓者，希琳一直都在这里陪着你哦。";
   const languageMode = settings.ttsGptsovitsLanguageMode;
   const rvcRequested = languageMode === "english" && settings.ttsRvcEnabled;
   const text = languageMode === "original-mandarin"
@@ -673,10 +814,13 @@ async function prepareGptsovitsVoicePayload(payload: {
     && /[\u3400-\u9fff]/u.test(text);
   return {
     ...payload,
+    baseUrl,
+    refAudioPath,
+    promptText,
     format: rvcRequested ? "wav" as const : payload.format,
     text,
     languageMode,
-    textLang: translatedToMandarin ? "zh" as const : "en" as const,
+    textLang: translatedToMandarin || /[\u3400-\u9fff]/u.test(text) ? "zh" as const : "en" as const,
     promptLang: languageMode === "original-mandarin" ? "zh" as const : "en" as const,
     rvcApplied: rvcRequested,
     rvc: rvcRequested
@@ -739,8 +883,8 @@ function buildMimoCacheKey(payload: {
   return "mimo-" + createHash("sha256").update(source, "utf8").digest("hex");
 }
 
-/** Mossland cache key：voice_id + model + format + text 哈希。
- *  因为 Mossland 没有"参考音频路径"作为天然 key 源，用 voice_id + model 区分。 */
+/** Mossland cache key：voice_id + model + format + text 。
+ *   Mossland "" key ， voice_id + model 。 */
 function buildMosslandCacheKey(payload: {
   voiceId?: string;
   text: string;
@@ -764,53 +908,53 @@ function getTtsCachePath(cacheKey: string, format: "mp3" | "wav" | "pcm" = "mp3"
   return path.join(getTtsCacheDir(), `${safeKey}.${ext}`);
 }
 
-// 单个厂商的可缓存配置：用户切到别的厂商再切回来，这三个字段从这里恢复。
+// ：，。
 interface ProviderProfile {
   baseUrl: string;
   model: string;
   apiKey: string;
   displayName?: string;
   /**
-   * 用户在 settings 显式指定的 transport；"auto" = 按 baseUrl 启发式 + capabilities fallback。
-   * resolveTransport() 负责把 "auto" 解析为具体 transport。
-   * 不存 = 等价于 "auto"。
+   *  settings  transport；"auto" =  baseUrl  + capabilities fallback。
+   * resolveTransport()  "auto"  transport。
+   *  =  "auto"。
    */
   explicitTransport?: "openai" | "anthropic" | "auto";
   /**
-   * 用户保存的推理偏好（source of truth）。顶层 ModelSettings.reasoning 是当前厂商镜像。
-   * 当前模型不支持某个 effort 时仍保留 user preference，
-   * 实际请求时由 resolveEffectiveReasoning 决定 effective config。
+   * （source of truth）。 ModelSettings.reasoning 。
+   *  effort  user preference，
+   *  resolveEffectiveReasoning  effective config。
    */
   reasoning?: ReasoningPreference;
 }
 
 /**
- * 厂商名变更映射：旧 providerName → 新 providerName。
+ * ： providerName →  providerName。
  *
- * 触发时机：UI 上为了对齐"英文名（中文公司名）"格式重命名了 preset 后，
- * 已存盘的 model-settings.json 里 provider 字段（以及 perProvider 字典的键）
- * 仍是旧名；normalize 阶段做一次性迁移，把旧名的 perProvider 数据搬到新名下，
- * provider 字段也改写为新名。迁移后写盘一次即清除痕迹。
+ * ：UI "（）" preset ，
+ *  model-settings.json  provider （ perProvider ）
+ * ；normalize ， perProvider ，
+ * provider 。。
  *
- * 后续如果再次重命名，**只追加键值对**，不要删除老条目，避免回归。
+ * ，****，，。
  */
 const PROVIDER_RENAMES: Record<string, string> = {
-  "MiniMax": "MiniMax（稀宇科技）",
-  "DeepSeek": "DeepSeek（深度求索）",
-  "智谱 GLM": "GLM（智谱）",
-  "通义千问（DashScope）": "Qwen（通义千问）",
-  "MiniMax (Xiyu Tech)": "MiniMax（稀宇科技）",
-  "Doubao (Volcano Engine)": "豆包（火山方舟）",
-  "GLM (Zhipu)": "GLM（智谱）",
-  "Kimi (Moonshot)": "Kimi（月之暗面）",
-  "Qwen (Tongyi Qianwen)": "Qwen（通义千问）",
-  "MiMo (Xiaomi)": "MiMo（小米）",
+  "MiniMax": "MiniMax",
+  "DeepSeek": "DeepSeek",
+  "Zhipu GLM": "GLM",
+  "Qwen (DashScope)": "Qwen",
+  "MiniMax (Xiyu Tech)": "MiniMax",
+  "Doubao (Volcano Engine)": "Doubao",
+  "GLM (Zhipu)": "GLM",
+  "Kimi (Moonshot)": "Kimi",
+  "Qwen (Tongyi Qianwen)": "Qwen",
+  "MiMo (Xiaomi)": "MiMo",
 };
 
 /**
- * 把 perProvider 字典 + currentProvider 字段一起套用 PROVIDER_RENAMES。
- * - 旧名 → 新名：直接搬数据；如果新名已存在数据，旧名的不覆盖（保护"已用新名存过"的情况）。
- * - 不在映射表里的键：原样保留。
+ *  perProvider  + currentProvider  PROVIDER_RENAMES。
+ * -  → ：；，（""）。
+ * - ：。
  */
 function migrateProviderRenames(
   currentProvider: string,
@@ -820,8 +964,8 @@ function migrateProviderRenames(
   for (const [key, value] of Object.entries(perProvider)) {
     const newKey = PROVIDER_RENAMES[key] ?? key;
     if (next[newKey]) {
-      // 新名已经有数据（说明用户已经在新名下存过），旧名的本地副本保留为最近一次更新优先：
-      // 这里取保守路线 → 不覆盖 next[newKey]，旧名直接丢弃。
+      // （），：
+      //  →  next[newKey]，。
       console.log("[Cyrene] provider rename: drop legacy", key, "→ kept", newKey);
       continue;
     }
@@ -837,53 +981,53 @@ function migrateProviderRenames(
 interface ModelSettings {
   mode: "auto" | "manual";
   provider: string;
-  // 用户给模型起的自定义昵称，留空时状态栏用厂商 shortName。
+  // ， shortName。
   displayName?: string;
   baseUrl: string;
   model: string;
   apiKey: string;
   /**
-   * 当前厂商的 explicitTransport 镜像（顶层字段是 perProvider[currentProvider] 的视图）。
-   * 详见 ProviderProfile.explicitTransport。
+   *  explicitTransport （ perProvider[currentProvider] ）。
+   *  ProviderProfile.explicitTransport。
    */
   explicitTransport?: "openai" | "anthropic" | "auto";
   /**
-   * 当前厂商 reasoning 偏好的顶层镜像（与 explicitTransport 同思路）。
-   * 真值在 perProvider[currentProvider].reasoning；顶层字段是 view。
-   * 保存的是用户 preference（不覆盖）；effective config 由 capability 决定。
+   *  reasoning （ explicitTransport ）。
+   *  perProvider[currentProvider].reasoning； view。
+   *  preference（）；effective config  capability 。
    */
   reasoning?: ReasoningPreference;
-  // 按厂商缓存：currentProvider 之外的厂商配置也保留在这里，切回来时回填。
-  // 真值（source of truth）是 perProvider；顶层 baseUrl/model/apiKey 是当前厂商那一份的展开镜像，
-  // 仅为兼容现有 main 进程里大量直接读 settings.baseUrl 等代码而保留。
+  // ：currentProvider ，。
+  // （source of truth） perProvider； baseUrl/model/apiKey ，
+  //  main  settings.baseUrl 。
   perProvider: Record<string, ProviderProfile>;
   runtimeSync: "off" | "local" | "llm";
   stickerEnabled: boolean;
   stickerSize: StickerSize;
   stickerSimilarityThreshold: number;
-  /** 整个聊天请求的总超时（秒）。30-1800，默认 300。 */
+  /** （）。30-1800， 300。 */
   chatRequestTimeoutSec: number;
-  /** 总轮数。5-30，默认 12。 */
+  /** 。5-30， 12。 */
   maxIterations: number;
-  /** Plan 步骤失败后重规划次数。1-5，默认 2。 */
+  /** Plan 。1-5， 2。 */
   maxReplans: number;
-  /** 引用过期重新决策次数。0-3，默认 1。 */
+  /** 。0-3， 1。 */
   maxRefresh: number;
-  /** 单次 LLM 调用超时（秒）。30-120，默认 75。 */
+  /**  LLM （）。30-120， 75。 */
   perCallTimeoutSec: number;
-  /** CITA 结构化输出重试总预算（秒）。4-30，默认 8。 */
+  /** CITA （）。4-30， 8。 */
   citaRepairBudgetSec: number;
-  /** Action Gate 结构化输出重试总预算（秒）。5-40，默认 10。 */
+  /** Action Gate （）。5-40， 10。 */
   actionGateRepairBudgetSec: number;
   rerankerMode: "light" | "standard" | "none";
   embeddingModel: "minilm" | "bgem3";
-  // 视觉模型配置（可选）。undefined 或未启用 = 不支持看图，read_image 诚实拒绝。
+  // （）。undefined  = ，read_image 。
   vision?: VisionModelConfig;
-  /** 主模型是否多模态。true 时图片直发主模型（direct），vision 配置保留但忽略。 */
+  /** 。true （direct），vision 。 */
   multimodal: boolean;
 }
 
-/** 视觉模型配置（独立视觉模型，非多模态直发场景）。全空 = 未启用。 */
+/** （，）。 = 。 */
 interface VisionModelConfig {
   baseUrl: string;
   apiKey: string;
@@ -897,16 +1041,16 @@ interface UserProfile {
   birthday: string;
   timezone: string;
   avatarPath: string;
-  /** 默认城市（用于天气等需要地理定位的工具，没填则模型会问用户） */
+  /** （，） */
   defaultCity: string;
-  /** 性别：secret(保密) | male(男) | female(女) */
+  /** ：secret() | male() | female() */
   gender: string;
 }
 
 interface GeneralSettings {
   citaEnabled: boolean;
   citaSemanticEngine: "remote";
-  /** Chat 模式的轻量社交上下文；默认关闭，开启后每轮最多多一次异步抽取调用。 */
+  /** Chat ；，。 */
   chatSocialContextEnabled: boolean;
   musicEnabled: boolean;
   musicVolume: number;
@@ -914,11 +1058,11 @@ interface GeneralSettings {
   soundVolume: number;
   petAlwaysOnTop: boolean;
   petVisible: boolean;
-  /** 桌宠缩放因子：1.0=默认，0.5~2.0，窗口与模型同步等比缩放。 */
+  /** ：1.0=，0.5~2.0，。 */
   petZoom: number;
-  /** 桌宠窗口 X 坐标，未保存时为 undefined */
+  /**  X ， undefined */
   petWindowX?: number;
-  /** 桌宠窗口 Y 坐标，未保存时为 undefined */
+  /**  Y ， undefined */
   petWindowY?: number;
   sidebarVisible: boolean;
   tasksVisible: boolean;
@@ -927,51 +1071,51 @@ interface GeneralSettings {
   uiTheme: UiTheme;
   uiFont: UiFont;
   uiIcon: UiIcon;
-  /** 聊天窗口打开时默认选中的模式。 */
+  /** 。 */
   defaultChatMode: DefaultChatMode;
-  /** 聊天窗口当前风格，启动时恢复；本轮请求仍以 renderer 显式 styleId 为准。 */
+  /** ，； renderer  styleId 。 */
   currentStyleId: StyleId;
-  /** 全局自定义风格采样配置。 */
+  /** 。 */
   customStyle: CustomStyleConfig;
-  /** 聊天气泡分段输出偏好。 */
+  /** 。 */
   segmentedOutputMode: SegmentedOutputMode;
-  /** 手机渠道文本消息分段发送偏好。 */
+  /** 。 */
   mobileMessageSegmentation: MobileMessageSegmentationMode;
-  /** 主动聊天功能开关占位；当前不接实际逻辑。 */
+  /** ；。 */
   proactiveChatMode: ProactiveChatMode;
-  /** 主动消息最终投递到本地、微信或飞书。 */
+  /** 、。 */
   proactiveDeliveryTarget: ProactiveDeliveryTarget;
-  // TTS 配置
-  ttsEngine: "off" | "minimax" | "gptsovits" | "custom-cloud" | "mimo" | "mossland";
+  // TTS 
+  ttsEngine: "off" | "web-speech" | "minimax" | "gptsovits" | "custom-cloud" | "mimo" | "mossland" | "edge";
   ttsAutoRead: boolean;
   ttsSpeed: number;
   ttsVolume: number;
   // MiniMax
   ttsMinimaxKey: string;
   ttsMinimaxVoiceId: string;
-  /** MiniMax 合成模型：speech-2.8-hd(高保真¥3.5/万字符) | speech-2.8-turbo(极速¥2.0/万字符) */
+  /** MiniMax ：speech-2.8-hd(¥3.5/) | speech-2.8-turbo(¥2.0/) */
   ttsMinimaxModel: "speech-2.8-hd" | "speech-2.8-turbo";
-  /** MiniMax 流式播放（边合成边播，首字延迟低）；false=完整合成收完再播 */
+  /** MiniMax （，）；false= */
   ttsStreaming: boolean;
-  // GPT-SoVITS（本地）
+  // GPT-SoVITS（）
   ttsGptsovitsBaseUrl: string;
   ttsGptsovitsRefAudioPath: string;
   ttsGptsovitsPromptText: string;
   ttsGptsovitsFormat: "wav" | "mp3";
   ttsGptsovitsLanguageMode: GptsovitsLanguageMode;
-  // RVC 声音转换
+  // RVC 
   ttsRvcEnabled: boolean;
   ttsRvcBaseUrl: string;
   ttsRvcModel: string;
   ttsRvcPitch: number;
   ttsRvcIndexRate: number;
-  // 自定义云端 TTS
+  //  TTS
   ttsCustomCloudEndpointUrl: string;
   ttsCustomCloudApiKey: string;
   ttsCustomCloudVoiceId: string;
   ttsCustomCloudFormat: "wav" | "mp3";
   ttsCustomCloudTimeoutMs: number;
-  // 小米 MiMo TTS
+  //  MiMo TTS
   ttsMimoKey: string;
   ttsMimoVoiceAudioPath: string;
   ttsMimoStylePrompt: string;
@@ -980,52 +1124,52 @@ interface GeneralSettings {
   ttsMosslandModel: string;
   ttsMosslandTestText: string;
   ttsMosslandFormat: "mp3" | "wav" | "pcm";
-  /** 天气源：open-meteo(免配置默认) | amap(高德,需填key) */
+  /** ：open-meteo() | amap(,key) */
   weatherSource: "open-meteo" | "amap";
-  /** 天气插件是否启用（开关） */
+  /** （） */
   weatherEnabled: boolean;
-  /** 高德天气 key（https://lbs.amap.com 注册 Web服务 key） */
+  /**  key（https://lbs.amap.com  Web key） */
   amapKey: string;
-  /** 🚗出行工具是否启用 */
+  /** 🚗 */
   travelEnabled: boolean;
-  /** 🖥️ 浏览器自动化（Playwright MCP）是否启用。默认 false，需用户手动开启。 */
+  /** 🖥️ （Playwright MCP）。 false，。 */
   playwrightMcpEnabled: boolean;
-  // 联网搜索：选哪个搜索源 + 对应 key
+  // ： +  key
   searchEngine: "off" | "ddg" | "bocha" | "tavily" | "minimax";
   searchBochaKey: string;
   searchTavilyKey: string;
   searchMinimaxKey: string;
-  /** ✉️邮件发送插件是否启用 */
+  /** ✉️ */
   emailEnabled: boolean;
-  /** SMTP 主机，如 smtp.qq.com */
+  /** SMTP ， smtp.qq.com */
   emailSmtpHost: string;
-  /** SMTP 端口，如 465（SSL）/ 587（STARTTLS） */
+  /** SMTP ， 465（SSL）/ 587（STARTTLS） */
   emailSmtpPort: number;
-  /** 使用 SSL/TLS（465 通常 true，587 通常 false；用户可覆盖） */
+  /**  SSL/TLS（465  true，587  false；） */
   emailSmtpSecure: boolean;
-  /** 发件邮箱地址 */
+  /**  */
   emailSmtpUser: string;
-  /** SMTP 授权码（非邮箱登录密码） */
+  /** SMTP （） */
   emailSmtpPass: string;
-  /** 发件人显示名（可选） */
+  /** （） */
   emailFromName: string;
-  /** 🎧ASR 服务商：off(关闭) | aliyun(阿里云) | local(本地,占位) */
+  /** 🎧ASR ：off() | aliyun() | local(,) */
   asrEngine: "off" | "aliyun" | "local";
-  /** 阿里云智能语音交互 AppKey */
+  /**  AppKey */
   asrAliyunAppKey: string;
-  /** 阿里云 RAM AccessKey ID */
+  /**  RAM AccessKey ID */
   asrAliyunAccessKeyId: string;
-  /** 阿里云 RAM AccessKey Secret */
+  /**  RAM AccessKey Secret */
   asrAliyunAccessKeySecret: string;
-  /** ASR 识别语言：zh(中文) | en(英文) | auto(自动) */
+  /** ASR ：zh() | en() | auto() */
   asrLanguage: "zh" | "en" | "auto";
-  /** VAD 静默检测阈值（毫秒），500~2000，默认 1000 */
+  /** VAD （），500~2000， 1000 */
   asrVadSilenceMs: number;
-  /** VAD 音量阈值（0~1），默认 0.01。环境吵或麦克风音量低时可调 */
+  /** VAD （0~1）， 0.01。 */
   asrVadThreshold: number;
-  /** 通话中显示文字转写 */
+  /**  */
   asrShowTranscript: boolean;
-  /** 截图全局热键（Electron Accelerator 格式，如 "Alt+Shift+S"） */
+  /** （Electron Accelerator ， "Alt+Shift+S"） */
   screenshotHotkey: string;
   systemAudioAwarenessEnabled: boolean;
 }
@@ -1034,9 +1178,9 @@ interface GeneralSettings {
 interface PublicModelConfig {
   mode: "auto" | "manual";
   provider: string;
-  // 用户自定义昵称；留空时状态栏用 shortName
+  // ； shortName
   displayName?: string;
-  // 厂商短名（去括号后缀），状态栏"正在喂养"的兜底显示
+  // （），""
   shortName: string;
   model: string;
   connected: boolean;
@@ -1045,8 +1189,8 @@ interface PublicModelConfig {
   rerankerMode: "light" | "standard" | "none";
 }
 
-type RuntimeStatus = "陪伴中" | "思考中" | "工作中" | "聆听中" | "提醒中" | "离线";
-type RuntimeFeeling = "平静" | "开心" | "温柔" | "激动" | "撒娇" | "担心" | "难过" | "感动" | "害羞";
+type RuntimeStatus = "Accompanying" | "Thinking" | "Working" | "Listening" | "Reminding" | "Offline";
+type RuntimeFeeling = "Calm" | "Happy" | "Gentle" | "Excited" | "Coy" | "Worried" | "Sad" | "Touched" | "Shy";
 type StickerSize = "small" | "standard" | "large";
 
 interface RuntimeState {
@@ -1056,26 +1200,36 @@ interface RuntimeState {
   updatedAt: number;
 }
 
-const RUNTIME_STATUSES: RuntimeStatus[] = ["陪伴中", "思考中", "工作中", "聆听中", "提醒中", "离线"];
-const RUNTIME_FEELINGS: RuntimeFeeling[] = ["平静", "开心", "温柔", "激动", "撒娇", "担心", "难过", "感动", "害羞"];
-const CHAT_REQUEST_TIMEOUT_MS = 300000; // FC 总预算：20 轮 × 推理模型 ~10-15s 需 300s 余量
+const RUNTIME_STATUSES: RuntimeStatus[] = ["Accompanying", "Thinking", "Working", "Listening", "Reminding", "Offline"];
+const RUNTIME_FEELINGS: RuntimeFeeling[] = ["Calm", "Happy", "Gentle", "Excited", "Coy", "Worried", "Sad", "Touched", "Shy"];
+const CHAT_REQUEST_TIMEOUT_MS = 300000; // FC Total budget: 20 rounds × reasoning model ~10-15s needs 300s headroom
 
-/** 桌宠窗口的基础尺寸（zoom=1.0 时）。缩放因子改变窗口与模型尺寸，二者同步。 */
+/** Base dimensions of desktop pet window (when zoom=1.0). */
 const PET_WINDOW_BASE_WIDTH = 400;
 const PET_WINDOW_BASE_HEIGHT = 500;
 const STARTUP_EMBEDDING_REFRESH_DELAY_MS = 1500;
 
 function getAppIconPath(icon: UiIcon): string {
   const preset = UI_ICON_PRESETS.find((item) => item.id === icon);
-  return path.join(__dirname, "..", "..", "..", "assets", "icon-presets", preset?.fileName ?? "cyrene-sun.png");
+  const fileName = preset?.fileName ?? "cyrene-sun.png";
+  const appPath = typeof app !== "undefined" && typeof app.getAppPath === "function" ? app.getAppPath() : process.cwd();
+  const candidates = [
+    path.join(appPath, "assets", "icon-presets", fileName),
+    path.join(__dirname, "..", "..", "..", "assets", "icon-presets", fileName),
+    path.join(process.cwd(), "assets", "icon-presets", fileName),
+  ];
+  for (const c of candidates) {
+    if (fs.existsSync(c)) return c;
+  }
+  return candidates[0];
 }
 
 function getCurrentAppIconPath(): string {
   return getAppIconPath(loadGeneralSettings().uiIcon);
 }
 let runtimeState: RuntimeState = {
-    status: "陪伴中",
-    feeling: "平静",
+    status: "Accompanying",
+    feeling: "Calm",
     expression: 0,
     updatedAt: Date.now(),
   };
@@ -1142,7 +1296,7 @@ function scheduleStartupEmbeddingRefreshes(): void {
 
 const DEFAULT_MODEL_SETTINGS: ModelSettings = {
   mode: "auto",
-  // 默认厂商改为 MiniMax（v1 vendor adapter 第一个落地的），DeepSeek 已从 v1 清单移除。
+  //  MiniMax（v1 vendor adapter ），DeepSeek  v1 。
   provider: LOCAL_MODEL_PROVIDER,
   baseUrl: DEFAULT_OLLAMA_BASE_URL,
   model: DEFAULT_OLLAMA_MODEL,
@@ -1155,7 +1309,7 @@ const DEFAULT_MODEL_SETTINGS: ModelSettings = {
       displayName: "Ollama (Local)",
     },
   },
-  runtimeSync: "off",
+  runtimeSync: "llm",
   stickerEnabled: true,
   stickerSize: "standard",
   stickerSimilarityThreshold: 0.55,
@@ -1197,7 +1351,7 @@ const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   mobileMessageSegmentation: "off",
   proactiveChatMode: "off",
   proactiveDeliveryTarget: "local",
-  ttsEngine: "off",
+  ttsEngine: "gptsovits",
   ttsAutoRead: true,
   ttsSpeed: 1,
   ttsVolume: 1,
@@ -1205,11 +1359,11 @@ const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   ttsMinimaxVoiceId: "",
   ttsMinimaxModel: "speech-2.8-turbo",
   ttsStreaming: true,
-  ttsGptsovitsBaseUrl: "http://localhost:9880",
+  ttsGptsovitsBaseUrl: "http://127.0.0.1:9880",
   ttsGptsovitsRefAudioPath: "",
-  ttsGptsovitsPromptText: "",
+  ttsGptsovitsPromptText: "开拓者，希琳一直都在这里陪着你哦。",
   ttsGptsovitsFormat: "wav",
-  ttsGptsovitsLanguageMode: "english",
+  ttsGptsovitsLanguageMode: "original-mandarin",
   ttsRvcEnabled: false,
   ttsRvcBaseUrl: "http://localhost:18888",
   ttsRvcModel: "Cyrene (Aiden Dawn)",
@@ -1229,7 +1383,7 @@ const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   ttsMosslandTestText: "Hello, I am Cyrene. It is wonderful to meet you.",
   ttsMosslandFormat: "mp3",
   weatherSource: "open-meteo",
-  weatherEnabled: false,
+  weatherEnabled: true,
   amapKey: "",
   travelEnabled: true,
   playwrightMcpEnabled: false,
@@ -1283,7 +1437,7 @@ const DEFAULT_USER_PROFILE: UserProfile = {
   birthday: "",
   timezone: "Asia/Shanghai",
   avatarPath: "",
-  defaultCity: "",
+  defaultCity: "Hanoi",
   gender: "secret",
 };
 
@@ -1291,7 +1445,11 @@ function loadUserProfile(): UserProfile {
   try {
     const filePath = getUserProfilePath();
     if (!fs.existsSync(filePath)) return DEFAULT_USER_PROFILE;
-    return { ...DEFAULT_USER_PROFILE, ...JSON.parse(fs.readFileSync(filePath, "utf8")) as Partial<UserProfile> };
+    const loaded = { ...DEFAULT_USER_PROFILE, ...JSON.parse(fs.readFileSync(filePath, "utf8")) as Partial<UserProfile> };
+    if (!loaded.defaultCity || !loaded.defaultCity.trim()) {
+      loaded.defaultCity = "Hanoi";
+    }
+    return loaded;
   } catch {
     return DEFAULT_USER_PROFILE;
   }
@@ -1351,7 +1509,7 @@ async function loadMemoryPanelData() {
         if (entry.source !== "imported_doc") continue;
         const fileName = entry.metadata?.fileName || "Untitled document";
         const importId = entry.metadata?.importId as string | undefined;
-        // 新数据按 importId 分组，旧数据按 fileName 分组
+        //  importId ， fileName 
         const key = importId || "legacy:" + fileName;
         const existing = docsMap.get(key);
         if (existing) {
@@ -1387,12 +1545,12 @@ function getStickerSettingsPath(): string {
 }
 
 /**
- * normalize 流程：
- *   1. 先清洗顶层基础字段（mode/provider/runtimeSync/...）
- *   2. 再清洗 perProvider 字典：忽略非法键、缺失字段补默认值、apiKey 不在这里强制 trim 留作下一步
- *   3. 旧 schema 兼容：若 perProvider 中没有 currentProvider 那一份，把顶层 baseUrl/model/apiKey 当作首次迁移塞进去
- *   4. 用 perProvider[currentProvider] 反向展开成顶层 baseUrl/model/apiKey 镜像
- *      → 真值（source of truth）是 perProvider；顶层只是当前厂商配置的视图
+ * normalize ：
+ *   1. （mode/provider/runtimeSync/...）
+ *   2.  perProvider ：、、apiKey  trim 
+ *   3.  schema ： perProvider  currentProvider ， baseUrl/model/apiKey 
+ *   4.  perProvider[currentProvider]  baseUrl/model/apiKey 
+ *      → （source of truth） perProvider；
  */
 function normalizeProviderProfile(input: Partial<ProviderProfile> | null | undefined): ProviderProfile {
   const explicitTransport: ProviderProfile["explicitTransport"] =
@@ -1409,13 +1567,13 @@ function normalizeProviderProfile(input: Partial<ProviderProfile> | null | undef
   };
 }
 
-/** 清洗视觉模型配置。三字段全空 = 未启用，返回 undefined。 */
+/** 。 = ， undefined。 */
 function normalizeVisionConfig(input: Partial<VisionModelConfig> | undefined): VisionModelConfig | undefined {
   if (!input || typeof input !== "object") return undefined;
   const baseUrl = typeof input.baseUrl === "string" ? input.baseUrl.trim() : "";
   const apiKey = typeof input.apiKey === "string" ? input.apiKey.trim() : "";
   const model = typeof input.model === "string" ? input.model.trim() : "";
-  // 三项全空 = 未启用
+  //  = 
   if (!baseUrl && !apiKey && !model) return undefined;
   return { baseUrl, apiKey, model };
 }
@@ -1426,7 +1584,7 @@ function normalizeModelSettings(input: Partial<ModelSettings> | null | undefined
     ? input.provider.trim()
     : DEFAULT_MODEL_SETTINGS.provider;
 
-  // perProvider 清洗：跳过非对象、非法键
+  // perProvider ：、
   const rawPerProvider = (input as ModelSettings | undefined)?.perProvider;
   let perProvider: Record<string, ProviderProfile> = {};
   if (rawPerProvider && typeof rawPerProvider === "object") {
@@ -1436,15 +1594,15 @@ function normalizeModelSettings(input: Partial<ModelSettings> | null | undefined
     }
   }
 
-  // 厂商重命名迁移：把旧 provider 名在字典里和当前 provider 字段一并改成新名。
-  // 必须在"旧 schema 兼容回填"之前做，否则会用旧名先创建一份僵尸数据。
+  // ： provider  provider 。
+  // " schema "，。
   ({ provider, perProvider } = migrateProviderRenames(provider, perProvider));
   for (const [providerName, profile] of Object.entries(perProvider)) {
     perProvider[providerName] = migrateLegacyMinimaxDefaults(providerName, profile);
   }
 
-  // 旧 schema 兼容：v1 之前的 model-config.json 没有 perProvider 字段，
-  // 但有顶层 baseUrl/model/apiKey 三件套。首次升级时把它们当作 currentProvider 那一份回填。
+  //  schema ：v1  model-config.json  perProvider ，
+  //  baseUrl/model/apiKey 。 currentProvider 。
   if (!perProvider[provider]) {
     perProvider[provider] = normalizeProviderProfile({
       baseUrl: typeof input?.baseUrl === "string" ? input.baseUrl : "",
@@ -1456,15 +1614,15 @@ function normalizeModelSettings(input: Partial<ModelSettings> | null | undefined
       const { checkForAppUpdates } = await import("./updater/auto-updater");
       return checkForAppUpdates(app.getVersion());
     });
-    // 如果迁移后这一份完全是空的（用户从来没配过），再给个默认 baseUrl/model（便于 UI 第一次显示）
+    // （）， baseUrl/model（ UI ）
     if (!perProvider[provider].baseUrl) perProvider[provider].baseUrl = DEFAULT_MODEL_SETTINGS.baseUrl;
     if (!perProvider[provider].model) perProvider[provider].model = DEFAULT_MODEL_SETTINGS.model;
   }
 
-  // 顶层镜像：用 perProvider[provider] 展开
+  // ： perProvider[provider] 
   const profile = perProvider[provider];
 
-  // 迁移旧配置：vision.syncWithMain === true -> multimodal: true
+  // ：vision.syncWithMain === true -> multimodal: true
   let multimodal = input?.multimodal === true;
   const rawVision = input?.vision as Partial<VisionModelConfig> & { syncWithMain?: boolean } | undefined;
   if (rawVision && rawVision.syncWithMain === true) {
@@ -1479,9 +1637,9 @@ function normalizeModelSettings(input: Partial<ModelSettings> | null | undefined
     model: profile.model,
     apiKey: profile.apiKey,
     explicitTransport: profile.explicitTransport,
-    reasoning: profile.reasoning,  // 顶层镜像：与 explicitTransport 同源（perProvider[currentProvider].reasoning）
+    reasoning: profile.reasoning,  // ： explicitTransport （perProvider[currentProvider].reasoning）
     perProvider,
-    runtimeSync: input?.runtimeSync === "llm" ? "llm" : input?.runtimeSync === "local" ? "local" : "off",
+    runtimeSync: input?.runtimeSync === "local" ? "local" : "llm",
     stickerEnabled: input?.stickerEnabled !== false,
     stickerSize: input?.stickerSize === "small" || input?.stickerSize === "large" ? input.stickerSize : "standard",
     stickerSimilarityThreshold: typeof input?.stickerSimilarityThreshold === "number"
@@ -1529,16 +1687,16 @@ function loadModelSettings(): ModelSettings {
 }
 
 /**
- * 加载视觉模型配置，解析 syncWithMain 并做 supportsVision 检查。
- * 返回 null = 未启用视觉（read_image 据此诚实拒绝）。
+ * ， syncWithMain  supportsVision 。
+ *  null = （read_image ）。
  *
- * syncWithMain=true 时：从主配置读 baseUrl/key/model，并检查主模型 supportsVision——
- * 若主模型非视觉，返回 null（避免把非视觉模型当视觉模型硬调导致运行时错误让用户困惑）。
+ * syncWithMain=true ： baseUrl/key/model， supportsVision——
+ * ， null（）。
  */
 /**
- * 运行时解析视觉配置。
- * multimodal=true：主模型本身支持视觉，返回主模型配置（让 read_image 等工具可用）。
- * multimodal=false：返回独立视觉模型配置（三字段齐全才有效），否则 null。
+ * 。
+ * multimodal=true：，（ read_image ）。
+ * multimodal=false：（）， null。
  */
 export function loadVisionConfig(): VisionConfig | null {
   const settings = loadModelSettings();
@@ -1557,22 +1715,22 @@ export function loadVisionConfig(): VisionConfig | null {
 }
 
 /**
- * 保存逻辑：
- *   - 渲染端发来的 settings 既可能带顶层 baseUrl/model/apiKey（旧调用方式），
- *     也可能带 perProvider（新调用方式，未来可扩展）。
- *   - 写盘前先把"顶层那三件套"折叠回 perProvider[provider]，保证真值落到字典里。
- *   - normalizeModelSettings 再把 perProvider[provider] 展开成顶层镜像，写盘 = 双视图一致。
+ * ：
+ *   -  settings  baseUrl/model/apiKey（），
+ *      perProvider（，）。
+ *   - "" perProvider[provider]，。
+ *   - normalizeModelSettings  perProvider[provider] ， = 。
  */
 function saveModelSettings(settings: Partial<ModelSettings>): ModelSettings {
   const existing = loadModelSettings();
   const merged: Partial<ModelSettings> = { ...existing, ...settings };
 
-  // currentProvider 优先取传入的、再取已有的
+  // currentProvider 、
   const currentProvider = (typeof settings.provider === "string" && settings.provider.trim())
     ? settings.provider.trim()
     : existing.provider;
 
-  // 起点：复制现有 perProvider，再 merge 传入的 perProvider
+  // ： perProvider， merge  perProvider
   const perProvider: Record<string, ProviderProfile> = { ...(existing.perProvider ?? {}) };
   if (settings.perProvider && typeof settings.perProvider === "object") {
     for (const [key, value] of Object.entries(settings.perProvider)) {
@@ -1580,14 +1738,14 @@ function saveModelSettings(settings: Partial<ModelSettings>): ModelSettings {
     }
   }
 
-  // 把传入的顶层三件套折叠到 currentProvider 下（这是渲染端目前主要的写入路径）
+  //  currentProvider （）
   const incomingProfile = perProvider[currentProvider] ?? normalizeProviderProfile(null);
-  // explicitTransport：渲染端新下拉框字段。传 "openai" | "anthropic" | "auto" 都接受；传 undefined 视为 "auto"。
+  // explicitTransport：。 "openai" | "anthropic" | "auto" ； undefined  "auto"。
   const incomingExplicitTransport: ProviderProfile["explicitTransport"] =
     settings.explicitTransport === "openai" || settings.explicitTransport === "anthropic" || settings.explicitTransport === "auto"
       ? settings.explicitTransport
       : incomingProfile.explicitTransport;
-  // reasoning 折叠（用户第三轮修订 #4）：优先级 perProvider > 顶层 > existing
+  // reasoning （ #4）： perProvider >  > existing
   const incomingProfileForReasoning = (settings.perProvider ?? {})[currentProvider];
   const hasProfileReasoning = incomingProfileForReasoning
     && Object.prototype.hasOwnProperty.call(incomingProfileForReasoning, "reasoning");
@@ -1674,8 +1832,8 @@ function normalizeGeneralSettings(input: Partial<GeneralSettings> | null | undef
     mobileMessageSegmentation: normalizeMobileMessageSegmentationMode(input?.mobileMessageSegmentation),
     proactiveChatMode: normalizeProactiveChatMode(input?.proactiveChatMode),
     proactiveDeliveryTarget: normalizeProactiveDeliveryTarget(input?.proactiveDeliveryTarget),
-    // TTS 配置
-    ttsEngine: (["off", "minimax", "gptsovits", "custom-cloud", "mimo", "mossland"].includes(input?.ttsEngine as string) ? input?.ttsEngine : "off") as GeneralSettings["ttsEngine"],
+    // TTS 
+    ttsEngine: (["off", "web-speech", "minimax", "gptsovits", "custom-cloud", "mimo", "mossland", "edge"].includes(input?.ttsEngine as string) ? input?.ttsEngine : "gptsovits") as GeneralSettings["ttsEngine"],
     ttsAutoRead: input?.ttsAutoRead === undefined ? DEFAULT_GENERAL_SETTINGS.ttsAutoRead : Boolean(input.ttsAutoRead),
     ttsSpeed: typeof input?.ttsSpeed === "number" ? Math.max(0.5, Math.min(2, input.ttsSpeed)) : DEFAULT_GENERAL_SETTINGS.ttsSpeed,
     ttsVolume: typeof input?.ttsVolume === "number" ? Math.max(0, Math.min(1, input.ttsVolume)) : DEFAULT_GENERAL_SETTINGS.ttsVolume,
@@ -1696,7 +1854,7 @@ function normalizeGeneralSettings(input: Partial<GeneralSettings> | null | undef
     searchBochaKey: typeof input?.searchBochaKey === "string" ? input.searchBochaKey : "",
     searchTavilyKey: typeof input?.searchTavilyKey === "string" ? input.searchTavilyKey : "",
     searchMinimaxKey: typeof input?.searchMinimaxKey === "string" ? input.searchMinimaxKey : "",
-    // 邮件（SMTP）配置
+    // （SMTP）
     emailEnabled: Boolean(input?.emailEnabled),
     emailSmtpHost: typeof input?.emailSmtpHost === "string" ? input.emailSmtpHost : "",
     emailSmtpPort: clampPort(input?.emailSmtpPort, DEFAULT_GENERAL_SETTINGS.emailSmtpPort),
@@ -1706,7 +1864,7 @@ function normalizeGeneralSettings(input: Partial<GeneralSettings> | null | undef
     emailSmtpUser: typeof input?.emailSmtpUser === "string" ? input.emailSmtpUser : "",
     emailSmtpPass: typeof input?.emailSmtpPass === "string" ? input.emailSmtpPass : "",
     emailFromName: typeof input?.emailFromName === "string" ? input.emailFromName : "",
-    // ASR（语音识别）配置
+    // ASR（）
     asrEngine: ["off", "aliyun", "local"].includes(String(input?.asrEngine))
       ? (input!.asrEngine as "off" | "aliyun" | "local")
       : "off",
@@ -1774,14 +1932,17 @@ function applyGeneralSettings(settings: GeneralSettings): void {
 }
 
 /**
- * 按缩放因子调整桌宠窗口尺寸，并通知渲染进程重算模型 scale。
- * 窗口与模型同步等比缩放，比例不变，故模型始终塞满窗口、不被裁剪。
+ * ， scale。
+ * ，，、。
  */
 function applyPetZoom(zoom: number): void {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   const width = Math.round(PET_WINDOW_BASE_WIDTH * zoom);
   const height = Math.round(PET_WINDOW_BASE_HEIGHT * zoom);
-  mainWindow.setSize(width, height);
+  const currentSize = mainWindow.getSize();
+  if (currentSize[0] !== width || currentSize[1] !== height) {
+    mainWindow.setSize(width, height);
+  }
   sendToLive2DWindow(IPC.PET_ZOOM, zoom);
 }
 
@@ -1819,25 +1980,25 @@ function syncBuiltInToolToggles(settings: GeneralSettings): void {
   toolRegistry.setEnabled("plan_trip", settings.travelEnabled);
 }
 
-/** MiniMax 搜索 MCP Server 的固定 ID。 */
+/** MiniMax  MCP Server  ID。 */
 const MINIMAX_SEARCH_MCP_ID = "minimax-web-search";
 
 /**
- * 同步搜索 MCP Server：选 MiniMax+有key→注册连接，否则→移除断开。
- * 在 TTS_SAVE_SETTINGS 检测到搜索配置变化时调用。
+ *  MCP Server： MiniMax+key→，→。
+ *  TTS_SAVE_SETTINGS 。
  */
 async function syncVolcanoSearchMcp(settings: GeneralSettings): Promise<{ mcpSyncResult: string }> {
-  // ── MiniMax（PyPI包，不依赖GitHub，推荐）──
+  // ── MiniMax（PyPI，GitHub，）──
   const minimaxEnable = settings.searchEngine === "minimax";
   const minimaxExists = listMcpServers().some(s => s.id === MINIMAX_SEARCH_MCP_ID);
 
-  // Key 校验（不泄漏原始 Key）
+  // Key （ Key）
   if (minimaxEnable) {
     const keyValidation = validateSearchApiKey(settings.searchMinimaxKey, "MiniMax API Key");
     console.log(`[Cyrene] MiniMax key validation: length=${keyValidation.diagnostics.length} trimmed=${keyValidation.diagnostics.trimmed} nonAscii=${keyValidation.diagnostics.hasNonAscii} controlChars=${keyValidation.diagnostics.hasControlChars}`);
     if (!keyValidation.valid) {
       console.error(`[Cyrene] MiniMax key validation failed: ${keyValidation.error}`);
-      // Key 不合法时，如果 MCP 存在则清理
+      // Key ， MCP 
       if (minimaxExists) {
         try { await removeMcpServer(MINIMAX_SEARCH_MCP_ID); } catch (err) { console.error("[Cyrene] Failed to remove MiniMax Search MCP:", err); }
       }
@@ -1900,7 +2061,7 @@ function loadStickerSettings(): Record<string, boolean> {
     console.error("[Cyrene] load sticker settings failed:", err);
   }
 
-  // 把所有 id 归一化为 boolean（默认 true）
+  //  id  boolean（ true）
   const result: Record<string, boolean> = {};
   for (const id of Object.keys(raw)) {
     result[id] = raw[id] !== false;
@@ -1926,13 +2087,13 @@ function getStickerManagerConfig(): StickerConfigItem[] {
   return getAllStickerConfig(stickerSettings);
 }
 
-// ── 多面板自适应布局 ──────────────────────────────────────────────
+// ──  ──────────────────────────────────────────────
 
 interface PanelLayout { x: number; y: number; }
 
 /**
- * 将窗口位置 clamp 到 workArea 内，保证至少 minVisibleW × minVisibleH 可见。
- * 允许窗口部分超出屏幕（可正可负），但可见区域不少于指定阈值。
+ *  clamp  workArea ， minVisibleW × minVisibleH 。
+ * （），。
  */
 function clampWindowToWorkArea(
   pos: PanelLayout,
@@ -1957,13 +2118,13 @@ function clampWindowToWorkArea(
 }
 
 /**
- * 计算多面板自适应布局。
+ * 。
  *
- * 策略：
- * - 水平排列：totalWidth <= workArea.width → 三面板水平居中
- * - 阶梯排列：totalWidth > workArea.width → sidebar/tasks 贴右边缘并垂直错开
+ * ：
+ * - ：totalWidth <= workArea.width → 
+ * - ：totalWidth > workArea.width → sidebar/tasks 
  *
- * 所有窗口均 clampWindowToWorkArea 保证至少 120×80 可见。
+ *  clampWindowToWorkArea  120×80 。
  */
 function computePanelLayout(
   workArea: { x: number; y: number; width: number; height: number },
@@ -1978,7 +2139,7 @@ function computePanelLayout(
       : workArea.y;
 
   if (totalWidth <= workArea.width) {
-    // 水平居中排列
+    // 
     const startX = workArea.x + Math.floor((workArea.width - totalWidth) / 2);
     const positions: PanelLayout[] = [];
     let curX = startX;
@@ -1990,20 +2151,20 @@ function computePanelLayout(
     return positions;
   }
 
-  // 阶梯排列：总宽超屏
-  // chat: 居中（clamp 后）
+  // ：
+  // chat: （clamp ）
   const chatPos = clampWindowToWorkArea(
     { x: workArea.x + Math.floor((workArea.width - panels[0].width) / 2), y: baseY },
     panels[0],
     workArea,
   );
 
-  // sidebar: 优先 chat 右侧有 gap；不够则贴 workArea 右边缘
+  // sidebar:  chat  gap； workArea 
   const sidebarMaxX = workArea.x + workArea.width - panels[1].width;
   const sidebarX = Math.min(chatPos.x + panels[0].width + gap, sidebarMaxX);
   const sidebarPos = clampWindowToWorkArea({ x: sidebarX, y: baseY }, panels[1], workArea);
 
-  // tasks: 贴右边缘，y 与 sidebar 错开 48px
+  // tasks: ，y  sidebar  48px
   const tasksX = Math.min(sidebarPos.x, sidebarMaxX);
   const tasksY = clampWindowToWorkArea(
     { x: tasksX, y: sidebarPos.y + 48 },
@@ -2014,8 +2175,8 @@ function computePanelLayout(
   return [chatPos, sidebarPos, tasksY];
 }
 
-// 计算 chat / sidebar / tasks 三个窗口的初始位置。
-// 规则：优先鼠标所在 display；窗口自适应 workArea，保证至少 120×80 可见。
+//  chat / sidebar / tasks 。
+// ： display； workArea， 120×80 。
 function computeLayout(): {
   chat: PanelLayout;
   sidebar: PanelLayout;
@@ -2033,7 +2194,7 @@ function computeLayout(): {
   const panels = [
     { width: 1280, height: 760 }, // chat
     { width: 360, height: 760 },  // sidebar
-    { width: 360, height: 760 },  // tasks
+    { width: 480, height: 820 },  // tasks
   ];
   const [chatPos, sidebarPos, tasksPos] = computePanelLayout(workArea, panels, 8);
   return { chat: chatPos, sidebar: sidebarPos, tasks: tasksPos };
@@ -2145,17 +2306,17 @@ function extractJsonPayload(text: string): unknown | null {
   }
 }
 
-// feeling → Live2D 表情索引
+// feeling → Live2D expression index
 const feelingToExpression: Record<string, number> = {
-  "平静": 0,
-  "开心": 6,
-  "温柔": 0,
-  "激动": 3,
-  "撒娇": 5,
-  "担心": 2,
-  "难过": 0,
-  "感动": 4,
-  "害羞": 5,
+  "Calm": 0,
+  "Happy": 6,
+  "Gentle": 0,
+  "Excited": 3,
+  "Coy": 5,
+  "Worried": 2,
+  "Sad": 0,
+  "Touched": 4,
+  "Shy": 5,
 };
 
 function inferRuntimeState(
@@ -2163,19 +2324,19 @@ function inferRuntimeState(
   llmReply: string,
   toolCalled: boolean
 ): Pick<RuntimeState, "status"> {
-  if (toolCalled) return { status: "工作中" };
+  if (toolCalled) return { status: "Working" };
 
   const text = userInput + llmReply;
 
-  if (STATUS_KEYWORDS["聆听中"].test(text)) {
-    return { status: "聆听中" };
+  if (STATUS_KEYWORDS["Listening"]?.test(text)) {
+    return { status: "Listening" };
   }
 
-  if (STATUS_KEYWORDS["思考中"].test(text)) {
-    return { status: "思考中" };
+  if (STATUS_KEYWORDS["Thinking"]?.test(text)) {
+    return { status: "Thinking" };
   }
 
-  return { status: "陪伴中" };
+  return { status: "Accompanying" };
 }
 
 function parseObserverFeeling(text: string): string | null {
@@ -2183,7 +2344,7 @@ function parseObserverFeeling(text: string): string | null {
   if (!payload || typeof payload !== "object") return null;
   const record = payload as Record<string, unknown>;
   const feeling = typeof record.feeling === "string" ? record.feeling : null;
-  const validFeelings = ["平静","开心","温柔","激动","撒娇","担心","难过","感动","害羞"];
+  const validFeelings = ["Calm","Happy","Gentle","Excited","Coy","Worried","Sad","Touched","Shy"];
   return feeling && validFeelings.includes(feeling) ? feeling : null;
 }
 
@@ -2257,7 +2418,7 @@ async function callChatCompletionsStream(
   const _startTime = Date.now();
   if (logTiming) console.log(`[TIMING] ${label} START timeout=${timeoutMs}ms msgLen=${messages.length} sysLen=${messages[0]?.content?.length ?? 0}`);
 
-  // 拼 VendorConfig（settings 顶层三件套 + 镜像字段都参与）
+  //  VendorConfig（settings  + ）
   const cfg: VendorConfig = {
     provider: settings.provider,
     baseUrl: settings.baseUrl,
@@ -2268,9 +2429,9 @@ async function callChatCompletionsStream(
   };
 
   try {
-    // adapter 三层 transport 解析（explicitTransport → baseUrl 启发式 → capabilities fallback）
+    // adapter  transport （explicitTransport → baseUrl  → capabilities fallback）
     const adapter = getAdapterForConfig(cfg);
-    // adapter 的 buildStreamRequest 内部已写 stream=true + 拼 transport 相关的 headers/body
+    // adapter  buildStreamRequest  stream=true +  transport  headers/body
     const http = adapter.buildStreamRequest({
       model: cfg.model,
       messages,
@@ -2298,8 +2459,8 @@ async function callChatCompletionsStream(
     let fullText = "";
     const visibleFilter = createVisibleStreamFilter();
 
-    // Reader 层切分字节流 → StreamEvent；adapter 解析为 StreamChunk
-    // 半行拼接、event 块切分等状态由 createSseReader 内部维护，adapter 保持纯函数无状态。
+    // Reader  → StreamEvent；adapter  StreamChunk
+    // 、event  createSseReader ，adapter 。
     for await (const event of createSseReader(adapter, response.body)) {
       const chunk = adapter.parseStreamEvent(event);
       if (!chunk) continue;
@@ -2308,7 +2469,7 @@ async function callChatCompletionsStream(
         const visibleDelta = visibleFilter.push(chunk.deltaText);
         if (visibleDelta) onChunk(visibleDelta);
       }
-      // thinking 累积但不入可见流（stripThinkBlocks 末尾统一剥）
+      // thinking （stripThinkBlocks ）
       if (chunk.usage) {
         recordUsage(chunk.usage.input, chunk.usage.output, 1);
       }
@@ -2350,9 +2511,9 @@ async function callChatCompletions(
 }
 
 /**
- * 非流式 chat completions 调用（CITA 专用）。
- * CITA 不需要流式输出（它只要完整 JSON），非流式比流式快 ~2 倍。
- * 支持 reasoningOverride 强制关闭 reasoning（CITA 不需要深度推理）。
+ *  chat completions （CITA ）。
+ * CITA （ JSON）， ~2 。
+ *  reasoningOverride  reasoning（CITA ）。
  */
 async function callChatCompletionsNonStream(
   settings: ModelSettings,
@@ -2574,12 +2735,12 @@ function resolveSoulSamplingForStyle(input: {
 }
 
 /**
- * 诊断：确认 WorldBook active entries 是否真正进入最终 system prompt，
- * 以及在什么位置。不预设结论——先看数据再判断是 lost-in-middle、
- * 被后续 prompt 覆盖、还是根本没拼进去。
+ * ： WorldBook active entries  system prompt，
+ * 。—— lost-in-middle、
+ *  prompt 、。
  */
 function logWorldbookInjection(alwaysOnContext: string, systemContent: string): void {
-  const marker = "【已激活的世界知识】";
+  const marker = "[Active World Knowledge]";
   if (alwaysOnContext && alwaysOnContext.includes(marker)) {
     const wbStart = systemContent.indexOf(marker);
     console.log("[Worldbook/Diag] ────────────────────────");
@@ -2600,7 +2761,7 @@ function logWorldbookInjection(alwaysOnContext: string, systemContent: string): 
 function buildSystemPrompt(styleFile: string, includeStyle = true): string {
   const parts: string[] = [];
 
-  // Chat 模式使用独立基础规则；仍兼容旧调用方传入的 "talk"。
+  // Chat ； "talk"。
   const isChatMode = styleFile.startsWith("chat") || styleFile.startsWith("talk");
   const system = loadPromptFile(isChatMode ? "chat_system.md" : "work_system.md");
   if (system) parts.push(system);
@@ -2614,7 +2775,7 @@ function buildSystemPrompt(styleFile: string, includeStyle = true): string {
   const canon = loadPromptFile("canon_quotes.md");
   if (canon) parts.push(canon);
 
-  // 新链路由 build-options 独立注入 style Prompt；旧调用方仍可选择在这里附加 style 文件。
+  //  build-options  style Prompt； style 。
   if (includeStyle && !isChatMode) {
     const style = loadPromptFile("styles/" + styleFile);
     if (style) parts.push(style);
@@ -2629,8 +2790,8 @@ function buildProactivePersonaPrompt(): string {
   if (chatSystem) parts.push(chatSystem);
   const soul = loadPromptFile("soul.md");
   if (soul) {
-    // 主动轮完全不携带工具说明；Soul 尾部的 Live2D/联网章节由正常聊天使用。
-    parts.push(soul.split("\n## Live2D 与聊天文字的分工")[0].trim());
+    // ；Soul  Live2D/。
+    parts.push(soul.split("\n## Division of Live2D and Chat")[0].trim());
   }
   const canon = loadPromptFile("canon_quotes.md");
   if (canon) parts.push(canon);
@@ -2661,7 +2822,7 @@ function getProactiveHistories(): { ordinary: ProactiveHistoryTurn[]; proactive:
 function getProactiveRuntimeSnapshot(): ProactiveRuntimeSnapshot {
   const now = Date.now();
   let idleSec = Number.POSITIVE_INFINITY;
-  try { idleSec = powerMonitor.getSystemIdleTime(); } catch { /* app 尚未 ready */ }
+  try { idleSec = powerMonitor.getSystemIdleTime(); } catch { /* app  ready */ }
   return {
     now,
     localHour: new Date(now).getHours(),
@@ -2683,7 +2844,7 @@ async function buildProactiveAgentMessages(candidate: ProactiveCandidate) {
   ]);
   const state = loadProactiveState();
   const snapshot = getProactiveRuntimeSnapshot();
-  // 用户有效时区：resolver 校验后传给 prompt，禁止未校验的 profile.timezone。
+  // ：resolver  prompt， profile.timezone。
   const profile = loadUserProfile();
   const timezone = resolveChatContextTimezone(profile.timezone);
   return buildProactiveMessages({
@@ -2726,8 +2887,8 @@ function getProactiveCommitDecision(candidate: ProactiveCandidate, generationEpo
 }
 
 function recordProactiveDeliveryMetadata(input: ProactiveCommitInput): void {
-  // Opener 的 todayFired/recentItems 字段已整体废弃（依赖的 SCENE_CONFIGS 与 ShowBubblePayload 来自旧 opener 子系统）。
-  // ProactiveChat 这边只需持久化 committed 副作用；当前 implementation 已无副作用，留空占位即可。
+  // Opener  todayFired/recentItems （ SCENE_CONFIGS  ShowBubblePayload  opener ）。
+  // ProactiveChat  committed ； implementation ，。
   void input;
 }
 
@@ -2749,7 +2910,7 @@ async function commitLocalProactiveMessage(input: ProactiveCommitInput): Promise
   if (!appended) throw new Error("Failed to write the proactive chat session");
   broadcastChatsChanged();
 
-  // 文本已落库；上次落库后没有 panel/show 步骤要做（opener 气泡已被移除，fallback 路径没有了）。
+  // ； panel/show （opener ，fallback ）。
   void input;
   void at;
   return { kind: "committed" };
@@ -2805,7 +2966,7 @@ function initializeProactiveChatService(): void {
         timeoutMs: 45_000,
       });
     },
-    // Opener 的 preset fallback 已移除：model 失败时由 proactive-service 自身走 cancel 路径。
+    // Opener  preset fallback ：model  proactive-service  cancel 。
     getFallback: async () => null,
     canStartDelivery: () => {
       const target = loadGeneralSettings().proactiveDeliveryTarget;
@@ -2829,13 +2990,13 @@ function initializeProactiveChatService(): void {
   powerMonitor.on("resume", () => { proactiveScreenLocked = false; });
 }
 
-// ── 主动聊天触发器（60s 周期扫描 → evaluateCandidate） ─────────────
-// 闭包持有的 evaluation backoff Map（仅内存，重启后由 policy 持久化冷却接续）
+// ── （60s  → evaluateCandidate） ─────────────
+//  evaluation backoff Map（， policy ）
 let proactiveTrigger: ProactiveTriggerController | null = null;
 const proactiveBackoffMap = new Map<string, number>();
 
 function initializeProactiveTrigger(): void {
-  if (proactiveTrigger) return; // 幂等
+  if (proactiveTrigger) return; // 
   if (!proactiveChatService) {
     console.warn("[Proactive] trigger skipped: service not initialized");
     return;
@@ -2846,7 +3007,7 @@ function initializeProactiveTrigger(): void {
     getRuntimeSnapshot: getProactiveRuntimeSnapshot,
     getProactiveState: loadProactiveState,
     getTimezone: () => resolveChatContextTimezone(loadUserProfile().timezone),
-    // getWeatherContext 第一版不传：未来天气缓存接入后填，函数体无需改
+    // getWeatherContext ：，
     getLastEvaluatedAtByScene: () => new Map(proactiveBackoffMap),
     setLastEvaluatedAtByScene: (next) => {
       proactiveBackoffMap.clear();
@@ -2862,9 +3023,9 @@ function stopProactiveTrigger(): void {
 }
 
 /**
- * 工具阶段使用的 system prompt。
- * 第一期：固定 tools_system.md 规则 + 运行时生成的工具目录。
- * 不放任何人格 / 环境 / 记忆，避免人设污染工具决策。
+ *  system prompt。
+ * ： tools_system.md  + 。
+ *  /  / ，。
  */
 function buildToolSystemPrompt(enabledTools: ReadonlyArray<ToolDefinition>): string {
   const base = loadPromptFile("tools_system.md");
@@ -2877,22 +3038,22 @@ function buildToolSystemPrompt(enabledTools: ReadonlyArray<ToolDefinition>): str
 }
 
 /**
- * Soul 阶段使用的基础 system prompt。
- * 包含：人设（work_system.md/chat_system.md + work_identity.md/chat_identity.md + soul.md + canon + style）+ 后续可追加的环境/记忆等。
- * 注意：工具结果（`role: "tool"` 消息）在 conversation 中已携带，本函数不重复注入。
- * 第一期：build-options 会把 environmentContext / skillCatalog / toneInjection /
- * alwaysOnContext / relationshipContext / attachmentContext 等都拼到 baseContent 末尾，
- * 后续第二期再拆分为 toolEnvironmentContext / soulEnvironmentContext。
+ * Soul  system prompt。
+ * ：（work_system.md/chat_system.md + work_identity.md/chat_identity.md + soul.md + canon + style）+ /。
+ * ：（`role: "tool"` ） conversation ，。
+ * ：build-options  environmentContext / skillCatalog / toneInjection /
+ * alwaysOnContext / relationshipContext / attachmentContext  baseContent ，
+ *  toolEnvironmentContext / soulEnvironmentContext。
  */
 function buildSoulSystemBasePrompt(styleFile: string): string {
   return buildSystemPrompt(styleFile, false);
 }
 
 /**
- * /命令拦截：命中 /skill-id（且 skill 存在+启用）则返回 system 激活段
- * （正文注入 system，user message 原样，不污染 memory，见 spec 6.3）。
- * 命中但 skill 不存在/未启用 → 改写该 user 消息为提示，返回 ""。
- * 未命中 → 返回 ""（放行，不误吞其他 /命令）。
+ * /： /skill-id（ skill +） system 
+ * （ system，user message ， memory， spec 6.3）。
+ *  skill / →  user ， ""。
+ *  →  ""（， /）。
  */
 function resolveSlashActivation<T extends { role: string; content: string }>(messages: T[]): string {
   let lastUserIdx = -1;
@@ -2914,7 +3075,7 @@ function resolveSlashActivation<T extends { role: string; content: string }>(mes
     }
     return "";
   }
-  // skill 不存在/未启用：替换该 user 消息为提示
+  // skill /： user 
   const available = skillRegistry.getEnabled().map(s => s.id).join(", ") || "(none)";
   messages[lastUserIdx] = { ...lastUser, content: `[System notice: skill is disabled or unavailable: ${parsed.skillId}. Available skills: ${available}]` } as T;
   return "";
@@ -2941,14 +3102,14 @@ async function observeRuntimeState(
     .slice(-6)
     .map((message) => ({ role: message.role, content: message.content }));
 
-  // 入 LLM 后台队列：和 MemoryJudge 串行执行，避免并发触发限流；
-  // 限流自动退避 5s 重试 1 次。.catch 吞错误，不影响主流程。
+  //  LLM ： MemoryJudge ，；
+  //  5s  1 。.catch ，。
   enqueueLLMTask("Mood observer", async () => {
     const observerContent = await callChatCompletions(settings, [
       {
         role: "system",
         content:
-          'You are an emotion classifier. Below is Cyrene\'s complete persona:\n\n' + loadSoulFeelingContext() + '\n\nUsing the persona and conversation, classify Cyrene\'s current mood. Return exactly one canonical value: 平静 / 开心 / 温柔 / 激动 / 撒娇 / 担心 / 难过 / 感动 / 害羞. Return JSON only: {"feeling":"canonical value"}. Prioritize the latest turn, classify Cyrene rather than the user, and use 平静 when uncertain.',
+          'You are an emotion classifier. Below is Cyrene\'s complete persona:\n\n' + loadSoulFeelingContext() + '\n\nUsing the persona and conversation, classify Cyrene\'s current mood. Return exactly one canonical value: Calm / Happy / Gentle / Excited / Coy / Worried / Sad / Touched / Shy. Return JSON only: {"feeling":"canonical value"}. Prioritize the latest turn, classify Cyrene rather than the user, and use Calm when uncertain.',
       },
       {
         role: "user",
@@ -2969,21 +3130,21 @@ async function observeRuntimeState(
   }, { log: false }).catch((err) => {
     console.warn("[Cyrene] observe runtime failed; keeping current feeling:", err);
   });
-  // 标注未使用的参数，避免 lint 警告
+  // ， lint 
   void latestUserText;
 }
 
-// 厂商短名映射（与 settings.ts 的 MODEL_PRESETS.shortName 镜像，需手动同步）。
-// 状态栏"正在喂养"在用户没填昵称时用这个兜底。
+// （ settings.ts  MODEL_PRESETS.shortName ，）。
+// ""。
 const PROVIDER_SHORT_NAMES: Record<string, string> = {
-  "MiniMax（稀宇科技）": "MiniMax",
-  "DeepSeek（深度求索）": "DeepSeek",
-  "豆包（火山方舟）": "Doubao",
-  "GLM（智谱）": "GLM",
-  "Kimi（月之暗面）": "Kimi",
-  "Qwen（通义千问）": "Qwen",
-  "ChatGPT（OpenAI）": "ChatGPT",
-  "Claude（Anthropic）": "Claude",
+  "MiniMax": "MiniMax",
+  "DeepSeek": "DeepSeek",
+  "Doubao": "Doubao",
+  "GLM": "GLM",
+  "Kimi": "Kimi",
+  "Qwen": "Qwen",
+  "ChatGPT": "ChatGPT",
+  "Claude": "Claude",
 };
 
 function getPublicModelConfig(settings = loadModelSettings()): PublicModelConfig {
@@ -3072,9 +3233,11 @@ function createWindow(): void {
   let restoreX: number | undefined;
   let restoreY: number | undefined;
 
+  const zoom = typeof settings.petZoom === "number" ? Math.max(0.5, Math.min(2, settings.petZoom)) : 1;
+  const PET_W = Math.round(PET_WINDOW_BASE_WIDTH * zoom);
+  const PET_H = Math.round(PET_WINDOW_BASE_HEIGHT * zoom);
+
   if (settings.petWindowX !== undefined && settings.petWindowY !== undefined) {
-    const PET_W = PET_WINDOW_BASE_WIDTH;
-    const PET_H = PET_WINDOW_BASE_HEIGHT;
     const targetBounds = {
       x: settings.petWindowX,
       y: settings.petWindowY,
@@ -3084,7 +3247,7 @@ function createWindow(): void {
     const display = screen.getDisplayMatching(targetBounds);
     const wa = display.workArea;
 
-    // 窗口与 workArea 交集至少 80x80 才使用保存的坐标
+    // Check if at least 60x60 is within display workArea
     const interW =
       Math.min(targetBounds.x + PET_W, wa.x + wa.width) -
       Math.max(targetBounds.x, wa.x);
@@ -3092,22 +3255,29 @@ function createWindow(): void {
       Math.min(targetBounds.y + PET_H, wa.y + wa.height) -
       Math.max(targetBounds.y, wa.y);
 
-    if (interW >= 80 && interH >= 80) {
-      restoreX = settings.petWindowX;
-      restoreY = settings.petWindowY;
+    if (interW >= 60 && interH >= 60) {
+      restoreX = Math.max(wa.x, Math.min(wa.x + wa.width - PET_W, settings.petWindowX));
+      restoreY = Math.max(wa.y, Math.min(wa.y + wa.height - PET_H, settings.petWindowY));
     } else {
       console.log(
         "[Cyrene] Saved pet position is off-screen (only " +
-          interW + "x" + interH + " visible); using the default position",
+          interW + "x" + interH + " visible); using default bottom-right position",
       );
     }
+  }
+
+  // Fallback default position: bottom-right corner of primary display
+  if (restoreX === undefined || restoreY === undefined) {
+    const primaryWa = screen.getPrimaryDisplay().workArea;
+    restoreX = Math.round(primaryWa.x + primaryWa.width - PET_W - 24);
+    restoreY = Math.round(primaryWa.y + primaryWa.height - PET_H - 24);
   }
 
   mainWindow = new BrowserWindow({
     x: restoreX,
     y: restoreY,
-    width: PET_WINDOW_BASE_WIDTH,
-    height: PET_WINDOW_BASE_HEIGHT,
+    width: PET_W,
+    height: PET_H,
     transparent: true,
     frame: false,
     skipTaskbar: true,
@@ -3159,15 +3329,31 @@ function createWindow(): void {
     mainWindow?.webContents.send(IPC.PET_VISIBILITY_CHANGED, true);
   });
 
+  let moveSaveTimer: NodeJS.Timeout | null = null;
+  mainWindow.on("moved", () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    if (moveSaveTimer) clearTimeout(moveSaveTimer);
+    moveSaveTimer = setTimeout(() => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      try {
+        const [x, y] = mainWindow.getPosition();
+        const before = loadGeneralSettings();
+        if (before.petWindowX !== x || before.petWindowY !== y) {
+          saveGeneralSettings({ petWindowX: x, petWindowY: y });
+        }
+      } catch {}
+    }, 150);
+  });
+
   applyGeneralSettings(loadGeneralSettings());
 
-  // 注入天气工具配置获取器：每次工具执行时实时读 key/默认城市
-  // （用户改了设置不用重启就能生效）
+  // ： key/
+  // （）
   setWeatherConfig(
-    () => loadUserProfile().defaultCity,
+    () => loadUserProfile().defaultCity || "Hanoi",
     () => loadGeneralSettings().weatherSource,
     () => loadGeneralSettings().amapKey,
-    // 天气卡片回调：工具拿到结构化数据后，发 Custom 事件给聊天窗口渲染卡片
+    // ：， Custom 
     (card) => {
       if (chatWindow && !chatWindow.isDestroyed()) {
         chatWindow.webContents.send(IPC.AGUI_EVENT, {
@@ -3180,10 +3366,10 @@ function createWindow(): void {
     () => loadGeneralSettings().weatherEnabled,
   );
 
-  // 注入用户时区 getter：工具侧通过 currentUserTimezone() 统一拿用户时区（缺/非法回退 Asia/Shanghai）
+  //  getter： currentUserTimezone() （/ Asia/Shanghai）
   setUserTimezoneConfig(() => loadUserProfile().timezone);
 
-  // 注入用户选择卡片回调：工具调 ask_user_choice 时发 Custom 事件给聊天窗口
+  // ： ask_user_choice  Custom 
   setChoiceCardSender((cardData) => {
     if (chatWindow && !chatWindow.isDestroyed()) {
       chatWindow.webContents.send(IPC.AGUI_EVENT, {
@@ -3194,17 +3380,17 @@ function createWindow(): void {
     }
   });
 
-  // 注入搜索配置获取器
+  // 
   setSearchConfig(
     () => loadGeneralSettings().searchEngine,
     () => loadGeneralSettings().searchBochaKey,
     () => loadGeneralSettings().searchTavilyKey,
   );
 
-  // 注入出行工具 amapKey 获取器（复用 GeneralSettings 中的 amapKey）
+  //  amapKey （ GeneralSettings  amapKey）
   setTravelConfig(() => loadGeneralSettings().amapKey, () => loadGeneralSettings().travelEnabled);
 
-  // 注入邮件工具 SMTP 配置获取器（每次执行实时读 GeneralSettings）
+  //  SMTP （ GeneralSettings）
   setEmailConfig(
     () => loadGeneralSettings().emailEnabled,
     () => loadGeneralSettings().emailSmtpHost,
@@ -3215,14 +3401,14 @@ function createWindow(): void {
     () => loadGeneralSettings().emailFromName,
   );
 
-  // 注入 ASR 配置获取器（通话功能用，实时读 GeneralSettings）
+  //  ASR （， GeneralSettings）
   setAsrConfig(() => {
     const s = loadGeneralSettings();
     if (s.asrEngine !== "aliyun") return null;
     return { appKey: s.asrAliyunAppKey, accessKeyId: s.asrAliyunAccessKeyId, accessKeySecret: s.asrAliyunAccessKeySecret, language: s.asrLanguage, engine: s.asrEngine };
   });
 
-  // 注入通话模型/TTS 配置获取器
+  // /TTS 
   setCallSettings(
     () => {
       const s = loadModelSettings();
@@ -3249,24 +3435,24 @@ function createWindow(): void {
         ttsMimoStylePrompt: s.ttsMimoStylePrompt,
       };
     },
-    // 通话专用 system prompt 构建器（时间+常驻+记忆+phone人设+skill+语气，不要环境上下文）
+    //  system prompt （+++phone+skill+，）
     async (userText: string) => {
       const messages = [{ role: "user" as const, content: userText }];
 
-      // ① 时间日期（用用户时区，禁止直接喂未校验的 profile.timezone 给 Intl）
+      // ① （， profile.timezone  Intl）
       const now = new Date();
       const userTz = resolveChatContextTimezone(loadUserProfile().timezone);
       const timeStr = `Current time: ${now.toLocaleDateString("en-US", { timeZone: userTz })} ${now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", timeZone: userTz })}`;
 
-      // ② 常驻上下文（世界书 + L0/L1 画像）
+      // ② （ + L0/L1 ）
       let alwaysOnContext = "";
       try { alwaysOnContext = await buildAlwaysOnContextWithSensory(userText, messages); } catch { /* ignore */ }
 
-      // ③ 记忆注入
+      // ③ 
       let memoryInjection = "";
       try { memoryInjection = await buildMemoryInjection(userText); } catch { /* ignore */ }
 
-      // ④ 通话专用人设 prompt
+      // ④  prompt
       const phoneParts: string[] = [];
       const phoneSystem = loadPromptFile("phone_system.md");
       if (phoneSystem) phoneParts.push(phoneSystem);
@@ -3280,11 +3466,11 @@ function createWindow(): void {
       if (phoneStyle) phoneParts.push(phoneStyle);
       const phonePrompt = phoneParts.join("\n\n---\n\n");
 
-      // ⑤ Skill 约束
+      // ⑤ Skill 
       const skillCatalog = buildSkillCatalog(skillRegistry.getEnabled());
       const skillActivation = resolveSlashActivation(messages);
 
-      // ⑥ 语气注入
+      // ⑥ 
       let toneInjection = "";
       const sceneProvider = getSceneEmbeddingProvider();
       if (sceneProvider && sceneEmbeddingIndex) {
@@ -3299,13 +3485,12 @@ function createWindow(): void {
         skillActivation +
         toneInjection;
     },
-    // 天气快捷处理：正则匹配到天气关键词 → 调 weather 工具的 execute
+    // ： →  weather  execute
     async (userText: string) => {
       try {
         const weatherTool = toolRegistry.getById("weather");
         if (!weatherTool) return null;
-        // 提取城市名（简单匹配：XX天气 / XX的天气）
-        const cityMatch = userText.match(/([北京上海广州深圳成都杭州南京武汉西安重庆天津苏州长沙郑州青岛大连沈阳哈尔滨长春济南太原合肥南昌福州昆明贵阳拉萨乌鲁木齐呼和浩特]+)/);
+        const cityMatch = userText.match(/(?:in|for|at|weather in|weather of)\s+([A-Za-z\s]+)/i) || userText.match(/([A-Za-z]+)/);
         const city = cityMatch?.[1] ?? "";
         const result = await weatherTool.execute({ city }, undefined);
         return result;
@@ -3316,13 +3501,17 @@ function createWindow(): void {
     },
   );
 
-  // 注入子代理 LLM 配置（delegate_task 工具用，复用主模型配置）
+  //  LLM （delegate_task ，）
   setDelegateSettings(() => {
     const s = loadModelSettings();
     return { provider: s.provider, baseUrl: s.baseUrl, model: s.model, apiKey: s.apiKey };
   });
 
   mainWindow.on("closed", () => {
+    if (moveSaveTimer) {
+      clearTimeout(moveSaveTimer);
+      moveSaveTimer = null;
+    }
     petWindowMoveController.dispose();
     live2dWindowLifecycle.clear(mainWindow ?? undefined);
     mainWindow = null;
@@ -3331,13 +3520,13 @@ function createWindow(): void {
 
 
 function createChatWindow(sessionId?: string): void {
+  const targetSessionId = sessionId || activeChatSessionId || undefined;
   if (chatWindow && !chatWindow.isDestroyed()) {
     if (chatWindow.isMinimized()) chatWindow.restore();
     chatWindow.show();
     chatWindow.focus();
-    // 窗口已存在：通过事件让渲染进程切到目标会话（不重 load）
-    if (sessionId) {
-      chatWindow.webContents.send(IPC.CHATS_SWITCH_SESSION, sessionId);
+    if (targetSessionId) {
+      chatWindow.webContents.send(IPC.CHATS_SWITCH_SESSION, targetSessionId);
     }
     return;
   }
@@ -3354,6 +3543,7 @@ function createChatWindow(sessionId?: string): void {
     icon: getCurrentAppIconPath(),
     backgroundColor: "#00000000",
     autoHideMenuBar: true,
+    skipTaskbar: false,
     show: false,
     frame: false,
     transparent: true,
@@ -3368,15 +3558,13 @@ function createChatWindow(sessionId?: string): void {
 
   attachExternalLinkHandler(chatWindow);
 
-  // 通过 URL query 把目标 sessionId 带给渲染进程（首次加载用），
-  // 后续切换走 CHATS_SWITCH_SESSION 事件，避免重新加载页面。
-  const queryString = sessionId ? "?sessionId=" + encodeURIComponent(sessionId) : "";
+  const queryString = targetSessionId ? "?sessionId=" + encodeURIComponent(targetSessionId) : "";
   if (isDev) {
     chatWindow.loadURL("http://localhost:5173/chat/" + queryString);
   } else {
     chatWindow.loadFile(
       path.join(__dirname, "..", "..", "renderer", "chat", "index.html"),
-      sessionId ? { search: queryString } : undefined,
+      targetSessionId ? { search: queryString } : undefined,
     );
   }
 
@@ -3395,13 +3583,6 @@ function createChatWindow(sessionId?: string): void {
 
   chatWindow.on("closed", () => {
     chatWindow = null;
-    // 聊天窗口关闭后清空活跃 sessionId 广播，让设置面板的"删除当前会话"
-    // 提示文案恢复成普通的"确定删除？"
-    activeChatSessionId = null;
-    for (const win of BrowserWindow.getAllWindows()) {
-      if (win.isDestroyed()) continue;
-      try { win.webContents.send(IPC.CHATS_ACTIVE_SESSION_CHANGED, null); } catch { /* ignore */ }
-    }
   });
 }
 
@@ -3424,6 +3605,7 @@ function createSidebarWindow(): void {
     icon: getCurrentAppIconPath(),
     backgroundColor: "#00000000",
     autoHideMenuBar: true,
+    skipTaskbar: true,
     show: false,
     frame: false,
     transparent: true,
@@ -3466,14 +3648,15 @@ function createTasksWindow(): void {
   tasksWindow = new BrowserWindow({
     x: layout.tasks.x,
     y: layout.tasks.y,
-    width: 360,
-    height: 760,
-    minWidth: 320,
-    minHeight: 540,
+    width: 480,
+    height: 820,
+    minWidth: 420,
+    minHeight: 600,
     title: "Cyrene · Today's Schedule",
     icon: getCurrentAppIconPath(),
     backgroundColor: "#00000000",
     autoHideMenuBar: true,
+    skipTaskbar: true,
     show: false,
     frame: false,
     transparent: true,
@@ -3509,7 +3692,7 @@ function createSettingsWindow(section?: string): void {
   if (settingsWindow && !settingsWindow.isDestroyed()) {
     settingsWindow.show();
     settingsWindow.focus();
-    // 窗口已存在：发事件让 settings 页切标签（loadURL 不会重新触发）
+    // ： settings （loadURL ）
     if (section) {
       settingsWindow.webContents.send(IPC.SETTINGS_SWITCH_SECTION, section);
     }
@@ -3531,6 +3714,7 @@ function createSettingsWindow(section?: string): void {
     icon: getCurrentAppIconPath(),
     backgroundColor: "#00000000",
     autoHideMenuBar: true,
+    skipTaskbar: true,
     show: false,
     frame: false,
     transparent: true,
@@ -3729,7 +3913,7 @@ async function createStickerManagerWindow(): Promise<{ ok: boolean; error?: stri
   return { ok: true };
 }
 
-/** 创建通话窗口（450×800 竖屏，语音通话）。 */
+/** （450×800 ，）。 */
 function createCallWindow(): void {
   if (callWindow && !callWindow.isDestroyed()) {
     callWindow.show();
@@ -3785,21 +3969,34 @@ function createCallWindow(): void {
     setCallWindow(null);
   });
 
-  // 绑定给 call-manager
+  //  call-manager
   setCallWindow(callWindow);
 }
 
 function getTrayIcon(): Electron.NativeImage {
-  const icoPath = path.join(__dirname, "..", "..", "..", "assets", "tray-icon.ico");
-  if (fs.existsSync(icoPath)) {
-    const ico = nativeImage.createFromPath(icoPath);
-    if (!ico.isEmpty()) return ico;
+  const appPath = typeof app !== "undefined" && typeof app.getAppPath === "function" ? app.getAppPath() : process.cwd();
+  const candidates = [
+    path.join(appPath, "assets", "tray-icon.ico"),
+    path.join(appPath, "assets", "icon.ico"),
+    path.join(__dirname, "..", "..", "..", "assets", "tray-icon.ico"),
+    path.join(__dirname, "..", "..", "..", "assets", "icon.ico"),
+    path.join(process.cwd(), "assets", "tray-icon.ico"),
+    path.join(process.cwd(), "assets", "icon.ico"),
+  ];
+  for (const c of candidates) {
+    if (fs.existsSync(c)) {
+      const ico = nativeImage.createFromPath(c);
+      if (!ico.isEmpty()) return ico;
+    }
   }
-  const appIcon = nativeImage.createFromPath(getCurrentAppIconPath());
-  if (!appIcon.isEmpty()) {
-    return appIcon.resize({ width: 16, height: 16 });
+  const appIconPath = getCurrentAppIconPath();
+  if (fs.existsSync(appIconPath)) {
+    const appIcon = nativeImage.createFromPath(appIconPath);
+    if (!appIcon.isEmpty()) {
+      return appIcon.resize({ width: 16, height: 16 });
+    }
   }
-  return appIcon;
+  return nativeImage.createEmpty();
 }
 
 function createTray(): void {
@@ -3931,11 +4128,8 @@ ipcMain.on(IPC.WINDOW_SET_DRAGGING, (event, isDragging: boolean) => {
   if (!isPetMainFrame(event) || !authorizePetControlSender(event.sender.id, currentPetSenderId()) || typeof isDragging !== "boolean") return;
   const window = mainWindow;
   if (!window || window.isDestroyed()) return;
-  if (!isDragging) petWindowMoveController.finishDragging();
-  try {
-    window.setOpacity(isDragging ? 0.99 : 1.0);
-  } catch (error) {
-    console.warn("[Cyrene] Failed to update pet window dragging opacity:", error);
+  if (!isDragging) {
+    petWindowMoveController.finishDragging();
   }
 });
 
@@ -3968,74 +4162,82 @@ ipcMain.handle(IPC.WINDOW_GET_CURSOR_POSITION, (event) => {
 ipcMain.on(IPC.PET_SHOW_CONTEXT_MENU, (event) => {
   const menu = Menu.buildFromTemplate([
     {
-      label: "💬 Chat with Cyrene (Alt+1)",
+      label: "Chat with Cyrene (Alt+1)",
       click: () => toggleChatWindow(),
     },
     {
-      label: "📊 Status Panel (Alt+2)",
+      label: "Status Panel (Alt+2)",
       click: () => toggleSidebarWindow(),
     },
     {
-      label: "📋 Today's Schedule (Alt+3)",
+      label: "Today's Schedule (Alt+3)",
       click: () => toggleTasksWindow(),
     },
     {
-      label: "📜 Response & Activity Log (Alt+4)",
+      label: "Response & Activity Log (Alt+4)",
       click: () => toggleLogWindow(),
     },
     {
-      label: "⚙️ Settings (Alt+S)",
+      label: "Quick Mini Chat (Alt+5)",
+      click: () => sendToLive2DWindow(IPC.PET_TOGGLE_MINI_CHAT),
+    },
+    {
+      label: "Toggle Voice / Sound",
+      click: () => sendToLive2DWindow(IPC.PET_TOGGLE_VOICE),
+    },
+    {
+      label: "Settings (Alt+S)",
       click: () => toggleSettingsWindow(),
     },
     { type: "separator" },
     {
-      label: "🎭 Expressions & Motions",
+      label: "Expressions & Motions",
       submenu: [
         {
-          label: "😊 Smile (笑一笑吧~)",
-          click: () => sendToLive2DWindow(IPC.LIVE2D_PLAY_ACTION, { kind: "motion", group: "动作#6", motionName: "笑一笑吧~" }),
+          label: "Smile",
+          click: () => { const a = findAction("smile"); if (a) sendToLive2DWindow(IPC.LIVE2D_PLAY_ACTION, a.target); },
         },
         {
-          label: "😉 Playful Wink (Wink~)",
-          click: () => sendToLive2DWindow(IPC.LIVE2D_PLAY_ACTION, { kind: "motion", group: "动作#6", motionName: "Wink~" }),
+          label: "Playful Wink (Wink~)",
+          click: () => { const a = findAction("wink"); if (a) sendToLive2DWindow(IPC.LIVE2D_PLAY_ACTION, a.target); },
         },
         {
-          label: "🥺 Act Cute (我可爱吧~)",
-          click: () => sendToLive2DWindow(IPC.LIVE2D_PLAY_ACTION, { kind: "motion", group: "动作#6", motionName: "我可爱吧~" }),
+          label: "Act Cute",
+          click: () => { const a = findAction("act cute"); if (a) sendToLive2DWindow(IPC.LIVE2D_PLAY_ACTION, a.target); },
         },
         {
-          label: "✨ Sparkle (闪耀)",
-          click: () => sendToLive2DWindow(IPC.LIVE2D_PLAY_ACTION, { kind: "expression", name: "闪耀" }),
+          label: "Sparkle",
+          click: () => { const a = findAction("sparkle"); if (a) sendToLive2DWindow(IPC.LIVE2D_PLAY_ACTION, a.target); },
         },
         {
-          label: "⭐ Starry Eyes (星星眼)",
-          click: () => sendToLive2DWindow(IPC.LIVE2D_PLAY_ACTION, { kind: "expression", name: "星星眼" }),
+          label: "Starry Eyes",
+          click: () => { const a = findAction("starry eyes"); if (a) sendToLive2DWindow(IPC.LIVE2D_PLAY_ACTION, a.target); },
         },
         {
-          label: "🕶️ Sunglasses (墨镜)",
-          click: () => sendToLive2DWindow(IPC.LIVE2D_PLAY_ACTION, { kind: "expression", name: "墨镜" }),
+          label: "Sunglasses",
+          click: () => { const a = findAction("sunglasses"); if (a) sendToLive2DWindow(IPC.LIVE2D_PLAY_ACTION, a.target); },
         },
         {
-          label: "❓ Question Mark (问号)",
-          click: () => sendToLive2DWindow(IPC.LIVE2D_PLAY_ACTION, { kind: "expression", name: "问号" }),
+          label: "Question Mark",
+          click: () => { const a = findAction("question mark"); if (a) sendToLive2DWindow(IPC.LIVE2D_PLAY_ACTION, a.target); },
         },
         {
-          label: "🌀 Dizzy Eyes (圈圈眼)",
-          click: () => sendToLive2DWindow(IPC.LIVE2D_PLAY_ACTION, { kind: "expression", name: "圈圈眼" }),
+          label: "Dizzy Eyes",
+          click: () => { const a = findAction("dizzy eyes"); if (a) sendToLive2DWindow(IPC.LIVE2D_PLAY_ACTION, a.target); },
         },
         {
-          label: "😄 Cheerful Eyes (开心眼)",
-          click: () => sendToLive2DWindow(IPC.LIVE2D_PLAY_ACTION, { kind: "expression", name: "开心眼" }),
+          label: "Cheerful Eyes",
+          click: () => { const a = findAction("happy eyes"); if (a) sendToLive2DWindow(IPC.LIVE2D_PLAY_ACTION, a.target); },
         },
         {
-          label: "🔄 Reset Pose & Expression (动作回正)",
-          click: () => sendToLive2DWindow(IPC.LIVE2D_PLAY_ACTION, { kind: "motion", group: "动作#6", motionName: "动作回正" }),
+          label: "Reset Pose & Expression",
+          click: () => { const a = findAction("reset"); if (a) sendToLive2DWindow(IPC.LIVE2D_PLAY_ACTION, a.target); },
         },
       ],
     },
     { type: "separator" },
     {
-      label: mainWindow?.isVisible() ? "👁️ Hide Cyrene (Alt+C)" : "👁️ Show Cyrene (Alt+C)",
+      label: mainWindow?.isVisible() ? "Hide Cyrene (Alt+C)" : "Show Cyrene (Alt+C)",
       click: () => {
         if (mainWindow) {
           if (mainWindow.isVisible()) mainWindow.hide();
@@ -4044,7 +4246,7 @@ ipcMain.on(IPC.PET_SHOW_CONTEXT_MENU, (event) => {
       },
     },
     {
-      label: "❌ Quit Cyrene",
+      label: "Quit Cyrene",
       click: () => app.quit(),
     },
   ]);
@@ -4058,7 +4260,33 @@ ipcMain.on(IPC.PET_SHOW_CONTEXT_MENU, (event) => {
 
 // Response & Activity Log IPC handlers
 ipcMain.handle(IPC.LOG_GET_ENTRIES, () => {
+  if (activityLogBuffer.length === 0) {
+    seedActivityLogFromChats();
+  }
   return activityLogBuffer;
+});
+
+ipcMain.handle(IPC.LOG_CLEAR, () => {
+  activityLogBuffer.length = 0;
+  if (logWindow && !logWindow.isDestroyed()) {
+    try {
+      logWindow.webContents.send(IPC.LOG_CLEARED);
+    } catch {
+      // ignore
+    }
+  }
+  return true;
+});
+
+ipcMain.handle(IPC.LOG_PUSH_ENTRY, (_event, entry: Partial<ActivityLogItem>) => {
+  if (!entry || typeof entry.text !== "string" || !entry.type) return false;
+  pushActivityLog(
+    entry.type as ActivityLogItem["type"],
+    entry.text,
+    entry.meta,
+    entry.channel,
+  );
+  return true;
 });
 
 ipcMain.on(IPC.LOG_CLOSE, () => {
@@ -4071,6 +4299,101 @@ ipcMain.on(IPC.LOG_MINIMIZE, () => {
   if (logWindow && !logWindow.isDestroyed()) {
     logWindow.minimize();
   }
+});
+
+interface CachedWeatherTelemetry {
+  timestamp: number;
+  data: {
+    city: string;
+    temperature: number;
+    apparentTemperature: number;
+    humidity: number;
+    weatherCode: number;
+    weatherText: string;
+    weatherIcon: string;
+  };
+}
+
+let hanoiWeatherCache: CachedWeatherTelemetry | null = null;
+const WEATHER_CACHE_TTL_MS = 10 * 60 * 1000;
+
+function resolveWeatherIcon(code: number): string {
+  if (code === 0) return "☀️";
+  if (code === 1) return "🌤️";
+  if (code === 2) return "⛅";
+  if (code === 3) return "☁️";
+  if (code === 45 || code === 48) return "🌫️";
+  if (code >= 51 && code <= 55) return "🌦️";
+  if (code >= 61 && code <= 65) return "🌧️";
+  if (code >= 71 && code <= 75) return "❄️";
+  if (code >= 80 && code <= 82) return "🌦️";
+  if (code >= 95 && code <= 99) return "⛈️";
+  return "⛅";
+}
+
+function resolveWeatherText(code: number): string {
+  if (code === 0) return "Clear Sky";
+  if (code === 1) return "Mainly Clear";
+  if (code === 2) return "Partly Cloudy";
+  if (code === 3) return "Overcast";
+  if (code === 45 || code === 48) return "Foggy";
+  if (code >= 51 && code <= 55) return "Drizzle";
+  if (code >= 61 && code <= 65) return "Rainy";
+  if (code >= 71 && code <= 75) return "Snowy";
+  if (code >= 80 && code <= 82) return "Showers";
+  if (code >= 95 && code <= 99) return "Thunderstorm";
+  return "Partly Cloudy";
+}
+
+ipcMain.handle(IPC.WEATHER_GET_CURRENT, async (_event, requestedCity?: string) => {
+  const city = (requestedCity && typeof requestedCity === "string" ? requestedCity.trim() : "Hanoi") || "Hanoi";
+  const now = Date.now();
+  if (city.toLowerCase() === "hanoi" && hanoiWeatherCache && (now - hanoiWeatherCache.timestamp < WEATHER_CACHE_TTL_MS)) {
+    return hanoiWeatherCache.data;
+  }
+
+  try {
+    const lat = 21.0285;
+    const lon = 105.8542;
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code&timezone=auto`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
+    if (res.ok) {
+      const data = (await res.json()) as {
+        current?: {
+          temperature_2m: number;
+          relative_humidity_2m: number;
+          apparent_temperature: number;
+          weather_code: number;
+        };
+      };
+      if (data?.current) {
+        const c = data.current;
+        const result = {
+          city: "Hanoi",
+          temperature: Math.round(c.temperature_2m),
+          apparentTemperature: Math.round(c.apparent_temperature),
+          humidity: Math.round(c.relative_humidity_2m),
+          weatherCode: c.weather_code,
+          weatherText: resolveWeatherText(c.weather_code),
+          weatherIcon: resolveWeatherIcon(c.weather_code),
+        };
+        hanoiWeatherCache = { timestamp: now, data: result };
+        return result;
+      }
+    }
+  } catch (err) {
+    console.warn("[Weather] Open-Meteo fetch failed:", err);
+  }
+
+  return {
+    city: "Hanoi",
+    temperature: 28,
+    apparentTemperature: 31,
+    humidity: 75,
+    weatherCode: 2,
+    weatherText: "Partly Cloudy",
+    weatherIcon: "⛅",
+  };
 });
 
 ipcMain.handle(IPC.LIVE2D_GET_MAIN_DIAGNOSTICS, () => ({
@@ -4121,8 +4444,8 @@ ipcMain.handle(IPC.CHAT_IS_MAXIMIZED, () => {
   return chatWindow?.isMaximized() ?? false;
 });
 
-// 推理下拉原子读：{ providerKey, providerId, model, preference }
-// providerKey = settings.provider（displayName），用来防竞态；chat:setReasoning 需携带同 providerKey。
+// ：{ providerKey, providerId, model, preference }
+// providerKey = settings.provider（displayName），；chat:setReasoning  providerKey。
 ipcMain.handle(IPC.CHAT_GET_REASONING_STATE, () => {
   const settings = loadModelSettings();
   const cap = getCapabilityOrOpenAI(settings.provider);
@@ -4134,14 +4457,14 @@ ipcMain.handle(IPC.CHAT_GET_REASONING_STATE, () => {
   };
 });
 
-// 推理下拉写：原子。payload 形如 { providerKey, preference }，providerKey 防竞态。
+// ：。payload  { providerKey, preference }，providerKey 。
 ipcMain.handle(IPC.CHAT_SET_REASONING, (_event, payload: unknown) => {
   if (!payload || typeof payload !== "object") return;
   const p = payload as { providerKey?: unknown; preference?: unknown };
   if (typeof p.providerKey !== "string" || typeof p.preference !== "object" || !p.preference) return;
   const current = loadModelSettings();
   if (current.provider !== p.providerKey) {
-    // 竞态：用户拿到 state 后、点选项前，provider 已切换。丢弃旧 providerKey 的写。
+    // ： state 、，provider 。 providerKey 。
     return;
   }
   const normalized = normalizeReasoningPreference(p.preference);
@@ -4203,7 +4526,7 @@ ipcMain.handle(IPC.CHAT_CAPTION_IMAGE, async (_event, payload: unknown) => {
       buildImageCaptionPrompt(hasAnnotations),
       visionCfg,
     );
-    if (caption.startsWith("[Error") || caption.startsWith("[错误")) {
+    if (caption.startsWith("[Error")) {
       return { ok: false, error: caption };
     }
     return { ok: true, caption };
@@ -4227,7 +4550,7 @@ ipcMain.on(IPC.SIDEBAR_CLOSE, () => {
   sidebarWindow?.close();
 });
 
-// 状态栏窗口置顶 toggle：返回切换后的新状态（true=已置顶）
+//  toggle：（true=）
 ipcMain.handle(IPC.SIDEBAR_TOGGLE_ALWAYS_ON_TOP, () => {
   if (!sidebarWindow) return false;
   const next = !sidebarWindow.isAlwaysOnTop();
@@ -4416,10 +4739,10 @@ ipcMain.handle(IPC.SETTINGS_TEST_CONNECTION, async (event, cfg: VendorConfig) =>
 });
 
 /**
- * 测试视觉模型连通性。
- * 用一张 4x4 纯红 PNG（100 字节 base64）做测试图——纯色位图所有视觉模型都能识别，
- * 比 SVG 兼容性好（SVG 是矢量，部分模型不支持）。
- * 验连通性（HTTP 2xx + 有内容返回）而非对答案——模型可能只说"一张红色图片"也算成功。
+ * 。
+ *  4x4  PNG（100  base64）——，
+ *  SVG （SVG ，）。
+ * （HTTP 2xx + ）——""。
  */
 const VISION_TEST_IMAGE_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAAAEklEQVR4nGP4z8DwHxkzkC4AADxAH+HggXe0AAAAAElFTkSuQmCC";
 
@@ -4437,8 +4760,8 @@ ipcMain.handle(IPC.SETTINGS_TEST_VISION, async (event, cfg: { baseUrl: string; a
       { baseUrl: cfg.baseUrl, apiKey: cfg.apiKey, model: cfg.model },
     );
     const latency = Date.now() - start;
-    // 验连通性：返回不含 [错误 即成功（视觉模型返回了内容）
-    if (result.startsWith("[Error") || result.startsWith("[错误")) {
+    // ： [ （）
+    if (result.startsWith("[Error")) {
       return { ok: false, latency, error: result };
     }
     return { ok: true, latency, sample: result.slice(0, 80) };
@@ -4740,8 +5063,8 @@ ipcMain.handle(IPC.EMBEDDING_DELETE, async (_event, payload: unknown) => {
 
 
 
-// 注册本地用户资源协议（表情包图片与用户导入的字体）
-// 必须在 app.ready 之前调用
+// （）
+//  app.ready 
 protocol.registerSchemesAsPrivileged([
   { scheme: "local-sticker", privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
   { scheme: "local-font", privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true } },
@@ -4763,6 +5086,9 @@ app.whenReady().then(async () => {
   globalShortcut.register("Alt+4", () => {
     toggleLogWindow();
   });
+  globalShortcut.register("Alt+5", () => {
+    sendToLive2DWindow(IPC.PET_TOGGLE_MINI_CHAT);
+  });
   globalShortcut.register("Alt+S", () => {
     toggleSettingsWindow();
   });
@@ -4776,8 +5102,11 @@ app.whenReady().then(async () => {
         }
       }
   });
+  globalShortcut.register("Alt+G", () => {
+    getCoWatchService().toggle();
+  });
 
-  // 注册 local-sticker:// 协议处理器：将请求映射到 userData/stickers/ 下的文件
+  //  local-sticker:// ： userData/stickers/ 
   protocol.handle("local-sticker", (request) => {
     const file = parseLocalStickerFileFromUrl(request.url);
     if (!file) return new Response("Invalid sticker URL", { status: 404 });
@@ -4801,7 +5130,7 @@ app.whenReady().then(async () => {
       headers: getUiFontResponseHeaders(fileName),
     }));
   });
-  // Token 用量查询 IPC
+  // Token  IPC
   ipcMain.handle(IPC.TOKEN_USAGE_GET, (_event, days: number) => {
     return getUsage(Math.max(1, Math.min(90, Number(days) || 7)));
   });
@@ -4815,9 +5144,14 @@ app.whenReady().then(async () => {
   ipcMain.on(IPC.LIVE2D_MOUTH_STOP, () => {
     sendToLive2DWindow(IPC.LIVE2D_MOUTH_STOP);
   });
+  ipcMain.on(IPC.PET_SPEAK, (_event, payload: { text?: string }) => {
+    if (payload?.text) {
+      sendToLive2DWindow(IPC.PET_AGENT_EVENT, { type: "say", text: payload.text });
+    }
+  });
 
   // ── TTS IPC ──
-  // 保存/加载 TTS 配置（复用 general settings 存储）
+  // / TTS （ general settings ）
   const ALLOWED_TTS_MUTATION_KEYS = new Set<string>(ALLOWED_TTS_SETTING_KEYS);
 
   ipcMain.handle(IPC.TTS_SAVE_SETTINGS, async (event, tts: Partial<GeneralSettings>) => {
@@ -4833,30 +5167,30 @@ app.whenReady().then(async () => {
     }
     const saved = saveGeneralSettings({ ...before, ...sanitizedTts });
 
-    // 搜索 MCP 自动注册/移除：选 MiniMax+有key→注册，否则→移除
+    //  MCP /： MiniMax+key→，→
     const searchConfigChanged = "searchMinimaxKey" in tts || "searchEngine" in tts;
     if (searchConfigChanged) {
       await syncVolcanoSearchMcp(saved);
     }
 
-    // Playwright MCP：按 settings 字段自动连接/断开
+    // Playwright MCP： settings /
     if ("playwrightMcpEnabled" in tts) {
       await syncPlaywrightMcp(saved);
     }
 
-    // 主动聊天总开关变化时使现有评估失效（频率档位由 ProactiveChat 内部判定，无需重启）。
+    // （ ProactiveChat ，）。
     if ("proactiveChatMode" in tts) {
       proactiveChatService?.invalidate();
     }
 
-    // 返回不含密钥明文的副本（前端展示用）
+    // （）
     return saved;
   });
   ipcMain.handle(IPC.TTS_LOAD_SETTINGS, () => {
     return loadGeneralSettings();
   });
 
-  // 上传音频文件 → file_id
+  //  → file_id
   ipcMain.handle(IPC.TTS_UPLOAD, async (_event, payload: { apiKey: string; filePath: string; purpose: "voice_clone" | "prompt_audio" }) => {
     if (!payload?.apiKey || !payload?.filePath) {
       throw new Error("API key or file path is missing");
@@ -4864,7 +5198,7 @@ app.whenReady().then(async () => {
     return await ttsUploadFile(payload.apiKey, payload.filePath, payload.purpose);
   });
 
-  // 选择音频文件（Electron dialog）
+  // （Electron dialog）
   ipcMain.handle(IPC.TTS_PICK_AUDIO, async () => {
     const result = await dialog.showOpenDialog({
       title: "Select an audio file",
@@ -4875,7 +5209,7 @@ app.whenReady().then(async () => {
     return result.filePaths[0];
   });
 
-  // 音色快速复刻 → voice_id
+  //  → voice_id
   ipcMain.handle(IPC.TTS_CLONE, async (_event, payload: {
     apiKey: string; fileId: string; voiceId: string;
     promptAudioId?: string; promptText?: string;
@@ -4887,7 +5221,7 @@ app.whenReady().then(async () => {
     return await ttsCloneVoice(payload);
   });
 
-  // 语音合成 → base64 音频（聊天朗读 / 测试发音都用这个）
+  //  → base64 （ / ）
   ipcMain.handle(IPC.TTS_SYNTHESIZE, async (_event, payload: {
     apiKey: string; voiceId: string; text: string;
     speed?: number; volume?: number; pitch?: number;
@@ -4900,7 +5234,7 @@ app.whenReady().then(async () => {
       ...payload,
       debugLog: appendMinimaxTtsLog,
     });
-    // Buffer → base64 传给渲染进程（渲染进程用 atob 解码再播）
+    // Buffer → base64 （ atob ）
     return audioBuffer.toString("base64");
   });
 
@@ -4912,12 +5246,12 @@ app.whenReady().then(async () => {
   }) => {
     const format = payload.format ?? "mp3";
 
-    // 回听优先：如果 expectedCacheKey 对应的缓存文件存在，直接返回，不需要 apiKey/voiceId。
+    // ： expectedCacheKey ，， apiKey/voiceId。
     let expectedPath: string | null = null;
     if (payload.expectedCacheKey) {
       try {
         expectedPath = getTtsCachePath(payload.expectedCacheKey, format);
-      } catch { /* expectedCacheKey 格式非法，忽略 */ }
+      } catch { /* expectedCacheKey ， */ }
     }
     if (expectedPath && fs.existsSync(expectedPath)) {
       const cachedBuffer = fs.readFileSync(expectedPath);
@@ -4936,7 +5270,7 @@ app.whenReady().then(async () => {
       };
     }
 
-    // 缓存未命中 → 需要合成，检查 apiKey/voiceId
+    //  → ， apiKey/voiceId
     if (!payload?.apiKey || !payload?.voiceId || !payload?.text || payload.apiKey === "cache-only") {
       throw new Error("The cache missed and required parameters are missing (apiKey/voiceId/text)");
     }
@@ -4966,8 +5300,8 @@ app.whenReady().then(async () => {
     };
   });
 
-  // 流式语音合成（minimax WS 边合成边推 chunk 给渲染端播）
-  // 主进程同时攒完整 buffer 落盘缓存，下次同文本走缓存
+  // （minimax WS  chunk ）
+  //  buffer ，
   ipcMain.handle(IPC.TTS_STREAM_START, async (event, payload: {
     apiKey: string; voiceId: string; text: string;
     speed?: number; volume?: number; pitch?: number;
@@ -4977,7 +5311,7 @@ app.whenReady().then(async () => {
     const format = payload.format ?? "mp3";
     const sender = event.sender;
 
-    // 回听优先：expectedCacheKey 命中缓存直接发完整 base64（走 STREAM_END，不走 chunk）
+    // ：expectedCacheKey  base64（ STREAM_END， chunk）
     let expectedPath: string | null = null;
     if (payload.expectedCacheKey) {
       try { expectedPath = getTtsCachePath(payload.expectedCacheKey, format); } catch { /* */ }
@@ -4991,7 +5325,7 @@ app.whenReady().then(async () => {
         cacheKey: payload.expectedCacheKey,
         audioBytes: cachedBuf.length,
       });
-      // 缓存命中：一次性发完整音频（渲染端会按 STREAM_END 处理，直接播完整 buffer）
+      // ：（ STREAM_END ， buffer）
       sender.send(IPC.TTS_AUDIO_CHUNK, { base64: cachedBuf.toString("base64") });
       sender.send(IPC.TTS_STREAM_END, { cacheKey: payload.expectedCacheKey, cached: true, format });
       return { started: false, cacheKey: payload.expectedCacheKey, cached: true };
@@ -5006,7 +5340,7 @@ app.whenReady().then(async () => {
     fs.mkdirSync(path.dirname(audioPath), { recursive: true });
     const fullChunks: Buffer[] = [];
 
-    // 异步合成，不 await（handler 立即返回，chunk 通过 send 推送）
+    // ， await（handler ，chunk  send ）
     void (async () => {
       try {
         const audioBuffer = await ttsSynthesize({
@@ -5024,7 +5358,7 @@ app.whenReady().then(async () => {
             if (!sender.isDestroyed()) sender.send(IPC.TTS_AUDIO_CHUNK, { base64: chunkBase64 });
           },
         });
-        // 落盘缓存（用完整 buffer，不用拼接的 fullChunks——synthesize 返回的更可靠）
+        // （ buffer， fullChunks——synthesize ）
         fs.writeFileSync(audioPath, audioBuffer);
         appendMinimaxTtsLog({
           requestId: `tts-stream-${Date.now()}`,
@@ -5044,15 +5378,15 @@ app.whenReady().then(async () => {
     return { started: true, cacheKey, cached: false };
   });
 
-  // GPT-SoVITS 语音合成 → base64 音频（测试发音用，不缓存）
+  // GPT-SoVITS  → base64 （，）
   ipcMain.handle(IPC.TTS_SYNTHESIZE_GPTSOVITS, async (_event, payload: {
-    baseUrl: string; refAudioPath: string; promptText: string; text: string;
+    baseUrl?: string; refAudioPath?: string; promptText?: string; text: string;
     speed?: number; format?: "wav" | "mp3";
   }) => {
-    if (!payload?.baseUrl || !payload?.refAudioPath || !payload?.promptText || !payload?.text) {
+    const prepared = await prepareGptsovitsVoicePayload(payload);
+    if (!prepared?.baseUrl || !prepared?.refAudioPath || !prepared?.promptText || !prepared?.text) {
       throw new Error("Required parameters are missing (baseUrl/refAudioPath/promptText/text)");
     }
-    const prepared = await prepareGptsovitsVoicePayload(payload);
     const result = await gptsovitsSynthesize({
       ...prepared,
       debugLog: appendGptsovitsTtsLog,
@@ -5070,7 +5404,7 @@ app.whenReady().then(async () => {
     };
   });
 
-  // GPT-SoVITS 语音合成 + 本地缓存（聊天朗读用）
+  // GPT-SoVITS  + （）
   ipcMain.handle(IPC.TTS_SYNTHESIZE_CACHED_GPTSOVITS, async (_event, payload: {
     baseUrl: string; refAudioPath: string; promptText: string; text: string;
     speed?: number; format?: "wav" | "mp3";
@@ -5080,12 +5414,12 @@ app.whenReady().then(async () => {
     const format: "wav" | "mp3" = prepared.format ?? "wav";
     const cacheKey = buildGptsovitsCacheKey(prepared);
 
-    // 回听优先：如果 expectedCacheKey 对应的缓存文件存在，直接返回，不需要 baseUrl/refAudioPath。
+    // ： expectedCacheKey ，， baseUrl/refAudioPath。
     let expectedPath: string | null = null;
     if (payload.expectedCacheKey === cacheKey) {
       try {
         expectedPath = getTtsCachePath(payload.expectedCacheKey, format);
-      } catch { /* expectedCacheKey 格式非法，忽略 */ }
+      } catch { /* expectedCacheKey ， */ }
     }
     if (expectedPath && fs.existsSync(expectedPath)) {
       const cachedBuffer = fs.readFileSync(expectedPath);
@@ -5105,8 +5439,8 @@ app.whenReady().then(async () => {
       };
     }
 
-    // 缓存未命中 → 需要合成，检查必要参数
-    if (!payload?.baseUrl || !payload?.refAudioPath || !payload?.promptText || !payload?.text) {
+    // Cache miss → synthesize and cache
+    if (!prepared?.baseUrl || !prepared?.refAudioPath || !prepared?.promptText || !prepared?.text) {
       throw new Error("The cache missed and required parameters are missing (baseUrl/refAudioPath/promptText/text)");
     }
 
@@ -5145,7 +5479,7 @@ app.whenReady().then(async () => {
     };
   });
 
-  // 自定义云端 TTS 合成 → base64 音频（测试发音用，不缓存）
+  //  TTS  → base64 （，）
   ipcMain.handle(IPC.TTS_SYNTHESIZE_CUSTOM_CLOUD, async (_event, payload: {
     endpointUrl: string; apiKey?: string; voiceId?: string; text: string;
     speed?: number; volume?: number; format?: "wav" | "mp3"; timeoutMs?: number;
@@ -5166,7 +5500,7 @@ app.whenReady().then(async () => {
     };
   });
 
-  // 自定义云端 TTS 合成 + 本地缓存（聊天朗读用）
+  //  TTS  + （）
   ipcMain.handle(IPC.TTS_SYNTHESIZE_CACHED_CUSTOM_CLOUD, async (_event, payload: {
     endpointUrl: string; apiKey?: string; voiceId?: string; text: string;
     speed?: number; volume?: number; format?: "wav" | "mp3"; timeoutMs?: number;
@@ -5178,7 +5512,7 @@ app.whenReady().then(async () => {
     if (payload.expectedCacheKey) {
       try {
         expectedPath = getTtsCachePath(payload.expectedCacheKey, format);
-      } catch { /* expectedCacheKey 格式非法，忽略 */ }
+      } catch { /* expectedCacheKey ， */ }
     }
     if (expectedPath && fs.existsSync(expectedPath)) {
       const cachedBuffer = fs.readFileSync(expectedPath);
@@ -5234,7 +5568,7 @@ app.whenReady().then(async () => {
     };
   });
 
-  // 小米 MiMo TTS 合成 → base64 音频（测试发音用，不缓存）
+  //  MiMo TTS  → base64 （，）
   ipcMain.handle(IPC.TTS_SYNTHESIZE_MIMO, async (_event, payload: {
     apiKey: string; voiceAudioPath?: string; text: string; stylePrompt?: string;
   }) => {
@@ -5257,7 +5591,7 @@ app.whenReady().then(async () => {
     };
   });
 
-  // 小米 MiMo TTS 合成 + 本地缓存（聊天朗读用）
+  //  MiMo TTS  + （）
   ipcMain.handle(IPC.TTS_SYNTHESIZE_CACHED_MIMO, async (_event, payload: {
     apiKey: string; voiceAudioPath?: string; text: string; stylePrompt?: string;
     expectedCacheKey?: string;
@@ -5268,7 +5602,7 @@ app.whenReady().then(async () => {
     if (payload.expectedCacheKey) {
       try {
         expectedPath = getTtsCachePath(payload.expectedCacheKey, format);
-      } catch { /* expectedCacheKey 格式非法，忽略 */ }
+      } catch { /* expectedCacheKey ， */ }
     }
     if (expectedPath && fs.existsSync(expectedPath)) {
       const cachedBuffer = fs.readFileSync(expectedPath);
@@ -5322,7 +5656,7 @@ app.whenReady().then(async () => {
 
   // ── Mossland (api.mosi.cn) ──────────────────────────────────────
 
-  // Mossland 合成（Settings「测试发音」用，无缓存）
+  // Mossland （Settings「」，）
   ipcMain.handle(IPC.TTS_SYNTHESIZE_MOSSLAND, async (_event, payload: {
     apiKey: string; voiceId: string; text: string;
     speed?: number; volume?: number; model?: string;
@@ -5349,7 +5683,7 @@ app.whenReady().then(async () => {
     };
   });
 
-  // Mossland 合成 + 本地缓存（聊天自动朗读用；cache-only 兜底由 chat 侧传 "cache-only"）
+  // Mossland  + （；cache-only  chat  "cache-only"）
   ipcMain.handle(IPC.TTS_SYNTHESIZE_CACHED_MOSSLAND, async (_event, payload: {
     apiKey: string; voiceId: string; text: string;
     speed?: number; volume?: number; model?: string;
@@ -5358,12 +5692,12 @@ app.whenReady().then(async () => {
   }) => {
     const format: "mp3" | "wav" | "pcm" = payload.format ?? "mp3";
 
-    // 缓存命中
+    // 
     let expectedPath: string | null = null;
     if (payload.expectedCacheKey) {
       try {
         expectedPath = getTtsCachePath(payload.expectedCacheKey, format);
-      } catch { /* expectedCacheKey 非法，忽略 */ }
+      } catch { /* expectedCacheKey ， */ }
     }
     if (expectedPath && fs.existsSync(expectedPath)) {
       const cachedBuffer = fs.readFileSync(expectedPath);
@@ -5375,7 +5709,7 @@ app.whenReady().then(async () => {
       };
     }
 
-    // 缓存未命中 + 缺关键参数（或 chat 端 cache-only 占位）→ 抛错
+    //  + （ chat  cache-only ）→ 
     if (!payload?.apiKey || !payload?.voiceId || !payload?.text
         || payload.apiKey === "cache-only" || payload.voiceId === "cache-only") {
       throw new Error("The cache missed and required parameters are missing (apiKey/voiceId/text)");
@@ -5403,7 +5737,7 @@ app.whenReady().then(async () => {
     };
   });
 
-  // Mossland 音色克隆（multipart 上传）
+  // Mossland （multipart ）
   ipcMain.handle(IPC.TTS_CLONE_MOSSLAND, async (_event, payload: {
     apiKey: string; filePath: string; name?: string; description?: string;
   }) => {
@@ -5420,7 +5754,7 @@ app.whenReady().then(async () => {
     };
   });
 
-  // Mossland 拉取账号下音色列表
+  // Mossland 
   ipcMain.handle(IPC.TTS_LIST_MOSSLAND_VOICES, async (_event, payload: {
     apiKey: string; limit?: number;
   }) => {
@@ -5431,33 +5765,104 @@ app.whenReady().then(async () => {
     return { voices: result.voices };
   });
 
-  // 聊天会话存储 IPC（chats-store.initialize 会建好 cyrene-chats 目录并加载 index）
-  registerChatsIpc();
+  // Online Neural voice synthesis (Microsoft Edge Neural TTS — zh-CN-XiaoyiNeural anime girl)
+  ipcMain.handle(IPC.TTS_SYNTHESIZE_ONLINE, async (_event, payload: { text: string; lang?: string }) => {
+    if (!payload?.text) return null;
+    const text = String(payload.text).trim();
+    if (!text) return null;
+
+    try {
+      const result = await synthesizeEdgeTts({
+        text,
+        pitch: "+10Hz",
+        rate: "+3%",
+      });
+      return { base64: result.audio.toString("base64"), format: result.format || "mp3" };
+    } catch (edgeErr: any) {
+      console.warn("[TTS] Edge neural synthesis failed, trying fallback:", edgeErr?.message || edgeErr);
+    }
+
+    try {
+      const lang = payload.lang || "zh-CN";
+      const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=${encodeURIComponent(lang)}&client=tw-ob`;
+      const res = await fetch(url, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        },
+      });
+      if (res.ok) {
+        const arrayBuffer = await res.arrayBuffer();
+        const base64 = Buffer.from(arrayBuffer).toString("base64");
+        return { base64, format: "mp3" };
+      }
+    } catch (err: any) {
+      console.warn("[TTS] Online fallback failed:", err?.message || err);
+    }
+    return null;
+  });
+
+  // Translate English/any language to Mandarin Chinese for voice synthesis
+  ipcMain.handle(IPC.TTS_TRANSLATE_TO_CHINESE, async (_event, text: string) => {
+    if (!text || typeof text !== "string") return "";
+    const trimmed = text.trim();
+    if (!trimmed) return "";
+    if (/[\u4e00-\u9fff]/.test(trimmed) && trimmed.length < 40) {
+      return trimmed;
+    }
+
+    try {
+      const gtxUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=zh-CN&dt=t&q=${encodeURIComponent(trimmed)}`;
+      const res = await fetch(gtxUrl, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        },
+      });
+      if (res.ok) {
+        const json = await res.json() as any;
+        if (Array.isArray(json?.[0])) {
+          const translated = json[0].map((item: any) => item?.[0] || "").join("").trim();
+          if (translated) return translated;
+        }
+      }
+    } catch (gtxErr) {
+      console.warn("[TTS] Google translation failed, trying model endpoint fallback:", gtxErr);
+    }
+
+    try {
+      const fallback = await translateEnglishToMandarinSpeech(trimmed, loadModelSettings());
+      if (fallback) return fallback;
+    } catch {}
+
+    return trimmed;
+  });
+
+  //  IPC（chats-store.initialize  cyrene-chats  index）
+  registerChatsIpc((type, text, meta, channel) => pushActivityLog(type, text, meta, channel));
   initializeProactiveChatService();
   initializeProactiveTrigger();
 
-  // 历史召回工具（recall_history）——让模型能回忆滚出窗口的对话
+  // （recall_history）——
   registerRecallHistoryTool();
 
-  // 文档生成工具（write_excel/write_word/write_pdf/write_markdown）
+  // （write_excel/write_word/write_pdf/write_markdown）
   registerDocumentTools();
 
-  // 生活类工具（记账/汇率/翻译/代码补丁）
-  // 翻译需要主模型，注入 loadModelSettings getter
+  // （///）
+  // ， loadModelSettings getter
   setTranslateConfig(() => {
     const s = loadModelSettings();
     return isModelEndpointUsable(s) ? { provider: s.provider, baseUrl: s.baseUrl, model: s.model, apiKey: s.apiKey } : null;
   });
   registerLifeTools();
 
-  // 出行工具（路线规划——驾车/步行/骑行/公交，复用 amapKey）
+  // （——///， amapKey）
   registerTravelTools();
 
-  // 邮件发送工具（SMTP 直发，需在设置里配置 SMTP 授权码）
+  // （SMTP ， SMTP ）
   registerEmailTools();
   syncBuiltInToolToggles(loadGeneralSettings());
 
-  // 内置 MCP 自动连接：Playwright (默认关闭,选项控制)
+  //  MCP ：Playwright (,)
   const initialSettings = loadGeneralSettings();
 
   systemAudioAwareness = new SystemAudioAwarenessService(
@@ -5466,7 +5871,7 @@ app.whenReady().then(async () => {
   );
   await setSystemAudioAwarenessEnabled(initialSettings.systemAudioAwarenessEnabled);
 
-  // 一次性清理已下架的内置 MCP（Firecrawl hosted 等）
+  //  MCP（Firecrawl hosted ）
   const removed = await pruneMcpServersByIds([...REMOVED_BUILTIN_MCP_IDS]);
   if (removed.length > 0) {
     console.log("[Cyrene] Removed retired built-in MCP entries:", removed.join(", "));
@@ -5476,7 +5881,7 @@ app.whenReady().then(async () => {
     console.error("[Cyrene] playwright MCP sync failed:", e)
   );
 
-  // 截图：原生 helper IPC、全局热键和后台预热。预热失败不会阻止应用启动。
+  // ： helper IPC、。。
   screenshotService = initializeScreenshotService(
     initialSettings.screenshotHotkey ?? "Alt+Shift+S",
   );
@@ -5517,7 +5922,7 @@ app.whenReady().then(async () => {
   });
   installShutdownLatch(musicBootstrap);
 
-  // Skill 系统：扫描双源 skills + 注册 meta-tool
+  // Skill ： skills +  meta-tool
   initSkills();
   try {
     loadMusicCompanionHost(
@@ -5534,7 +5939,7 @@ app.whenReady().then(async () => {
     skillRegistry.setAvailability("cyrene-music-companion", () => false);
   }
 
-  // 游戏代肝：IPC + game_bot_start 工具
+  // ：IPC + game_bot_start 
   initGameBot({
     captureScreen: () => runExplicitScreenCapture("game-bot", async () => {
       const { captureScreen } = await import("./game-bot/screenshot");
@@ -5543,21 +5948,21 @@ app.whenReady().then(async () => {
     isSettingsSender: (event) => isTrustedMainFrameSender(event, settingsWindow, expectedRendererDocument("settings/index.html")),
   });
 
-  // 多渠道（微信/飞书/...）：先注入 dispatcher 的 buildAndRunAgent + TTS + 镜像广播 + 最近历史读取，
-  // 让 channels 模块拿到真 agent + 出站增强能力 + 对话上下文。
+  // （//...）： dispatcher  buildAndRunAgent + TTS +  + ，
+  //  channels  agent +  + 。
   setDispatcherLoadRecentHistory(async (sessionId, limit) => {
-    // 委托给 history-log：读 userData/channels/history/<sessionId>.jsonl 最新 N 条
+    //  history-log： userData/channels/history/<sessionId>.jsonl  N 
     const { loadRecentHistory } = await import("./channels/history-log");
     return loadRecentHistory(sessionId, limit);
   });
   setDispatcherLoadGeneralSettings(loadGeneralSettings);
 
   setDispatcherBuildAndRunAgent(async (msg, sessionId, priorMessages) => {
-    // 渠道响应结果：统一由 dispatcher 按 cap 降级到 OutgoingMessage.parts。
-    // 包含 sticker 决定（从 onAgentRunFinished 返回，避免在 dispatcher 端重新算一遍 embedding）。
+    // ： dispatcher  cap  OutgoingMessage.parts。
+    //  sticker （ onAgentRunFinished ， dispatcher  embedding）。
     const channelResult: { text: string; sticker: string | null } = { text: "", sticker: null };
 
-    // Phase 3.3：按 toolSandbox 过滤可用工具
+    // Phase 3.3： toolSandbox 
     const sandbox = loadChannelsSettings().toolSandbox;
     const allTools = toolRegistry.getEnabledTools();
     const filteredTools: ToolDefinition[] = sandbox === "off"
@@ -5570,8 +5975,8 @@ app.whenReady().then(async () => {
       `msg.channel=${msg.channel} sandbox=${sandbox} tools=${filteredTools.length}/${allTools.length} priorMsgs=${priorMessages?.length ?? 0}`,
     );
 
-    // Phase A：拼接历史 (同桌面端 buildModelMessages 行为: 上滑窗最近 N 条).
-    // history-log 统一存 role: "user"|"assistant", 直接用即可.
+    // Phase A： ( buildModelMessages :  N ).
+    // history-log  role: "user"|"assistant", .
     const historyMessages = (priorMessages ?? [])
       .filter((m) => typeof m.content === "string" && m.content.trim().length > 0)
       .map((m) => ({
@@ -5579,7 +5984,7 @@ app.whenReady().then(async () => {
         content: m.content,
       }));
 
-    // 把 IncomingMessage 转成 AguiRunInput，调 CyreneAgent
+    //  IncomingMessage  AguiRunInput， CyreneAgent
     const channelModelSettings = loadModelSettings();
     const imageSendStrategy = decideImageSendStrategy({
       multimodal: channelModelSettings.multimodal,
@@ -5599,7 +6004,7 @@ app.whenReady().then(async () => {
             IMAGE_CAPTION_PROMPT,
             visionCfg,
           );
-          if (caption.startsWith("[Error") || caption.startsWith("[错误")) return { ok: false, error: caption };
+          if (caption.startsWith("[Error")) return { ok: false, error: caption };
           return { ok: true, caption };
         } catch (err: any) {
           return { ok: false, error: err?.message || String(err) };
@@ -5625,7 +6030,7 @@ app.whenReady().then(async () => {
       },
       buildOptionsDeps,
     );
-    // 把过滤后的 tools 注入 options（覆盖默认的 getEnabledTools）
+    //  tools  options（ getEnabledTools）
     options.tools = filteredTools;
 
     const threadId = `thread-${sessionId}-${Date.now()}`;
@@ -5641,16 +6046,16 @@ app.whenReady().then(async () => {
     channelResult.text = reply;
     if (agent.lastResult) {
       const finished = await onAgentRunFinished(agent.lastResult, msg.text, onRunFinishedDeps, msg.channel);
-      // 把 sticker 决定透出给 dispatcher，让它纳入 OutgoingMessage.parts；
-      // 桌面聊天窗的 sticker 仍由 onAgentRunFinished 内部 IPC 广播承担，此处不重复。
+      //  sticker  dispatcher， OutgoingMessage.parts；
+      //  sticker  onAgentRunFinished  IPC ，。
       channelResult.sticker = finished.sticker;
     }
-    // 落历史
+    // 
     void indexConversationTurn(sessionId, msg.text, reply);
     return channelResult;
   });
 
-  // Phase 3.1：注入 TTS 合成 —— dispatcher 在 reply 后会用这个生成渠道音频
+  // Phase 3.1： TTS  —— dispatcher  reply 
   setDispatcherSynthesizeTts(async (text: string, context) => {
     const cfg = loadGeneralSettings();
     if (cfg.ttsEngine === "off") return null;
@@ -5658,7 +6063,7 @@ app.whenReady().then(async () => {
     if (cfg.ttsEngine === "gptsovits" && (!cfg.ttsGptsovitsBaseUrl || !cfg.ttsGptsovitsRefAudioPath || !cfg.ttsGptsovitsPromptText)) return null;
     if (cfg.ttsEngine === "custom-cloud" && !cfg.ttsCustomCloudEndpointUrl) return null;
     if (cfg.ttsEngine === "mimo" && (!cfg.ttsMimoKey || !cfg.ttsMimoVoiceAudioPath)) return null;
-    // 限制 TTS 文本长度（飞书 audio 100M 限制 + 用户体验，太长应截断）
+    //  TTS （ audio 100M  + ，）
     const ttsText = text.length > 1000 ? text.slice(0, 1000) + "…" : text;
     try {
       const requestedFormat = context.channel === "wechat" ? "wav" : "mp3";
@@ -5704,7 +6109,7 @@ app.whenReady().then(async () => {
     }
   });
 
-  // Phase 3.2：注入桌面端镜像广播 —— 把 bot 入站/出站消息推到 chatWindow
+  // Phase 3.2： ——  bot / chatWindow
   setDispatcherBroadcastChat((event) => {
     const win = chatWindow;
     if (!win || win.isDestroyed()) return;
@@ -5721,10 +6126,10 @@ app.whenReady().then(async () => {
 
   void initChannels();
 
-  // 任务清单（todo_write 工具的持久化 + 事件广播）：
-  // - loadTodos 从磁盘恢复上次未完成的任务（跨重启延续）
-  // - onTodosChange 订阅变化，把 TodoState 作为 CUSTOM 事件转发给所有聊天窗口
-  //   渲染端收到 cyrene.todos 后渲染左上角进度面板
+  // （todo_write  + ）：
+  // - loadTodos （）
+  // - onTodosChange ， TodoState  CUSTOM 
+  //    cyrene.todos 
   loadTodos();
   onTodosChange((state) => {
     for (const win of BrowserWindow.getAllWindows()) {
@@ -5787,10 +6192,10 @@ app.whenReady().then(async () => {
   });
   registerSchedulerIpc(schedulerStore, schedulerEngine, () => toolRegistry.getAllTools());
 
-  // AG-UI 事件流桥：渲染进程 invoke(AGUI_RUN) → CyreneAgent 跑 FC 循环 → 事件透传
-  // buildOptions 负责统一构建上下文；onRunFinished 复用副作用
-  // Phase 0 重构：抽出到 orchestrator/build-options.ts，三处共用（桌面 / scheduler / bot）
-  // deps 函数签名故意宽 (unknown/ReadonlyArray)；这里做一次包装把强类型函数适配进去
+  // AG-UI ： invoke(AGUI_RUN) → CyreneAgent  FC  → 
+  // buildOptions ；onRunFinished 
+  // Phase 0 ： orchestrator/build-options.ts，（ / scheduler / bot）
+  // deps  (unknown/ReadonlyArray)；
   const socialAtomStore = createSocialAtomStore(
     path.join(app.getPath("userData"), "chat-social-atoms.json"),
   );
@@ -5924,7 +6329,7 @@ app.whenReady().then(async () => {
           IMAGE_CAPTION_PROMPT,
           visionCfg,
         );
-        if (caption.startsWith("[Error") || caption.startsWith("[错误")) return { ok: false, error: caption };
+        if (caption.startsWith("[Error")) return { ok: false, error: caption };
         return { ok: true, caption };
       } catch (err: any) {
         return { ok: false, error: err?.message || String(err) };
@@ -5951,6 +6356,7 @@ app.whenReady().then(async () => {
     scheduleMemoryWrite,
     scheduleSocialAtomExtraction: (input) => socialContextScheduler.schedule(input),
     inferRuntimeState,
+    inferFeelingState: (text) => inferFeelingFromText(text),
     runtimeState,
     feelingToExpression,
     setRuntimeState: (next) => {
@@ -5976,21 +6382,28 @@ app.whenReady().then(async () => {
   };
   registerAgUiIpc(
     async (input: AguiRunInput) => buildAgentRunOptions(input, buildOptionsDeps),
-    // 桌面 IPC 路径不消费 sticker（sticker 由 onAgentRunFinished 内部 IPC 广播承担）
+    //  IPC  sticker（sticker  onAgentRunFinished  IPC ）
     async (result, latestUserText) => { await onAgentRunFinished(result, latestUserText, onRunFinishedDeps); },
     () => chatWindow,
     proactiveConversationLifecycle,
     () => mainWindow,
-    (event) => isTrustedMainFrameSender(event, chatWindow, expectedRendererDocument("chat/index.html")),
-    (type, text, meta) => pushActivityLog(type, text, meta),
+    (event) =>
+      isTrustedMainFrameSender(event, chatWindow, expectedRendererDocument("chat/index.html")) ||
+      isPetMainFrame(event),
+    (type, text, meta, channel) => pushActivityLog(type, text, meta, channel),
+    (status) => {
+      runtimeState.status = status;
+      runtimeState.updatedAt = Date.now();
+      broadcastRuntimeStateChanged();
+    },
   );
 
   ipcMain.handle(IPC.CHATS_OPEN_IN_CHAT_WINDOW, (_event, sessionId: string) => {
     createChatWindow(sessionId);
     return true;
   });
-  // 聊天窗口启动/切换会话时上报当前活跃 sessionId；main 广播给所有窗口
-  // 用途：设置面板"删除当前会话"时差异化提示文案
+  // / sessionId；main 
+  // ：""
   ipcMain.handle(IPC.CHATS_SET_ACTIVE_SESSION, (_event, sessionId: string | null) => {
     activeChatSessionId = sessionId ?? null;
     for (const win of BrowserWindow.getAllWindows()) {
@@ -6003,12 +6416,11 @@ app.whenReady().then(async () => {
 
   const generalSettings = loadGeneralSettings();
   createWindow();
-  createChatWindow();
 
-  // Create Live2D pet and primary chat window on startup; auxiliary windows
-  // remain lazy and are summoned via shortcuts or the tray.
+  // Create Live2D pet on startup; auxiliary windows (chat, sidebar, tasks, settings)
+  // remain lazy and are summoned on demand via shortcuts, mini-chat or the tray.
   createTray();
-  // 权限模块初始化：必须在 createWindow 之后但任意工具调用之前
+  // ： createWindow 
   initPermissionFromDisk();
   registerPermissionIpc({
     canSetLevel: (event) => settingsWindow?.webContents.id === event.sender.id,
@@ -6025,7 +6437,7 @@ app.whenReady().then(async () => {
     } catch (err) {
       console.warn("[Memory/RAG] startup reconciliation failed:", err);
     }
-    // 初始化 MCP Manager；scheduler 启动前等待一次，避免近即时任务早于 MCP 工具恢复。
+    //  MCP Manager；scheduler ， MCP 。
     await initMcpManager();
     console.log("[Cyrene] RAG initialized OK");
 
@@ -6226,8 +6638,14 @@ app.on("will-quit", () => {
 
 app.on("window-all-closed", () => {});
 
-// 应用退出前把 token 用量缓存落盘（防抖未触发的最后一次写）
+//  token （）
 app.on("before-quit", () => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    try {
+      const [x, y] = mainWindow.getPosition();
+      saveGeneralSettings({ petWindowX: x, petWindowY: y });
+    } catch {}
+  }
   petWindowMoveController.dispose();
   schedulerEngine?.stop();
   stopProactiveTrigger();

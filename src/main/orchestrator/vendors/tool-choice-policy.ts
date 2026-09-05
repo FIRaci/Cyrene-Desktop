@@ -19,8 +19,8 @@ export interface ToolChoicePolicyInput {
 export type AutomaticToolChoicePolicyInput = Omit<ToolChoicePolicyInput, "requestedToolName">;
 
 function isThinkingEnabled(input: AutomaticToolChoicePolicyInput): boolean {
-  // reasoning=auto 时不排除 thinking -- 服务端可能默认开启
-  // 只有明确 mode="off" 才认为 thinking 关闭
+  // When reasoning=auto do not exclude thinking -- server may enable by default
+  // Only explicit mode="off" is considered thinking disabled
   const resolved = resolveEffectiveReasoning(
     input.reasoning,
     resolveReasoningCapability(input.providerId, input.model),
@@ -58,8 +58,8 @@ export function resolveToolChoicePolicy(input: ToolChoicePolicyInput): ToolChoic
   if (input.providerId === "kimi" && thinkingEnabled) return choose("auto");
   // Anthropic extended thinking supports auto/none, not any/tool.
   if (input.transport === "anthropic" && thinkingEnabled) return choose("auto");
-  // thinking 可能开启时，所有 vendor 默认降级到 auto
-  // （Native FC 只暴露一个工具，auto 不会选错，但 named + thinking 会被很多 vendor 拒绝）
+  // When thinking may be enabled, all vendors fallback to auto by default
+  // (Native FC only exposes one tool so auto works, while named + thinking is rejected by many vendors)
   if (thinkingEnabled) return choose("auto");
   return choose("named");
 }

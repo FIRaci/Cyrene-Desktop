@@ -112,6 +112,8 @@ export async function runChatLoop(options: ChatLoopOptions): Promise<TwoPhaseFcR
       usageRecorder(response.usage.input, response.usage.output, 1);
     }
     const reply = stripLeakedChatTimeContext(stripToolProtocol(response.text))
+      || (response.thinking ? stripLeakedChatTimeContext(stripToolProtocol(response.thinking)) : "")
+      || response.refusal
       || "No valid response was generated. Please try again.";
     emitText(options.onEvent, reply);
     return {

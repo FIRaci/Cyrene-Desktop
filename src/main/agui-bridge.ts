@@ -14,6 +14,7 @@ import type { RelationshipChannel } from "./relationship/relationship-log";
 import { createThinkFilter, type ThinkStreamFilter, type ThinkFilterMode } from "./chat/think-filter";
 import { perf } from "./perf-trace";
 import type { StyleId } from "../shared/style-sampling";
+import * as chatsStore from "./chats/chats-store";
 
 /** Input supplied by the renderer when starting a run. */
 export interface AguiRunInput {
@@ -281,7 +282,8 @@ export function registerAgUiIpc(
   lifecycle?: AguiConversationLifecycle,
   getPetWindow: GetPetWindowFn = () => null,
   isTrustedChatSender?: (event: IpcMainInvokeEvent) => boolean,
-  onActivityLog?: (type: "user" | "reasoning" | "response" | "tool" | "error" | "system", text: string, meta?: unknown) => void,
+  onActivityLog?: (type: "user" | "reasoning" | "response" | "kaomoji" | "tool" | "error" | "system", text: string, meta?: unknown, channel?: string) => void,
+  onStatusChange?: (status: "Thinking" | "Working" | "Accompanying") => void,
 ): void {
   buildOptionsFn = buildOptions;
   getChatWindowFn = getChatWindow;
@@ -294,6 +296,16 @@ export function registerAgUiIpc(
       throw new Error("AG-UI is not ready.");
     }
     const input = validateRunInput(rawInput);
+    let channel = "Main Chat";
+    if (input.sessionId) {
+      try {
+        const s = chatsStore.getSession(input.sessionId);
+        channel = s?.title ? s.title : "Main Chat";
+      } catch {
+        channel = "Main Chat";
+      }
+    }
+
     lifecycle?.onUserMessage();
     lifecycle?.onConversationStarted();
     perf.beginTurn("desktop");
@@ -304,11 +316,11 @@ export function registerAgUiIpc(
       perf.dump();
       lifecycle?.onConversationEnded();
       console.error("[AgUiBridge] Failed to prepare run:", diagnosticError(error));
-      onActivityLog?.("error", "Failed to prepare run: " + (error instanceof Error ? error.message : String(error)));
+      onActivityLog?.("error", "Failed to prepare run: " + (error instanceof Error ? error.message : String(error)), undefined, channel);
       throw new Error("Cyrene could not start that request. Check Ollama and try again.");
     }
     const { options, latestUserText } = built;
-    onActivityLog?.("user", latestUserText);
+    onActivityLog?.("user", latestUserText, undefined, channel);
 
     const threadId = `thread-${Date.now()}`;
     const runId = `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -325,12 +337,7 @@ export function registerAgUiIpc(
         targets.push(chatWin.webContents);
       }
       const petWin = getPetWindow();
-      if (
-        petWin
-        && !petWin.isDestroyed()
-        && petWin.webContents !== sender
-        && !targets.includes(petWin.webContents)
-      ) {
+      if (petWin && !petWin.isDestroyed()) {
         try {
           const petEvent = toPetAgentEvent(baseEvent);
           if (petEvent) petWin.webContents.send(IPC.PET_AGENT_EVENT, petEvent);
@@ -364,20 +371,24 @@ export function registerAgUiIpc(
 
     // Forward agent events, filter private reasoning, then emit terminal state.
     perf.mark("agent_run_start");
+    onStatusChange?.("Thinking");
+    let accumulatedThinking = "";
     const sub = agent.runWithEvents(options).subscribe({
       next: (baseEvent) => {
         const eventType = (baseEvent as { type?: string })?.type;
 
         if (eventType === "TOOL_CALL_START") {
           const name = (baseEvent as { toolCallName?: string })?.toolCallName || "tool";
-          onActivityLog?.("tool", `Invoking tool: ${name}`);
+          onActivityLog?.("tool", `Invoking tool: ${name}`, undefined, channel);
+          onStatusChange?.("Working");
         } else if (eventType === "TOOL_CALL_END") {
           const name = (baseEvent as { toolCallName?: string })?.toolCallName || "tool";
-          onActivityLog?.("tool", `Finished tool: ${name}`);
+          onActivityLog?.("tool", `Finished tool: ${name}`, undefined, channel);
+          onStatusChange?.("Thinking");
         } else if (eventType === "CUSTOM") {
           const custom = baseEvent as { name?: string; delta?: string; value?: unknown };
           if (custom.delta) {
-            onActivityLog?.("reasoning", custom.delta);
+            accumulatedThinking += custom.delta;
           }
         }
 
@@ -391,7 +402,9 @@ export function registerAgUiIpc(
 
         // Filter private reasoning from TEXT_MESSAGE_* events.
         if (eventType === "TEXT_MESSAGE_START") {
-          thinkFilter = createThinkFilter(thinkFilterMode);
+          thinkFilter = createThinkFilter(thinkFilterMode, (chunk) => {
+            accumulatedThinking += chunk;
+          });
           send(baseEvent);
           return;
         }
@@ -421,6 +434,10 @@ export function registerAgUiIpc(
             }
             thinkFilter = null;
           }
+          if (accumulatedThinking.trim()) {
+            onActivityLog?.("reasoning", accumulatedThinking.trim(), undefined, channel);
+            accumulatedThinking = "";
+          }
           send(baseEvent);
           return;
         }
@@ -430,9 +447,10 @@ export function registerAgUiIpc(
       },
       error: (err) => {
         thinkFilter = null;
+        onStatusChange?.("Accompanying");
         const safe = safeRunError(err);
         console.error("[AgUiBridge] Run failed:", diagnosticError(err));
-        onActivityLog?.("error", safe.message || "Agent execution failed");
+        onActivityLog?.("error", safe.message || "Agent execution failed", undefined, channel);
         perf.dump();
         send({ type: "RUN_ERROR", message: safe.message, code: safe.code, threadId, runId });
         activeRuns.delete(runId);
@@ -441,11 +459,18 @@ export function registerAgUiIpc(
       complete: async () => {
         perf.mark("agent_run_complete");
         activeRuns.delete(runId);
+        if (accumulatedThinking.trim()) {
+          onActivityLog?.("reasoning", accumulatedThinking.trim(), undefined, channel);
+          accumulatedThinking = "";
+        }
         try {
           if (agent.lastResult) {
             const lastResult = agent.lastResult;
+            if (lastResult.soulPhaseReason) {
+              onActivityLog?.("reasoning", `[Soul Reasoning] ${lastResult.soulPhaseReason}`, undefined, channel);
+            }
             if (lastResult.reply) {
-              onActivityLog?.("response", lastResult.reply);
+              onActivityLog?.("response", lastResult.reply, undefined, channel);
             }
             await perf.track("on_run_finished", async () => { await onFinished(lastResult, latestUserText); });
             // Index history asynchronously after visible post-run work.

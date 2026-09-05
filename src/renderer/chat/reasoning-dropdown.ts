@@ -1,18 +1,18 @@
-// Chat 窗口推理下拉 —— 按 (providerId, model) capability 动态生成选项。
+// Chat window reasoning dropdown - dynamically generates options according to (providerId, model) capability.
 //
-// 入口：computeReasoningDropdown(providerId, model, savedPreference)
-// 返回 ReasoningDropdownView，由 chat/main.ts 在真实 DOM 上构建选项。
+// Entry point: computeReasoningDropdown(providerId, model, savedPreference)
+// Returns ReasoningDropdownView, rendered onto the DOM by chat/main.ts.
 //
-// 控件形态（按 capability.control）：
-// - fixed-on：始终开启，控件 disabled，单项 disabled
-// - dynamic：跟随动态路由，控件 disabled，单项 disabled
-// - none：未配置推理控制，控件 disabled，单项 disabled
-// - toggle（无 supportedEfforts）：跟随模型 / [关闭] / 开启
-// - effort / toggle-effort（带 supportedEfforts）：跟随模型 / [关闭] / supportedEfforts.map
+// Control variations (by capability.control):
+// - fixed-on: always enabled, control disabled, single disabled option
+// - dynamic: follows dynamic routing, control disabled, single disabled option
+// - none: reasoning control not configured, control disabled, single disabled option
+// - toggle (without supportedEfforts): Follow Model / [Off] / On
+// - effort / toggle-effort (with supportedEfforts): Follow Model / [Off] / supportedEfforts.map
 //
-// 注意：effective 必须用 resolveEffectiveReasoning(saved, capability) 计算，
-// 不能直接 saved ?? auto。原因：fixed-on 模型即使 saved=off，effective.mode 仍为 on；
-// saved.effort 不被支持时 effective.effort 应退回 defaultEffort。
+// Note: effective must be computed with resolveEffectiveReasoning(saved, capability),
+// never directly via saved ?? auto. For fixed-on models even if saved=off, effective.mode is on;
+// if saved.effort is unsupported, effective.effort falls back to defaultEffort.
 
 import {
   resolveEffectiveReasoning,
@@ -24,18 +24,18 @@ import {
 export interface ReasoningDropdownItem {
   label: string;
   preference: ReasoningPreference;
-  /** 该 item 不可点击（fixed-on / dynamic / none 的唯一项） */
+  /** Whether item cannot be clicked (single item for fixed-on / dynamic / none) */
   disabled?: boolean;
-  /** tooltip 提示 */
+  /** Tooltip hint */
   hint?: string;
 }
 
 export interface ReasoningDropdownView {
-  /** 整个下拉禁用（fixed-on / dynamic / none）：trigger 也不可点 */
+  /** Entire dropdown disabled (fixed-on / dynamic / none): trigger cannot be clicked */
   disabled: boolean;
-  /** 触发按钮上显示的文案（用户当前 effective 状态） */
+  /** Text displayed on trigger button (user current effective state) */
   statusText: string;
-  /** 当前选中的 item preference（与 saved 可能不同——saved 是用户偏好，effective 是能力归一化后的值） */
+  /** Currently active preference (may differ from saved preference after normalization) */
   activePreference: ReasoningPreference;
   items: ReasoningDropdownItem[];
 }

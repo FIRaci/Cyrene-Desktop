@@ -1,11 +1,11 @@
-// 通话窗口渲染端 —— 粒子背景 + 麦克风采集 + VAD 静默检测 + 状态机 + TTS 播放。
+// Call window renderer — particle background + microphone capture + VAD silence detection + state machine + TTS playback.
 //
-// 状态：LISTENING（用户说话）→ THINKING（agent 思考）→ SPEAKING（昔涟说话）→ LISTENING
-// 用户说话时：柱状胶囊波形跳动 + 头像外圈音量波形
-// 昔涟说话时：电波环脉冲扩散 + 波形隐藏
+// States: LISTENING (user speaking) → THINKING (agent thinking) → SPEAKING (Cyrene speaking) → LISTENING
+// User speaking: capsule waveform bounces + avatar perimeter volume waveform
+// Cyrene speaking: pulse ring radiates + waveform hides
 import "../ui/theme";
 
-// ── 粒子背景 ──
+// ── Particle Background ──
 const canvas = document.getElementById("particles") as HTMLCanvasElement | null;
 const ctx = canvas?.getContext("2d") ?? null;
 let particlesW = 0, particlesH = 0;
@@ -34,7 +34,7 @@ function spawnParticle(): Particle {
 function resizeParticles(): void {
   if (!canvas || !ctx) return;
   const dpr = window.devicePixelRatio || 1;
-  // 直接用窗口尺寸，不依赖 clientWidth（可能被 body 层遮挡读到错误值）
+  // Use window dimensions directly; avoid relying on clientWidth which may be obscured
   particlesW = window.innerWidth;
   particlesH = window.innerHeight;
   canvas.width = particlesW * dpr;
@@ -67,7 +67,7 @@ function drawParticles(): void {
   requestAnimationFrame(drawParticles);
 }
 
-// ── DOM 元素 ──
+// ── DOM Elements ──
 const statusEl = document.getElementById("call-status") as HTMLElement;
 const ringEl = document.getElementById("avatar-ring") as HTMLElement;
 const waveformCanvas = document.getElementById("waveform-canvas") as HTMLCanvasElement | null;
@@ -77,12 +77,14 @@ const transcriptEl = document.getElementById("transcript") as HTMLElement;
 const hangupBtn = document.getElementById("hangup-btn") as HTMLButtonElement;
 const closeBtn = document.getElementById("close-btn") as HTMLButtonElement;
 const durationEl = document.getElementById("call-duration") as HTMLElement | null;
+const quickForm = document.getElementById("quick-form") as HTMLFormElement | null;
+const quickInput = document.getElementById("quick-input") as HTMLInputElement | null;
 
-// ── 通话时长计时（首次进入活动状态时启动，END 时停止） ──
+// ── Call Duration Timer (starts on first active state, stops on END) ──
 let callStartAt: number | null = null;
 let callTimer: number | null = null;
 
-/** 把毫秒数格式化为 MM:SS，超过 60 分钟进入 HH:MM:SS。 */
+/** Formats milliseconds as MM:SS, or HH:MM:SS if over 60 minutes. */
 function formatDuration(ms: number): string {
   const totalSec = Math.floor(ms / 1000);
   const h = Math.floor(totalSec / 3600);
@@ -92,9 +94,9 @@ function formatDuration(ms: number): string {
   return h > 0 ? `${pad(h)}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
 }
 
-/** 启动 / 重置 计时器。第一次传 true 时记录起点并启动 1s interval。 */
+/** Start or reset timer. Records start time and starts 1s interval on first true call. */
 function startCallTimer(): void {
-  if (callStartAt !== null) return; // 已经启动过了，避免 LISTENING<->SPEAKING 时重置
+  if (callStartAt !== null) return; // Already started; avoid resetting during LISTENING<->SPEAKING transitions
   callStartAt = performance.now();
   if (durationEl) {
     durationEl.textContent = "00:00";
@@ -108,7 +110,7 @@ function startCallTimer(): void {
   tick();
 }
 
-/** 停止计时并隐藏时长元素（用于 hangup / 通话已结束）。 */
+/** Stop timer and hide duration element (for hangup or ended call). */
 function stopCallTimer(): void {
   if (callTimer !== null) {
     window.clearInterval(callTimer);
@@ -118,10 +120,10 @@ function stopCallTimer(): void {
   if (durationEl) durationEl.hidden = true;
 }
 
-// ── 状态管理 ──
+// ── State Management ──
 type CallState = "IDLE" | "LISTENING" | "THINKING" | "SPEAKING" | "ERROR" | "ENDED";
 let currentState: CallState = "IDLE";
-let showTranscript = false; // 从设置读取
+let showTranscript = false; // Read from settings
 
 function setState(state: CallState): void {
   currentState = state;
@@ -135,15 +137,15 @@ function updateUI(): void {
   const mic = micWaveEl;
 
   if (currentState === "LISTENING") {
-    status.textContent = "正在聆听...";
-    status.className = "call__status";
+    status.textContent = "In Call · Mic On";
+    status.className = "call__status call__status--active";
     ring.classList.remove("is-active");
     wave?.classList.add("is-active");
     mic.classList.add("is-active");
     waveformMode = "listening";
     micMode = "listening";
   } else if (currentState === "THINKING") {
-    status.textContent = "昔涟思考中...";
+    status.textContent = "Cyrene is thinking...";
     status.className = "call__status call__status--thinking";
     ring.classList.remove("is-active");
     wave?.classList.add("is-active");
@@ -151,7 +153,7 @@ function updateUI(): void {
     waveformMode = "thinking";
     micMode = "thinking";
   } else if (currentState === "SPEAKING") {
-    status.textContent = "昔涟说话中...";
+    status.textContent = "Cyrene is speaking...";
     status.className = "call__status";
     ring.classList.add("is-active");
     wave?.classList.remove("is-active");
@@ -159,7 +161,7 @@ function updateUI(): void {
     waveformMode = "idle";
     micMode = "idle";
   } else if (currentState === "ERROR") {
-    status.textContent = "连接出错，请检查网络";
+    status.textContent = "Connection error, please check network";
     status.className = "call__status call__status--error";
     ring.classList.remove("is-active");
     wave?.classList.remove("is-active");
@@ -167,7 +169,7 @@ function updateUI(): void {
     waveformMode = "idle";
     micMode = "idle";
   } else if (currentState === "ENDED") {
-    status.textContent = "通话已结束";
+    status.textContent = "Call ended";
     status.className = "call__status";
     ring.classList.remove("is-active");
     wave?.classList.remove("is-active");
@@ -175,7 +177,7 @@ function updateUI(): void {
     waveformMode = "idle";
     micMode = "idle";
   } else {
-    status.textContent = "正在连接...";
+    status.textContent = "Connecting...";
     status.className = "call__status";
     ring.classList.remove("is-active");
     wave?.classList.remove("is-active");
@@ -184,7 +186,7 @@ function updateUI(): void {
     micMode = "idle";
   }
 
-  // 通话时长：进入活动状态时启动计时，END 时停止（IDLE/ERROR/ENDED 均停）。
+  // Call duration: starts when entering active state, stops on END/IDLE/ERROR/ENDED.
   if (currentState === "LISTENING" || currentState === "THINKING" || currentState === "SPEAKING") {
     startCallTimer();
   } else if (currentState === "ENDED") {
@@ -192,7 +194,7 @@ function updateUI(): void {
   }
 }
 
-// ── 转写显示（只显示当前一轮） ──
+// ── Transcript Display (shows current turn only) ──
 function renderTranscript(userText: string, botText: string): void {
   if (!showTranscript) { transcriptEl.hidden = true; return; }
   transcriptEl.hidden = false;
@@ -214,7 +216,7 @@ function renderTranscript(userText: string, botText: string): void {
 let currentUserText = "";
 let currentBotText = "";
 
-// ── 音量波形（绕头像一圈） ──
+// ── Volume Waveform (around avatar perimeter) ──
 let waveformMode = "idle"; // idle, listening, thinking
 const NUM_WAVE_BARS = 32;
 const waveBars: Array<{ angle: number }> = [];
@@ -223,7 +225,7 @@ const waveformCtx = waveformCanvas?.getContext("2d") ?? null;
 function initWaveformCanvas(): void {
   if (!waveformCanvas || !waveformCtx) return;
   const dpr = window.devicePixelRatio || 1;
-  const size = 200; // 比 avatar-zone(150px) 大一圈
+  const size = 200; // Slightly larger than avatar-zone (150px)
   waveformCanvas.width = size * dpr;
   waveformCanvas.height = size * dpr;
   waveformCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -238,13 +240,13 @@ function drawWaveform(): void {
   if (!waveformCtx || !waveformCanvas) { requestAnimationFrame(drawWaveform); return; }
   const cx = waveformCanvas.width / (window.devicePixelRatio || 1) / 2;
   const cy = waveformCanvas.height / (window.devicePixelRatio || 1) / 2;
-  const innerRadius = 80; // 头像半径（150px / 2 ≈ 75，留一点边）
+  const innerRadius = 80; // Avatar radius (150px / 2 ≈ 75, with margin)
   waveformCtx.clearRect(0, 0, waveformCanvas.width, waveformCanvas.height);
 
   for (const b of waveBars) {
     let h: number;
     if (waveformMode === "listening") {
-      // 从 AnalyserNode 取频域数据
+      // Get frequency domain data from AnalyserNode
       const dataIdx = Math.floor((b.angle / (Math.PI * 2)) * (analyserData?.length ?? 1));
       const vol = analyserData ? analyserData[dataIdx] / 255 : 0;
       h = 5 + vol * 85;
@@ -268,14 +270,14 @@ function drawWaveform(): void {
   requestAnimationFrame(drawWaveform);
 }
 
-// ── 柱状胶囊波形动画 ──
+// ── Capsule Waveform Animation ──
 let micMode = "idle"; // idle, listening, thinking
 
 function animateMicWave(): void {
   for (const bar of micBars) {
     let h: number;
     if (micMode === "listening") {
-      // 从 AnalyserNode 取平均音量
+      // Get average volume from AnalyserNode
       const avg = analyserData ? analyserData.reduce((a, b) => a + b, 0) / analyserData.length / 255 : 0;
       h = 10 + Math.random() * avg * 76 + avg * 20;
     } else if (micMode === "thinking") {
@@ -288,15 +290,15 @@ function animateMicWave(): void {
   requestAnimationFrame(animateMicWave);
 }
 
-// ── 麦克风采集 + VAD ──
+// ── Microphone Capture + VAD ──
 let audioContext: AudioContext | null = null;
 let analyser: AnalyserNode | null = null;
 let workletNode: AudioWorkletNode | null = null;
 let micStream: MediaStream | null = null;
 let vadSilenceTimer: ReturnType<typeof setTimeout> | null = null;
 let vadSilenceMs = 1000;
-let vadThreshold = 0.01; // 音量阈值，默认调低照顾安静环境/小声麦克风
-let hasSpoken = false; // 用户是否已开始说话（VAD 只在说过话后检测静默）
+let vadThreshold = 0.01; // Volume threshold, low default for quiet environments
+let hasSpoken = false; // Whether user has started speaking (VAD detects silence only after speech)
 
 async function startMicrophone(): Promise<void> {
   try {
@@ -314,31 +316,31 @@ async function startMicrophone(): Promise<void> {
 
     const source = audioContext.createMediaStreamSource(micStream);
 
-    // AnalyserNode 用于 VAD + 波形显示
+    // AnalyserNode for VAD + waveform display
     analyser = audioContext.createAnalyser();
     analyser.fftSize = 256;
     analyserData = new Uint8Array(analyser.frequencyBinCount);
     source.connect(analyser);
 
-    // AudioWorkletNode 用于 PCM 采集
+    // AudioWorkletNode for PCM capture
     workletNode = new AudioWorkletNode(audioContext, "pcm-processor");
     workletNode.port.onmessage = (e: MessageEvent) => {
       const frame = e.data as ArrayBuffer;
       window.call?.sendAudioFrame(frame);
     };
     source.connect(workletNode);
-    // workletNode 不连 destination（不需要本地回放）
+    // workletNode not connected to destination (no local playback needed)
 
-    console.log("[Call] 麦克风已启动");
+    console.log("[Call] Microphone started");
     startVAD();
   } catch (err) {
-    console.error("[Call] 麦克风启动失败:", err);
-    statusEl.textContent = "无法访问麦克风，请检查权限";
+    console.error("[Call] Failed to start microphone:", err);
+    statusEl.textContent = "Cannot access microphone. Please check permissions.";
     statusEl.className = "call__status call__status--error";
   }
 }
 
-/** VAD 静默检测：连续 N ms 低于阈值判定说完 */
+/** VAD silence detection: N consecutive ms below threshold marks end of speech */
 function startVAD(): void {
   let logCounter = 0;
   const checkInterval = setInterval(() => {
@@ -346,7 +348,7 @@ function startVAD(): void {
     if (currentState !== "LISTENING") return;
 
     analyser.getByteFrequencyData(analyserData);
-    // 计算平均音量
+    // Calculate average volume
     let sum = 0;
     for (let i = 0; i < analyserData.length; i++) sum += analyserData[i];
     const avg = sum / analyserData.length / 255;
@@ -357,19 +359,19 @@ function startVAD(): void {
     }
 
     if (avg >= vadThreshold) {
-      // 有声音：标记已开始说话，重置静默计时
-      if (!hasSpoken) console.log("[Call VAD] 开始说话 detected, volume=", avg.toFixed(4));
+      // Sound detected: mark speaking started, reset silence timer
+      if (!hasSpoken) console.log("[Call VAD] Speech start detected, volume=", avg.toFixed(4));
       hasSpoken = true;
       if (vadSilenceTimer) {
         clearTimeout(vadSilenceTimer);
         vadSilenceTimer = null;
       }
     } else if (hasSpoken) {
-      // 静默且之前说过话：开始静默计时
+      // Silence after speaking: start silence countdown
       if (!vadSilenceTimer) {
-        console.log("[Call VAD] 静默开始，准备结束本轮");
+        console.log("[Call VAD] Silence started, preparing to end turn");
         vadSilenceTimer = setTimeout(() => {
-          console.log("[Call] VAD 静默检测触发，结束本轮");
+          console.log("[Call] VAD silence detected, ending turn");
           window.call?.turnEnd();
           vadSilenceTimer = null;
           hasSpoken = false;
@@ -387,8 +389,8 @@ function stopMicrophone(): void {
   if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
 }
 
-// ── TTS 播放 + Live2D 嘴型联动 ──
-// 复用聊天窗口的逻辑：音频播放时通过 live2dSpeech IPC 让宠物窗口小人嘴巴张合。
+// ── TTS Playback + Live2D Mouth Sync ──
+// Audio playback syncs with pet window mouth movement via live2dSpeech IPC.
 const AUDIO_MOUTH_DELAY_MS = 800;
 
 let currentAudio: HTMLAudioElement | null = null;
@@ -399,7 +401,7 @@ function nextSpeechToken(): number {
   return speechToken;
 }
 
-/** 停止嘴型联动（挂断 / 新 TTS / 错误时调用）。 */
+/** Stops mouth sync (on hangup, new TTS, or error). */
 function stopLive2dMouth(): void {
   speechToken += 1;
   window.live2dSpeech?.stopMouth();
@@ -434,7 +436,7 @@ function waitForAudioMetadata(audio: HTMLAudioElement): Promise<number | null> {
 }
 
 function playTtsAudio(base64: string): void {
-  // 停掉旧音频和嘴型
+  // Stop previous audio and mouth sync
   if (currentAudio) { currentAudio.pause(); currentAudio = null; }
   stopLive2dMouth();
 
@@ -447,7 +449,7 @@ function playTtsAudio(base64: string): void {
   audio.load();
   currentAudio = audio;
 
-  // 重置表情，准备嘴型联动
+  // Reset expression, prepare mouth sync
   window.live2dSpeech?.prepare();
 
   audio.onended = () => {
@@ -467,7 +469,7 @@ function playTtsAudio(base64: string): void {
     window.call?.ttsDone();
   });
 
-  // 等音频 metadata 获取时长，延迟后驱动嘴型
+  // Wait for audio metadata duration, drive mouth after delay
   void (async () => {
     const durationSec = await waitForAudioMetadata(audio);
     if (speechToken !== token) return;
@@ -484,7 +486,7 @@ function stopTts(): void {
   stopLive2dMouth();
 }
 
-// ── IPC 事件监听 ──
+// ── IPC Event Listeners ──
 window.call?.onState((state: string) => {
   setState(state as CallState);
   if (state === "LISTENING" && !micStream) {
@@ -504,7 +506,7 @@ window.call?.onAsrResult((data: { partial?: string; final?: string }) => {
 });
 
 window.call?.onTtsAudio((data: { base64: string }) => {
-  renderTranscript(currentUserText, "（语音回复中）");
+  renderTranscript(currentUserText, "(Voice replying...)");
   playTtsAudio(data.base64);
 });
 
@@ -513,7 +515,7 @@ window.call?.onError((data: { message: string }) => {
   statusEl.className = "call__status call__status--error";
 });
 
-// ── 挂断 ──
+// ── Hangup ──
 function hangup(): void {
   window.call?.stop();
   stopMicrophone();
@@ -526,9 +528,21 @@ function hangup(): void {
 hangupBtn.addEventListener("click", hangup);
 closeBtn.addEventListener("click", hangup);
 
-// ── 初始化 ──
+if (quickForm && quickInput) {
+  quickForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const text = quickInput.value.trim();
+    if (!text) return;
+    quickInput.value = "";
+    currentUserText = text;
+    renderTranscript(currentUserText, "");
+    window.call?.submitText(text);
+  });
+}
+
+// ── Initialization ──
 async function init(): Promise<void> {
-  // 读 ASR 设置（VAD 阈值 + 转写开关）
+  // Read ASR settings (VAD threshold + transcript switch)
   try {
     const cfg = await window.tts?.loadSettings();
     if (cfg) {
@@ -539,7 +553,7 @@ async function init(): Promise<void> {
     console.log("[Call] VAD config: threshold=", vadThreshold, "silenceMs=", vadSilenceMs);
   } catch { /* ignore */ }
 
-  // 粒子背景
+  // Particle background
   if (canvas && ctx) {
     resizeParticles();
     for (let i = 0; i < PARTICLE_COUNT; i++) particles.push(spawnParticle());
@@ -547,24 +561,25 @@ async function init(): Promise<void> {
     window.addEventListener("resize", resizeParticles);
   }
 
-  // 波形 canvas
+  // Waveform canvas
   initWaveformCanvas();
   requestAnimationFrame(drawWaveform);
   requestAnimationFrame(animateMicWave);
 
-  // 开始通话
+  // Start call
   window.call?.start();
 }
 
 void init();
 
-// 窗口类型声明
+// Window type declarations
 declare global {
   interface Window {
     call?: {
       start: () => void;
       sendAudioFrame: (frame: ArrayBuffer) => void;
       turnEnd: () => void;
+      submitText: (text: string) => void;
       ttsDone: () => void;
       stop: () => void;
       onState: (callback: (state: string) => void) => () => void;

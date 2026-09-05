@@ -7,7 +7,7 @@ export interface NativeToolCallInput {
   model: string;
   nativeFcSystemPrompt: string;
   executionBrief: string;
-  /** 本地主进程提供的可信默认值与绝对路径。 */
+  /** Trusted defaults and absolute paths provided by local main process. */
   runtimeEnvironmentContext?: string;
   toolResults: ToolCallResult[];
   tool: ToolDefinition;
@@ -28,13 +28,13 @@ function buildRequest(input: NativeToolCallInput): ChatRequest {
       : "",
     input.executionBrief,
     buildToolExecutionContext(input.toolResults),
-    input.protocolFeedback ? `上一次工具参数未通过 Runtime 校验：${input.protocolFeedback}` : "",
+    input.protocolFeedback ? `Previous tool arguments failed runtime validation: ${input.protocolFeedback}` : "",
   ].filter(Boolean).join("\n\n");
   return {
     model: input.model,
     messages: [
       { role: "system", content: systemContent },
-      { role: "user", content: "请根据 EXECUTION_BRIEF 填写工具参数。" },
+      { role: "user", content: "Please provide tool arguments based on EXECUTION_BRIEF." },
     ],
     tools: [{
       name: input.tool.id,
@@ -57,7 +57,7 @@ export async function resolveNativeToolCall(
   if (Object.keys(input.tool.inputSchema.properties).length === 0) return directToolCall(input.tool);
   const response = await invoke(buildRequest(input));
 
-  // 脱敏诊断：记录模型返回的原始结构，不打印 arguments 内容
+  // Desensitized diagnostics: record raw structure returned by model, do not print arguments content
   const finishReason = response.finishReason ?? "unknown";
   const toolCallCount = response.toolCalls.length;
   const toolCallNames = response.toolCalls.map((tc) => tc.name);
@@ -68,12 +68,12 @@ export async function resolveNativeToolCall(
   console.log(`[NativeFC] tool=${input.tool.id} finish=${finishReason} toolCalls=${toolCallCount} names=[${toolCallNames.join(", ")}] textLen=${textLength} refusal=${hasRefusal}`);
 
   if (toolCallCount >= 1 && response.toolCalls[0].name === input.tool.id) {
-    // MiniMax 等模型在 must_call 模式下可能返回多个同名 tool call
-    // 取第一个，其余忽略
+    // Models like MiniMax in must_call mode might return multiple tool calls with same name
+    // Take the first, ignore rest
     if (toolCallCount > 1) {
       console.warn(`[NativeFC] tool=${input.tool.id} received ${toolCallCount} calls, using first one`);
     }
-    // 记录 arguments 的结构信息（不打印内容）
+    // Record structural info of arguments (do not print content)
     const args = response.toolCalls[0].arguments;
     let argsType = "string";
     let argsLen = 0;
@@ -88,7 +88,7 @@ export async function resolveNativeToolCall(
     return response.toolCalls[0];
   }
 
-  // 分类失败原因
+  // Classify failure cause
   let errorCode = "E_NATIVE_TOOL_PROTOCOL";
   let errorDetail = "unknown";
   if (toolCallCount === 0) {

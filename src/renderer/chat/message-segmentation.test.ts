@@ -9,22 +9,23 @@ import {
 
 describe("message segmentation", () => {
   it("keeps short natural chat bubbles intact", () => {
-    const text = "噗…好好好，是帅气！但人家眼里，又帅又可爱的样子，不是更犯规吗…真的好难抵挡呢♪";
+    const text = "Haha okay, so handsome! But cute is better♪";
     expect(segmentAssistantReply(text)).toEqual([text]);
   });
 
   it("splits compact multi-sentence casual replies", () => {
-    const text = "今天天气挺凉快的呢，淄博那边下雨了吗？开发辛苦了，记得多起来动一动哦。你中午吃的什么呀？最近有什么好玩的事想分享吗？要喝点水啦，别光顾着忙。";
+    const parts = [
+      "Weather is cool today!",
+      "Did it rain over there?",
+      "Great work on coding!",
+      "Take a break now!",
+    ];
+    const text = parts.join("");
 
-    const parts = segmentAssistantReply(text);
+    const result = segmentAssistantReply(text);
 
-    expect(parts).toEqual([
-      "今天天气挺凉快的呢，淄博那边下雨了吗？",
-      "开发辛苦了，记得多起来动一动哦。",
-      "你中午吃的什么呀？最近有什么好玩的事想分享吗？",
-      "要喝点水啦，别光顾着忙。",
-    ]);
-    expect(parts.join("")).toBe(text);
+    expect(result).toEqual(parts);
+    expect(result.join("")).toBe(text);
   });
 
   it("uses sentence-ending punctuation as streaming bubble boundaries", () => {
@@ -42,16 +43,14 @@ describe("message segmentation", () => {
     expect(shouldSkipStreamingBubbleLeadingChar("\n", true)).toBe(true);
     expect(shouldSkipStreamingBubbleLeadingChar("\r", true)).toBe(true);
     expect(shouldSkipStreamingBubbleLeadingChar(" ", true)).toBe(true);
-    expect(shouldSkipStreamingBubbleLeadingChar("中", true)).toBe(false);
+    expect(shouldSkipStreamingBubbleLeadingChar("A", true)).toBe(false);
     expect(shouldSkipStreamingBubbleLeadingChar("\n", false)).toBe(false);
   });
 
   it("splits medium natural chat into two readable bubbles", () => {
     const text = [
-      "我知道啦，今天你其实已经撑得很久了，不是没有努力。",
-      "先别急着把所有事情都补完，能把最重要的一件收尾，就已经很值得夸了。",
-      "剩下的我们慢慢拆开，我陪你一件一件处理。",
-      "如果中途觉得累，就先停一下，不需要一次把状态拉满。"
+      "I know you have tried your very best today and pushed through everything!",
+      "Take your time to wrap up the most critical part and get some rest tonight!"
     ].join("");
 
     const parts = segmentAssistantReply(text);
@@ -62,7 +61,7 @@ describe("message segmentation", () => {
   });
 
   it("caps long chat replies at ten bubbles", () => {
-    const text = "今天先不用把自己逼得太紧，我们可以从最小的一步开始。".repeat(12);
+    const text = "Do not push yourself too hard today, we can start with small steps!".repeat(12);
     const parts = segmentAssistantReply(text);
 
     expect(parts.length).toBeLessThanOrEqual(10);
@@ -71,8 +70,8 @@ describe("message segmentation", () => {
   });
 
   it("does not split structured content", () => {
-    expect(segmentAssistantReply("```ts\nconst a = 1;\n```\n这段不要拆。")).toHaveLength(1);
-    expect(segmentAssistantReply("- 第一项\n- 第二项\n- 第三项\n这段也不要拆。")).toHaveLength(1);
+    expect(segmentAssistantReply("```ts\nconst a = 1;\n```\nDo not split this part.")).toHaveLength(1);
+    expect(segmentAssistantReply("- Item one\n- Item two\n- Item three\nDo not split this part either.")).toHaveLength(1);
     expect(segmentAssistantReply("| A | B |\n|---|---|\n| 1 | 2 |")).toHaveLength(1);
   });
 

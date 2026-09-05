@@ -28,7 +28,7 @@ function selectionSet(overrides: Record<string, unknown> = {}) {
     createdAt: 900,
     expiresAt: 9_000,
     conversationId: "c1",
-    tracks: [{ id: "255667", name: "胆小鬼", artists: ["梁咏琪"], album: "最爱梁咏琪" }],
+    tracks: [{ id: "255667", name: "Coward", artists: ["Gigi Leung"], album: "Favorite Gigi Leung" }],
     ...overrides,
   };
 }
@@ -76,7 +76,7 @@ describe("music Agent tools", () => {
       .find((candidate) => candidate.id === "music_get_daily_recommendations")!;
 
     const outputText = await tool.execute({}, {
-      userQuery: "今日推荐",
+      userQuery: "Daily recommendation",
       conversationId: "c1",
       runId: "run-1",
       contextRefs,
@@ -91,9 +91,9 @@ describe("music Agent tools", () => {
         candidates: [{
           candidateRef: "ctx_2",
           position: 1,
-          name: "胆小鬼",
-          artists: ["梁咏琪"],
-          album: "最爱梁咏琪",
+          name: "Coward",
+          artists: ["Gigi Leung"],
+          album: "Favorite Gigi Leung",
         }],
       },
       presentation: { presented: true },
@@ -122,13 +122,13 @@ describe("music Agent tools", () => {
       .find((candidate) => candidate.id === "music_get_daily_recommendations")!;
 
     const first = JSON.parse(await tool.execute({}, {
-      userQuery: "今日推荐",
+      userQuery: "Daily recommendation",
       conversationId: "c1",
       runId: "run-1",
       contextRefs,
     }));
     const second = JSON.parse(await tool.execute({}, {
-      userQuery: "再试一次",
+      userQuery: "Try again",
       conversationId: "c1",
       runId: "run-2",
       contextRefs,
@@ -157,7 +157,7 @@ describe("music Agent tools", () => {
       sendCard: () => { throw new Error("renderer unavailable"); },
     }).find((candidate) => candidate.id === "music_get_daily_recommendations")!;
 
-    await expect(tool.execute({}, { userQuery: "日推", conversationId: "c1", contextRefs }))
+    await expect(tool.execute({}, { userQuery: "Daily recommendation", conversationId: "c1", contextRefs }))
       .rejects.toThrow("renderer unavailable");
     expect(service.markTracksPresented).not.toHaveBeenCalled();
   });
@@ -176,7 +176,7 @@ describe("music Agent tools", () => {
       sendCard: () => false,
     }).find((candidate) => candidate.id === "music_get_daily_recommendations")!;
 
-    const output = JSON.parse(await tool.execute({}, { userQuery: "日推", conversationId: "c1", contextRefs }));
+    const output = JSON.parse(await tool.execute({}, { userQuery: "Daily recommendation", conversationId: "c1", contextRefs }));
 
     expect(output.presentation).toEqual({ presented: false });
     expect(service.markTracksPresented).not.toHaveBeenCalled();
@@ -204,7 +204,7 @@ describe("music Agent tools", () => {
 
     const output = JSON.parse(await tool.execute(
       { candidateRef },
-      { userQuery: "播放第一首", conversationId: "c1", runId: "run-1", contextRefs },
+      { userQuery: "Play the first song", conversationId: "c1", runId: "run-1", contextRefs },
     ));
 
     expect(tool.inputSchema).toEqual(expect.objectContaining({ required: ["candidateRef"] }));
@@ -234,7 +234,7 @@ describe("music Agent tools", () => {
 
     await expect(tool.execute(
       { candidateRef: ref === "valid" ? valid : ref },
-      { userQuery: "播放", conversationId, contextRefs },
+      { userQuery: "Play", conversationId, contextRefs },
     )).rejects.toThrow(error);
     expect(service.playTrack).not.toHaveBeenCalled();
   });
@@ -251,7 +251,7 @@ describe("music Agent tools", () => {
     const tool = buildMusicTools(service as never, { contextRefs })
       .find((candidate) => candidate.id === "music_play_track")!;
 
-    await expect(tool.execute({ candidateRef }, { userQuery: "播放", conversationId: "c1", contextRefs }))
+    await expect(tool.execute({ candidateRef }, { userQuery: "Play", conversationId: "c1", contextRefs }))
       .rejects.toThrow(/EXPIRED/);
     expect(service.playTrack).not.toHaveBeenCalled();
   });
@@ -261,8 +261,8 @@ describe("music Agent tools", () => {
     const set = selectionSet({
       setId: "s1",
       tracks: [
-        { id: "101", name: "晴天", artists: ["周杰伦"] },
-        { id: "102", name: "夜曲", artists: ["周杰伦"] },
+        { id: "101", name: "Sunny Day", artists: ["Jay Chou"] },
+        { id: "102", name: "Nocturne", artists: ["Jay Chou"] },
       ],
     });
     service.presentTracks.mockResolvedValue({ cardRef: "internal-card" });
@@ -277,7 +277,7 @@ describe("music Agent tools", () => {
 
     expect(tool.controlledInput).toEqual({ candidateRefs: { type: "context_ref_array", kind: "candidate" } });
 
-    await tool.execute({ candidateRefs: [second, first] }, { userQuery: "展示", conversationId: "c1", contextRefs });
+    await tool.execute({ candidateRefs: [second, first] }, { userQuery: "Show", conversationId: "c1", contextRefs });
 
     expect(service.presentTracks).toHaveBeenCalledWith(expect.objectContaining({ setId: "s1", trackIds: ["102", "101"] }));
     expect(service.markTracksPresented).toHaveBeenCalledWith("s1", "c1", ["102", "101"]);
@@ -285,18 +285,18 @@ describe("music Agent tools", () => {
 
   it("uses the model-selected search purpose without inferring from user wording", async () => {
     const service = serviceDouble();
-    const set = selectionSet({ source: "search", query: "稻香", resolutionPurpose: "play" });
+    const set = selectionSet({ source: "search", query: "Rice Field", resolutionPurpose: "play" });
     service.searchTracks.mockResolvedValue(set);
     const contextRefs = registry();
     const tool = buildMusicTools(service as never, { contextRefs })
       .find((candidate) => candidate.id === "music_search")!;
 
     const output = await tool.execute(
-      { keyword: "稻香", purpose: "discover" },
-      { userQuery: "播放稻香", conversationId: "c1", runId: "run-1", contextRefs },
+      { keyword: "Rice Field", purpose: "discover" },
+      { userQuery: "Play Rice Field", conversationId: "c1", runId: "run-1", contextRefs },
     );
 
-    expect(service.searchTracks).toHaveBeenCalledWith("稻香", "c1", undefined, {
+    expect(service.searchTracks).toHaveBeenCalledWith("Rice Field", "c1", undefined, {
       resolutionRunId: "run-1",
       purpose: "discover",
     });
@@ -310,8 +310,8 @@ describe("music Agent tools", () => {
       .find((candidate) => candidate.id === "music_search")!;
 
     await expect(tool.execute(
-      { keyword: "稻香" },
-      { userQuery: "播放稻香", conversationId: "c1", runId: "run-1" },
+      { keyword: "Rice Field" },
+      { userQuery: "Play Rice Field", conversationId: "c1", runId: "run-1" },
     )).rejects.toThrow("E_MUSIC_SEARCH_PURPOSE_REQUIRED");
     expect(service.searchTracks).not.toHaveBeenCalled();
   });

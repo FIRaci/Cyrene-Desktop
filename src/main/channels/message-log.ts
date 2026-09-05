@@ -1,13 +1,13 @@
-// channels/message-log —— JSONL 落盘 + 内存最近 N 条，给 UI 提供消息日志查看。
+// channels/message-log - JSONL persistence + in-memory recent N entries for UI message logging.
 //
-// 数据流：
-//   dispatcher 处理完入站/出站后 → appendLog(incoming) / appendLog(outgoing)
-//   → 写入 userData/channels/log.jsonl (一行一 JSON)
-//   → 同时维护内存 lastN 数组（默认 200 条）
+// Data flow:
+//   After dispatcher completes inbound/outbound -> appendLog(incoming) / appendLog(outgoing)
+//   -> written to userData/channels/log.jsonl (one JSON line per entry)
+//   -> maintains in-memory lastN array (default 200 entries)
 //
-// 读：
-//   getRecentLog(limit) → 最近 N 条倒序
-//   clearLog() → 清磁盘 + 内存
+// Read:
+//   getRecentLog(limit) -> recent N entries in reverse chronological order
+//   clearLog() -> cleans disk + memory
 import * as fs from "fs";
 import * as path from "path";
 import { app } from "electron";
@@ -15,7 +15,7 @@ import { app } from "electron";
 const LOG = "[ChannelLog]";
 
 export interface LogEntry {
-  /** ISO 时间戳 */
+  /** ISO timestamp */
   at: string;
   /** "incoming" | "outgoing" */
   dir: "incoming" | "outgoing";
@@ -24,7 +24,7 @@ export interface LogEntry {
   senderName?: string;
   chatId: string;
   text: string;
-  /** 是否有附件（不进 JSONL，只记布尔） */
+  /** Whether there are attachments (boolean only, not serialized in detail) */
   hasAttachments?: boolean;
 }
 
@@ -44,7 +44,7 @@ function ensureDir(): void {
 
 let appendsSincePrune = 0;
 
-/** 追加一条日志。失败不影响主流程。 */
+/** Append a log entry. Failures do not interrupt the main process. */
 export function appendLog(entry: Omit<LogEntry, "at">): void {
   const full: LogEntry = { at: new Date().toISOString(), ...entry };
   inMemory.push(full);
@@ -55,7 +55,7 @@ export function appendLog(entry: Omit<LogEntry, "at">): void {
     ensureDir();
     fs.appendFileSync(filePath(), JSON.stringify(full) + "\n", "utf8");
     appendsSincePrune++;
-    // 只有每 100 次写入才做一次文件截断，避免每次消息都全量重读磁盘
+    // Truncate file every 100 appends to prevent disk reading overhead
     if (appendsSincePrune >= 100) {
       appendsSincePrune = 0;
       if (fs.existsSync(filePath())) {
@@ -72,13 +72,13 @@ export function appendLog(entry: Omit<LogEntry, "at">): void {
   }
 }
 
-/** 读最近 N 条（最新在前）。 */
+/** Read recent N entries (newest first). */
 export function getRecentLog(limit = 100): LogEntry[] {
   const n = Math.max(1, Math.min(MAX_INMEM, limit));
   if (inMemory.length > 0) {
     return [...inMemory].slice(-n).reverse();
   }
-  // 内存空（刚启动）→ 从磁盘读
+  // If memory empty (fresh startup), read from disk
   try {
     const buf = fs.readFileSync(filePath(), "utf8");
     const lines = buf.split("\n").filter((l) => l.length > 0);
@@ -96,7 +96,7 @@ export function getRecentLog(limit = 100): LogEntry[] {
   }
 }
 
-/** 清空日志（磁盘 + 内存）。 */
+/** Clear log (disk + memory). */
 export function clearLog(): { ok: boolean; error?: string } {
   inMemory.length = 0;
   appendsSincePrune = 0;
@@ -112,7 +112,7 @@ export function clearLog(): { ok: boolean; error?: string } {
   }
 }
 
-/** 启动时从磁盘 reload 到内存（避免重启后内存里没有历史）。 */
+/** Reload from disk to memory at startup. */
 export function reloadLogFromDisk(): void {
   try {
     const buf = fs.readFileSync(filePath(), "utf8");
@@ -126,10 +126,9 @@ export function reloadLogFromDisk(): void {
       }
     }
     inMemory.length = 0;
-    // 取最后的 MAX_INMEM 条
     const tail = parsed.slice(-MAX_INMEM);
     inMemory.push(...tail);
   } catch {
-    /* 首次启动无文件，正常 */
+    /* normal on first launch when no log file exists */
   }
 }

@@ -1,5 +1,5 @@
-// ProactiveChat 状态持久化（从原 opener/desire-engine 搬出 + 剃除 opener 专属字段）
-// 文件名改用 "proactive-state.json"，避免与历史 opener-state.json 残留冲突。
+// ProactiveChat state persistence (migrated from opener/desire-engine, stripping opener-only fields)
+// Uses "proactive-state.json" to avoid conflict with legacy opener-state.json.
 import * as fs from "fs";
 import * as path from "path";
 import { app } from "electron";

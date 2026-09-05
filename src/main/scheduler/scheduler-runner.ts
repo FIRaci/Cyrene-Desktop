@@ -7,12 +7,12 @@ import { filterToolsForTask } from "./tool-filter";
 import type { ScheduledRunResult, ScheduledTask, ScheduledTaskHistoryEntry } from "./types";
 
 /**
- * 第一期：scheduler 的 buildOptions 返回"传统"形式（包含 system 消息）。
- * CyreneAgent 暂时通过 fallback 兼容：检测 options.messages[0].role === "system" 时，
- * 用它作为 soulSystemBaseContent（重复一次），toolSystemContent 用同一个串（暂时不拆分）。
+ * Phase 1: scheduler buildOptions returns legacy format (containing system message).
+ * CyreneAgent temporarily fallbacks: when options.messages[0].role === "system",
+ * uses it as soulSystemBaseContent, and toolSystemContent uses the same string.
  *
- * 第二期：scheduler 同步迁移到 tool_system / soul_system 分阶段，buildOptions 改为返回
- * 带 toolSystemContent / soulSystemBaseContent 的 CyreneRunOptions。
+ * Phase 2: scheduler migrates to separate tool_system / soul_system phases, with buildOptions returning
+ * CyreneRunOptions with toolSystemContent / soulSystemBaseContent.
  */
 type LegacyRunOptions = Omit<CyreneRunOptions, "toolSystemContent" | "soulSystemBaseContent">;
 
@@ -61,8 +61,8 @@ export function createSchedulerRunner(deps: RunnerDeps) {
       const legacyOptions = await deps.buildOptions(task);
       legacyOptions.tools = effectiveTools;
 
-      // 第一期兼容：把传统 messages 里的 system 消息拆出来作为 soulSystemBaseContent。
-      // toolSystemContent 暂用同一份（scheduler 第二期再迁）。
+      // Phase 1 compatibility: extract system message from legacy messages as soulSystemBaseContent.
+      // toolSystemContent temporarily uses the same string.
       const sysIdx = legacyOptions.messages.findIndex((m) => m.role === "system");
       let soulSystemBaseContent: string;
       let messages = legacyOptions.messages;
@@ -73,7 +73,7 @@ export function createSchedulerRunner(deps: RunnerDeps) {
       } else {
         soulSystemBaseContent = "";
       }
-      const toolSystemContent = soulSystemBaseContent; // 第一期暂用同一份
+      const toolSystemContent = soulSystemBaseContent; // Phase 1 uses same string
 
       const options: CyreneRunOptions = {
         ...legacyOptions,

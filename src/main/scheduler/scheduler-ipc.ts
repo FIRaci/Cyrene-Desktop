@@ -21,7 +21,7 @@ export interface SchedulerToolInfo {
   risk: string;
 }
 
-/** 通知所有窗口任务列表已变更 */
+/** Notify all windows that task list has changed */
 function broadcastChanged(): void {
   for (const win of BrowserWindow.getAllWindows()) {
     if (!win.isDestroyed()) {

@@ -48,7 +48,7 @@ declare global {
   }
 }
 
-// 没有 preload 时给浏览器跑留个 no-op，方便 vite 单独打开 sidebar 调试
+// Fallback no-op when preload is absent, allowing sidebar debugging directly in browser
 if (!window.sidebar) {
   (window as unknown as { sidebar: SidebarApi }).sidebar = {
     minimize: () => {},
@@ -99,20 +99,11 @@ const FEELING_ICON: Record<RuntimeFeeling, string> = {
   Shy: "../feeling/shy.png",
 };
 
-function applyRuntimeDisabled(): void {
-	  statusEmojiEl.innerHTML = '<svg width="22" height="22" viewBox="0 0 48 48" fill="none" aria-hidden="true" style="display:block"><title>General Settings</title><path d="M18.2838 43.1713C14.9327 42.1736 11.9498 40.3213 9.58787 37.867C10.469 36.8227 11 35.4734 11 34.0001C11 30.6864 8.31371 28.0001 5 28.0001C4.79955 28.0001 4.60139 28.01 4.40599 28.0292C4.13979 26.7277 4 25.3803 4 24.0001C4 21.9095 4.32077 19.8938 4.91579 17.9995C4.94381 17.9999 4.97188 18.0001 5 18.0001C8.31371 18.0001 11 15.3138 11 12.0001C11 11.0488 10.7786 10.1493 10.3846 9.35011C12.6975 7.1995 15.5205 5.59002 18.6521 4.72314C19.6444 6.66819 21.6667 8.00013 24 8.00013C26.3333 8.00013 28.3556 6.66819 29.3479 4.72314C32.4795 5.59002 35.3025 7.1995 37.6154 9.35011C37.2214 10.1493 37 11.0488 37 12.0001C37 15.3138 39.6863 18.0001 43 18.0001C43.0281 18.0001 43.0562 17.9999 43.0842 17.9995C43.6792 19.8938 44 21.9095 44 24.0001C44 25.3803 43.8602 26.7277 43.594 28.0292C43.3986 28.01 43.2005 28.0001 43 28.0001C39.6863 28.0001 37 30.6864 37 34.0001C37 35.4734 37.531 36.8227 38.4121 37.867C36.0502 40.3213 33.0673 42.1736 29.7162 43.1713C28.9428 40.752 26.676 39.0001 24 39.0001C21.324 39.0001 19.0572 40.752 18.2838 43.1713Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M24 31C27.866 31 31 27.866 31 24C31 20.134 27.866 17 24 17C20.134 17 17 20.134 17 24C17 27.866 20.134 31 24 31Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/></svg>';
-	  statusLabelEl.textContent = "Please enable in settings";
-	  feelingEmojiEl.innerHTML = '<svg width="22" height="22" viewBox="0 0 48 48" fill="none" aria-hidden="true" style="display:block"><title>General Settings</title><path d="M18.2838 43.1713C14.9327 42.1736 11.9498 40.3213 9.58787 37.867C10.469 36.8227 11 35.4734 11 34.0001C11 30.6864 8.31371 28.0001 5 28.0001C4.79955 28.0001 4.60139 28.01 4.40599 28.0292C4.13979 26.7277 4 25.3803 4 24.0001C4 21.9095 4.32077 19.8938 4.91579 17.9995C4.94381 17.9999 4.97188 18.0001 5 18.0001C8.31371 18.0001 11 15.3138 11 12.0001C11 11.0488 10.7786 10.1493 10.3846 9.35011C12.6975 7.1995 15.5205 5.59002 18.6521 4.72314C19.6444 6.66819 21.6667 8.00013 24 8.00013C26.3333 8.00013 28.3556 6.66819 29.3479 4.72314C32.4795 5.59002 35.3025 7.1995 37.6154 9.35011C37.2214 10.1493 37 11.0488 37 12.0001C37 15.3138 39.6863 18.0001 43 18.0001C43.0281 18.0001 43.0562 17.9999 43.0842 17.9995C43.6792 19.8938 44 21.9095 44 24.0001C44 25.3803 43.8602 26.7277 43.594 28.0292C43.3986 28.01 43.2005 28.0001 43 28.0001C39.6863 28.0001 37 30.6864 37 34.0001C37 35.4734 37.531 36.8227 38.4121 37.867C36.0502 40.3213 33.0673 42.1736 29.7162 43.1713C28.9428 40.752 26.676 39.0001 24 39.0001C21.324 39.0001 19.0572 40.752 18.2838 43.1713Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M24 31C27.866 31 31 27.866 31 24C31 20.134 27.866 17 24 17C20.134 17 17 20.134 17 24C17 27.866 20.134 31 24 31Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/></svg>';
-
-  feelingLabelEl.textContent = "Please enable in settings";
-}
+const statusCardEl = document.querySelector(".panel-card--status") as HTMLElement | null;
+const feelingCardEl = document.querySelector(".panel-card--feeling") as HTMLElement | null;
 
 function applyRuntimeState(state: RuntimeState | null): void {
   latestRuntimeState = state;
-  if (!runtimeSyncEnabled) {
-    applyRuntimeDisabled();
-    return;
-  }
   const status = state?.status ?? "Accompanying";
   const feeling = state?.feeling ?? "Calm";
   const statusIcon = STATUS_ICON[status] ?? STATUS_ICON["Accompanying"];
@@ -135,14 +126,12 @@ async function initRuntimeState(): Promise<void> {
 
 function applyModelConfig(config: ModelConfig | null): void {
   const connected = Boolean(config?.connected);
-  const wasRuntimeSyncEnabled = runtimeSyncEnabled;
   runtimeSyncEnabled = config?.runtimeSync === "local" || config?.runtimeSync === "llm";
   onlineStatusLabel.textContent = connected ? "Online" : "Offline";
   onlineBadge?.classList.toggle("is-offline", !connected);
-  // "正在喂养"显示优先级：用户Nickname > 厂商短名 > model id > 兜底
+  // Display priority: user nickname > vendor short name > model id > fallback
   feedingModelEl.textContent = config?.displayName || config?.shortName || config?.model || "Model not selected";
-  if (!runtimeSyncEnabled) applyRuntimeDisabled();
-  else if (!wasRuntimeSyncEnabled) applyRuntimeState(latestRuntimeState);
+  applyRuntimeState(latestRuntimeState);
 }
 
 async function initModelConfig(): Promise<void> {
@@ -154,7 +143,7 @@ async function initModelConfig(): Promise<void> {
   }
   window.modelConfig?.onChanged((config) => applyModelConfig(config));
 }
-// Always On Top toggle：点 📌 切换 alwaysOnTop，按钮高亮态反映当前是否已Always On Top。
+// Always On Top toggle: click pin to toggle alwaysOnTop; button highlight reflects active state.
 pinBtn.addEventListener("click", async () => {
   const pinned = await window.sidebar?.toggleAlwaysOnTop();
   const isPinned = Boolean(pinned);
@@ -175,8 +164,28 @@ settingsBtn.addEventListener("click", () => {
   window.sidebar?.openSettings();
 });
 
+statusCardEl?.addEventListener("click", () => {
+  window.sidebar?.openSettings("api");
+});
+statusCardEl?.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" || e.key === " ") {
+    e.preventDefault();
+    window.sidebar?.openSettings("api");
+  }
+});
+
+feelingCardEl?.addEventListener("click", () => {
+  window.sidebar?.openSettings("api");
+});
+feelingCardEl?.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" || e.key === " ") {
+    e.preventDefault();
+    window.sidebar?.openSettings("api");
+  }
+});
+
 modelSwitchBtn.addEventListener("click", () => {
-  // "Switch Model"直奔 API 配置标签，而不是Default的通用标签
+  // "Switch Model" navigates directly to the API configuration tab instead of default general tab
   window.sidebar?.openSettings("api");
 });
 
@@ -184,8 +193,8 @@ callBtn.addEventListener("click", () => {
   window.sidebar?.openCall();
 });
 
-// "Open Chat"：拿到最近一条会话 id，让 main Open Chat窗口并加载它；
-// 没有任何会话时先建一个再打开，保证点按钮总能进到一个具体会话。
+// "Open Chat": retrieve latest session ID, open chat window and load it in main process;
+// if no sessions exist, create one first to ensure button always enters a concrete session.
 openChatBtn.addEventListener("click", async () => {
   const chatStore = (window as unknown as {
     chatStore?: {

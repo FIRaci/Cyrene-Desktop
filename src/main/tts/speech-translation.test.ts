@@ -21,7 +21,7 @@ describe("translateEnglishToMandarinSpeech", () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
-        choices: [{ message: { content: "主人，你好呀" } }],
+        choices: [{ message: { content: "Master, hello there" } }],
       }),
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -35,7 +35,7 @@ describe("translateEnglishToMandarinSpeech", () => {
       },
     );
 
-    expect(result).toBe("主人，你好呀");
+    expect(result).toBe("Master, hello there");
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
     expect(body.messages[1].content).toBe("Hello Master");

@@ -1,23 +1,23 @@
 /**
- * <think> 标签流式过滤器。
+ * <think> tag streaming filter.
  *
- * 用于 AG-UI 事件桥层，防止模型的思维链标签泄漏到用户可见文本。
+ * Used in AG-UI event bridge layer to prevent model reasoning chain tags from leaking into user-visible text.
  *
- * 两种模式：
- * - "strict": 过滤全文所有 <think>...</think> 块（用于已知会混入 think 的模型）
- * - "leading-only": 只在消息开头（跳过空白后）以 <think> 开头时才进入过滤模式；
- *   否则原样透传。避免正文讨论 <think> 标签或代码块中的 <think> 被误删。
+ * Two modes:
+ * - "strict": filters all <think>...</think> blocks in entire text (for models known to leak think tags)
+ * - "leading-only": enters filtering mode only when message starts with <think> (after whitespace);
+ *   otherwise passes through as-is to avoid stripping discussion of <think> tags or code blocks.
  *
- * 生命周期：按单条 assistant message（TEXT_MESSAGE_START ~ TEXT_MESSAGE_END）隔离，
- * 不贯穿整个 run。多轮 FC 循环中每次 LLM 调用都有独立的消息边界。
+ * Lifecycle: isolated per assistant message (TEXT_MESSAGE_START ~ TEXT_MESSAGE_END),
+ * does not span entire run. Each LLM call in multi-turn FC loops has an independent message boundary.
  */
 
 export type ThinkFilterMode = "strict" | "leading-only" | "disabled";
 
 export interface ThinkStreamFilter {
-  /** 推入一个 chunk，返回过滤后的可见文本（可能为空字符串）。 */
+  /** Pushes a chunk and returns filtered visible text (may be empty string). */
   push(chunk: string): string;
-  /** 消息结束时 flush 残留的可见文本（可能为空字符串）。 */
+  /** Flushes remaining visible text at message end (may be empty string). */
   flush(): string;
 }
 
@@ -25,10 +25,10 @@ const OPEN_TAG = "<think>";
 const CLOSE_TAG = "</think>";
 
 /**
- * 创建一个全量 <think> 过滤器（strict 模式内部使用）。
- * 跨 chunk 保持状态，处理标签被拆分的情况。
+ * Creates a full <think> filter (used internally by strict mode).
+ * Maintains state across chunks to handle split tags.
  */
-function createStrictFilter(): ThinkStreamFilter {
+function createStrictFilter(onThinkChunk?: (chunk: string) => void): ThinkStreamFilter {
   let pending = "";
   let insideThink = false;
 
@@ -43,10 +43,15 @@ function createStrictFilter(): ThinkStreamFilter {
         if (insideThink) {
           const closeIndex = lower.indexOf(CLOSE_TAG);
           if (closeIndex < 0) {
-            // 保留末尾可能跨 chunk 的部分
-            pending = pending.slice(Math.max(0, pending.length - (CLOSE_TAG.length - 1)));
+            // Keep trailing part that may span across chunks
+            const safeTail = Math.max(0, pending.length - (CLOSE_TAG.length - 1));
+            const thinkPart = pending.slice(0, safeTail);
+            if (thinkPart) onThinkChunk?.(thinkPart);
+            pending = pending.slice(safeTail);
             break;
           }
+          const thinkPart = pending.slice(0, closeIndex);
+          if (thinkPart) onThinkChunk?.(thinkPart);
           pending = pending.slice(closeIndex + CLOSE_TAG.length);
           insideThink = false;
           continue;
@@ -54,14 +59,14 @@ function createStrictFilter(): ThinkStreamFilter {
 
         const openIndex = lower.indexOf(OPEN_TAG);
         if (openIndex < 0) {
-          // 没找到 <think>，输出大部分但保留末尾可能跨 chunk 的部分
+          // <think> not found, output most text but keep trailing part that may span chunks
           const safeLength = Math.max(0, pending.length - (OPEN_TAG.length - 1));
           visible += pending.slice(0, safeLength);
           pending = pending.slice(safeLength);
           break;
         }
 
-        // 找到 <think>，输出它之前的内容
+        // Found <think>, output preceding content
         visible += pending.slice(0, openIndex);
         pending = pending.slice(openIndex + OPEN_TAG.length);
         insideThink = true;
@@ -72,7 +77,7 @@ function createStrictFilter(): ThinkStreamFilter {
 
     flush(): string {
       if (insideThink) {
-        // 未闭合的 <think>：丢弃内容
+        if (pending) onThinkChunk?.(pending);
         pending = "";
         return "";
       }
@@ -84,18 +89,18 @@ function createStrictFilter(): ThinkStreamFilter {
 }
 
 /**
- * 创建一个 leading-only 过滤器。
+ * Creates a leading-only filter.
  *
- * 行为：
- * 1. 初始为 "buffering" 态，累积字符直到能判断消息是否以 <think> 开头
- * 2. 如果开头（跳过空白）是 <think> -> 进入 "filtering" 态，后续全部走 strict 过滤
- * 3. 如果开头不是 <think> -> 进入 "passthrough" 态，后续原样透传
+ * Behavior:
+ * 1. Initially "buffering", accumulates characters until it can determine if message starts with <think>
+ * 2. If start is <think> -> enters "filtering" state, subsequent chunks follow strict filtering
+ * 3. If start is not <think> -> enters "passthrough" state, subsequent chunks pass through directly
  */
-function createLeadingOnlyFilter(): ThinkStreamFilter {
+function createLeadingOnlyFilter(onThinkChunk?: (chunk: string) => void): ThinkStreamFilter {
   type State = "buffering" | "filtering" | "passthrough";
   let state: State = "buffering";
   let buffer = "";
-  let inner: ThinkStreamFilter = createStrictFilter();
+  let inner: ThinkStreamFilter = createStrictFilter(onThinkChunk);
 
   return {
     push(chunk: string): string {
@@ -107,7 +112,7 @@ function createLeadingOnlyFilter(): ThinkStreamFilter {
       buffer += chunk;
       const trimmed = buffer.trimStart();
 
-      // 已确定以 <think> 开头
+      // Confirmed starts with <think>
       if (trimmed.toLowerCase().startsWith(OPEN_TAG)) {
         state = "filtering";
         const result = inner.push(buffer);
@@ -115,7 +120,7 @@ function createLeadingOnlyFilter(): ThinkStreamFilter {
         return result;
       }
 
-      // 第一个非空白字符不是 '<'，确定不是 <think>
+      // First non-whitespace char is not '<', confirmed not <think>
       if (trimmed.length > 0 && !trimmed.startsWith("<")) {
         state = "passthrough";
         const result = buffer;
@@ -123,7 +128,7 @@ function createLeadingOnlyFilter(): ThinkStreamFilter {
         return result;
       }
 
-      // 以 '<' 开头但还不够 7 个字符判断
+      // Starts with '<' but fewer than 7 chars to determine
       if (trimmed.length >= OPEN_TAG.length && !trimmed.toLowerCase().startsWith(OPEN_TAG)) {
         state = "passthrough";
         const result = buffer;
@@ -131,14 +136,14 @@ function createLeadingOnlyFilter(): ThinkStreamFilter {
         return result;
       }
 
-      // 字符不够，继续缓冲
+      // Not enough characters, keep buffering
       return "";
     },
 
     flush(): string {
       if (state === "passthrough") return "";
       if (state === "buffering") {
-        // 消息结束仍未遇到 <think>，输出全部缓冲
+        // Message ended without encountering <think>, flush all buffered content
         state = "passthrough";
         const result = buffer;
         buffer = "";
@@ -151,26 +156,30 @@ function createLeadingOnlyFilter(): ThinkStreamFilter {
 }
 
 /**
- * 创建 <think> 流式过滤器。
+ * Creates a <think> stream filter.
  *
  * @param mode "strict" | "leading-only" | "disabled"
- * - "strict": 过滤全文所有 <think> 块
- * - "leading-only": 只过滤消息开头的 <think> 块（默认，最安全）
- * - "disabled": 不过滤，原样透传
+ * - "strict": filters all <think> blocks in full text
+ * - "leading-only": only filters leading <think> blocks at start of message (default, safest)
+ * - "disabled": no filtering, pass through as-is
+ * @param onThinkChunk optional callback receiving content extracted from within <think> blocks
  */
-export function createThinkFilter(mode: ThinkFilterMode = "leading-only"): ThinkStreamFilter {
+export function createThinkFilter(
+  mode: ThinkFilterMode = "leading-only",
+  onThinkChunk?: (chunk: string) => void,
+): ThinkStreamFilter {
   if (mode === "disabled") {
     return { push: (s: string) => s, flush: () => "" };
   }
   if (mode === "strict") {
-    return createStrictFilter();
+    return createStrictFilter(onThinkChunk);
   }
-  return createLeadingOnlyFilter();
+  return createLeadingOnlyFilter(onThinkChunk);
 }
 
 /**
- * 对完整文本一次性剥离 <think> 块（非流式场景使用）。
- * 保留未闭合 <think> 之后的内容会被丢弃。
+ * Strips <think> blocks from complete text in one pass (for non-streaming scenarios).
+ * Content after an unclosed <think> is discarded.
  */
 export function stripThinkBlocks(text: string): string {
   return text

@@ -90,7 +90,7 @@ export interface LangGraphAgentLoopOptions {
   onEvent?: (event: TwoPhaseEvent) => void;
   recordUsage?: (input: number, output: number, calls: number) => void;
   signal?: AbortSignal;
-  /** 标记 abort 来源（first-source-wins），由 CyreneAgent 注入 */
+  /** Flags abort source (first-source-wins), injected by CyreneAgent */
   markAbort?: (source: AbortSource) => void;
   cleanMessages?: ChatMessage[];
   actionGateSystemPrompt?: string;
@@ -101,7 +101,7 @@ export interface LangGraphAgentLoopOptions {
   askSystemContent?: string;
   trustedAskUserProfile?: TrustedAskUserProfile;
   requestUserClarification?: (card: AskClarificationCard) => Promise<AskUserAnswer>;
-  /** Task Router 可用 Skill 列表（feature flag 开启时由 build-options 传入） */
+  /** Task Router available Skill list (passed from build-options when feature flag enabled) */
   availableSkills?: SkillRouteInfo[];
 }
 
@@ -164,8 +164,8 @@ async function callAdapter(
         fetchTimer.end(`status=${response.status}`);
         if (!response.ok) {
           const body = await response.text().catch(() => "");
-          // 结构化诊断日志：打印最终 wire-level 请求关键字段 + HTTP 响应
-          // 不打印 API Key、完整 messages、完整工具 schema
+          // Structured diagnostic log: logs key wire-level request fields + HTTP response
+          // Does not log API Key, full messages, or full tool schemas
           try {
             const wireBody = JSON.parse(http.body as string) as Record<string, unknown>;
             console.error("[LLM-HTTP] failed request", {
@@ -250,11 +250,11 @@ export const SOUL_NO_TOOL_DIRECTIVE = [
 ].join("\n");
 
 function stripToolProtocol(text: string): string {
-  // MiniMax 内部协议使用 \uffff 作为分隔符；合法回复中不应出现
+  // MiniMax internal protocol uses \uffff as delimiter; should not appear in valid replies
   const uffffIndex = text.indexOf("\uffff");
   if (uffffIndex >= 0) text = text.slice(0, uffffIndex);
-  // 中文标签协议块：[系统提示]/[工具调用]/[工具结果]
-  const labelIndex = text.search(/\[系统提示\]|\[工具调用\]|\[工具结果\]/);
+  // Protocol label block: [system prompt]/[tool call]/[tool result]
+  const labelIndex = text.search(/\[\u7cfb\u7edf\u63d0\u793a\]|\[\u5de5\u5177\u8c03\u7528\]|\[\u5de5\u5177\u7ed3\u679c\]/);
   if (labelIndex >= 0) text = text.slice(0, labelIndex);
   return text
     .split("]<]minimax[>[").join("")
@@ -282,7 +282,7 @@ function referencePolicyFor(tool: ToolDefinition): ActionReferencePolicy {
   return "none";
 }
 
-/** 从工具的 controlledInput 中收集所有 context_ref/context_ref_array 条目的 expectedKind */
+/** Collect expectedKind for all context_ref/context_ref_array entries from tool controlledInput */
 function expectedRefKindsFor(tool: ToolDefinition): Set<string> | undefined {
   const kinds = new Set<string>();
   for (const policy of Object.values(tool.controlledInput ?? {})) {
@@ -295,12 +295,12 @@ function expectedRefKindsFor(tool: ToolDefinition): Set<string> | undefined {
   return kinds.size > 0 ? kinds : undefined;
 }
 
-/** Soul 失败时的确定性部分成功回复（不调用模型） */
+/** Deterministic partial success reply when Soul fails (does not call model) */
 function buildPartialSuccessReply(status: RunExecutionStatus): string {
   const lines: string[] = [];
 
   if (status.taskCompletionConfirmed && status.createdArtifacts.length > 0) {
-    // 任务已确认完成 + 有文件产物
+    // Task confirmed complete + has file artifacts
     lines.push("The task steps completed and produced these files:");
     for (const a of status.createdArtifacts) {
       lines.push(`- ${a.path}`);
@@ -308,7 +308,7 @@ function buildPartialSuccessReply(status: RunExecutionStatus): string {
     lines.push("");
     lines.push("The final response could not be generated, but you can review the files above.");
   } else if (status.successfulTools.length > 0) {
-    // 有成功工具但任务未确认完成
+    // Has successful tools but task not confirmed complete
     lines.push("Some operations completed:");
     for (const t of status.successfulTools) {
       lines.push(`- ${t.actionLabel}`);
@@ -338,7 +338,7 @@ export async function runLangGraphAgentLoop(options: LangGraphAgentLoopOptions):
   }
   const perCallTimeout = Math.max(1_000, Math.min(75_000, options.timeoutMs));
   const enabledTools = options.tools.filter((tool) => tool.enabled);
-  // 过滤后的版本（按 inPlanMode 动态切换）
+  // Filtered version (dynamically switched based on inPlanMode)
   let enabledToolsFiltered = enabledTools;
   let runnableToolIdsFiltered: Set<string> = new Set(enabledTools.map((t) => t.id));
   const runnableToolIds = new Set(enabledTools.map((tool) => tool.id));
@@ -358,7 +358,7 @@ export async function runLangGraphAgentLoop(options: LangGraphAgentLoopOptions):
   const executionLedger = options.executionLedger ?? new ExecutionLedger();
   const usageRecorder = options.recordUsage ?? ((input, output, calls) => recordUsage(input, output, calls));
 
-  // ── 执行状态追踪 ────────────────────────
+  // -- Execution status tracking --
   const executionStatus: RunExecutionStatus = {
     phase: "context",
     successfulTools: [],
@@ -503,7 +503,7 @@ export async function runLangGraphAgentLoop(options: LangGraphAgentLoopOptions):
           ),
           signal: options.signal,
         });
-        // 初始化第一个步骤
+        // Initialize first step
         const firstStep = plan.steps.find((s) => s.status === "pending");
         if (firstStep) {
           firstStep.executionId = generateExecutionId();
@@ -598,13 +598,13 @@ export async function runLangGraphAgentLoop(options: LangGraphAgentLoopOptions):
     decide: async (state) => {
       executionStatus.phase = "action_gate";
       ensureBudget();
-      // 异常兜底：正常路径下 routeAfterTool 已经在工具成功后确定性路由到 soul，
-      // 不会走到这里。只有 routeAfterTool 路由回 decide（replan 或可重试失败）后，
-      // 模型又重复同一已完成动作时才触发。主路径不依赖此检查。
+      // Fallback guard: on normal paths, routeAfterTool deterministically routes to soul after tool success,
+      // and will not reach here. Only triggered when routeAfterTool routes back to decide (replan or retryable failure)
+      // and the model repeats the exact completed action. Happy path does not depend on this check.
       const lastResult = state.toolResults[state.toolResults.length - 1];
 
-      // Plan 模式工具过滤：隐藏 hideInPlanMode 工具，确保 Action Gate 和 Native FC 都看不到
-      // 包括 Plan 创建失败降级后的 direct 模式（requestedExecutionMode === "plan"）
+      // Plan mode tool filtering: hide hideInPlanMode tools, ensuring Action Gate and Native FC cannot see them
+      // including direct mode degraded from Plan creation failure (requestedExecutionMode === "plan")
       const inPlanMode = (state.taskPlan != null
         && !["completed", "failed", "cancelled"].includes(state.taskPlan.status))
         || state.taskRoute?.requestedExecutionMode === "plan";
@@ -726,7 +726,7 @@ export async function runLangGraphAgentLoop(options: LangGraphAgentLoopOptions):
         if (decision.decision === "act") {
           const toolId = capabilities.find((item) => item.capability === decision.capability)?.toolId
             ?? decision.capability;
-          // plan 模式下显示当前步骤进度
+          // In plan mode display current step progress
           if (state.taskPlan && state.currentStepId) {
             const step = findStep(state.taskPlan, state.currentStepId);
             if (step) {
@@ -783,7 +783,7 @@ export async function runLangGraphAgentLoop(options: LangGraphAgentLoopOptions):
       const selectedTool = resolveToolForCapability(enabledToolsFiltered, decision.capability);
       options.onEvent?.({ type: "step_started", stepName: `agent-graph-tool-${selectedTool.id}` });
       try {
-        // 引用验证：检查需要可信引用的工具的 targetRefs 是否有效（含类型检查）
+        // Reference validation: check if targetRefs of tools requiring trusted references are valid (including type check)
         const controlledInput = selectedTool.controlledInput;
         const needsRefVerification = controlledInput
           && Object.values(controlledInput).some((v) => {
@@ -796,7 +796,7 @@ export async function runLangGraphAgentLoop(options: LangGraphAgentLoopOptions):
           try {
             for (const ref of decision.targetRefs) {
               if (expectedKinds) {
-                // 有 kind 约束：逐个 kind 尝试，全部不匹配才失败
+                // Has kind constraint: test each kind sequentially, fail only if none match
                 let resolved = false;
                 for (const kind of expectedKinds) {
                   try {
@@ -853,8 +853,8 @@ export async function runLangGraphAgentLoop(options: LangGraphAgentLoopOptions):
                 trackUsage(response.usage);
                 return response;
               } catch (err) {
-                // HTTP 失败的详细诊断已在 callAdapter 中打印（[LLM-HTTP] failed request）
-                // 这里只标记 Native FC 上下文
+                // Detailed diagnosis of HTTP failure is already logged in callAdapter ([LLM-HTTP] failed request)
+                // Only marks Native FC context here
                 console.error(`[NativeFC] invoke failed: tool=${selectedTool.id} model=${request.model} tools=${request.tools?.length ?? 0}`);
                 throw err;
               }
@@ -911,7 +911,7 @@ export async function runLangGraphAgentLoop(options: LangGraphAgentLoopOptions):
         const deduplicated = execution.cached && outcome.terminal;
         if (deduplicated) {
           duplicateTerminalStreak += 1;
-          // 连续 2 次重复同一终态动作，说明模型没有吸收"动作已完成"的事实，提前抛错。
+          // Repeating the same terminal action 2 consecutive times indicates the model did not absorb the "action completed" fact; throw error early.
           if (duplicateTerminalStreak >= 2) {
             throw new AgentRuntimeError(
               "E_AGENT_NO_PROGRESS",
@@ -952,14 +952,14 @@ export async function runLangGraphAgentLoop(options: LangGraphAgentLoopOptions):
         options.onEvent?.({ type: "tool_call_result", toolCallId, messageId, content: outcome.output });
         options.onEvent?.({ type: "tool_call_end", toolCallId });
 
-        // ── 记录成功的工具到 executionStatus ──
+        // -- Record successful tools into executionStatus --
         if (result.status === "succeeded") {
           const toolExec: SuccessfulToolExecution = {
             capabilityId: result.capabilityId ?? selectedTool.id,
             actionLabel: selectedTool.soulActionLabel ?? selectedTool.name ?? selectedTool.id,
             completionClaims: [],
           };
-          // 从 completionEvidence 提取 claims
+          // Extract claims from completionEvidence
           if (selectedTool.completionEvidence) {
             for (const ev of selectedTool.completionEvidence) {
               if (ev.kind === "tool_succeeded") {
@@ -971,15 +971,15 @@ export async function runLangGraphAgentLoop(options: LangGraphAgentLoopOptions):
           }
           executionStatus.successfulTools.push(toolExec);
 
-          // 从可信 completionEvidence 提取文件产物
+          // Extract file artifacts from trusted completionEvidence
           if (selectedTool.completionEvidence?.some((e) => e.kind === "tool_succeeded")) {
             const artifactKinds: Record<string, CreatedArtifact["kind"]> = {
               write_word: "docx", write_excel: "xlsx", write_pdf: "pdf", write_markdown: "markdown",
             };
             const kind = artifactKinds[selectedTool.id];
             if (kind) {
-              // 从工具输出中提取路径（只接受声明了产物的工具）
-              const pathMatch = result.output.match(/已生成[：:]\s*(.+)$/);
+              // Extract path from tool output (only accept tools declaring artifacts)
+              const pathMatch = result.output.match(/(?:\u5df2\u751f\u6210|Generated)[：:]\s*(.+)$/);
               if (pathMatch) {
                 executionStatus.createdArtifacts.push({
                   path: pathMatch[1].trim(),
@@ -1036,7 +1036,7 @@ export async function runLangGraphAgentLoop(options: LangGraphAgentLoopOptions):
           stream: false,
           ...(options.soulSampling ?? {}),
         };
-        // 脱敏日志：只记结构，不记内容
+        // Sanitized log: record structure only, not content
         debugLog(`${LOG_PREFIX} node=soul messages=${soulMessages.length} tools=none structuredOutput=none`);
         for (let i = 0; i < soulMessages.length; i++) {
           const m = soulMessages[i] as unknown as Record<string, unknown>;
@@ -1061,23 +1061,23 @@ export async function runLangGraphAgentLoop(options: LangGraphAgentLoopOptions):
     },
   }));
 
-    // 图执行成功，标记 taskCompletionConfirmed
+    // Graph execution succeeded, mark taskCompletionConfirmed
     executionStatus.taskCompletionConfirmed = true;
   } catch (error) {
-    // 不重复包装
+    // Do not wrap repeatedly
     if (error instanceof AgentExecutionError) throw error;
 
     const snapshot = snapshotRunExecutionStatus(executionStatus);
 
-    // ── Soul 阶段失败 + 有成功工具 → 部分成功 fallback ──
-    // 用户取消（E_AGENT_GRAPH_CANCELLED）不触发
+    // -- Soul phase failed + has successful tool -> partial success fallback --
+    // User cancellation (E_AGENT_GRAPH_CANCELLED) does not trigger
     const isUserCancel = error instanceof Error && error.message === "E_AGENT_GRAPH_CANCELLED";
     if (snapshot.phase === "soul" && snapshot.successfulTools.length > 0 && !isUserCancel) {
       const partialReply = buildPartialSuccessReply(snapshot);
       flowLog("7. Soul failed, falling back to partial success result");
       return {
         reply: partialReply,
-        toolResults: [],  // 部分成功时不返回完整工具结果（已在 snapshot 中）
+        toolResults: [],  // Do not return full tool results on partial success (already in snapshot)
         totalUsage: usageInput || usageOutput ? { input: usageInput, output: usageOutput } : undefined,
         soulPhaseReason: "tool_error",
       };

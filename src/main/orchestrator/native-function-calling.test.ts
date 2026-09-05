@@ -5,8 +5,8 @@ import type { ChatRequest, ChatResponse } from "./vendors/types";
 
 function tool(properties: ToolDefinition["inputSchema"]["properties"] = {}): ToolDefinition {
   return {
-    id: "music_search", capability: "music.search", name: "搜索音乐",
-    description: "搜索真实歌曲", enabled: true,
+    id: "music_search", capability: "music.search", name: "Search music",
+    description: "Search real tracks", enabled: true,
     inputSchema: {
       type: "object", properties,
       required: Object.keys(properties),
@@ -25,14 +25,14 @@ function response(toolCalls: ChatResponse["toolCalls"], text = ""): ChatResponse
 describe("resolveNativeToolCall", () => {
   it("passes trusted runtime paths and defaults to native argument generation", async () => {
     const invoke = vi.fn(async (_request: ChatRequest) => response([{
-      id: "call-1", name: "music_search", arguments: '{"keyword":"左转灯"}',
+      id: "call-1", name: "music_search", arguments: '{"keyword":"Left Turn Signal"}',
     }]));
 
     await resolveNativeToolCall(({
       model: "m",
       nativeFcSystemPrompt: "test",
       executionBrief: "test",
-      runtimeEnvironmentContext: "默认城市：淄博\n桌面：C:\\Users\\13575\\Desktop",
+      runtimeEnvironmentContext: "Default city: Zibo\nDesktop: C:\\Users\\13575\\Desktop",
       toolResults: [],
       tool: tool({ keyword: { type: "string" } }),
     } as unknown) as Parameters<typeof resolveNativeToolCall>[0], invoke);
@@ -55,7 +55,7 @@ describe("resolveNativeToolCall", () => {
 
   it("uses one native tool schema and accepts only the Adapter-normalized ToolCall", async () => {
     const invoke = vi.fn(async (request: ChatRequest) => response([{
-      id: "call-1", name: "music_search", arguments: '{"keyword":"左转灯"}',
+      id: "call-1", name: "music_search", arguments: '{"keyword":"Left Turn Signal"}',
     }]));
     const result = await resolveNativeToolCall({
       model: "m", nativeFcSystemPrompt: "test", executionBrief: "test",
@@ -66,11 +66,11 @@ describe("resolveNativeToolCall", () => {
       tools: [expect.objectContaining({ name: "music_search" })],
       toolChoiceIntent: { mode: "must_call", toolName: "music_search" },
     }));
-    expect(result).toEqual({ id: "call-1", name: "music_search", arguments: '{"keyword":"左转灯"}' });
+    expect(result).toEqual({ id: "call-1", name: "music_search", arguments: '{"keyword":"Left Turn Signal"}' });
   });
 
   it("rejects text pretending to be a function call", async () => {
-    const invoke = vi.fn(async () => response([], '{"name":"music_search","arguments":{"keyword":"左转灯"}}'));
+    const invoke = vi.fn(async () => response([], '{"name":"music_search","arguments":{"keyword":"Left Turn Signal"}}'));
     await expect(resolveNativeToolCall({
       model: "m", nativeFcSystemPrompt: "test", executionBrief: "test",
       toolResults: [], tool: tool({ keyword: { type: "string" } }),
@@ -79,22 +79,22 @@ describe("resolveNativeToolCall", () => {
 
   it("accepts first same-name tool call when model returns multiple (MiniMax compatibility)", async () => {
     const invoke = vi.fn(async () => response([
-      { id: "call-1", name: "music_search", arguments: '{"keyword":"左转灯"}' },
-      { id: "call-2", name: "music_search", arguments: '{"keyword":"右转灯"}' },
+      { id: "call-1", name: "music_search", arguments: '{"keyword":"Left Turn Signal"}' },
+      { id: "call-2", name: "music_search", arguments: '{"keyword":"Right Turn Signal"}' },
     ]));
     const result = await resolveNativeToolCall({
       model: "m", nativeFcSystemPrompt: "test", executionBrief: "test",
       toolResults: [], tool: tool({ keyword: { type: "string" } }),
     }, invoke);
 
-    // 应接受第一个，丢弃第二个
-    expect(result).toEqual({ id: "call-1", name: "music_search", arguments: '{"keyword":"左转灯"}' });
+    // Should accept first, discard second
+    expect(result).toEqual({ id: "call-1", name: "music_search", arguments: '{"keyword":"Left Turn Signal"}' });
   });
 
   it("rejects when multiple tool calls have different names", async () => {
     const invoke = vi.fn(async () => response([
       { id: "call-1", name: "wrong_tool", arguments: '{}' },
-      { id: "call-2", name: "music_search", arguments: '{"keyword":"左转灯"}' },
+      { id: "call-2", name: "music_search", arguments: '{"keyword":"Left Turn Signal"}' },
     ]));
     await expect(resolveNativeToolCall({
       model: "m", nativeFcSystemPrompt: "test", executionBrief: "test",

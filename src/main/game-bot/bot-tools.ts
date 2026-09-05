@@ -1,27 +1,27 @@
-// bot-tools —— 引擎依赖注入的工具集合接口。
-// 引擎不直接 import screenshot/input/vlm/refs，而通过此接口调用，便于单测 mock。
-// 实际实现由 index.ts 组装（screenshot + input + vlm-locator + refs-store）。
+// bot-tools — interface for underlying capabilities required by the engine.
+// Dependency injection: engine only programs against this interface, without importing concrete implementations directly.
+// Actual implementation is assembled in index.ts (screenshot + input + vlm-locator + refs-store).
 
 export interface BotTools {
-  /** 启动 exe。 */
+  /** Launches executable. */
   launch(exe: string): Promise<void>;
-  /** 截当前屏幕，返回 base64 + 实际像素尺寸。 */
+  /** Captures current screen, returns base64 + actual pixel dimensions. */
   screenshot(): Promise<{ base64: string; mime: string; width: number; height: number } | null>;
-  /** 点击屏幕坐标。 */
+  /** Clicks screen coordinates. */
   click(x: number, y: number): Promise<void>;
-  /** 点击屏幕中心。 */
+  /** Clicks screen center. */
   clickCenter(): Promise<void>;
-  /** 按组合键（如 "F4" / "Alt+F4"）。 */
+  /** Presses key combo (e.g. "F4" / "Alt+F4"). */
   key(combo: string): Promise<void>;
-  /** 视觉定位：参考图 + 描述 → 目标坐标。未找到返回 null。 */
+  /** Visual localization: reference image + description -> target coordinates. Returns null if not found. */
   locate(refName: string, targetDesc?: string): Promise<{ x: number; y: number } | null>;
-  /** 纯语义定位（无参考图，如"列表第一个"）→ 坐标。未找到返回 null。 */
+  /** Pure semantic selection (no reference image, e.g. "first item in list") -> coordinates. Returns null if not found. */
   select(desc: string): Promise<{ x: number; y: number } | null>;
-  /** 视觉判断 → 布尔。无法判断返回 null。 */
+  /** Visual check -> boolean. Returns null if inconclusive. */
   check(ask: string, refName?: string): Promise<boolean | null>;
-  /** 多图比对 → 匹配的参考图序号（0-based）。无法判断返回 null。 */
+  /** Multi-image comparison -> matched reference image index (0-based). Returns null if inconclusive. */
   compare(refNames: string[], ask: string): Promise<number | null>;
 }
 
-/** 进度回调：每个顶层步骤执行前调用。 */
+/** Progress callback: invoked before each top-level step executes. */
 export type ProgressCb = (info: { index: number; total: number; desc: string }) => void;

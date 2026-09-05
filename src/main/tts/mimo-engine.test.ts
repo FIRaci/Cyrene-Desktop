@@ -40,9 +40,9 @@ describe("mimo-engine synthesize", () => {
 
     const result = await synthesize({
       apiKey: "mimo-key",
-      text: "你好呀",
+      text: "Hello there",
       voiceAudioPath,
-      stylePrompt: "温柔、自然，像近距离聊天。",
+      stylePrompt: "Gentle and natural, like an intimate conversation.",
     });
 
     expect(result.audio.equals(audio)).toBe(true);
@@ -59,8 +59,8 @@ describe("mimo-engine synthesize", () => {
     expect(JSON.parse(String(request.body))).toEqual({
       model: "mimo-v2.5-tts-voiceclone",
       messages: [
-        { role: "user", content: "温柔、自然，像近距离聊天。" },
-        { role: "assistant", content: "你好呀" },
+        { role: "user", content: "Gentle and natural, like an intimate conversation." },
+        { role: "assistant", content: "Hello there" },
       ],
       audio: {
         format: "wav",

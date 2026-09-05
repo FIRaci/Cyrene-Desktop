@@ -48,17 +48,17 @@ exports.DEFAULT_DMAE_PARAMS = {
     decayAlpha: 1.5,
     decayBeta: 0.3,
 };
-// ── v4.0 默认 Reward 策略 ──
+// ── v4.0 Default Reward Strategy ──
 // Ru = Bu × (1 + γ · ln(1 + U_old))     [v4.0 §4]
-//   - 连续命中 → 至少 Bu
-//   - 沉默越久 → ln(1+U) 越大 → 久别重逢奖励越猛
-//   - ln 单调递增 + 增长变缓 → 永远不会暴涨（避免无限分）
+//   - Consecutive hits -> at least Bu
+//   - Longer silence -> larger ln(1+U) -> stronger reunion reward
+//   - Logarithmic growth prevents explosion
 //
 // Rm = Bm × e^(−λ · U_old)             [v4.0 §5]
-//   - U_old=0 → 最大 Bm
-//   - U_old 越大 → 指数衰减 → 模型话语权越小
-//   - Active gating 由主循环控制（v4.0 §5 要求 "当前 Activation ≥ PromptThreshold"）
-//   - Rm<D clamp 由主循环控制（v4.0 §8/§9 不变量）
+//   - U_old=0 -> maximum Bm
+//   - Larger U_old -> exponential decay -> diminishing model authority
+//   - Active gating controlled by main loop
+//   - Rm < D clamp enforced by main loop
 class DefaultRewardStrategy {
     userReward(ctx) {
         const { snap, params } = ctx;
@@ -70,10 +70,10 @@ class DefaultRewardStrategy {
     }
 }
 exports.DefaultRewardStrategy = DefaultRewardStrategy;
-// I 不参与（避免高价值条目既涨得快又忘得慢而天然霸榜）。
-// ── v3.4 默认 Decay 策略 ──
-// Decay = (α·US² + β·MS²) / sqrt(I)   [I 仅在 Resistance：高 I = 抵抗强 = 忘得慢]
-// 平方 → 累计加速遗忘 §8.1；除以 sqrt(I) → "价值决定忘得多慢，而不是爱得多深"。
+// Intrinsic value does not participate in reward (prevents permanent dominance).
+// ── v3.4 Default Decay Strategy ──
+// Decay = (alpha * US^2 + beta * MS^2) / sqrt(I)   [High I = strong resistance = slower forgetting]
+// Quadratic -> accelerated forgetting; divided by sqrt(I) -> value determines resistance.
 class QuadraticResistanceDecay {
     compute(ctx) {
         const { entry, snap, params } = ctx;
@@ -85,8 +85,8 @@ class QuadraticResistanceDecay {
     }
 }
 exports.QuadraticResistanceDecay = QuadraticResistanceDecay;
-// ── 状态派生（纯函数，业务层 + 策略层共用）──
-// <=0 → Archived；>= threshold → Active；之间 → Dormant
+// ── State Derivation (Pure function) ──
+// <=0 -> Archived; >= threshold -> Active; in-between -> Dormant
 function deriveState(activation, threshold) {
     if (activation <= 0)
         return "Archived";
@@ -98,16 +98,16 @@ class WorldbookManager {
     entries = [];
     worldbookDir;
     state = new Map();
-    // ── One-Shot cascade：本轮用户命中后连带触发的条目（不入 DMAE 状态表，只本轮有效）──
+    // ── One-Shot Cascade: entries co-triggered after user hit (active for current turn only) ──
     lastCascadeEntries = [];
     params;
     rewardStrategy;
     decayStrategy;
     stateFile;
     debug;
-    // 终态注入上限（详见 worldbook-constants.ts）
+    // Final injection upper bound (see worldbook-constants.ts)
     static MAX_ACTIVE = worldbook_constants_1.WORLDBOOK_CONSTANTS.MAX_ACTIVE;
-    // .md 未写 intrinsic value 时的 fallback（详见 worldbook-constants.ts）
+    // Fallback when .md does not specify intrinsic value (see worldbook-constants.ts)
     static DEFAULT_INTRINSIC_VALUE = worldbook_constants_1.WORLDBOOK_CONSTANTS.DEFAULT_INTRINSIC_VALUE;
     constructor(worldbookDir, options) {
         this.worldbookDir = worldbookDir;
@@ -136,20 +136,20 @@ class WorldbookManager {
             allEntries.push(...entries);
         }
         this.entries = allEntries;
-        // 初始化 DMAE 状态：每条非常驻条目 activation=0（Archived 冷态）
-        // 常驻条目不进 DMAE（始终注入），不给它们分配状态。
+        // Initialize DMAE state: non-permanent entries start at activation = 0 (Archived state)
+        // Permanent entries bypass DMAE (always injected).
         this.state.clear();
         for (const e of this.entries) {
             if (e.enabled && !e.permanent) {
                 this.state.set(e.id, { activation: 0, userSilence: 0, modelSilence: 0 });
             }
         }
-        // v1 持久化 seam：预留，暂为空（重启回 0）
+        // v1 persistence seam: reserved
         this.loadState();
         console.log(`[Worldbook] loaded ${allEntries.length} entries from ${files.length} files; DMAE state initialized for ${this.state.size} non-permanent entries`);
     }
-    // 从内存 entries 加载（不读 fs）：simulator / 测试用。
-    // 复用 loadFromDirectory 的状态初始化逻辑，保证 sim 和生产用同一套初始化路径。
+    // Load from in-memory entries: used by simulator / tests.
+    // Reuses loadFromDirectory state initialization logic for consistency.
     loadFromEntries(entries) {
         this.entries = entries;
         this.state.clear();
@@ -161,13 +161,13 @@ class WorldbookManager {
         this.loadState();
     }
     // Parse markdown format:
-    // ## 条目名
-    // - 触发词: 词1, 词2, 词3
-    // - 常驻: 是
-    // - 优先级: 200
-    // - 内在价值: 60                ← v3.4 新名（与 初始分/initial_score/intrinsic_value 兼容）
+    // ## Entry Name
+    // - triggers: word1, word2, word3
+    // - permanent: true
+    // - priority: 200
+    // - intrinsic_value: 60
     //
-    // 内容段落...
+    // Content paragraph...
     // ---
     parseMarkdown(content, fileName) {
         const entries = [];
@@ -192,36 +192,33 @@ class WorldbookManager {
             let contentStart = i;
             while (i < lines.length) {
                 const metaLine = lines[i].trim();
-                if (metaLine.startsWith("- 触发词:") || metaLine.startsWith("- 触发词：")) {
-                    const val = metaLine.replace(/^-\s*触发词[：:]/, "").trim();
+                if (metaLine.toLowerCase().startsWith("- trigger:") || metaLine.toLowerCase().startsWith("- triggers:") || /^-\s*\u89e6\u53d1\u8bcd[\uff1a:]/.test(metaLine)) {
+                    const val = metaLine.replace(/^-\s*(?:triggers?|\u89e6\u53d1\u8bcd)[\uff1a:]/i, "").trim();
                     keywords = val.split(/[,，、]/).map((k) => k.trim()).filter(Boolean);
                     i++;
                 }
-                else if (metaLine.startsWith("- 常驻:")) {
-                    const val = metaLine.replace(/^-\s*常驻:/, "").trim();
-                    permanent = val === "是" || val === "yes" || val === "true";
+                else if (metaLine.toLowerCase().startsWith("- permanent:") || /^-\s*\u5e38\u9a7b[\uff1a:]/.test(metaLine)) {
+                    const val = metaLine.replace(/^-\s*(?:permanent|\u5e38\u9a7b)[\uff1a:]/i, "").trim().toLowerCase();
+                    permanent = val === "yes" || val === "true" || val === "1" || val === "\u662f";
                     i++;
                 }
-                else if (metaLine.startsWith("- 优先级:")) {
-                    const val = metaLine.replace(/^-\s*优先级:/, "").trim();
+                else if (metaLine.toLowerCase().startsWith("- priority:") || /^-\s*\u4f18\u5148\u7ea7[\uff1a:]/.test(metaLine)) {
+                    const val = metaLine.replace(/^-\s*(?:priority|\u4f18\u5148\u7ea7)[\uff1a:]/i, "").trim();
                     priority = parseInt(val) || 5;
                     i++;
                 }
-                else if (metaLine.startsWith("- 初始分:") || metaLine.startsWith("- 初始分：") ||
-                    metaLine.startsWith("- initial_score:") || metaLine.startsWith("- initial_score：") ||
-                    metaLine.startsWith("- 内在价值:") || metaLine.startsWith("- 内在价值：") ||
-                    metaLine.startsWith("- intrinsic_value:") || metaLine.startsWith("- intrinsic_value：")) {
-                    const val = metaLine.replace(/^-\s*(初始分|initial_score|内在价值|intrinsic_value)[：:]/, "").trim();
+                else if (metaLine.toLowerCase().startsWith("- initial_score:") ||
+                    metaLine.toLowerCase().startsWith("- intrinsic_value:") ||
+                    /^-\s*(?:\u521d\u59cb\u5206|\u5185\u5728\u4ef7\u503c)[\uff1a:]/.test(metaLine)) {
+                    const val = metaLine.replace(/^-\s*(?:initial_score|intrinsic_value|\u521d\u59cb\u5206|\u5185\u5728\u4ef7\u503c)[\uff1a:]/i, "").trim();
                     const parsed = parseFloat(val);
                     intrinsicValue = Number.isFinite(parsed) ? parsed : WorldbookManager.DEFAULT_INTRINSIC_VALUE;
                     i++;
                 }
-                else if (metaLine.startsWith("- 连带触发词:") || metaLine.startsWith("- 连带触发词：") ||
-                    metaLine.startsWith("- 连带触发:") || metaLine.startsWith("- 连带触发：") ||
-                    metaLine.startsWith("- link_triggers:") || metaLine.startsWith("- link_triggers：")) {
-                    const val = metaLine.replace(/^-\s*(连带触发词|连带触发|link_triggers)[：:]/, "").trim();
-                    // "无" / "无" / "" 表示不连带
-                    if (val && val !== "无" && val !== "无" && val !== "none" && val !== "-") {
+                else if (metaLine.toLowerCase().startsWith("- link_triggers:") || /^-\s*(?:\u8fde\u5e26\u89e6\u53d1\u8bcd|\u8fde\u5e26\u89e6\u53d1)[\uff1a:]/.test(metaLine)) {
+                    const val = metaLine.replace(/^-\s*(?:link_triggers|\u8fde\u5e26\u89e6\u53d1\u8bcd|\u8fde\u5e26\u89e6\u53d1)[\uff1a:]/i, "").trim();
+                    // "none" indicates no cascade
+                    if (val && val !== "none" && val !== "-" && val !== "\u65e0") {
                         linkTriggers = val.split(/[,，、]/).map((k) => k.trim()).filter(Boolean);
                     }
                     i++;
@@ -272,22 +269,22 @@ class WorldbookManager {
         }
         return entries;
     }
-    // ── DMAE 打分层：每轮更新所有条目的 Activation/US/MS ──
-    // v3.4 收口公式：
-    //   reward = userHit ? rewardGain × Wake(US_old) × Eff(A_old) : 0   (I 不参与 Reward)
-    //   decay  = (α·US_new² + β·MS_new²) / sqrt(I)                       (I 仅在 Resistance)
+    // ── DMAE Scoring Layer: update Activation/US/MS for all entries every round ──
+    // v3.4 Formulas:
+    //   reward = userHit ? rewardGain * Wake(US_old) * Eff(A_old) : 0   (I does not participate in Reward)
+    //   decay  = (alpha * US_new^2 + beta * MS_new^2) / sqrt(I)          (I in Resistance only)
     //   A_new  = clamp(A_old + reward - decay, 0, MaxScore)
-    //   if userHit && A_old 状态 == Archived: A_new = max(A_new, I)      (★ 仅 Archived 复活时 floor；I 参与 Floor 基线)
-    // MS 语义：距离最近一次"进入上下文"的轮数（userHit 或 modelHit 都重置），不是"模型有没有说过"
-    // ModelHit：只重置 msNew = 0，不给任何 reward（模型没有兴趣表达权 §7.3/§7.4）
-    // Snapshot 语义：每条 entry 独立、先读旧值再统一写，互不影响（DMAE §4/§11.1）。
+    //   if userHit && A_old == Archived: A_new = max(A_new, I)         (Floor on resurrection from Archived)
+    // MS semantics: turns since last entry into context (reset by userHit or modelHit).
+    // ModelHit: resets msNew = 0 without positive reward.
+    // Snapshot semantics: entries evaluated independently from old state.
     updateActivation(userText, modelText) {
         const user = userText ?? "";
         const model = modelText ?? "";
         const params = this.params;
         const max = params.maxScore;
         const changed = [];
-        // ── 第一遍：收集本轮所有 userHit 条目 id（cascade 通道用，DMAE 主循环也要）──
+        // ── Pass 1: Collect all userHit entry IDs this round ──
         const userHitEntryIds = new Set();
         for (const entry of this.entries) {
             if (!entry.enabled || entry.permanent)
@@ -315,32 +312,32 @@ class WorldbookManager {
             const modelHit = entry.keywords.some((kw) => model.includes(kw));
             // ─ silence update ─
             const usNew = userHit ? 0 : usOld + 1;
-            // MS = 距离最近一次"进入上下文"的轮数。用户主动提 OR 模型自然提都属于"进入上下文"，
-            // 所以 userHit 也重置 ms——否则用户连续提但模型不复述时 ms 累积导致 decay 上升、A 反而下降。
+            // MS = turns since last entry into context. User prompt OR model reply counts as context entry,
+            // so userHit also resets ms to avoid wrongful decay.
             const msNew = (userHit || modelHit) ? 0 : msOld + 1;
-            // ─ positive: user reward（仅 userHit，I 不参与） ─
+            // - positive: user reward (userHit only, I does not participate) -
             const userReward = userHit
                 ? this.rewardStrategy.userReward({ entry, snap: { activation: aOld, userSilence: usOld, modelSilence: msOld }, params })
                 : 0;
-            // ─ negative: decay（I 仅在 Resistance） ─
+            // - negative: decay (I in resistance only) -
             const decay = this.decayStrategy.compute({
                 entry,
                 snap: { userSilence: usNew, modelSilence: msNew },
                 params,
             });
-            // ─ positive: model reward（仅 modelHit + Active gating） ─
-            // v4.0 §5：Rm = Bm·e^(-λ·U_old)，仅当 A ≥ PromptThreshold 时给分
-            // v4.0 §8 不变量：Rm < D 严格成立，由主循环 clamp 保证（避免 Rm ≥ D 时仍能涨分）
+            // - positive: model reward (modelHit + Active gating only) -
+            // v4.0: Rm = Bm * e^(-lambda * U_old), awarded only when A >= PromptThreshold
+            // v4.0 invariant: Rm < D strictly holds via main loop clamp
             let modelReward = 0;
-            if (modelHit && deriveState(aOld, params.promptThreshold) === worldbook_constants_1.WORLDBOOK_CONSTANTS.STATES.ACTIVE) {
+            if (modelHit && deriveState(aOld, params.promptThreshold) === worldbook_constants_1.WORLDBOOK_STATES.ACTIVE) {
                 const rawRm = this.rewardStrategy.modelReward({ entry, snap: { activation: aOld, userSilence: usOld, modelSilence: msOld }, params });
-                // 不变量 clamp：Rm = min(Rm, D - ε)
+                // Invariant clamp: Rm = min(Rm, D - eps)
                 modelReward = Math.max(0, Math.min(rawRm, decay - worldbook_constants_1.WORLDBOOK_CONSTANTS.EPSILON));
             }
             // ─ commit ─
             let aNew = aOld + userReward + modelReward - decay;
             aNew = Math.max(0, aNew);
-            // ★ Floor 仅在 Archived 复活时触发（避免高价值条目每次命中都 floor 让 Decay/Wake 失效）
+            // Floor triggered only on resurrection from Archived
             if (userHit && deriveState(aOld, params.promptThreshold) === worldbook_constants_1.WORLDBOOK_CONSTANTS.FLOOR_TRIGGER_STATE) {
                 aNew = Math.max(aNew, entry.intrinsicValue);
             }
@@ -367,12 +364,12 @@ class WorldbookManager {
                 console.log(`  ${c.id}: ${c.aOld.toFixed(1)} → ${c.aNew.toFixed(1)}  (${c.reason})`);
             }
         }
-        // ── One-Shot 联动触发（不入 DMAE 状态表，只本轮有效）──
-        // 规则：只有 userHit 的条目才有连带触发权；cascade 目标不再级联（1 层封顶）。
-        // 防死循环 3 条硬约束：
-        //   1. 1 层封顶：cascade 只从 userHit 触发，cascade 目标不会再 cascade
-        //   2. userHit 拦截：cascade 目标已在 userHit 列表则跳过（已被主动激活）
-        //   3. cascade 集合去重：同条目本轮只 cascade 一次
+        // ── One-Shot Linked Cascade (not stored in DMAE state table, valid for current turn only) ──
+        // Rules: only userHit entries have cascade rights; 1-level cap.
+        // Anti-loop constraints:
+        //   1. 1-level cap: cascade triggered only from userHit, targets do not cascade further
+        //   2. userHit intercept: skip cascade targets already in userHit list
+        //   3. Deduplicate: an entry cascades at most once per round
         this.lastCascadeEntries = [];
         const cascadeInjected = new Set();
         for (const entry of this.entries) {
@@ -382,14 +379,14 @@ class WorldbookManager {
                 continue;
             if (entry.permanent || !entry.enabled)
                 continue;
-            // 找 linkTriggers 对应的子条目（关键词命中）
+            // Find child entries corresponding to linkTriggers
             const targets = this.entries.filter(e => e.enabled && !e.permanent &&
                 e.keywords.some(kw => entry.linkTriggers.includes(kw)));
             for (const target of targets) {
-                // 硬约束 2：跳过 userHit
+                // Constraint 2: Skip userHit entries
                 if (userHitEntryIds.has(target.id))
                     continue;
-                // 硬约束 3：cascade 去重
+                // Constraint 3: Deduplicate cascade entries
                 if (cascadeInjected.has(target.id))
                     continue;
                 cascadeInjected.add(target.id);
@@ -400,12 +397,12 @@ class WorldbookManager {
             console.log(`[Worldbook/Cascade] ${this.lastCascadeEntries.length} entries one-shot injected: ${this.lastCascadeEntries.map(e => e.id).join(", ")}`);
         }
     }
-    // 取本轮 One-Shot cascade 触发的条目（仅供 orchestrator 注入用，不进 DMAE 状态表）
+    // Get entries triggered by One-Shot cascade this round
     getCascadeEntries() {
         return [...this.lastCascadeEntries];
     }
-    // ── 业务层：阈值门控 + 注入 ──
-    // deriveState(activation, promptThreshold)=="Active" 的条目注入；按 activation 降序、priority 降序 tiebreak、截 MAX_ACTIVE。
+    // ── Business Layer: Threshold Gating + Prompt Injection ──
+    // Inject entries where state == Active; sorted by activation desc, priority desc, capped at MAX_ACTIVE.
     getActiveEntries(promptThreshold) {
         const th = promptThreshold ?? this.params.promptThreshold;
         const active = this.entries
@@ -415,7 +412,7 @@ class WorldbookManager {
             const st = this.state.get(e.id);
             if (!st)
                 return false;
-            return deriveState(st.activation, th) === worldbook_constants_1.WORLDBOOK_CONSTANTS.STATES.ACTIVE;
+            return deriveState(st.activation, th) === worldbook_constants_1.WORLDBOOK_STATES.ACTIVE;
         })
             .sort((a, b) => {
             const sa = this.state.get(a.id).activation;
@@ -428,14 +425,14 @@ class WorldbookManager {
         if (this.debug && active.length > 0) {
             console.log(`[Worldbook/DMAE] active entries injected: ${active.length} (threshold=${th})`);
         }
-        // 返回带条目标题的完整内容（模型需要知道这段设定在说谁）
+        // Return full content with entry title
         return active.map((e) => {
-            // 从 entry.id 还原可读标题：wb_<file>_<title> → <title>
+            // Restore readable title from entry.id: wb_<file>_<title> -> <title>
             const title = e.id.replace(/^wb_[^_]+_/, "").replace(/_/g, " ");
             return `【${title}】\n${e.content}`;
         });
     }
-    // Get permanent entries (常驻) — always included, bypass DMAE
+    // Get permanent entries — always included, bypasses DMAE
     getPermanentEntries() {
         return this.entries
             .filter((e) => e.enabled && e.permanent)
@@ -455,19 +452,19 @@ class WorldbookManager {
     get entriesCount() {
         return this.entries.length;
     }
-    // ── 只读访问器（simulator / 调试用）──
+    // ── Read-only Accessors (Simulator / Debug) ──
     getEntries() {
         return this.entries;
     }
     getState(id) {
         return this.state.get(id);
     }
-    // ── 持久化 seam（v1 no-op；后续接 JsonVectorStore 同款 sync JSON）──
+    // ── Persistence Seam (v1 no-op) ──
     loadState() {
         if (!this.stateFile)
             return;
-        // TODO v1.1: fs.readFileSync(this.stateFile) → 反序列化到 this.state
-        // 暂不落盘，重启回 0（已确认 v1 接受）
+        // TODO v1.1: fs.readFileSync(this.stateFile) -> deserialize to this.state
+        // Volatile in v1, resets on restart
     }
     saveState() {
         if (!this.stateFile)

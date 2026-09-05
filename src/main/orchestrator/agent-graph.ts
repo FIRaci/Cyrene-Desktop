@@ -14,7 +14,7 @@ export type ActionDecision =
       capability: string;
       objective: string;
       targetRefs: string[];
-      /** 本次工具成功后的继续策略。未声明时默认 respond。 */
+      /** Continuation strategy after current tool succeeds. Defaults to respond if undeclared. */
       afterSuccess?: "respond" | "replan";
     }
   | {
@@ -55,25 +55,25 @@ export interface AgentGraphInput {
 
 export interface AgentGraphState extends AgentGraphInput {
   decision?: ActionDecision;
-  /** 当前正在执行的 act 决策（含 afterSuccess），供 routeAfterTool 读取。 */
+  /** Currently executing act decision (including afterSuccess), read by routeAfterTool. */
   currentAction?: ActDecision;
   toolResults: ToolCallResult[];
   iterationCount: number;
   reply: string;
   clarificationAnswers: AskUserAnswer[];
-  /** refresh_state 重新决策次数，防止无限循环。 */
+  /** Number of refresh_state re-decisions, preventing infinite loops. */
   refreshCount: number;
-  /** 上一次 Action Gate 失败信息，供下一次 decide 读取并传给模型。 */
+  /** Previous Action Gate failure info, read by next decide and passed to model. */
   lastGateFailure?: GateFailureInfo;
-  /** Task Router 路由结果（feature flag 开启时使用） */
+  /** Task Router routing result (used when feature flag is enabled) */
   taskRoute?: import("./task-router").TaskRoute;
-  /** 执行计划（plan 模式） */
+  /** Execution plan (plan mode) */
   taskPlan?: import("./task-plan").TaskPlan;
-  /** 当前执行的步骤 ID */
+  /** Currently executing step ID */
   currentStepId?: string;
-  /** 重规划次数 */
+  /** Number of replans */
   replanCount: number;
-  /** 临时 direct 完成后恢复旧 Plan */
+  /** Restore old Plan after temporary direct execution completes */
   resumePlanAfterDirect?: boolean;
 }
 
@@ -82,20 +82,20 @@ export interface AgentGraphDeps {
   execute: (state: AgentGraphState, decision: ActDecision) => Promise<ToolCallResult[]>;
   askUser?: (state: AgentGraphState, decision: AskUserDecision) => Promise<AskUserAnswer>;
   respond: (state: AgentGraphState, decision: Exclude<ActionDecision, { decision: "act" }>) => Promise<string>;
-  /** Task Router 回调（feature flag 开启时提供） */
+  /** Task Router callback (provided when feature flag is enabled) */
   route?: (state: AgentGraphState) => Promise<import("./task-router").TaskRoute>;
-  /** 计划创建回调（plan 模式） */
+  /** Plan creation callback (plan mode) */
   createPlan?: (state: AgentGraphState) => Promise<import("./task-plan").TaskPlan>;
-  /** 步骤验证回调（plan 模式） */
+  /** Step verification callback (plan mode) */
   planVerify?: (state: AgentGraphState) => Promise<import("./task-plan").StepVerificationResult>;
-  /** 重规划回调（plan 模式） */
+  /** Replanning callback (plan mode) */
   planReplan?: (state: AgentGraphState) => Promise<import("./task-plan").PlanStep[]>;
   maxIterations?: number;
-  /** refresh_state 最多重新决策次数，默认 1。 */
+  /** Max number of refresh_state re-decisions, defaults to 1. */
   maxRefresh?: number;
-  /** 最大重规划次数，默认 2 */
+  /** Max number of replans, defaults to 2 */
   maxReplans?: number;
-  /** Plan 状态变化时调用，发送快照给前端 */
+  /** Called when Plan state changes, sending snapshot to frontend */
   onPlanUpdate?: (plan: import("./task-plan").TaskPlan, replanCount: number) => void;
   trace?: (node: string, state: AgentGraphState) => void;
 }
@@ -121,7 +121,7 @@ const GraphState = Annotation.Root({
   resumePlanAfterDirect: Annotation<boolean | undefined>,
 });
 
-// ── createPlan 错误分类 ──────────────────────
+// -- createPlan error classification --
 
 function extractHttpStatus(message: string): number | undefined {
   const match = message.match(/HTTP\s+(\d{3})/);
@@ -133,23 +133,23 @@ function classifyCreatePlanError(error: unknown): { errorType: string; retryable
   const errName = error instanceof Error ? error.name : "Unknown";
   const httpStatus = extractHttpStatus(errStr);
 
-  // 用户主动取消
+  // User explicitly cancelled
   if (errName === "AbortError" || errStr.includes("aborted") || errStr.includes("E_AGENT_GRAPH_CANCELLED")) {
     return { errorType: "abort", retryable: false };
   }
-  // 鉴权失败
+  // Authentication failure
   if (errStr.includes("401") || errStr.includes("403") || errStr.includes("AUTH") || errStr.includes("API key")) {
     return { errorType: "auth_failed", retryable: false };
   }
-  // 内容拒绝
+  // Content refusal
   if (errStr.includes("REFUSED") || errStr.includes("CONTENT_FILTERED")) {
     return { errorType: "model_refused", retryable: false };
   }
-  // schema 错误（结构化输出 repair 预算已用完）
+  // Schema error (structured output repair budget exhausted)
   if (errStr.includes("REPAIR_EXHAUSTED") || errStr.includes("NO_JSON_OBJECT") || errStr.includes("NO_SCHEMA_VALID_OBJECT")) {
     return { errorType: "structured_output_failed", retryable: false };
   }
-  // 可重试的临时错误
+  // Retryable transient error
   if (httpStatus === 429 || httpStatus === 502 || httpStatus === 503 || httpStatus === 504 || httpStatus === 529) {
     return { errorType: "temporary_server_error", retryable: true };
   }
@@ -157,7 +157,7 @@ function classifyCreatePlanError(error: unknown): { errorType: string; retryable
     return { errorType: "temporary_server_error", retryable: true };
   }
   if (errStr.includes("MODEL_REQUEST_FAILED") && !httpStatus) {
-    // 无 HTTP 状态码的请求失败，可能是网络问题
+    // Request failure without HTTP status code, likely network issue
     return { errorType: "request_failed", retryable: true };
   }
   return { errorType: "unknown", retryable: false };
@@ -172,15 +172,15 @@ export async function runAgentGraph(input: AgentGraphInput, deps: AgentGraphDeps
   const graph = new StateGraph(GraphState)
     .addNode("route", async (state) => {
       deps.trace?.("route", state);
-      if (!deps.route) return {};  // feature flag 关闭时 no-op
+      if (!deps.route) return {};  // no-op when feature flag is disabled
       const taskRoute = await deps.route(state);
       return { taskRoute };
     })
     .addNode("decide", async (state) => {
       deps.trace?.("decide", state);
       const decision = await deps.decide(state);
-      // act decision 同步写入 currentAction，供 routeAfterTool 读取 afterSuccess
-      // lastGateFailure 在 decide 回调读取后清空，避免跨轮残留
+      // act decision is written synchronously to currentAction for routeAfterTool to read afterSuccess
+      // lastGateFailure is cleared after being read by decide callback to avoid cross-turn residue
       return {
         decision,
         lastGateFailure: undefined,
@@ -212,7 +212,7 @@ export async function runAgentGraph(input: AgentGraphInput, deps: AgentGraphDeps
         return new Command({ goto: "decide" });
       }
 
-      // 路由逻辑（纯代码，不调 LLM）
+      // Routing logic (pure code, no LLM call)
       let goto: "decide" | "soul" | "planVerify";
       if (result.status === "failed") {
         goto = result.retryable ? "decide" : "soul";
@@ -222,15 +222,15 @@ export async function runAgentGraph(input: AgentGraphInput, deps: AgentGraphDeps
         goto = action.afterSuccess === "replan" ? "decide" : "soul";
       }
 
-      // plan 模式下，终态路由到 planVerify 而非 soul
-      // 只有真正进入 plan 模式（taskPlan 存在且 running）才走 planVerify
+      // In plan mode, terminal state routes to planVerify rather than soul
+      // Only runs planVerify when truly in plan mode (taskPlan exists and is running)
       const inPlanMode = state.taskRoute?.executionMode === "plan"
         && state.taskPlan?.status === "running";
       if (goto === "soul" && inPlanMode) {
         goto = "planVerify";
       }
 
-      // 去 soul 时把 decision 改写成 respond
+      // Rewrite decision to respond when going to soul
       const update = goto === "soul"
         ? { decision: { decision: "respond" as const, reason: "tool_complete" } }
         : {};
@@ -306,19 +306,19 @@ export async function runAgentGraph(input: AgentGraphInput, deps: AgentGraphDeps
           const httpStatus = extractHttpStatus(errStr);
 
           if (retryable && attempt <= MAX_REQUEST_RETRIES) {
-            // 短退避后重试
+            // Retry after short backoff
             console.log(`[AgentGraph] CreatePlan request failed: attempt=${attempt}/${1 + MAX_REQUEST_RETRIES} type=${errorType} httpStatus=${httpStatus ?? "n/a"} retryable=true next=retry`);
             await new Promise((r) => setTimeout(r, 300 + Math.random() * 300));
             continue;
           }
 
-          // 最终失败
+          // Final failure
           console.error(`[AgentGraph] CreatePlan failed: attempts=${attempt} type=${errorType} httpStatus=${httpStatus ?? "n/a"} retryable=${retryable} fallback=direct`);
           break;
         }
       }
 
-      // 降级：清理 plan 状态，但保留原始路由意图
+      // Degrade: clean up plan state while retaining original routing intent
       return new Command({
         update: {
           taskRoute: {
@@ -347,7 +347,7 @@ export async function runAgentGraph(input: AgentGraphInput, deps: AgentGraphDeps
       if (result.status === "completed") {
         step.status = "completed";
         plan.updatedAt = Date.now();
-        // 查找下一个 pending 步骤
+        // Find next pending step
         const nextStep = plan.steps.find((s) => s.status === "pending");
         if (nextStep) {
           nextStep.executionId = `exec_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -358,7 +358,7 @@ export async function runAgentGraph(input: AgentGraphInput, deps: AgentGraphDeps
             goto: "decide",
           });
         }
-        // 全部完成
+        // All steps completed
         plan.status = "completed";
         deps.onPlanUpdate?.(plan, state.replanCount);
         return new Command({
@@ -376,13 +376,13 @@ export async function runAgentGraph(input: AgentGraphInput, deps: AgentGraphDeps
           goto: "planReplan",
         });
       }
-      // running：继续当前步骤
+      // running: continue current step
       return new Command({ goto: "decide" });
     })
     .addNode("planReplan", async (state) => {
       deps.trace?.("planReplan", state);
       if (!deps.planReplan || !state.taskPlan || state.replanCount >= maxReplans) {
-        // 重规划预算耗尽
+        // Replan budget exhausted
         const plan = state.taskPlan;
         if (plan) {
           plan.status = "failed";
@@ -400,7 +400,7 @@ export async function runAgentGraph(input: AgentGraphInput, deps: AgentGraphDeps
         const failedStep = plan.steps.find((s) => s.id === state.currentStepId && s.status === "failed");
         if (!failedStep) return new Command({ goto: "soul" });
 
-        // 标记 failed 及其后 pending 步骤为 superseded
+        // Mark failed and subsequent pending steps as superseded
         const replacementIds = replacementSteps.map((s) => s.id);
         const failedIndex = plan.steps.indexOf(failedStep);
         failedStep.status = "superseded";
@@ -411,7 +411,7 @@ export async function runAgentGraph(input: AgentGraphInput, deps: AgentGraphDeps
             plan.steps[i].supersededBy = replacementIds;
           }
         }
-        // 插入替代步骤
+        // Insert replacement steps
         plan.steps.splice(failedIndex + 1, 0, ...replacementSteps);
         plan.updatedAt = Date.now();
 
@@ -430,7 +430,7 @@ export async function runAgentGraph(input: AgentGraphInput, deps: AgentGraphDeps
           goto: "decide",
         });
       } catch {
-        // 重规划失败
+        // Replanning failed
         const plan = state.taskPlan;
         if (plan) {
           plan.status = "failed";
@@ -496,7 +496,7 @@ export async function runAgentGraph(input: AgentGraphInput, deps: AgentGraphDeps
     resumePlanAfterDirect: undefined,
     reply: "",
   }, {
-    // route + decide + execute + routeAfterTool + planVerify/planReplan 消耗多个 superstep。
+    // route + decide + execute + routeAfterTool + planVerify/planReplan consumes multiple supersteps.
     recursionLimit: maxIterations * 4 + 12,
   });
   invokeTimer.end();

@@ -16,13 +16,13 @@ describe("normalizeToolExecutionOutcome", () => {
     });
   });
 
-  it("defaults failed to terminal=true, retryable=false (修订第1点：失败也算已结束)", () => {
+  it("defaults failed to terminal=true, retryable=false (revision point 1: failure also counts as finished)", () => {
     const outcome: ToolExecutionOutcome = {
       status: "failed",
       output: "E_TOOL_ARGS_INVALID",
       errorCode: "E_TOOL_ARGS_INVALID",
     };
-    // 参数错误等失败默认不可重试
+    // Parameter errors and similar failures are non-retryable by default
     const normalized = normalizeToolExecutionOutcome(outcome);
     expect(normalized.terminal).toBe(true);
     expect(normalized.retryable).toBe(false);

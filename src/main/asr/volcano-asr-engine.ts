@@ -1,10 +1,10 @@
-// 阿里云实时语音识别 ASR 引擎 —— WebSocket + JSON 协议。
+// Aliyun real-time ASR engine — WebSocket + JSON protocol.
 //
-// 文档：https://help.aliyun.com/zh/isi/developer-reference/websocket
-// URL：wss://nls-gateway.cn-shanghai.aliyuncs.com/ws/v1?token=<token>
-// 鉴权：用 AccessKeyId + AccessKeySecret 获取临时 token，拼到 URL 里
-// 协议：JSON 文本帧（StartTranscription/StopTranscription）+ 二进制帧（PCM 音频）
-// 音频：PCM 16kHz/16bit/mono
+// Documentation: https://help.aliyun.com/zh/isi/developer-reference/websocket
+// URL: wss://nls-gateway.cn-shanghai.aliyuncs.com/ws/v1?token=<token>
+// Auth: Acquire temporary token with AccessKeyId + AccessKeySecret, appended to URL
+// Protocol: JSON text frames (StartTranscription/StopTranscription) + binary frames (PCM audio)
+// Audio: PCM 16kHz/16bit/mono
 
 import { WebSocket } from "ws";
 import { createHmac } from "node:crypto";
@@ -13,7 +13,7 @@ import { randomUUID } from "node:crypto";
 const LOG_PREFIX = "[AliyunASR]";
 const NLS_GATEWAY = "wss://nls-gateway.cn-shanghai.aliyuncs.com/ws/v1";
 
-/** 阿里云 ASR 流式识别会话 */
+/** Aliyun ASR streaming recognition session */
 export class VolcanoAsrStream {
   private ws: WebSocket | null = null;
   private stopped = false;
@@ -31,7 +31,7 @@ export class VolcanoAsrStream {
     private readonly options: { startTimeoutMs?: number; maxQueuedAudioBytes?: number } = {},
   ) {}
 
-  /** 开始识别会话：获取 token → 连 WebSocket → 发 StartTranscription */
+  /** Starts recognition session: acquire token -> connect WebSocket -> send StartTranscription */
   async start(
     appKey: string,
     accessKeyId: string,
@@ -79,7 +79,7 @@ export class VolcanoAsrStream {
     }
   }
 
-  /** 发送 StartTranscription 指令（JSON 文本帧） */
+  /** Sends StartTranscription command (JSON text frame) */
   private sendStartTranscription(appKey: string, language: string): void {
     const requestedLanguage = normalizeAsrLanguage(language);
     // SpeechTranscriber binds its recognition language/model to the project
@@ -107,11 +107,11 @@ export class VolcanoAsrStream {
     try {
       this.ws?.send(JSON.stringify(msg));
     } catch (err) {
-      console.error(LOG_PREFIX, "发送 StartTranscription 失败:", err);
+      console.error(LOG_PREFIX, "Failed to send StartTranscription:", err);
     }
   }
 
-  /** 发送一帧 PCM 音频（攒够 200ms/6400 字节再发） */
+  /** Sends a PCM audio frame (buffers 200ms/6400 bytes before sending) */
   sendAudio(pcmFrame: Buffer): void {
     if (this.stopped || pcmFrame.length === 0) return;
     this.audioBuffer = Buffer.concat([this.audioBuffer, pcmFrame]);
@@ -126,7 +126,7 @@ export class VolcanoAsrStream {
   private flushFullAudioChunks(): void {
     const ws = this.ws;
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
-    // 200ms = 16000 * 0.2 * 2 = 6400 字节
+    // 200ms = 16000 * 0.2 * 2 = 6400 bytes
     while (this.audioBuffer.length >= 6400) {
       const chunk = this.audioBuffer.subarray(0, 6400);
       this.audioBuffer = this.audioBuffer.subarray(6400);
@@ -134,7 +134,7 @@ export class VolcanoAsrStream {
     }
   }
 
-  /** 结束识别：发剩余音频 + StopTranscription */
+  /** Ends recognition: flush remaining audio + StopTranscription */
   stop(): void {
     if (this.stopped) return;
     this.stopped = true;
@@ -147,13 +147,13 @@ export class VolcanoAsrStream {
       return;
     }
 
-    // 发剩余音频
+    // Send remaining audio
     if (this.audioBuffer.length > 0) {
       try { this.ws.send(this.audioBuffer, { binary: true }); } catch { /* ignore */ }
       this.audioBuffer = Buffer.alloc(0);
     }
 
-    // 发 StopTranscription 指令
+    // Send StopTranscription command
     const msg = {
       header: {
         message_id: randomUUID().replace(/-/g, ""),
@@ -168,7 +168,7 @@ export class VolcanoAsrStream {
     setTimeout(() => { try { this.ws?.close(); } catch { /* ignore */ } }, 2000);
   }
 
-  /** 解析服务端 JSON 响应 */
+  /** Parse server JSON response */
   private handleMessage(raw: Buffer, resolveStart?: () => void): void {
     try {
       const msg = JSON.parse(raw.toString()) as {
@@ -200,21 +200,21 @@ export class VolcanoAsrStream {
         this.flushFullAudioChunks();
         resolveStart?.();
       } else if (eventName === "TranscriptionResultChanged") {
-        // 中间结果
+        // Partial result
         const text = msg.payload?.result ?? "";
         if (text) this.onPartial(text);
       } else if (eventName === "SentenceEnd") {
-        // 最终结果
+        // Final result
         const text = msg.payload?.result ?? "";
         if (text) {
-          console.log(LOG_PREFIX, "最终识别:", text);
+          console.log(LOG_PREFIX, "Final recognition:", text);
           this.onFinal(text);
         }
       } else if (eventName === "TranscriptionCompleted") {
-        console.log(LOG_PREFIX, "转写已完成");
+        console.log(LOG_PREFIX, "Transcription completed");
       }
     } catch (err) {
-      console.error(LOG_PREFIX, "解析响应失败:", err);
+      console.error(LOG_PREFIX, "Failed to parse response:", err);
     }
   }
 
@@ -238,9 +238,9 @@ export class VolcanoAsrStream {
     return reason instanceof Error ? reason : new Error(reason ? String(reason) : fallback);
   }
 
-  /** 用 AccessKeyId + AccessKeySecret 获取阿里云临时 token */
+  /** Acquire temporary Aliyun token with AccessKeyId + AccessKeySecret */
   private async getToken(accessKeyId: string, accessKeySecret: string, signal: AbortSignal): Promise<string> {
-    // 阿里云 NLS token 获取：RPC 风格 API 签名
+    // Aliyun NLS token acquisition: RPC style API signature
     const params: Record<string, string> = {
       AccessKeyId: accessKeyId,
       Action: "CreateToken",
@@ -253,19 +253,19 @@ export class VolcanoAsrStream {
       Version: "2019-02-28",
     };
 
-    // 按字母序排列参数
+    // Sort parameters alphabetically
     const sortedKeys = Object.keys(params).sort();
     const canonicalQuery = sortedKeys.map(k => `${encodeURIComponent(k)}=${encodeURIComponent(params[k])}`).join("&");
 
-    // 构建签名字符串
+    // Build signature string
     const stringToSign = `GET&%2F&${encodeURIComponent(canonicalQuery)}`;
 
-    // HMAC-SHA256 签名（阿里云签名附加 &）
+    // HMAC-SHA256 signature (Aliyun signature appends &)
     const signature = createHmac("sha256", accessKeySecret + "&")
       .update(stringToSign)
       .digest("base64");
 
-    // 构建完整 URL
+    // Build full URL
     const url = `https://nls-meta.cn-shanghai.aliyuncs.com/?${canonicalQuery}&Signature=${encodeURIComponent(signature)}`;
 
     const resp = await fetch(url, { signal });
@@ -288,7 +288,7 @@ export function normalizeAsrLanguage(language: string): AsrLanguage {
   return normalized === "zh" || normalized === "en" ? normalized : "auto";
 }
 
-// ── 配置注入 ──
+// ── Configuration Injection ──
 
 export interface AsrConfig {
   appKey: string;

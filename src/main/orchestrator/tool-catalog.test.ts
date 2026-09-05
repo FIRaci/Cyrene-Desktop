@@ -14,75 +14,75 @@ function makeTool(overrides: Partial<ToolDefinition> & { id: string }): ToolDefi
 }
 
 describe("buildToolCatalog", () => {
-  it("空工具列表输出占位", () => {
+  it("outputs placeholder for empty tool list", () => {
     expect(buildToolCatalog([])).toBe("(No tools are currently available.)");
   });
 
-  it("基础输出：id + 用途 + 风险", () => {
+  it("basic output: id + purpose + risk", () => {
     const tools = [
-      makeTool({ id: "weather", description: "查询天气", risk: "network" }),
-      makeTool({ id: "fetch_url", description: "读取网页", risk: "network" }),
+      makeTool({ id: "weather", description: "Query weather", risk: "network" }),
+      makeTool({ id: "fetch_url", description: "Read webpage", risk: "network" }),
     ];
     const out = buildToolCatalog(tools);
     expect(out).toContain("- weather");
-    expect(out).toContain("Purpose: 查询天气");
+    expect(out).toContain("Purpose: Query weather");
     expect(out).toContain("Risk: network");
     expect(out).toContain("- fetch_url");
-    expect(out).toContain("Purpose: 读取网页");
+    expect(out).toContain("Purpose: Read webpage");
   });
 
-  it("默认 risk 为 safe", () => {
+  it("defaults risk to safe", () => {
     const tools = [makeTool({ id: "x", description: "X" })];
     const out = buildToolCatalog(tools);
     expect(out).toContain("Risk: safe");
   });
 
-  it("catalogHint 优先于 description", () => {
+  it("catalogHint takes precedence over description", () => {
     const tools = [
       makeTool({
         id: "weather",
-        description: "查询指定城市的实时天气，返回温度、湿度、风速等信息。",
-        catalogHint: "查询天气",
+        description: "Query real-time weather in specified city, returning temperature, humidity, wind speed, etc.",
+        catalogHint: "Query weather",
       }),
     ];
     const out = buildToolCatalog(tools);
-    expect(out).toContain("Purpose: 查询天气");
-    expect(out).not.toContain("温度、湿度");
+    expect(out).toContain("Purpose: Query weather");
+    expect(out).not.toContain("temperature, humidity");
   });
 
-  it("未填 catalogHint 时回落 description 首行", () => {
+  it("falls back to first line of description when catalogHint is not provided", () => {
     const tools = [
       makeTool({
         id: "fetch_url",
         description:
-          "下载指定 URL 的网页内容并返回正文。\n何时用：\n- 用户给了明确的网址",
+          "Download webpage content from specified URL and return main text.\nWhen to use:\n- User gave explicit URL",
       }),
     ];
     const out = buildToolCatalog(tools);
-    expect(out).toContain("Purpose: 下载指定 URL 的网页内容并返回正文。");
-    expect(out).not.toContain("何时用");
+    expect(out).toContain("Purpose: Download webpage content from specified URL and return main text.");
+    expect(out).not.toContain("When to use");
   });
 
-  it("description 缺失时回落 catalogHint（兜底）", () => {
+  it("falls back to catalogHint when description is missing (fallback)", () => {
     const tools = [
       makeTool({
         id: "x",
         description: "",
-        catalogHint: "兜底用途",
+        catalogHint: "Fallback purpose",
       }),
     ];
     const out = buildToolCatalog(tools);
-    expect(out).toContain("Purpose: 兜底用途");
+    expect(out).toContain("Purpose: Fallback purpose");
   });
 
-  it("目录不输出参数（避免与 Schema 重复）", () => {
+  it("does not output parameters in catalog (avoid duplicating schema)", () => {
     const tools = [
       makeTool({
         id: "weather",
-        description: "查询天气",
+        description: "Query weather",
         inputSchema: {
           type: "object",
-          properties: { city: { type: "string", description: "城市名" } },
+          properties: { city: { type: "string", description: "City name" } },
           required: ["city"],
         },
       }),
@@ -93,11 +93,11 @@ describe("buildToolCatalog", () => {
     expect(out).not.toContain("required");
   });
 
-  it("多工具按顺序拼接", () => {
+  it("concatenates multiple tools in order", () => {
     const tools = [
-      makeTool({ id: "a", description: "A 工具" }),
-      makeTool({ id: "b", description: "B 工具" }),
-      makeTool({ id: "c", description: "C 工具" }),
+      makeTool({ id: "a", description: "Tool A" }),
+      makeTool({ id: "b", description: "Tool B" }),
+      makeTool({ id: "c", description: "Tool C" }),
     ];
     const out = buildToolCatalog(tools);
     const idxA = out.indexOf("- a");

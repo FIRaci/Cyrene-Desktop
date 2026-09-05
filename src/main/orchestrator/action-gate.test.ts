@@ -12,7 +12,7 @@ import type { ChatResponse } from "./vendors/types";
 const capabilities: ActionCapability[] = [{
   capability: "music.play_track",
   toolId: "music_play_track",
-  description: "播放歌曲",
+  description: "Play song",
   requiredInputs: ["candidateRef"],
   referencePolicy: "context_ref",
 }];
@@ -47,7 +47,7 @@ function actDecision(overrides: Record<string, unknown> = {}): Record<string, un
   return {
     decision: "act",
     capability: "music.play_track",
-    objective: "播放当前候选中的第一首",
+    objective: "Play the first song in current candidates",
     targetRefs: ["ctx-song-1"],
     afterSuccess: "respond",
     ...overrides,
@@ -60,10 +60,10 @@ function baseInput(
 ): RunActionGateInput {
   return {
     model: "gpt-5.2",
-    originalQuery: "播放第一首",
-    contextualizedQuery: "播放当前候选中的第一首",
+    originalQuery: "Play the first song",
+    contextualizedQuery: "Play the first song in current candidates",
     citaContextBlock: "[CITA_CONTEXT]trusted[/CITA_CONTEXT]",
-    messages: [{ role: "user", content: "播放第一首" }],
+    messages: [{ role: "user", content: "Play the first song" }],
     availableCapabilities: capabilities,
     trustedRefs: ["ctx-song-1"],
     toolResults: [],
@@ -78,7 +78,7 @@ describe("buildActionGateRequest", () => {
   it("includes trusted runtime defaults and machine-derived required inputs", () => {
     const request = buildActionGateRequest(({
       ...baseInput(async () => response({ decision: "respond", reason: "done" })),
-      runtimeEnvironmentContext: "默认城市：淄博\n桌面：C:\\Users\\13575\\Desktop",
+      runtimeEnvironmentContext: "Default city: Zibo\nDesktop: C:\\Users\\13575\\Desktop",
       availableCapabilities: [{
         ...capabilities[0],
         requiredInputs: ["candidateRef"],
@@ -87,7 +87,7 @@ describe("buildActionGateRequest", () => {
     } as unknown) as Parameters<typeof buildActionGateRequest>[0]);
     const payload = JSON.parse(String(request.messages.at(-1)?.content));
 
-    expect(payload.machineInput.runtimeEnvironmentContext).toContain("默认城市：淄博");
+    expect(payload.machineInput.runtimeEnvironmentContext).toContain("Default city: Zibo");
     expect(payload.machineInput.availableCapabilities[0].requiredInputs).toEqual(["candidateRef"]);
   });
 
@@ -137,7 +137,7 @@ describe("buildActionGateRequest", () => {
 
     expect(payload).toMatchObject({
       protocol: "action_gate.decision.v1",
-      rewrittenQuery: "播放当前候选中的第一首",
+      rewrittenQuery: "Play the first song in current candidates",
       trustedRefs: ["ctx-song-1"],
       repair: { attempt: 2, errorCodes: ["NO_SCHEMA_VALID_OBJECT"] },
     });
@@ -151,15 +151,15 @@ describe("runActionGate", () => {
     expect(parseActionDecisionValue({
       decision: "act",
       capability: "music.play_track",
-      objective: "播放当前候选中的第一首",
+      objective: "Play the first song in current candidates",
       targetRefs: ["ctx-song-1"],
       afterSuccess: "respond",
-      reason: "目标、能力和引用已经明确，可以执行。",
+      reason: "Goal, capability, and references are clear; execution can proceed.",
       missingFields: [],
     })).toEqual({
       decision: "act",
       capability: "music.play_track",
-      objective: "播放当前候选中的第一首",
+      objective: "Play the first song in current candidates",
       targetRefs: ["ctx-song-1"],
       afterSuccess: "respond",
     });
@@ -180,13 +180,13 @@ describe("runActionGate", () => {
   it("repairs a schema-invalid response using error codes without echoing raw output", async () => {
     const generate = vi.fn()
       .mockResolvedValueOnce(response({ decision: "act", capability: "music.play_track" }))
-      .mockResolvedValueOnce(response({ decision: "respond", reason: "无需工具" }));
+      .mockResolvedValueOnce(response({ decision: "respond", reason: "No tools needed" }));
 
     const result = await runActionGate(baseInput(generate));
 
     expect(result).toMatchObject({
       outcome: "success",
-      decision: { decision: "respond", reason: "无需工具" },
+      decision: { decision: "respond", reason: "No tools needed" },
       repairCount: 1,
     });
     const repairPayload = String(generate.mock.calls[1][0].messages.at(-1)?.content);
@@ -211,7 +211,7 @@ describe("runActionGate", () => {
   it("repairs a capability not present in the current available set", async () => {
     const generate = vi.fn()
       .mockResolvedValueOnce(response(actDecision({ capability: "shell.execute" })))
-      .mockResolvedValueOnce(response({ decision: "respond", reason: "能力不可用" }));
+      .mockResolvedValueOnce(response({ decision: "respond", reason: "Capability unavailable" }));
 
     const result = await runActionGate(baseInput(generate));
 
@@ -240,17 +240,17 @@ describe("runActionGate", () => {
   it("discards invented target refs for a capability that does not use context refs", async () => {
     const generate = vi.fn(async () => response(actDecision({
       capability: "weather.lookup",
-      objective: "查询杭州天气",
-      targetRefs: ["杭州"],
+      objective: "Query Hangzhou weather",
+      targetRefs: ["Hangzhou"],
     })));
 
     const result = await runActionGate(baseInput(generate, {
-      originalQuery: "查一下杭州天气",
-      contextualizedQuery: "查询杭州当前天气",
+      originalQuery: "Check Hangzhou weather",
+      contextualizedQuery: "Query current Hangzhou weather",
       availableCapabilities: [{
         capability: "weather.lookup",
         toolId: "weather",
-        description: "查询天气",
+        description: "Query weather",
         requiredInputs: [],
         referencePolicy: "none",
       } as ActionCapability],
@@ -263,7 +263,7 @@ describe("runActionGate", () => {
       decision: {
         decision: "act",
         capability: "weather.lookup",
-        objective: "查询杭州天气",
+        objective: "Query Hangzhou weather",
         targetRefs: [],
         afterSuccess: "respond",
       },
@@ -275,26 +275,26 @@ describe("runActionGate", () => {
   it("accepts structured ask_user fields and candidate choices", async () => {
     const generate = vi.fn(async () => response({
       decision: "ask_user",
-      reason: "需要确认文档主题和格式",
+      reason: "Need to confirm document topic and format",
       missingFields: [
         {
           field: "topic",
-          reason: "文档内容未知",
+          reason: "Document content unknown",
           required: true,
-          questionHint: "这份文档主要写什么？",
+          questionHint: "What is this document mainly about?",
           typeHint: "text",
-          candidateHints: ["项目说明", "学习总结"],
+          candidateHints: ["Project description", "Study summary"],
           allowCustom: false,
         },
         {
           field: "format",
-          reason: "输出格式未知",
+          reason: "Output format unknown",
           required: true,
-          questionHint: "希望生成哪种格式？",
+          questionHint: "Which format do you prefer?",
           typeHint: "single_select",
           allowedOptions: [
-            { value: "word", label: "Word 文档" },
-            { value: "markdown", label: "Markdown 文档" },
+            { value: "word", label: "Word Document" },
+            { value: "markdown", label: "Markdown Document" },
           ],
           allowCustom: true,
         },
@@ -307,15 +307,15 @@ describe("runActionGate", () => {
       outcome: "success",
       decision: {
         decision: "ask_user",
-        reason: "需要确认文档主题和格式",
+        reason: "Need to confirm document topic and format",
         missingFields: [
           expect.objectContaining({ field: "topic", typeHint: "text" }),
           expect.objectContaining({
             field: "format",
             typeHint: "single_select",
             allowedOptions: [
-              { value: "word", label: "Word 文档" },
-              { value: "markdown", label: "Markdown 文档" },
+              { value: "word", label: "Word Document" },
+              { value: "markdown", label: "Markdown Document" },
             ],
           }),
         ],

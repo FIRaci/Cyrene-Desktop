@@ -1,22 +1,20 @@
-// ── 滑动窗口 Chunk 切分 ──
-// 不做段落/句子逻辑判断，直接按 token 数滑动。
-// overlap 确保任何断点都在至少两个 chunk 里覆盖。
-// 自动识别 Markdown 标题，给每个 chunk 带上标题前缀。
+// ── Sliding Window Chunking ──
+// Slides by token count with overlap coverage.
+// Automatically recognizes Markdown headings and prepends heading prefixes.
 
 export interface Chunk {
   id: string;
   text: string;
-  source: string;       // 来源：文件名或 "memory"
-  index: number;        // chunk 序号
+  source: string;       // Source: filename or "memory"
+  index: number;        // Chunk index
   metadata?: Record<string, unknown>;
 }
 
 export const DOCUMENT_CHUNK_SIZE = 512;
 export const DOCUMENT_CHUNK_OVERLAP = 128;
 
-// ── Token 估算 ──
-// 注意：这只是估算值，用于决定切分位置。
-// 实际模型的 tokenizer 会略有不同，但滑动窗口的冗余覆盖能容错。
+// ── Token Estimation ──
+// Estimation used to determine chunk boundaries; sliding window overlap provides tolerance.
 function estimateTokens(text: string): number {
   const chineseChars = (text.match(/[\u4e00-\u9fff]/g) || []).length;
   const otherTokens = text
@@ -26,23 +24,21 @@ function estimateTokens(text: string): number {
   return chineseChars + otherTokens;
 }
 
-// ── 文本位置索引（防止 chars / tokens 不一致的问题） ──
-// 为了控制切分边界在"字符"层级而不是 token 层级更精确，
-// 我们先把文本按"字符"切好，用 estimateTokens 算总 token 数，
-// 然后按比例在字符位置滑动。
+// ── Text Position Index ──
+// Positions boundaries at character level proportionally based on estimated token count.
 
 interface CharSpan {
-  start: number;   // 字符索引（包含）
-  end: number;     // 字符索引（不包含）
+  start: number;   // Character index (inclusive)
+  end: number;     // Character index (exclusive)
   text: string;
 }
 
-/** 找到 text 中从 pos 开始的下一个句子边界位置（句号/问号/感叹号/换行符）。找不到时返回 -1。 */
+/** Find next sentence boundary from pos (period/question/exclamation/newline). Returns -1 if none. */
 function findNextSentenceBoundary(text: string, pos: number): number {
   for (let i = pos; i < text.length; i++) {
     const c = text[i];
     if (c === "\u3002" || c === "\uff01" || c === "\uff1f" || c === "\n" || c === "." || c === "!" || c === "?") {
-      // 跳过连续标点
+      // Skip consecutive punctuation
       let j = i + 1;
       while (j < text.length && "\u3002\uff01\uff1f\n.!?".includes(text[j])) j++;
       return j;
@@ -59,30 +55,30 @@ function* iterateSlidingWindowChars(
   if (!text || !text.trim()) return;
 
   const totalChars = text.length;
-  // 如果总 token 数 <= chunkSize，不需要切
+  // If total tokens <= chunkSize, no split needed
   if (estimateTokens(text) <= chunkSize) {
     yield { start: 0, end: totalChars, text };
     return;
   }
 
   let previousSpan: CharSpan | null = null;
-  const step = chunkSize - overlap;  // 每步前进的 token 数
+  const step = chunkSize - overlap;  // Step forward per window in tokens
   const totalTokens = estimateTokens(text);
-  // 每个 token 对应的平均字符数
+  // Average characters per token
   const tokensPerChar = totalTokens / totalChars;
 
-  let posStart = 0;  // 字符起始位置
+  let posStart = 0;  // Character start position
   let chunkIndex = 0;
 
   while (posStart < totalChars) {
-    // 当前窗口的 token 起始位置（理论值）
+    // Target token start position for current window
     const startToken = Math.round(posStart * tokensPerChar);
     const endToken = startToken + chunkSize;
     let posEndChar = Math.min(totalChars, Math.round(endToken / tokensPerChar));
 
-    // 如果剩余内容不足 chunkSize 的 1/3，合并到上一个 chunk
+    // Merge remaining content into previous chunk if < 1/3 chunkSize
     if (chunkIndex > 0 && (totalChars - posStart) < chunkSize * tokensPerChar * 0.33) {
-      // 把剩余内容追加到上一个 chunk
+      // Append remainder to previous chunk
       if (previousSpan) {
         previousSpan.text = text.slice(previousSpan.start);
         previousSpan.end = totalChars;
@@ -90,9 +86,9 @@ function* iterateSlidingWindowChars(
       break;
     }
 
-    // ── 句子边界保护 ──
-    // 如果 posEndChar 落在句子中间，往后延伸到下一个句子边界。
-    // 最多允许额外延伸 chunkSize 的 20%，防止单个长句撑爆上限。
+    // ── Sentence boundary protection ──
+    // If posEndChar falls mid-sentence, extend to next sentence boundary.
+    // Allow up to 20% of chunkSize extension to prevent long sentences from blowing up limit.
     const maxExtend = posEndChar + Math.round(chunkSize * 0.2 * tokensPerChar);
     const boundary = findNextSentenceBoundary(text, posEndChar);
     if (boundary !== -1 && boundary <= Math.min(maxExtend, totalChars)) {
@@ -113,11 +109,11 @@ function* iterateSlidingWindowChars(
   if (previousSpan) yield previousSpan;
 }
 
-// ── 标题前缀提取 ──
+// ── Heading Prefix Extraction ──
 interface TitleRecord {
   level: number;     // 1=#, 2=##, 3=###
-  title: string;     // "3.1 架构"
-  tokenPos: number;  // 出现位置的 token 估算值
+  title: string;     // e.g. "3.1 Architecture"
+  tokenPos: number;  // Estimated token position
 }
 
 function extractTitles(text: string): TitleRecord[] {
@@ -140,13 +136,13 @@ function extractTitles(text: string): TitleRecord[] {
   return titles;
 }
 
-/** 根据 token 位置和标题列表，生成该位置的标题前缀 */
+/** Generate heading prefix for a token position based on heading list */
 function getTitlePrefix(tokenPos: number, titles: TitleRecord[]): string {
-  // 找距离当前位置最近且 tokenPos <= 当前位置的标题链
+  // Find heading chain closest to current position
   const active: TitleRecord[] = [];
   for (const t of titles) {
     if (t.tokenPos > tokenPos) break;
-    // 同层级覆盖
+    // Overwrite at same level
     while (active.length > 0 && active[active.length - 1].level >= t.level) {
       active.pop();
     }
@@ -157,7 +153,7 @@ function getTitlePrefix(tokenPos: number, titles: TitleRecord[]): string {
   return active.map((t) => t.title).join(" > ");
 }
 
-// ── 主函数 ──
+// ── Main Function ──
 export function chunkText(
   text: string,
   source: string,
@@ -173,19 +169,19 @@ export function* iterateDocumentChunks(
   chunkSize = DOCUMENT_CHUNK_SIZE,
   overlap = DOCUMENT_CHUNK_OVERLAP,
 ): Generator<Chunk> {
-  // 预提取标题（只需扫描一次全文）
+  // Pre-extract headings (single scan)
   const titles = extractTitles(text);
   const hasTitles = titles.length > 0;
 
-  // 滑动窗口切分
+  // Sliding window chunking
   let i = 0;
   for (const span of iterateSlidingWindowChars(text, chunkSize, overlap)) {
     let chunkTextContent = span.text.trim();
     if (!chunkTextContent) continue;
 
-    // 加上标题前缀（如果有标题的话）
+    // Prepend heading prefix if available
     if (hasTitles) {
-      // 用该 span 的起始 token 位置计算前缀
+      // Calculate prefix using span start position
       const startTokenPos = Math.round(estimateTokens(text.slice(0, span.start)));
       const prefix = getTitlePrefix(startTokenPos, titles);
       if (prefix) {

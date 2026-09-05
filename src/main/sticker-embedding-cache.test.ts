@@ -47,7 +47,7 @@ describe("sticker embedding cache", () => {
 
   it("reuses a completed sticker embedding cache without embedding descriptions again", async () => {
     const firstProvider = provider();
-    const builtIn = { hello: { phrases: ["你好"] } };
+    const builtIn = { hello: { phrases: ["hello"] } };
 
     const first = await buildCachedStickerEmbeddingIndex(firstProvider, builtIn, {}, dir);
     expect(first).toEqual([{ id: "hello", embedding: [1, 2] }]);
@@ -61,17 +61,17 @@ describe("sticker embedding cache", () => {
   });
 
   it("invalidates the sticker embedding cache when phrases change", async () => {
-    const builtIn = { hello: { phrases: ["你好"] } };
+    const builtIn = { hello: { phrases: ["hello"] } };
     await buildCachedStickerEmbeddingIndex(provider(), builtIn, {}, dir);
 
     const changedProvider = provider();
-    await buildCachedStickerEmbeddingIndex(changedProvider, { hello: { phrases: ["你好呀"] } }, {}, dir);
+    await buildCachedStickerEmbeddingIndex(changedProvider, { hello: { phrases: ["hello there"] } }, {}, dir);
 
     expect(changedProvider.embedBatch).toHaveBeenCalledTimes(1);
   });
 
   it("invalidates the sticker embedding cache when the embedding model changes", async () => {
-    const builtIn = { hello: { phrases: ["你好"] } };
+    const builtIn = { hello: { phrases: ["hello"] } };
     await buildCachedStickerEmbeddingIndex(provider(), builtIn, {}, dir);
 
     identity.value = {

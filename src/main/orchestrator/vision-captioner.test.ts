@@ -13,9 +13,9 @@ describe("captionImage", () => {
       };
       const instruction = body.messages[0].content[0].text ?? "";
       expect(instruction).toContain("You are an image-analysis assistant");
-      expect(instruction).toContain("这张图里有什么？");
+      expect(instruction).toContain("What is in this image?");
       expect(instruction).toContain("Reply in the user's language");
-      return new Response(JSON.stringify({ choices: [{ message: { content: "一只猫" } }] }), {
+      return new Response(JSON.stringify({ choices: [{ message: { content: "a cat" } }] }), {
         status: 200,
         headers: { "Content-Type": "application/json" },
       });
@@ -24,9 +24,9 @@ describe("captionImage", () => {
 
     await expect(captionImage(
       { base64: "AQID", mime: "image/png" },
-      "这张图里有什么？",
+      "What is in this image?",
       { baseUrl: "https://example.test/v1", apiKey: "test", model: "vision-test" },
-    )).resolves.toBe("一只猫");
+    )).resolves.toBe("a cat");
   });
 
   it("returns English runtime errors", async () => {
@@ -45,7 +45,7 @@ describe("captionImage", () => {
 
   it("recognizes current and legacy failure markers without misclassifying captions", () => {
     expect(isVisionCaptionError("[Runtime error] timeout")).toBe(true);
-    expect(isVisionCaptionError("[错误·超时]")).toBe(true);
+    expect(isVisionCaptionError("[\u9519\u8bef\u00b7\u8d85\u65f6]")).toBe(true);
     expect(isVisionCaptionError("A normal image caption")).toBe(false);
   });
 });

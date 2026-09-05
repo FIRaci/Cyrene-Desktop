@@ -1,12 +1,12 @@
-// 生活类工具 —— 记账/汇率/翻译/代码补丁。
+// Lifestyle tools: expense tracking / exchange rate / translation / code patch.
 //
-// 设计原则：
-// - 每个工具职责单一（铁律 1）
-// - 描述写清 use case / anti-use case（铁律 2）
-// - 记账走本地 JSON 存储，不依赖外部服务
-// - 汇率走免费无 key 的 frankfurter.app
-// - 翻译复用主模型（质量稳，不增加依赖）
-// - apply_patch 做精确字符串替换，要求 old_string 唯一
+// Design principles:
+// - Single responsibility per tool
+// - Explicitly document use cases and anti-use cases in descriptions
+// - Expense tracking uses local JSON storage, independent of external services
+// - Exchange rates use keyless frankfurter.app API
+// - Translation reuses main LLM model
+// - apply_patch performs exact string replacement requiring unique old_string
 
 import * as fs from "fs";
 import * as path from "path";
@@ -18,7 +18,7 @@ import { isModelEndpointUsable, modelAuthorizationHeaders } from "../../shared/m
 const LOG_PREFIX = "[LifeTools]";
 
 // ══════════════════════════════════════════════════════════
-// 记账
+// Expense tracking
 // ══════════════════════════════════════════════════════════
 
 interface ExpenseRecord {
@@ -129,7 +129,7 @@ function registerExpenseTools(): void {
 }
 
 // ══════════════════════════════════════════════════════════
-// 汇率
+// Exchange rate
 // ══════════════════════════════════════════════════════════
 
 function registerExchangeRateTool(): void {
@@ -158,7 +158,7 @@ function registerExchangeRateTool(): void {
       if (from === to) {
         return `[exchange_rate] ${amount} ${from} = ${amount} ${to} (same currency)`;
       }
-      // frankfurter.app 免费、无 key、支持主要货币
+      // frankfurter.app: keyless, supports major currencies
       const url = `https://api.frankfurter.app/latest?from=${from}&to=${to}`;
       const resp = await fetch(url);
       if (!resp.ok) {
@@ -176,13 +176,13 @@ function registerExchangeRateTool(): void {
 }
 
 // ══════════════════════════════════════════════════════════
-// 翻译
+// Translation
 // ══════════════════════════════════════════════════════════
 
-// 翻译需要调主模型，注入由 index.ts 完成
+// Translation requires main model, injected by index.ts
 let modelSettingsGetter: (() => { provider: string; baseUrl: string; model: string; apiKey: string } | null) | null = null;
 
-/** index.ts 启动时注入模型设置读取器。 */
+/** Injected model settings reader on startup. */
 export function setTranslateConfig(getter: () => { provider: string; baseUrl: string; model: string; apiKey: string } | null): void {
   modelSettingsGetter = getter;
 }
@@ -216,7 +216,7 @@ function registerTranslateTool(): void {
         return "[Error] Translation is unavailable because no model is configured";
       }
 
-      // 动态 import 避免循环依赖
+      // Dynamic import to avoid circular dependency
       const { buildVendorUrlByProvider } = await import("./vendors");
       const fromHint = args.from ? ` The source language is ${String(args.from)}.` : " Detect the source language automatically.";
       const sysPrompt = `You are a translation engine.${fromHint} Translate the following text into ${to}. Return only the translation, with no explanation or additional text.`;
@@ -255,7 +255,7 @@ function registerTranslateTool(): void {
 }
 
 // ══════════════════════════════════════════════════════════
-// 代码补丁
+// Code patch
 // ══════════════════════════════════════════════════════════
 
 function registerApplyPatchTool(): void {
@@ -304,7 +304,7 @@ function registerApplyPatchTool(): void {
   });
 }
 
-/** 注册全部生活类工具。index.ts startup 调一次。 */
+/** Register all life tools on startup. */
 export function registerLifeTools(): void {
   registerExpenseTools();
   registerExchangeRateTool();

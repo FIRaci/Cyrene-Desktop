@@ -14,7 +14,7 @@ export type Attachment =
   | { kind: "image"; name: string; filePath: string; mime?: string; status: "pending"; previewUrl?: string; caption?: string }
   | { kind: "document"; name: string; filePath: string; mime?: string; status: "pending" | "done" | "error" };
 
-/** ingestOneFile 的大文件索引回调签名。由调用方（index.ts）注入具体实现（importDocument）。 */
+/** Callback signature for large file indexing in ingestOneFile. Injected by caller (importDocument). */
 export type DocumentImportProgress = {
   status: "chunking" | "embedding" | "cached";
   completedChunks?: number;
@@ -36,10 +36,10 @@ export type DocumentImportOptions = {
 export type DocumentImport = ImportFn | DocumentImportOptions;
 
 // ── Thresholds ──
-/** 小文件 vs 大文件（→RAG）的分界，字符数。 */
+/** Threshold between small files and large files (-> RAG) in characters. */
 export const SMALL_THRESHOLD = 30_000;
 
-// ── 扩展名路由 ──
+// ── Extension Routing ──
 const TEXT_EXTS = new Set([
   ".txt", ".md", ".markdown", ".json", ".csv", ".tsv", ".log",
   ".xml", ".yaml", ".yml",
@@ -138,13 +138,12 @@ export function describePendingAttachment(filePath: string): Attachment {
     kind: "unsupported",
     filePath,
     status: "error",
-    reason: `暂不支持的文件格式 ${ext || "（无扩展名）"}`,
+    reason: `Unsupported file format ${ext || "(no extension)"}`,
   };
 }
 
 /**
- * 判二进制：读前 8KB 中有无 null 字节。
- * 不要求读满，如果文件小于 8KB 就全读完。
+ * Binary check: look for null bytes in the first 8KB.
  */
 const BINARY_SCAN_BYTES = 8192;
 
@@ -205,12 +204,12 @@ async function indexLargeText(
   }
 }
 
-// ── 核心路由：处理单个文件 ──
+// ── Core Routing: Process Single File ──
 
 /**
- * 摄入一个文件。
- * @param filePath 绝对路径
- * @param importFn 大文件时调用的导入函数（通常为 importDocument）
+ * Ingest a single file.
+ * @param filePath Absolute path
+ * @param importFn Ingestion callback for large files (typically importDocument)
  */
 export async function ingestOneFile(
   filePath: string,
@@ -236,12 +235,12 @@ export async function ingestOneFile(
   const name = path.basename(filePath);
   const ext = path.extname(filePath).toLowerCase();
 
-  // 显式不支持的类型
+  // Explicitly unsupported formats
   if (isUnsupportedExt(ext)) {
-    return { name, kind: "unsupported", reason: `暂不支持的文件格式 ${ext}（MVP-0 仅支持文本）` };
+    return { name, kind: "unsupported", reason: `Unsupported file format ${ext} (only text is supported)` };
   }
 
-  // 读取文件
+  // Read file
   let buf: Buffer;
   try {
     buf = fs.readFileSync(filePath);
@@ -249,10 +248,10 @@ export async function ingestOneFile(
     return { name, kind: "unsupported", reason: err?.code || String(err) };
   }
 
-  // 类型判断与内容提取
-  // 文本扩展名
+  // Type detection and content extraction
+  // Text extension
   if (isTextExt(ext)) {
-    // 二进制兜底：标题是文本但实际含 null 字节
+    // Binary fallback: text extension but contains null bytes
     if (isBinary(buf)) {
       return { name, kind: "unsupported", reason: `File ${ext} contains binary data, not supported for text ingestion` };
     }
@@ -261,17 +260,17 @@ export async function ingestOneFile(
       return { name, kind: "empty" };
     }
     if (text.length > SMALL_THRESHOLD) {
-      // 大文本 → 索引到 Vector DB
+      // Large text -> Index into Vector DB
       return indexLargeText(text, name, documentImport);
     }
     return { name, kind: "text", text };
   }
 
-  // 无扩展名或未知扩展名：用 null 字节检测
+  // Unknown extension: detect via null bytes
   if (isBinary(buf)) {
-    return { name, kind: "unsupported", reason: "二进制文件，暂不支持" };
+    return { name, kind: "unsupported", reason: "Binary file, not currently supported" };
   }
-  // 无扩展名的文本文件
+  // Text file without extension
   const text = buf.toString("utf-8");
   if (!text.trim()) {
     return { name, kind: "empty" };
@@ -282,18 +281,17 @@ export async function ingestOneFile(
   return { name, kind: "text", text };
 }
 
-// ── 目录递归 ──
+// ── Directory Traversal ──
 
 /**
- * 递归遍历目录，返回所有（非隐藏）文件的绝对路径。
- * 遇到无权限等异常时跳过该条目，不抛。
+ * Recursively traverse directory, returning absolute paths of all non-hidden files.
  */
 export function walkDir(dirPath: string): string[] {
   const result: string[] = [];
   try {
     const items = fs.readdirSync(dirPath);
     for (const item of items) {
-      // 跳过隐藏文件/目录（. 开头）
+      // Skip hidden files/directories (starting with .)
       if (item.startsWith(".")) continue;
       const fullPath = path.join(dirPath, item);
       try {
@@ -304,26 +302,26 @@ export function walkDir(dirPath: string): string[] {
           result.push(fullPath);
         }
       } catch {
-        // 无权限/已删除 → 跳过
+        // No permission / deleted -> skip
       }
     }
   } catch {
-    // 无权限浏览目录 → 跳过
+    // No permission to list directory -> skip
   }
   return result;
 }
 
-// ── 批量摄入 ──
+// ── Batch Ingest ──
 
 /**
- * 批量摄入多条路径（文件或目录）。
- * 目录 → walkDir 展开；重复路径去重（realpath）。
+ * Batch ingest multiple paths (files or directories).
+ * Directories expanded via walkDir; deduplicated via realpath.
  */
 export async function ingestPaths(
   paths: string[],
   documentImport: DocumentImport,
 ): Promise<Attachment[]> {
-  // 展开目录，同时记录每个文件的"显示名"（相对输入目录的路径）
+  // Expand directory and track relative display names
   const filesWithPaths: Array<{ absPath: string; displayName: string }> = [];
   for (const p of paths) {
     try {
@@ -337,11 +335,11 @@ export async function ingestPaths(
         filesWithPaths.push({ absPath: p, displayName: path.basename(p) });
       }
     } catch {
-      // 不存在 → 跳过
+      // Does not exist -> skip
     }
   }
 
-  // 去重（用 realpath）
+  // Deduplicate via realpath
   const seen = new Set<string>();
   const unique: Array<{ absPath: string; displayName: string }> = [];
   for (const entry of filesWithPaths) {
@@ -352,14 +350,14 @@ export async function ingestPaths(
         unique.push({ ...entry, absPath: real });
       }
     } catch {
-      // symlink broken → 跳过
+      // Broken symlink -> skip
     }
   }
 
   const results: Attachment[] = [];
   for (const { absPath, displayName } of unique) {
     const att = await ingestOneFile(absPath, documentImport);
-    // 用保留相对路径的显示名覆盖 basename
+    // Override basename with display name preserving relative path
     results.push({ ...att, name: displayName, filePath: absPath });
   }
   return results;
@@ -381,7 +379,7 @@ export async function processDocumentsForChat(
           kind: "unsupported",
           filePath,
           status: "error",
-          reason: "文件不存在或无法读取",
+          reason: "File does not exist or cannot be read",
         });
         continue;
       }

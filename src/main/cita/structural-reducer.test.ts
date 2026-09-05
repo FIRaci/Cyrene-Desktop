@@ -7,7 +7,7 @@ const context = (contextRef = "ref-1"): ModelVisibleContext => ({
   conversationId: "c1",
   domain: "music",
   kind: "candidate",
-  label: "胆小鬼",
+  label: "Coward",
   position: 1,
   lifecycle: "active",
   expiresAt: 200,

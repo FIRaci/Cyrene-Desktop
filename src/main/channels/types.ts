@@ -1,67 +1,67 @@
-// channels 模块的统一数据类型。
+// Unified data types for the channels module.
 //
-// 设计原则：所有外部入口（微信/飞书/Discord/...）都必须先把消息归一化成
-// IncomingMessage / OutgoingMessage 两种格式再交给 dispatcher。
-// 这样 dispatcher 完全不知道任何具体平台 —— 加新渠道零改动 dispatcher。
+// Design principle: All external entrypoints (WeChat/Feishu/Discord/...) must normalize messages
+// into IncomingMessage / OutgoingMessage formats before handing them to the dispatcher.
+// This decouples the dispatcher from concrete platforms - new channels require zero changes to the dispatcher.
 //
-// 命名规范：所有字段小驼峰、可空字段加 ?；时间戳统一 Date。
+// Naming convention: camelCase for all fields, optional fields marked with ?; timestamps use Date.
 import type { WebContents } from "electron";
 
-/** 渠道 id 联合类型。新增渠道时在此扩展。 */
+/** Channel ID union type. Extend here when adding new channels. */
 export type ChannelId = "wechat" | "feishu";
 
-/** 渠道能力声明。Dispatcher 按 cap 做降级。 */
+/** Channel capability declaration. Dispatcher performs degradation based on capabilities. */
 export interface ChannelCapability {
-  /** 纯文本消息 */
+  /** Plain text message */
   text: boolean;
-  /** 图片消息 */
+  /** Image message */
   image: boolean;
-  /** TTS 音频消息 */
+  /** TTS audio message */
   audio: boolean;
-  /** 文件附件 */
+  /** File attachment */
   file: boolean;
-  /** 视频消息 */
+  /** Video message */
   video: boolean;
-  /** Markdown 富文本（部分渠道支持） */
+  /** Markdown rich text (supported by certain channels) */
   markdown: boolean;
-  /** 富卡片（飞书 interactive / Discord embed） */
+  /** Rich cards (Feishu interactive / Discord embed) */
   card: boolean;
-  /** 自定义表情包 */
+  /** Custom stickers/emojis */
   sticker: boolean;
-  /** 单条文本最大长度。超出按 cap 截断 + 提示。 */
+  /** Maximum single message text length. Exceeding text is truncated with a notice based on capability. */
   maxTextLength: number;
 }
 
-/** 入站附件。adapters 负责下载到本地后填 filePath。 */
+/** Inbound attachment. Adapters download locally and populate filePath. */
 export interface ChannelAttachment {
   kind: "image" | "audio" | "file" | "video";
-  /** 远程 URL（adapter 已下载到本地时为空） */
+  /** Remote URL (empty if adapter has already downloaded locally) */
   url?: string;
-  /** 本地路径（adapter 已下载时填这个） */
+  /** Local path (populated when downloaded by adapter) */
   filePath?: string;
   mime?: string;
   caption?: string;
 }
 
-/** 入站消息。adapters → dispatcher。 */
+/** Inbound message: adapters -> dispatcher. */
 export interface IncomingMessage {
   channel: ChannelId;
-  /** 平台原始 sender id。dispatcher 会 sha256 截断成 16 字符作为 sessionId。 */
+  /** Platform native sender ID. Dispatcher hashes and truncates to 16 chars as sessionId. */
   senderId: string;
-  /** 显示名（昵称/open_id alias），用于日志/UI。 */
+  /** Display name (nickname/open_id alias) for logs/UI. */
   senderName?: string;
-  /** 会话 id。私聊时通常 = senderId。 */
+  /** Conversation ID. For direct messages, usually equals senderId. */
   chatId: string;
-  /** 群聊/话题 id。私聊时 undefined。 */
+  /** Group chat / thread ID. Undefined for direct messages. */
   threadId?: string;
   text: string;
   attachments?: ChannelAttachment[];
   at: Date;
-  /** 原始 payload，调试用，不序列化。 */
+  /** Raw platform payload for debugging; not serialized. */
   _raw?: unknown;
 }
 
-/** 出站消息的单个片段。多模态按 parts 数组，capability 降级在 dispatcher 做。 */
+/** Single fragment of an outgoing message. Multimodal messages use parts array; degradation done in dispatcher. */
 export type OutgoingPart =
   | { kind: "text"; text: string }
   | { kind: "image"; url?: string; filePath?: string; caption?: string }
@@ -76,35 +76,35 @@ export type OutgoingPart =
     }
   | { kind: "sticker"; stickerId: string; imagePath: string };
 
-/** 出站消息。dispatcher → adapters。 */
+/** Outgoing message: dispatcher -> adapters. */
 export interface OutgoingMessage {
   channel: ChannelId;
-  /** 回复给谁（私聊 = senderId；群聊 = chatId） */
+  /** Recipient target (direct message = senderId; group chat = chatId) */
   targetId: string;
   threadId?: string;
   parts: OutgoingPart[];
 }
 
-/** 渠道状态（UI 展示用） */
+/** Channel status for UI display */
 export interface ChannelStatus {
   enabled: boolean;
-  /** "running" / "offline" / "starting" / "config_missing" / "error" */
+  /** "running" | "offline" | "starting" | "config_missing" | "error" */
   phase: "running" | "offline" | "starting" | "config_missing" | "error";
   message?: string;
-  /** 渠道专属的额外状态字段（如微信账号昵称、飞书 token 是否过期） */
+  /** Channel-specific extra status fields (e.g. WeChat account nickname, Feishu token expiry) */
   detail?: Record<string, unknown>;
 }
 
-/** ChannelAdapter 内部 onMessage handler 的签名。
- *  返回 null 表示该消息被忽略（权限/限速/不在 allow list），adapter 不会再回信。 */
+/** Signature of ChannelAdapter's internal onMessage handler.
+ * Returning null indicates the message is ignored (permissions/rate limiting/not in allowlist); adapter will not reply. */
 export type MessageHandler = (
   msg: IncomingMessage,
 ) => Promise<OutgoingMessage | null>;
 
-/** inbound-server 拿到入站请求后转交给 manager 路由时的回调签名 */
+/** Callback signature when inbound-server passes an inbound request to manager for routing */
 export interface InboundRouteContext {
-  /** 用于推送 AG-UI 事件到桌面端 chatWindow（可选）。 */
+  /** Used to push AG-UI events to desktop chatWindow (optional). */
   chatWindow?: WebContents | null;
-  /** 用于把出站消息广播回桌面端镜像显示（可选）。 */
+  /** Used to broadcast outgoing messages back to desktop for mirrored display (optional). */
   broadcastChat?: (event: { type: "bot:message"; payload: unknown }) => void;
 }

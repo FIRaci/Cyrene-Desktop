@@ -1,5 +1,5 @@
-// Skill 系统启动入口 + 对外 API。
-// 唯一碰 electron 的模块（app.getPath）；scanSkills/registry/tools 都是纯逻辑或单例。
+// Skill system startup entry + public API.
+// Only module interacting with electron (app.getPath); scanSkills/registry/tools are pure logic or singletons.
 
 import * as fs from "fs";
 import * as path from "path";
@@ -11,12 +11,12 @@ import type { SkillEntry } from "./types";
 
 const LOG_PREFIX = "[Skills]";
 
-/** skill enabled 状态持久化文件（userData/skills-enabled.json）。 */
+/** Skill enabled state persistence file (userData/skills-enabled.json). */
 function enabledStatePath(): string {
   return path.join(app.getPath("userData"), "skills-enabled.json");
 }
 
-/** 读取持久化的 enabled 状态（id → bool）。 */
+/** Read persisted enabled state (id -> bool). */
 function loadEnabledState(): Record<string, boolean> {
   try {
     const p = enabledStatePath();
@@ -28,8 +28,8 @@ function loadEnabledState(): Record<string, boolean> {
 }
 
 /**
- * 启动入口：扫描双源 skills → 灌入 registry（user 目录级覆盖 builtin + 合并 enabled 状态）→ 注册 meta-tool。
- * 必须在 app.whenReady 之后调用（依赖 app.getPath）。
+ * Startup entry: scan dual-source skills -> populate registry (user overrides builtin at dir-level + merge enabled state) -> register meta-tools.
+ * Must be called after app.whenReady (depends on app.getPath).
  */
 export function initSkills(): void {
   const builtinDir = path.join(app.getAppPath(), "skills");
@@ -38,12 +38,12 @@ export function initSkills(): void {
   const builtin = scanSkills(builtinDir, "builtin");
   const user = scanSkills(userDir, "user");
 
-  // 合并：按 id，user 覆盖 builtin（目录级整体覆盖，见 spec 4.1）
+  // Merge: by id, user overrides builtin (directory-level wholesale override, per spec 4.1)
   const map = new Map<string, SkillEntry>();
   for (const s of builtin) map.set(s.id, s);
   for (const s of user) map.set(s.id, s);
 
-  // 合并 enabled 状态（settings.json 持久化的覆盖默认 true）
+  // Merge enabled state (persisted in settings.json overrides default true)
   const saved = loadEnabledState();
   for (const s of map.values()) {
     if (s.id in saved) s.enabled = saved[s.id];
@@ -51,10 +51,10 @@ export function initSkills(): void {
   }
 
   registerSkillTools();
-  console.log(LOG_PREFIX, `已加载 ${map.size} 个 skill：`, Array.from(map.keys()).join(", ") || "(无)");
+  console.log(LOG_PREFIX, `Loaded ${map.size} skills:`, Array.from(map.keys()).join(", ") || "(none)");
 }
 
-/** 持久化某 skill 的 enabled 状态。 */
+/** Persist enabled state for a skill. */
 export function setSkillEnabled(id: string, enabled: boolean): void {
   skillRegistry.setEnabled(id, enabled);
   try {
@@ -63,11 +63,11 @@ export function setSkillEnabled(id: string, enabled: boolean): void {
     fs.mkdirSync(path.dirname(enabledStatePath()), { recursive: true });
     fs.writeFileSync(enabledStatePath(), JSON.stringify(saved, null, 2), "utf8");
   } catch (err) {
-    console.warn(LOG_PREFIX, "持久化 enabled 失败:", err);
+    console.warn(LOG_PREFIX, "Failed to persist enabled state:", err);
   }
 }
 
-/** 返回所有 skill 的元数据（给 UI 用）。 */
+/** Return metadata for all skills (for UI consumption). */
 export function listSkillsForUi() {
   return skillRegistry.getAll().map(s => ({
     id: s.id,

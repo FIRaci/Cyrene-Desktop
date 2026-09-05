@@ -1,5 +1,5 @@
-// 文件系统工具组 — 给 agent 装上"读文件 / 列目录 / 写文件 / 读图片"四件武器
-// 不绕 run_shell，直接用 fs API。每个工具都有 risk 字段交给权限网关判定。
+// File system tool group: read_file / list_dir / write_file / read_image
+// Uses fs API directly. Each tool specifies risk level for permission gateway evaluation.
 
 import * as fs from "fs";
 import * as path from "path";
@@ -9,11 +9,11 @@ import type { ToolContext } from "./tool-context";
 
 const LOG_PREFIX = "[FsTools]";
 
-const READ_MAX_BYTES = 256 * 1024;       // 单文件最多读 256KB
-const LIST_MAX_ENTRIES = 200;            // 单次目录列举最多 200 项
-const IMAGE_MAX_BYTES = 5 * 1024 * 1024; // 图片最多 5MB
+const READ_MAX_BYTES = 256 * 1024;       // Max 256KB per file read
+const LIST_MAX_ENTRIES = 200;            // Max 200 entries per list
+const IMAGE_MAX_BYTES = 5 * 1024 * 1024; // Max 5MB per image
 
-// 图片扩展名集合，用于 list_dir 标注 [图片] 和汇总计数
+// Set of image extensions used for list_dir annotations and counts
 const IMAGE_EXTS = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg", ".ico"]);
 
 function ensureAbsolute(p: string): string | null {
@@ -33,7 +33,7 @@ function humanBytes(n: number): string {
   return (n / 1024 / 1024 / 1024).toFixed(2) + "GB";
 }
 
-// ── 工具 1：read_file ─────────────────────────────────────
+// -- Tool 1: read_file ------------------------------------
 
 async function executeReadFile(args: Record<string, unknown>): Promise<string> {
   const raw = String(args.path || "").trim();
@@ -60,7 +60,7 @@ async function executeReadFile(args: Record<string, unknown>): Promise<string> {
   const truncatedSize = buf.length > READ_MAX_BYTES;
   const slice = truncatedSize ? buf.subarray(0, READ_MAX_BYTES) : buf;
 
-  // 二进制启发：前 4KB 出现大量 \0 → 当作二进制
+  // Binary heuristic: lots of \0 in first 4KB -> treat as binary
   const head = slice.subarray(0, Math.min(slice.length, 4096));
   let nullCount = 0;
   for (let i = 0; i < head.length; i++) if (head[i] === 0) nullCount++;
@@ -78,7 +78,7 @@ async function executeReadFile(args: Record<string, unknown>): Promise<string> {
     "\ntotal_lines: ~" + total + (truncatedSize ? "  [truncated at 256KB]" : "") +
     "\nshowing: line " + startLine + " ~ " + (startLine + sliceLines.length - 1) + "\n\n";
 
-  // 带行号方便 agent 后续精确引用
+  // Line numbers included for accurate citation by agent
   const numbered = sliceLines.map((line, i) => {
     const ln = startLine + i;
     return String(ln).padStart(5, " ") + " | " + line;
@@ -108,7 +108,7 @@ toolRegistry.register({
   execute: executeReadFile,
 });
 
-// ── 工具 2：list_dir ──────────────────────────────────────
+// -- Tool 2: list_dir -------------------------------------
 
 async function executeListDir(args: Record<string, unknown>): Promise<string> {
   const raw = String(args.path || "").trim();
@@ -135,7 +135,7 @@ async function executeListDir(args: Record<string, unknown>): Promise<string> {
     entries = entries.filter(e => !e.name.startsWith("."));
   }
 
-  // 文件夹在前，文件在后；同类按名字排序
+  // Directories first, files second; sorted alphabetically by name
   entries.sort((a, b) => {
     const da = a.isDirectory() ? 0 : 1;
     const db = b.isDirectory() ? 0 : 1;
@@ -146,7 +146,7 @@ async function executeListDir(args: Record<string, unknown>): Promise<string> {
   const truncated = entries.length > LIST_MAX_ENTRIES;
   const slice = truncated ? entries.slice(0, LIST_MAX_ENTRIES) : entries;
 
-  // 汇总图片数量，让模型不用逐个数就能回答"有几张图"
+  // Summarize image count so model can answer image count queries directly
   const imageCount = entries.filter(e => e.isFile() && IMAGE_EXTS.has(path.extname(e.name).toLowerCase())).length;
 
   const lines: string[] = [];
@@ -166,7 +166,7 @@ async function executeListDir(args: Record<string, unknown>): Promise<string> {
     } else if (ent.isFile()) {
       const st = safeStat(full);
       const size = st ? "  " + humanBytes(st.size) : "";
-      // 标注文件类型，重点让图片显式可见，模型才能数清"有几张图"
+      // Annotate file types, explicitly labeling images
       const ext = path.extname(ent.name).toLowerCase();
       const tag = IMAGE_EXTS.has(ext) ? "  [image]" : "";
       lines.push("[F] " + ent.name + size + tag);
@@ -199,7 +199,7 @@ toolRegistry.register({
   execute: executeListDir,
 });
 
-// ── 工具 3：write_file ────────────────────────────────────
+// -- Tool 3: write_file -----------------------------------
 
 async function executeWriteFile(args: Record<string, unknown>): Promise<string> {
   const raw = String(args.path || "").trim();
@@ -208,7 +208,7 @@ async function executeWriteFile(args: Record<string, unknown>): Promise<string> 
 
   const content = typeof args.content === "string" ? args.content : "";
   const append = args.append === true;
-  const createDirs = args.createDirs !== false; // 默认创建父目录
+  const createDirs = args.createDirs !== false; // Create parent directories by default
 
   console.log(LOG_PREFIX, "write_file:", filePath, "bytes=" + Buffer.byteLength(content, "utf8"), append ? "(append)" : "(overwrite)");
 
@@ -259,12 +259,12 @@ toolRegistry.register({
   execute: executeWriteFile,
 });
 
-// ── 工具 4：read_image ────────────────────────────────────
-// 资源访问层：读图片→base64→交 vision-captioner 看图→返回文字。
-// 不懂视觉，看图的活外包给 captioner。
+// -- Tool 4: read_image -----------------------------------
+// Resource layer: read image -> base64 -> call vision-captioner -> return text.
+// Vision analysis delegated to captioner.
 
-// loadVisionConfig 在 index.ts，但 index.ts 也 import 本文件（副作用注册），形成循环。
-// 用懒加载规避：运行时才 require，此时 index.ts 已初始化完。
+// loadVisionConfig is in index.ts; lazy load to break circular import.
+// Avoided with lazy require at runtime.
 function loadVisionConfigLazy() {
   const mod = require("../index") as { loadVisionConfig: () => import("./vision-captioner").VisionConfig | null };
   return mod.loadVisionConfig();
@@ -310,13 +310,13 @@ async function executeReadImage(
     return "[Error] Failed to read image: " + msg;
   }
 
-  // 查视觉模型配置（统一判断入口，不再有调度层门控）
+  // Query vision model config
   const visionConfig = loadVisionConfigLazy();
   if (!visionConfig) {
     return "[Configuration error] Vision is not enabled. Configure an OpenAI-compatible vision model in Settings → API Settings → Vision Model.";
   }
 
-  // 调视觉模型看图，用户问题从 ToolContext 来
+  // Invoke vision model with user query from ToolContext
   const userQuery = ctx?.userQuery ?? "";
   const result = await captionImage(
     { base64: buf.toString("base64"), mime },

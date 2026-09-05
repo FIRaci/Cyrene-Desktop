@@ -16,11 +16,12 @@ describe("pet interaction policy", () => {
     expect(nextPetZoom(PET_ZOOM_MIN, 120)).toBe(PET_ZOOM_MIN);
   });
 
-  it("starts a window drag only for Alt plus the primary pointer button", () => {
+  it("starts a window drag for Alt plus the primary or secondary pointer button", () => {
     expect(shouldStartPetDrag({ altKey: true, button: 0 })).toBe(true);
+    expect(shouldStartPetDrag({ altKey: true, button: 2 })).toBe(true);
     expect(shouldStartPetDrag({ altKey: false, button: 0 })).toBe(false);
+    expect(shouldStartPetDrag({ altKey: false, button: 2 })).toBe(false);
     expect(shouldStartPetDrag({ altKey: true, button: 1 })).toBe(false);
-    expect(shouldStartPetDrag({ altKey: true, button: 2 })).toBe(false);
   });
 
   it("starts a window zoom drag for Alt plus the middle pointer button", () => {

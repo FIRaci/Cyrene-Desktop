@@ -1,6 +1,7 @@
-// 用户Timezone白名单。Settings页只暴露下列选项；保存时只接受这里的 value（空串/非法/不在白名单一律回退 Asia/Shanghai）。
-// 显示 label 形如"Beijing Time (UTC+08:00)"，value 用 IANA Timezone名。
-// 任何主进程格式化位置都不直接吃 profile.timezone，必须先经 resolveChatContextTimezone 校验再喂 Intl。
+// User timezone allowlist. Settings page exposes only the following options;
+// saving accepts only values defined here (empty / invalid / unlisted fall back to Asia/Shanghai).
+// Display labels follow format "Beijing Time (UTC+08:00)", values use IANA timezone identifiers.
+// Main process formatters must validate via resolveChatContextTimezone before Intl consumption.
 
 export interface TimezoneOption {
   label: string;
@@ -17,7 +18,7 @@ export const TIMEZONE_OPTIONS: readonly TimezoneOption[] = [
   { label: "Los Angeles Time (UTC-08:00)", value: "America/Los_Angeles" },
 ] as const;
 
-/** 加载时校验：空串/非法/不在白名单都回退 Asia/Shanghai。 */
+/** Validation on load: empty string, invalid, or unlisted fall back to Asia/Shanghai. */
 export const FALLBACK_TIMEZONE = "Asia/Shanghai";
 
 export function normalizeTimezoneOptionValue(raw: string | null | undefined): string {

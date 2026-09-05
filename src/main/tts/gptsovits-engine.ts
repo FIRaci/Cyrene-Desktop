@@ -1,18 +1,18 @@
-// GPT-SoVITS 本地 TTS 引擎
-// 接口：官方 api_v2 (POST /api/tts)，返回 wav 字节
-// 参考：https://github.com/RVC-Boss/GPT-SoVITS
+// GPT-SoVITS local TTS engine
+// Interface: official api_v2 (POST /api/tts), returns wav bytes
+// Reference: https://github.com/RVC-Boss/GPT-SoVITS
 import * as fs from "fs";
 
 export interface GptsovitsSynthesizeOptions {
-  baseUrl: string;          // 形如 "http://localhost:9880"，不含路径
-  refAudioPath: string;     // 参考音频绝对路径
-  promptText: string;      // 参考音频对应的文本
-  text: string;             // 待合成文本
+  baseUrl: string;          // e.g. "http://localhost:9880", without path
+  refAudioPath: string;     // Reference audio absolute path
+  promptText: string;      // Reference audio transcript text
+  text: string;             // Text to synthesize
   textLang?: "en" | "zh";
   promptLang?: "en" | "zh";
-  speed?: number;           // 0.5~2，默认 1
-  format?: "wav" | "mp3";   // 默认 wav
-  timeoutMs?: number;      // 默认 60000（本地推理可能较慢）
+  speed?: number;           // 0.5~2, default 1
+  format?: "wav" | "mp3";   // Default wav
+  timeoutMs?: number;      // Default 60000 (local inference might be slow)
   debugLog?: (entry: Record<string, unknown>) => void;
 }
 
@@ -25,10 +25,10 @@ const DEFAULT_TIMEOUT_MS = 60000;
 const TTS_PATH = "/tts";
 
 /**
- * 调 GPT-SoVITS api_v2。
- * 请求体 application/x-www-form-urlencoded：
+ * Calls GPT-SoVITS api_v2.
+ * Request body application/x-www-form-urlencoded:
  *   refer_wav_path / prompt_text / text / text_language / prompt_language / speed_factor / streaming / format
- * 返回完整 wav（或 mp3）字节。
+ * Returns complete wav (or mp3) bytes.
  */
 export async function synthesize(opts: GptsovitsSynthesizeOptions): Promise<GptsovitsSynthesizeResult> {
   const format: "wav" | "mp3" = opts.format ?? "wav";
@@ -40,7 +40,7 @@ export async function synthesize(opts: GptsovitsSynthesizeOptions): Promise<Gpts
     try { opts.debugLog?.({ requestId, ts: new Date().toISOString(), ...entry }); } catch { /* ignore */ }
   };
 
-  // 1) 输入校验
+  // 1) Input validation
   if (!opts.baseUrl) throw new Error("GPT-SoVITS API URL is required");
   if (!opts.refAudioPath) throw new Error("Reference audio path is required");
   if (!opts.promptText) throw new Error("Reference audio transcript is required");
@@ -49,68 +49,63 @@ export async function synthesize(opts: GptsovitsSynthesizeOptions): Promise<Gpts
     throw new Error(`Reference audio file does not exist: ${opts.refAudioPath}`);
   }
 
-  // 2) 构造 JSON body（裸对象，不包 data）
-  // 契约参考 GPT-SoVITS api_v2.py: POST /tts，body 是 TTS_Request 模型
-  // 必需字段：text / text_lang / ref_audio_path / prompt_lang
+  // 2) Build JSON body (raw object, not wrapped in data)
+  // Contract ref GPT-SoVITS api_v2.py: POST /tts, body is TTS_Request model
+  // Required fields: text / text_lang / ref_audio_path / prompt_lang
+  const isZh = /[\u4e00-\u9fff]/.test(opts.text);
+  const text_lang = opts.textLang ?? (isZh ? "zh" : "en");
+  const isPromptZh = /[\u4e00-\u9fff]/.test(opts.promptText);
+  const prompt_lang = opts.promptLang ?? (isPromptZh ? "zh" : "en");
+
   const body = JSON.stringify({
     text: opts.text,
-    text_lang: opts.textLang ?? "en",
+    text_lang,
     ref_audio_path: opts.refAudioPath,
     prompt_text: opts.promptText,
-    prompt_lang: opts.promptLang ?? "en",
+    prompt_lang,
     speed_factor: opts.speed ?? 1,
     streaming_mode: false,
     media_type: format,
   });
 
-  // baseUrl 去掉尾部斜杠，拼 /api/tts
-  const url = opts.baseUrl.replace(/\/+$/, "") + TTS_PATH;
+  // Strip trailing slash from baseUrl, append /api/tts
+  const endpoint = `${opts.baseUrl.replace(/\/+$/, "")}${TTS_PATH}`;
+  log({ stage: "request_start", endpoint, format, textLen: opts.text.length });
 
-  log({
-    phase: "request.begin",
-    endpoint: url,
-    textChars: Array.from(opts.text).length,
-    refAudioPath: opts.refAudioPath,
-    format,
-  });
-
-  // 3) 发请求 + 全程超时控制与缓冲保护
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  // 3) Send request + full timeout control and buffer protection
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
 
   let audio: Buffer;
   try {
-    const resp = await fetch(url, {
+    const res = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body,
-      signal: controller.signal,
+      signal: ctrl.signal,
     });
 
-    if (!resp.ok) {
-      const text = await resp.text().catch(() => "");
-      const preview = text.slice(0, 200);
-      log({ phase: "error", status: resp.status, bodyPreview: preview, durationMs: Date.now() - startedAt });
-      throw new Error(`GPT-SoVITS synthesis failed: ${resp.status} ${preview}`);
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      const message = `GPT-SoVITS returned HTTP ${res.status}: ${text.slice(0, 300)}`;
+      log({ stage: "http_error", status: res.status, body: text.slice(0, 300) });
+      throw new Error(message);
     }
 
-    const arrayBuf = await resp.arrayBuffer();
-    if (arrayBuf.byteLength > 25 * 1024 * 1024) {
-      throw new Error("GPT-SoVITS audio response exceeds 25MB safety limit");
-    }
+    const arrayBuf = await res.arrayBuffer();
     audio = Buffer.from(arrayBuf);
-  } catch (err) {
-    if (err instanceof Error && err.name === "AbortError") {
-      log({ phase: "error", error: `Synthesis timed out (${timeoutMs}ms)`, durationMs: Date.now() - startedAt });
-      throw new Error(`GPT-SoVITS synthesis timed out (${timeoutMs}ms); check whether the service is running`);
+    log({ stage: "audio_received", bytes: audio.length, costMs: Date.now() - startedAt });
+
+    if (audio.length === 0) {
+      throw new Error("GPT-SoVITS returned empty audio buffer");
     }
-    log({ phase: "error", error: err instanceof Error ? err.message : String(err), durationMs: Date.now() - startedAt });
+  } catch (err) {
     throw err instanceof Error ? err : new Error(String(err));
   } finally {
     clearTimeout(timer);
   }
 
-  // 校验 magic bytes：wav 以 "RIFF" 开头，mp3 以 ID3 或 0xFF 0xFB 开头
+  // Validate magic bytes: wav starts with "RIFF", mp3 starts with ID3 or 0xFF 0xFB
   const isWav = audio.slice(0, 4).toString("ascii") === "RIFF";
   const isMp3 = audio[0] === 0x49 /* I (ID3) */ || audio[0] === 0xff;
   if (format === "wav" && !isWav && !isMp3) {

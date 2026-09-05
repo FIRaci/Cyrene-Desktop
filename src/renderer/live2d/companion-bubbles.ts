@@ -78,6 +78,35 @@ export function reducePetBubbleState(
   }
 }
 
+export function renderFormattedSpeech(el: HTMLElement, text: string): void {
+  if (
+    typeof document === "undefined" ||
+    typeof el.replaceChildren !== "function" ||
+    (!text.includes("*") && !text.includes("/"))
+  ) {
+    el.textContent = text;
+    return;
+  }
+  el.replaceChildren();
+  const parts = text.split(/(\*[^*]+\*|\/[^/]+\/)/g);
+  for (const part of parts) {
+    if (!part) continue;
+    if (part.startsWith("*") && part.endsWith("*") && part.length > 2) {
+      const span = document.createElement("span");
+      span.className = "pet-bubble__action";
+      span.textContent = part;
+      el.appendChild(span);
+    } else if (part.startsWith("/") && part.endsWith("/") && part.length > 2) {
+      const span = document.createElement("span");
+      span.className = "pet-bubble__thought-inline";
+      span.textContent = part;
+      el.appendChild(span);
+    } else {
+      el.appendChild(document.createTextNode(part));
+    }
+  }
+}
+
 export class CompanionBubbleController {
   private state: PetBubbleState = {
     speech: "",
@@ -122,12 +151,27 @@ export class CompanionBubbleController {
     this.hideTimer = globalThis.setTimeout(() => this.hide(), durationMs);
   }
 
+  think(text: string, durationMs = 4_500): void {
+    if (this.isBusy) return;
+    this.clearHideTimer();
+    this.state = {
+      ...this.state,
+      thought: truncatePetSpeech(text),
+      thoughtVisible: true,
+      speech: "",
+      speechVisible: false,
+      terminal: true,
+    };
+    this.render();
+    this.hideTimer = globalThis.setTimeout(() => this.hide(), durationMs);
+  }
+
   dispose(): void {
     this.clearHideTimer();
   }
 
   private render(): void {
-    this.speechEl.textContent = this.state.speech;
+    renderFormattedSpeech(this.speechEl, this.state.speech);
     this.speechEl.hidden = !this.state.speechVisible;
     this.thoughtEl.textContent = this.state.thought;
     this.thoughtEl.hidden = !this.state.thoughtVisible;

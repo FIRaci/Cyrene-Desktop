@@ -1,10 +1,10 @@
-// 🚗 出行工具 —— 路线规划（驾车/步行/骑行/公交）。
+// Travel tools: route planning (driving/walking/cycling/transit).
 //
-// 设计原则：
-// - 复用 GeneralSettings 中已有的 amapKey（高德 Web 服务 API Key）
-// - 用高德地理编码将地名转坐标，再调用路径规划 API
-// - 返回易读的中文路线描述
-// - 不引入新依赖，复用全局 fetch
+// Design principles:
+// - Reuses amapKey from GeneralSettings
+// - Uses geocoding to convert names to coordinates, then calls routing API
+// - Returns readable route description
+// - Zero new dependencies, reuses global fetch
 
 import { toolRegistry } from "./tool-registry";
 
@@ -12,20 +12,20 @@ const LOG_PREFIX = "[TravelTools]";
 const TRAVEL_TIMEOUT_MS = 15000;
 
 // ══════════════════════════════════════════════════════════
-// 配置注入
+// Config injection
 // ══════════════════════════════════════════════════════════
 
 let amapKeyGetter: (() => string) | null = null;
 let travelEnabledGetter: (() => boolean) | null = null;
 
-/** index.ts 启动时注入 amapKey 获取器。 */
+/** Injected amapKey getter on startup. */
 export function setTravelConfig(amapKeyFn: () => string, enabledFn?: () => boolean): void {
   amapKeyGetter = amapKeyFn;
   travelEnabledGetter = enabledFn ?? null;
 }
 
 // ══════════════════════════════════════════════════════════
-// 高德地理编码：地名 → "经度,纬度"
+// Amap geocoding: place name -> "longitude,latitude"
 // ══════════════════════════════════════════════════════════
 
 async function geocode(address: string, key: string): Promise<string | null> {
@@ -37,7 +37,7 @@ async function geocode(address: string, key: string): Promise<string | null> {
     if (!resp.ok) return null;
     const data = await resp.json() as { status?: string; geocodes?: Array<{ location: string }> };
     if (data.status !== "1" || !data.geocodes || data.geocodes.length === 0) return null;
-    return data.geocodes[0].location; // 格式 "116.397428,39.90923"
+    return data.geocodes[0].location; // Format "116.397428,39.90923"
   } catch {
     return null;
   } finally {
@@ -46,10 +46,10 @@ async function geocode(address: string, key: string): Promise<string | null> {
 }
 
 // ══════════════════════════════════════════════════════════
-// 各出行方式 API 封装
+// Routing API wrappers
 // ══════════════════════════════════════════════════════════
 
-/** 驾车路径规划。 */
+/** Driving route planning. */
 async function planDriving(origin: string, destination: string, key: string): Promise<string> {
   const url = `https://restapi.amap.com/v3/direction/driving?origin=${origin}&destination=${destination}&extensions=base&strategy=0&key=${key}`;
   const ctrl = new AbortController();
@@ -81,7 +81,7 @@ async function planDriving(origin: string, destination: string, key: string): Pr
   }
 }
 
-/** 步行路径规划（最长 100km）。 */
+/** Walking route planning (up to 100km). */
 async function planWalking(origin: string, destination: string, key: string): Promise<string> {
   const url = `https://restapi.amap.com/v3/direction/walking?origin=${origin}&destination=${destination}&key=${key}`;
   const ctrl = new AbortController();
@@ -110,7 +110,7 @@ async function planWalking(origin: string, destination: string, key: string): Pr
   }
 }
 
-/** 骑行路径规划（最长 500km）。 */
+/** Cycling route planning (up to 500km). */
 async function planCycling(origin: string, destination: string, key: string): Promise<string> {
   const url = `https://restapi.amap.com/v4/direction/bicycling?origin=${origin}&destination=${destination}&key=${key}`;
   const ctrl = new AbortController();
@@ -138,7 +138,7 @@ async function planCycling(origin: string, destination: string, key: string): Pr
   }
 }
 
-/** 公交路径规划（支持公交/地铁/火车综合换乘）。 */
+/** Transit route planning (bus/subway/rail transfers). */
 async function planTransit(
   origin: string,
   destination: string,
@@ -167,7 +167,7 @@ async function planTransit(
     const walkDist = Number(transit.walking_distance);
     const walkStr = walkDist > 0 ? ` (including ${walkDist.toFixed(0)} m on foot)` : "";
 
-    // 提取换乘方案简述
+    // Extract transfer plan summary
     const steps = transit.segments?.map((seg, i) => {
       if (seg.bus?.buslines?.length) {
         const bus = seg.bus.buslines[0];
@@ -197,12 +197,12 @@ async function planTransit(
 }
 
 // ══════════════════════════════════════════════════════════
-// 工具入口
+// Tool entrypoint
 // ══════════════════════════════════════════════════════════
 
 
 // ══════════════════════════════════════════════════════════
-// 全球免费路线与地理编码（无需 Key，支持全球任意国家城市）
+// Keyless global routing and geocoding
 // ══════════════════════════════════════════════════════════
 
 interface GlobalLocation {
@@ -299,10 +299,10 @@ async function executePlanTrip(args: Record<string, unknown>): Promise<string> {
 
   const rawMode = String(args.mode ?? "driving").trim();
   const legacyModes: Readonly<Record<string, string>> = {
-    "驾车": "driving", "开车": "driving",
-    "步行": "walking", "走路": "walking",
-    "骑行": "cycling", "骑车": "cycling", "自行车": "cycling",
-    "公交": "transit", "公共交通": "transit", "地铁": "transit", "公交地铁": "transit",
+    "\u9a7e\u8f66": "driving", "\u5f00\u8f66": "driving",
+    "\u6b65\u884c": "walking", "\u8d70\u8def": "walking",
+    "\u9a91\u884c": "cycling", "\u9a91\u8f66": "cycling", "\u81ea\u884c\u8f66": "cycling",
+    "\u516c\u4ea4": "transit", "\u516c\u5171\u4ea4\u901a": "transit", "\u5730\u94c1": "transit", "\u516c\u4ea4\u5730\u94c1": "transit",
   };
   const mode = legacyModes[rawMode] ?? rawMode.toLowerCase();
 
@@ -334,10 +334,10 @@ async function executePlanTrip(args: Record<string, unknown>): Promise<string> {
 }
 
 // ══════════════════════════════════════════════════════════
-// 注册
+// Registration
 // ══════════════════════════════════════════════════════════
 
-/** 注册出行工具。index.ts startup 调一次。 */
+/** Register travel tools on startup. */
 export function registerTravelTools(): void {
   toolRegistry.register({
     id: "plan_trip",

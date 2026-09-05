@@ -71,7 +71,7 @@ async function runPhases(smokeUserDataDir: string): Promise<number> {
 
   // 3. Search (default: empty array is OK; strict: must be non-empty)
   const strict = process.env.CYRENE_MUSIC_SMOKE_STRICT === "1";
-  const searchResult = await bootstrap.service.searchTracks("花海 周杰伦", "smoke");
+  const searchResult = await bootstrap.service.searchTracks("Floral Sea Jay Chou", "smoke");
   if (!Array.isArray(searchResult.tracks)) {
     log("search_failed errorCode=E_SEARCH_INVALID_RESPONSE");
     await shutdown(bootstrap);

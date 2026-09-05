@@ -12,12 +12,12 @@ import { resolveStructuredOutputProfile } from "./structured-output/profiles";
 import type { ToolDefinition } from "./tool-registry";
 import type { ChatResponse } from "./vendors/types";
 
-// ── 测试辅助 ──────────────────────────────
+// -- Test helpers --
 
 const skills: SkillRouteInfo[] = [
-  { id: "xlsx", description: "Excel 文档生成" },
-  { id: "cyrene-music-companion", description: "音乐搜索与播放", defaultExecutionMode: "direct" },
-  { id: "docx", description: "Word 文档生成", defaultExecutionMode: "plan" },
+  { id: "xlsx", description: "Excel document generation" },
+  { id: "cyrene-music-companion", description: "Music search and playback", defaultExecutionMode: "direct" },
+  { id: "docx", description: "Word document generation", defaultExecutionMode: "plan" },
 ];
 
 const profile = resolveStructuredOutputProfile({
@@ -41,45 +41,45 @@ function response(value: unknown): ChatResponse {
 function makeInput(overrides: Partial<RunTaskRouterInput> = {}): RunTaskRouterInput {
   return {
     model: "gpt-5.2",
-    originalQuery: "查杭州天气",
-    contextualizedQuery: "查询杭州当前天气",
-    messages: [{ role: "user", content: "查杭州天气" }],
+    originalQuery: "check Hangzhou weather",
+    contextualizedQuery: "check current Hangzhou weather",
+    messages: [{ role: "user", content: "check Hangzhou weather" }],
     availableSkills: skills,
     availableCapabilities: [
-      { capabilityId: "weather.lookup", description: "查询天气", hasCompletionEvidence: false },
-      { capabilityId: "music.search", description: "搜索歌曲", hasCompletionEvidence: true },
+      { capabilityId: "weather.lookup", description: "check weather", hasCompletionEvidence: false },
+      { capabilityId: "music.search", description: "search songs", hasCompletionEvidence: true },
     ],
     profile,
-    generate: async () => response({ executionMode: "direct", skillIds: [], reason: "单次查询" }),
+    generate: async () => response({ executionMode: "direct", skillIds: [], reason: "single query" }),
     ...overrides,
   };
 }
 
-// ── matchSkillByName 测试 ─────────────────
+// -- matchSkillByName tests --
 
 describe("matchSkillByName", () => {
-  it("matches '使用 xlsx skill'", () => {
-    expect(matchSkillByName("使用 xlsx skill 帮我生成报表", skills)).toBe("xlsx");
+  it("matches 'use xlsx skill'", () => {
+    expect(matchSkillByName("use xlsx skill to generate report", skills)).toBe("xlsx");
   });
 
-  it("matches '调用 docx 技能'", () => {
-    expect(matchSkillByName("调用 docx 技能", skills)).toBe("docx");
+  it("matches 'call docx skill'", () => {
+    expect(matchSkillByName("call docx skill", skills)).toBe("docx");
   });
 
   it("matches 'cyrene-music-companion skill'", () => {
-    expect(matchSkillByName("用 cyrene-music-companion skill", skills)).toBe("cyrene-music-companion");
+    expect(matchSkillByName("use cyrene-music-companion skill", skills)).toBe("cyrene-music-companion");
   });
 
   it("does not match natural language mentioning Excel", () => {
-    expect(matchSkillByName("帮我做个 Excel 报表", skills)).toBeUndefined();
+    expect(matchSkillByName("help me make an Excel report", skills)).toBeUndefined();
   });
 
   it("does not match unrelated text", () => {
-    expect(matchSkillByName("查杭州天气", skills)).toBeUndefined();
+    expect(matchSkillByName("check Hangzhou weather", skills)).toBeUndefined();
   });
 });
 
-// ── buildRouterCapabilities 测试 ──────────
+// -- buildRouterCapabilities tests --
 
 describe("buildRouterCapabilities", () => {
   it("builds capability list with completionEvidence flag", () => {
@@ -87,8 +87,8 @@ describe("buildRouterCapabilities", () => {
       {
         id: "music_search",
         capability: "music.search",
-        name: "搜索",
-        description: "搜索歌曲",
+        name: "Search",
+        description: "Search songs",
         enabled: true,
         inputSchema: { type: "object", properties: {} },
         execute: async () => "",
@@ -97,8 +97,8 @@ describe("buildRouterCapabilities", () => {
       {
         id: "weather",
         capability: "weather.lookup",
-        name: "天气",
-        description: "查询天气",
+        name: "Weather",
+        description: "Check weather",
         enabled: true,
         inputSchema: { type: "object", properties: {} },
         execute: async () => "",
@@ -119,7 +119,7 @@ describe("buildRouterCapabilities", () => {
   });
 });
 
-// ── runTaskRouter 测试 ────────────────────
+// -- runTaskRouter tests --
 
 describe("runTaskRouter", () => {
   it("has feature flag enabled", () => {
@@ -129,7 +129,7 @@ describe("runTaskRouter", () => {
   it("uses shortcut path with defaultExecutionMode from metadata", async () => {
     // cyrene-music-companion has defaultExecutionMode: "direct"
     const result = await runTaskRouter(makeInput({
-      originalQuery: "使用 cyrene-music-companion skill 播放歌曲",
+      originalQuery: "use cyrene-music-companion skill to play music",
     }));
     expect(result.executionMode).toBe("direct");
     expect(result.skillIds).toContain("cyrene-music-companion");
@@ -139,7 +139,7 @@ describe("runTaskRouter", () => {
   it("uses shortcut path with plan mode from metadata", async () => {
     // docx has defaultExecutionMode: "plan"
     const result = await runTaskRouter(makeInput({
-      originalQuery: "使用 docx 技能生成文档",
+      originalQuery: "use docx skill to generate document",
     }));
     expect(result.executionMode).toBe("plan");
     expect(result.skillIds).toContain("docx");
@@ -150,10 +150,10 @@ describe("runTaskRouter", () => {
     const generate = vi.fn(async () => response({
       executionMode: "plan",
       skillIds: [],
-      reason: "多步文档生成",
+      reason: "multi-step document generation",
     }));
     const result = await runTaskRouter(makeInput({
-      originalQuery: "使用 xlsx skill 生成报表",
+      originalQuery: "use xlsx skill to generate report",
       generate,
     }));
     expect(generate).toHaveBeenCalledTimes(1);
@@ -166,10 +166,10 @@ describe("runTaskRouter", () => {
     const generate = vi.fn(async () => response({
       executionMode: "direct",
       skillIds: [],
-      reason: "单次查询",
+      reason: "single query",
     }));
     const result = await runTaskRouter(makeInput({
-      originalQuery: "查杭州天气",
+      originalQuery: "check Hangzhou weather",
       generate,
     }));
     expect(generate).toHaveBeenCalledTimes(1);
@@ -183,7 +183,7 @@ describe("runTaskRouter", () => {
       reason: "test",
     }));
     const result = await runTaskRouter(makeInput({
-      originalQuery: "查天气",
+      originalQuery: "check weather",
       generate,
     }));
     expect(result.skillIds).toContain("xlsx");
@@ -195,7 +195,7 @@ describe("runTaskRouter", () => {
       throw new Error("network error");
     });
     const result = await runTaskRouter(makeInput({
-      originalQuery: "查天气",
+      originalQuery: "check weather",
       generate,
     }));
     expect(result.executionMode).toBe("direct");
@@ -205,7 +205,7 @@ describe("runTaskRouter", () => {
   it("falls back to direct on invalid LLM output", async () => {
     const generate = vi.fn(async () => response("not an object"));
     const result = await runTaskRouter(makeInput({
-      originalQuery: "查天气",
+      originalQuery: "check weather",
       generate,
     }));
     expect(result.executionMode).toBe("direct");

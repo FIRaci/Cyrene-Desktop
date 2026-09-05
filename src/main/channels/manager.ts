@@ -1,27 +1,27 @@
-// ChannelManager —— 渠道注册表 + 生命周期管理。
+// ChannelManager - Channel registry and lifecycle management.
 //
-// 设计原则：
-//   - Manager 只做"哪个渠道注册了、它们的启停状态"。不知道任何平台协议细节。
-//   - 入站消息路径：adapters.onMessage → manager.handleIncoming(msg) → dispatcher。
-//     实际转发由 dispatcher 负责；manager 只持有 dispatcher 的入口引用。
-//   - 出站消息路径：dispatcher 拿到 outgoing 后调 adapter.send(outgoing)。
-//   - Manager 不感知 sessionId、不感知 cap 降级、不感知 tool 调用 —— 全部下放。
+// Design principles:
+//   - Manager handles channel registration and starting/stopping status. It is agnostic of platform protocol details.
+//   - Inbound message path: adapters.onMessage -> manager.handleIncoming(msg) -> dispatcher.
+//     Forwarding is handled by dispatcher; manager holds the entry reference.
+//   - Outbound message path: dispatcher generates outgoing message then calls adapter.send(outgoing).
+//   - Manager is agnostic of sessionId, capability degradation, and tool invocations.
 import type { ChannelAdapter } from "./adapters/base";
 import type { ChannelId, ChannelStatus, IncomingMessage, OutgoingMessage } from "./types";
 import { setAdapterHandler } from "./adapters/base";
 
 const LOG = "[ChannelManager]";
 
-/** dispatcher 给 manager 的回调 —— 拿到入站消息后返回一个 outgoing 消息 */
+/** Callback from dispatcher to manager - receives inbound message and returns outgoing message */
 export type DispatchFn = (msg: IncomingMessage) => Promise<OutgoingMessage | null>;
 
 export class ChannelManager {
   private adapters = new Map<ChannelId, ChannelAdapter>();
   private dispatchFn: DispatchFn | null = null;
-  /** 启动后已开启的 adapter（start 成功的才会调 stop） */
+  /** Active adapters started successfully */
   private startedAdapters = new Set<ChannelId>();
 
-  /** 注册 adapter（必须在 startAll 之前调用） */
+  /** Register an adapter (must be called before startAll) */
   register(adapter: ChannelAdapter): void {
     if (this.adapters.has(adapter.id)) {
       console.warn(LOG, `Channel ${adapter.id} already registered, overwriting previous instance`);
@@ -29,20 +29,18 @@ export class ChannelManager {
     this.adapters.set(adapter.id, adapter);
   }
 
-  /** 设置 dispatcher 入口。注册 adapter 时机不限，dispatcher 注入必须早于 startAll。 */
+  /** Configure dispatcher entry. Injection must precede startAll. */
   setDispatcher(fn: DispatchFn): void {
     this.dispatchFn = fn;
-    // 给所有已注册的 adapter 注入 handler
     for (const adapter of this.adapters.values()) {
       setAdapterHandler(adapter, this.makeAdapterHandler(adapter.id));
     }
   }
 
-  /** 启动所有已注册 adapter（失败的跳过、记 log） */
+  /** Start all registered adapters (skip failed ones and log error) */
   async startAll(): Promise<void> {
     for (const adapter of this.adapters.values()) {
       try {
-        // 每次 start 前重新注入 handler（防止 setDispatcher 之前 adapter 已经被外部注入 null）
         if (this.dispatchFn) {
           setAdapterHandler(adapter, this.makeAdapterHandler(adapter.id));
         }
@@ -55,7 +53,7 @@ export class ChannelManager {
     }
   }
 
-  /** 关闭所有已启动的 adapter */
+  /** Stop all active adapters */
   async stopAll(): Promise<void> {
     for (const id of this.startedAdapters) {
       const adapter = this.adapters.get(id);
@@ -77,7 +75,7 @@ export class ChannelManager {
     return Array.from(this.adapters.keys());
   }
 
-  /** 给 UI 用：所有渠道的实时状态 */
+  /** For UI: real-time status of all channels */
   getAllStatus(): Record<ChannelId, ChannelStatus> {
     const out: Partial<Record<ChannelId, ChannelStatus>> = {};
     for (const [id, adapter] of this.adapters.entries()) {
@@ -89,31 +87,30 @@ export class ChannelManager {
   private makeAdapterHandler(channel: ChannelId) {
     return async (msg: IncomingMessage): Promise<OutgoingMessage | null> => {
       if (!this.dispatchFn) {
-      console.warn(LOG, `Inbound message received before dispatcher registration [${channel}]`);
+        console.warn(LOG, `Inbound message received before dispatcher registration [${channel}]`);
         return null;
       }
       let outgoing: OutgoingMessage | null = null;
       try {
         outgoing = await this.dispatchFn(msg);
       } catch (err) {
-      console.error(LOG, `Dispatcher failed [${channel}]:`, err);
+        console.error(LOG, `Dispatcher failed [${channel}]:`, err);
         return null;
       }
-      // dispatcher 已经算好了回复，现在调 adapter.send() 真发出去
-      // （之前漏了这一步，导致回复算出来但不发，agent 静默无响应）
+      // Dispatcher computed reply; invoke adapter.send() to deliver
       if (outgoing) {
         const adapter = this.adapters.get(channel);
         if (adapter && adapter.send) {
           try {
             const result = await adapter.send(outgoing);
             if (!result.ok) {
-        console.warn(LOG, `adapter.send failed [${channel}]:`, result.error);
+              console.warn(LOG, `adapter.send failed [${channel}]:`, result.error);
             }
           } catch (err) {
-      console.error(LOG, `adapter.send threw [${channel}]:`, err);
+            console.error(LOG, `adapter.send threw [${channel}]:`, err);
           }
         } else {
-    console.warn(LOG, `Adapter not found or does not support send [${channel}]`);
+          console.warn(LOG, `Adapter not found or does not support send [${channel}]`);
         }
       }
       return outgoing;
@@ -121,5 +118,5 @@ export class ChannelManager {
   }
 }
 
-/** 进程级单例。index.ts 在 app.whenReady() 里实例化一次。 */
+/** Process-level singleton. Instantiated once in index.ts during app.whenReady(). */
 export const channelManager = new ChannelManager();

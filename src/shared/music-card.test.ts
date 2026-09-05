@@ -7,9 +7,9 @@ describe("normalizeMusicCardData", () => {
       setId: "set-1",
       source: "daily_recommendation",
       tracks: [
-        { id: "102", name: "夜曲", artists: ["周杰伦"] },
+        { id: "102", name: "Nocturne", artists: ["Jay Chou"] },
         { id: "", name: "invalid", artists: [] },
-        { id: "101", name: "晴天", artists: ["周杰伦"] },
+        { id: "101", name: "Sunny Day", artists: ["Jay Chou"] },
       ],
     });
 

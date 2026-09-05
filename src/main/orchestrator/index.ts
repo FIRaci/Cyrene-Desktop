@@ -1,6 +1,6 @@
 // Orchestrator — unified entry point
-// Function Calling 模式下，Orchestrator 只负责构建 always-on 上下文（世界书 + L0/L1）
-// 工具的选择和执行由 function-calling.ts 的 runFunctionCallingLoop 处理
+// In Function Calling mode, Orchestrator is only responsible for building always-on context (worldbook + L0/L1)
+// Tool selection and execution is handled by runFunctionCallingLoop in function-calling.ts
 import { updateWorldbookActivation, getPermanentWorldbookEntries, getActiveWorldbookEntries, getCascadeWorldbookEntries, searchMemory, searchMemoryEntries, INJECTION_HEADER, INJECTION_PREAMBLE } from "../rag";
 import { memoryStore } from "../memory/memory-store";
 import { entityGraph } from "../memory/entity-graph";
@@ -12,12 +12,12 @@ export { scheduleMemoryWrite } from "./context-builder";
 export { buildToneInjection } from "./tone-injector";
 export { runFunctionCallingLoop } from "./function-calling";
 
-// topicState TTL 已移除——由 DMAE Activation 状态机接管（见 rag/worldbook.ts）
+// topicState TTL removed -- superseded by DMAE Activation state machine (see rag/worldbook.ts)
 
 /**
- * 构建相关记忆注入：自动检索 top-N 相关 L2 记忆和导入文档，
- * 注入到 system prompt 中，让模型无需主动调用 tool 也能感知到相关信息。
- * 原有 tool 保留，模型仍可深度搜索。
+ * Build relevant memory injection: auto-retrieves top-N relevant L2 memories and imported docs,
+ * injecting them into system prompt so model perceives context without active tool calls.
+ * Original tools remain available for deeper searches.
  */
 export async function buildMemoryInjection(
   userInput: string,
@@ -25,41 +25,41 @@ export async function buildMemoryInjection(
   const parts: string[] = [];
 
   try {
-    // 检索 top-3 L2 用户记忆
+    // Retrieve top-3 L2 user memories
     const userMemoryEntries = await searchMemoryEntries(userInput, "user_memory", 5);
     if (userMemoryEntries.length > 0) {
       recordRecentMemorySearchEntries(userMemoryEntries);
-      // 标注可能存在冲突的记忆
+      // Annotate potentially conflicting memories
       const allL2 = await memoryStore.getAllL2();
       const conflictAnnotated = userMemoryEntries.map((entry) => {
         const m = entry.text;
         const l2Entry = allL2.find((l) => l.content === m && l.conflictWith && l.conflictWith.length > 0);
         if (l2Entry) {
-          return `· ${m} ⚠️（该信息可能存在矛盾记录）`;
+          return `· ${m} ⚠️ (This information may contain conflicting records)`;
         }
         return `· ${m}`;
       });
-      parts.push("【相关记忆】\n" + conflictAnnotated.join("\n"));
+      parts.push("[Relevant memories]\n" + conflictAnnotated.join("\n"));
     }
   } catch (err) {
     console.warn("[Orchestrator] user_memory search failed:", err);
   }
 
   try {
-    // 检索 top-2 导入文档片段
+    // Retrieve top-2 imported document snippets
     const docResults = await searchMemory(userInput, "imported_doc", 2);
     if (docResults.length > 0) {
-      parts.push("【相关文档】\n" + docResults.map((d) => "· " + d).join("\n"));
+      parts.push("[Relevant documents]\n" + docResults.map((d) => "· " + d).join("\n"));
     }
   } catch (err) {
     console.warn("[Orchestrator] imported_doc search failed:", err);
   }
 
   try {
-    // 实体关系图谱
+    // Entity relationship graph
     const entityInfo = entityGraph.search(userInput);
     if (entityInfo) {
-      parts.push("【人物关系】\n" + entityInfo);
+      parts.push("[Character relationships]\n" + entityInfo);
     }
   } catch (err) {
     console.warn("[Orchestrator] entity graph search failed:", err);
@@ -70,10 +70,14 @@ export async function buildMemoryInjection(
 
 function getWorldbookTriggerText(userInput: string): string {
   const contextMarkers = [
-    "【本轮文件】",
-    "【文档内容】",
-    "【图片视觉信息】",
-    "【图片附件】",
+    "[Files for this turn]",
+    "[Document content]",
+    "[Image observations]",
+    "[Image attachments]",
+    "\u3010\u672c\u8f6e\u6587\u4ef6\u3011",
+    "\u3010\u6587\u6863\u5185\u5bb9\u3011",
+    "\u3010\u56fe\u7247\u89c6\u89c9\u4fe1\u606f\u3011",
+    "\u3010\u56fe\u7247\u9644\u4ef6\u3011",
   ];
   const firstContextIndex = contextMarkers
     .map((marker) => userInput.indexOf(marker))
@@ -83,8 +87,8 @@ function getWorldbookTriggerText(userInput: string): string {
 }
 
 /**
- * 构建 always-on 上下文：世界书 + L0/L1 画像。
- * 不涉及工具选择和执行——那些由 function calling 处理。
+ * Build always-on context: worldbook + L0/L1 profile.
+ * Does not involve tool selection and execution -- handled by function calling.
  */
 export async function buildAlwaysOnContext(
   userInput: string,
@@ -92,21 +96,21 @@ export async function buildAlwaysOnContext(
 ): Promise<string> {
   const parts: string[] = [];
 
-  // ── 世界书 — 永远跑 ──────────────────────────────────
-  // DMAE：常驻始终注入；非常驻条目按 Activation 生命周期门控。
-  // updateActivation 在调 LLM 之前跑 → 用户当轮命中的条目当轮就进 Prompt。
+  // -- Worldbook - Always runs --
+  // DMAE: permanent entries always injected; non-permanent gated by Activation lifecycle.
+  // updateActivation runs before LLM call -> turn hits enter Prompt in the same turn.
   try {
     const permanentWb = getPermanentWorldbookEntries();
     if (permanentWb.length > 0) {
-      parts.push("【常驻背景】\n" + permanentWb.join("\n\n"));
+      parts.push("[Permanent background]\n" + permanentWb.join("\n\n"));
     }
 
     const lastAssistant = recentMessages
       .filter(m => m.role === "assistant")
       .slice(-1)[0]?.content ?? "";
-    updateWorldbookActivation(getWorldbookTriggerText(userInput), lastAssistant);  // 打分（本轮用户 + 上轮模型）
-    const active = getActiveWorldbookEntries();           // 阈值门控 + 注入
-    // One-Shot cascade：用户命中后连带触发的条目（不入 DMAE 状态表，只本轮有效）
+    updateWorldbookActivation(getWorldbookTriggerText(userInput), lastAssistant);  // Score (current user + previous assistant)
+    const active = getActiveWorldbookEntries();           // Threshold gate + injection
+    // One-Shot cascade: co-triggered entries upon user hit (not in DMAE state table, valid this turn only)
     const cascade = getCascadeWorldbookEntries();
     const allInjected = active.length > 0 || cascade.length > 0;
     if (allInjected) {
@@ -123,32 +127,32 @@ export async function buildAlwaysOnContext(
     console.warn("[Orchestrator] worldbook dmae failed:", err);
   }
 
-  // ── L0/L1 画像 — 永远跑 ──────────────────────────────
+  // -- L0/L1 profile - Always runs --
   try {
     const l0 = await memoryStore.getL0();
     const l1 = await memoryStore.getL1();
 
     const l0Lines = [
-      l0.preferredName && `称呼：${l0.preferredName}`,
-      l0.occupation && `职业：${l0.occupation}`,
-      l0.longTermInterests && `长期兴趣：${l0.longTermInterests}`,
-      l0.language && `常用语言：${l0.language}`,
-      l0.permanentNote && `备注：${l0.permanentNote}`,
+      l0.preferredName && `Preferred Name: ${l0.preferredName}`,
+      l0.occupation && `Occupation: ${l0.occupation}`,
+      l0.longTermInterests && `Long-term Interests: ${l0.longTermInterests}`,
+      l0.language && `Preferred Language: ${l0.language}`,
+      l0.permanentNote && `Note: ${l0.permanentNote}`,
     ].filter(Boolean);
 
     const l1Lines = [
-      l1.recentGoals && `最近目标：${l1.recentGoals}`,
-      l1.recentPreferences && `近期偏好：${l1.recentPreferences}`,
-      l1.currentProject && `当前项目：${l1.currentProject}`,
+      l1.recentGoals && `Recent Goals: ${l1.recentGoals}`,
+      l1.recentPreferences && `Recent Preferences: ${l1.recentPreferences}`,
+      l1.currentProject && `Current Project: ${l1.currentProject}`,
     ].filter(Boolean);
 
     if (l0Lines.length > 0 || l1Lines.length > 0) {
       let memoryContext = "";
       if (l0Lines.length > 0) {
-        memoryContext += `[用户画像]\n${l0Lines.join("\n")}\n\n`;
+        memoryContext += `[User Profile]\n${l0Lines.join("\n")}\n\n`;
       }
       if (l1Lines.length > 0) {
-        memoryContext += `[近期状态]\n${l1Lines.join("\n")}\n\n`;
+        memoryContext += `[Recent Status]\n${l1Lines.join("\n")}\n\n`;
       }
       parts.push(memoryContext.trim());
     }
@@ -156,7 +160,7 @@ export async function buildAlwaysOnContext(
     console.warn("[Orchestrator] memory load failed:", err);
   }
 
-  // ── 日志 ──────────────────────────────────────────────
+  // -- Logging --
   const enabledTools = toolRegistry.getEnabledTools();
   console.log("[Orchestrator] Always-on context built, enabled tools: " + enabledTools.map(t => t.id).join(", "));
 

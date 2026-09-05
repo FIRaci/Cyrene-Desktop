@@ -1,5 +1,5 @@
-// 小米 MiMo TTS 引擎
-// 官方接口：POST /v1/chat/completions，返回 choices[0].message.audio.data base64。
+// Xiaomi MiMo TTS engine
+// Official API: POST /v1/chat/completions, returns choices[0].message.audio.data base64.
 
 import * as fs from "fs";
 import * as path from "path";

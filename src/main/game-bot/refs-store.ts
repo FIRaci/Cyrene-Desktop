@@ -1,6 +1,6 @@
-// refs-store —— 参考图存储。userData/game-bot/refs/<recipe>/<ref>.png。
-// 唯一碰 electron 的模块（app.getPath）；读写纯 fs。
-// 红框标记编辑器裁出的小图存这里，运行时 vlm_click 按 ref 名读取。
+// refs-store — reference image store. userData/game-bot/refs/<recipe>/<ref>.png.
+// Only module touching electron (app.getPath); reads and writes via pure fs.
+// Cropped reference images from bounding box editors are stored here, read by vlm_click at runtime.
 
 import * as fs from "fs";
 import * as path from "path";
@@ -30,13 +30,13 @@ function containedPath(root: string, ...segments: string[]): string {
   return candidate;
 }
 
-/** 某 recipe 的参考图目录绝对路径。 */
+/** Absolute path to reference images directory for a recipe. */
 export function refsDirPath(recipeId: string): string {
   if (!isGameBotIdentifier(recipeId)) throw new TypeError("Invalid game-bot recipe identifier");
   return containedPath(refsRootPath(), recipeId);
 }
 
-/** 列出某 recipe 下所有参考图名（不含 .png 后缀）。 */
+/** Lists all reference image names for a recipe (excluding .png suffix). */
 export function listRefs(recipeId: string): string[] {
   try {
     const dir = refsDirPath(recipeId);
@@ -49,7 +49,7 @@ export function listRefs(recipeId: string): string[] {
   }
 }
 
-/** 读取参考图。返回 {base64, mime}；不存在返回 null。 */
+/** Reads reference image. Returns {base64, mime}; returns null if non-existent. */
 export function readRef(recipeId: string, refName: string): { base64: string; mime: string } | null {
   try {
     if (!isGameBotIdentifier(refName)) return null;
@@ -63,5 +63,5 @@ export function readRef(recipeId: string, refName: string): { base64: string; mi
   }
 }
 
-// 说明：参考图由用户自行把裁好的小图（按 ref 命名 .png）放进 refsDirPath(recipeId) 目录。
-// 不提供前端写入入口——后端只读。
+// Note: reference images are placed by user into refsDirPath(recipeId) as <ref>.png.
+// Backend is read-only.

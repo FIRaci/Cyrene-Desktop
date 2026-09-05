@@ -72,7 +72,7 @@ describe("build-options", () => {
   it("still requires an API key for an explicitly selected cloud provider", async () => {
     const deps = createBuildDeps()
     deps.loadModelSettings = () => ({
-      provider: "MiniMax（稀宇科技）",
+      provider: "MiniMax",
       baseUrl: "https://api.minimaxi.com/v1",
       model: "MiniMax-M3",
       apiKey: "",
@@ -86,15 +86,15 @@ describe("build-options", () => {
   it("builds the lightweight Ask Soul prompt in the approved order with trusted identity only", async () => {
     const deps = createBuildDeps()
     deps.loadUserProfile = () => ({
-      nickname: "小王",
-      callPreference: "伙伴",
+      nickname: "Alex",
+      callPreference: "partner",
       gender: "male",
       birthday: "2000-01-01",
-      defaultCity: "淄博",
+      defaultCity: "London",
     })
 
     const result = await buildAgentRunOptions({
-      messages: [{ role: "user", content: "生成一份文档" }],
+      messages: [{ role: "user", content: "Generate a document" }],
       style: "01_default.md",
     }, deps)
     const askOptions = result.options as typeof result.options & {
@@ -104,15 +104,15 @@ describe("build-options", () => {
 
     expect(askOptions.askSystemContent).toBe("ASK_SYSTEM\n\nASK_PERSONA\n\nASK_QUOTES")
     expect(askOptions.trustedAskUserProfile).toEqual({
-      nickname: "小王",
-      callPreference: "伙伴",
+      nickname: "Alex",
+      callPreference: "partner",
       gender: "male",
     })
   })
 
   it("passes the trusted runtime environment to the agent decision stages", async () => {
     const result = await buildAgentRunOptions({
-      messages: [{ role: "user", content: "帮我查一下今天的天气" }],
+      messages: [{ role: "user", content: "Check today's weather for me" }],
       style: "01_default.md",
     }, createBuildDeps())
 
@@ -124,7 +124,7 @@ describe("build-options", () => {
   it("passes the saved reasoning preference into the Agent Runtime", async () => {
     const deps = createBuildDeps()
     deps.loadModelSettings = () => ({
-      provider: "DeepSeek（深度求索）",
+      provider: "DeepSeek",
       baseUrl: "https://api.deepseek.com",
       model: "deepseek-v4-pro",
       apiKey: "k",
@@ -132,7 +132,7 @@ describe("build-options", () => {
     })
 
     const result = await buildAgentRunOptions({
-      messages: [{ role: "user", content: "你好" }],
+      messages: [{ role: "user", content: "Hello" }],
       style: "01_default.md",
     }, deps)
 
@@ -141,7 +141,7 @@ describe("build-options", () => {
 
   it("adds a concise WeChat system when the run comes from WeChat", async () => {
     const result = await buildAgentRunOptions({
-      messages: [{ role: "user", content: "你好" }],
+      messages: [{ role: "user", content: "Hello" }],
       style: "01_default.md",
       channel: "wechat",
     }, createBuildDeps())
@@ -154,7 +154,7 @@ describe("build-options", () => {
 
   it("does not add channel system for desktop chat", async () => {
     const result = await buildAgentRunOptions({
-      messages: [{ role: "user", content: "你好" }],
+      messages: [{ role: "user", content: "Hello" }],
       style: "01_default.md",
     }, createBuildDeps())
 
@@ -162,13 +162,13 @@ describe("build-options", () => {
     expect(result.options.soulSystemBaseContent).not.toContain("You are replying to the user through Feishu")
   })
 
-  it("messages 不含 system，FC 循环按阶段动态注入", async () => {
+  it("messages do not contain system, FC loop dynamically injects per phase", async () => {
     const result = await buildAgentRunOptions({
-      messages: [{ role: "user", content: "你好" }],
+      messages: [{ role: "user", content: "Hello" }],
       style: "01_default.md",
     }, createBuildDeps())
 
-    // 第一期：原始 messages 不含 system 消息
+    // Phase 1: original messages do not contain system message
     expect(result.options.messages.some((m) => m.role === "system")).toBe(false)
   })
 
@@ -178,24 +178,24 @@ describe("build-options", () => {
 
     const result = await buildAgentRunOptions({
       messages: [
-        { role: "user", content: "今天有点累", at: Date.UTC(2026, 6, 12, 12, 0) },
-        { role: "assistant", content: "早点休息", at: Date.UTC(2026, 6, 12, 12, 2) },
-        { role: "user", content: "我回来啦", at: Date.UTC(2026, 6, 13, 3, 0) },
+        { role: "user", content: "A bit tired today", at: Date.UTC(2026, 6, 12, 12, 0) },
+        { role: "assistant", content: "Rest early", at: Date.UTC(2026, 6, 12, 12, 2) },
+        { role: "user", content: "I'm back", at: Date.UTC(2026, 6, 13, 3, 0) },
       ],
       style: "01_default.md",
     }, deps)
 
-    expect(result.options.messages[0].content).toBe("[2026-07-12 20:00, Asia/Taipei]\n今天有点累")
-    expect(result.options.messages[2].content).toBe("[2026-07-13 11:00, Asia/Taipei]\n我回来啦")
+    expect(result.options.messages[0].content).toBe("[2026-07-12 20:00, Asia/Taipei]\nA bit tired today")
+    expect(result.options.messages[2].content).toBe("[2026-07-13 11:00, Asia/Taipei]\nI'm back")
     expect(result.options.soulSystemBaseContent).toContain("[CONVERSATION_TIME_CONTEXT]")
     expect(result.options.soulSystemBaseContent).toContain("Time since the previous valid chat message: about 14 hours 58 minutes")
     expect(result.options.soulSystemBaseContent.match(/Time since the previous valid chat message/g)).toHaveLength(1)
     expect(result.options.toolSystemContent).not.toContain("[CONVERSATION_TIME_CONTEXT]")
   })
 
-  it("toolSystemContent / soulSystemBaseContent 是分开的两套字符串", async () => {
+  it("toolSystemContent / soulSystemBaseContent are separate strings", async () => {
     const result = await buildAgentRunOptions({
-      messages: [{ role: "user", content: "你好" }],
+      messages: [{ role: "user", content: "Hello" }],
       style: "01_default.md",
     }, createBuildDeps())
 
@@ -213,7 +213,7 @@ describe("build-options", () => {
     ]
 
     const result = await buildAgentRunOptions({
-      messages: [{ role: "user", content: "陪我聊聊" }],
+      messages: [{ role: "user", content: "Chat with me" }],
       styleId: "lively",
       executionMode: "chat",
     }, deps)
@@ -232,9 +232,9 @@ describe("build-options", () => {
       id: "atom-1",
       conversationId: "chat-a",
       type: "long_term",
-      content: "用户喜欢海边",
+      content: "User likes the seaside",
       evidenceTurnId: "old-user",
-      evidenceQuote: "我喜欢海边",
+      evidenceQuote: "I like the seaside",
       createdAt: 1,
       status: "active",
     }
@@ -244,7 +244,7 @@ describe("build-options", () => {
       chatSocialContextEnabled: true,
     })
     deps.buildChatSocialContext = vi.fn(async () => ({
-      contextBlock: "【本轮可用的对话背景】\n- 用户喜欢海边",
+      contextBlock: "[Context for this turn]\n- User likes the seaside",
       retrievedAtoms: [retrievedAtom],
     }))
     const messages = Array.from({ length: 14 }, (_, index) => ({
@@ -266,7 +266,7 @@ describe("build-options", () => {
       query: "message-13",
     })
     expect(result.options.messages).toHaveLength(12)
-    expect(result.options.soulSystemBaseContent).toContain("用户喜欢海边")
+    expect(result.options.soulSystemBaseContent).toContain("User likes the seaside")
     expect(result.options.socialContext).toMatchObject({
       enabled: true,
       conversationId: "chat-a",
@@ -288,13 +288,13 @@ describe("build-options", () => {
       retrievedAtoms: [],
     }))
     const chat = await buildAgentRunOptions({
-      messages: [{ role: "user", content: "你好" }],
+      messages: [{ role: "user", content: "Hello" }],
       executionMode: "chat",
       sessionId: "chat-a",
       userTurnId: "user-1",
       assistantTurnId: "assistant-1",
     }, emptyDeps)
-    expect(chat.options.soulSystemBaseContent).not.toContain("本轮可用的对话背景")
+    expect(chat.options.soulSystemBaseContent).not.toContain("[Context for this turn]")
 
     const workDeps = createBuildDeps()
     workDeps.loadGeneralSettings = emptyDeps.loadGeneralSettings
@@ -303,7 +303,7 @@ describe("build-options", () => {
       retrievedAtoms: [],
     }))
     await buildAgentRunOptions({
-      messages: [{ role: "user", content: "你好" }],
+      messages: [{ role: "user", content: "Hello" }],
       executionMode: "work",
     }, workDeps)
     expect(workDeps.buildChatSocialContext).not.toHaveBeenCalled()
@@ -314,7 +314,7 @@ describe("build-options", () => {
       retrievedAtoms: [],
     }))
     await buildAgentRunOptions({
-      messages: [{ role: "user", content: "你好" }],
+      messages: [{ role: "user", content: "Hello" }],
       executionMode: "chat",
     }, disabledDeps)
     expect(disabledDeps.buildChatSocialContext).not.toHaveBeenCalled()
@@ -327,7 +327,7 @@ describe("build-options", () => {
     deps.buildSoulSystemBasePrompt = vi.fn(() => "TALK_SOUL_SYSTEM")
 
     const result = await buildAgentRunOptions({
-      messages: [{ role: "user", content: "今天怎么样" }],
+      messages: [{ role: "user", content: "How is today going" }],
       style: "01_default.md",
       channel: "wechat",
       executionMode: "chat",
@@ -348,12 +348,12 @@ describe("build-options", () => {
     )
 
     const chat = await buildAgentRunOptions({
-      messages: [{ role: "user", content: "陪我聊聊" }],
+      messages: [{ role: "user", content: "Chat with me" }],
       styleId: "sweet",
       executionMode: "chat",
     }, deps)
     const work = await buildAgentRunOptions({
-      messages: [{ role: "user", content: "查一下天气" }],
+      messages: [{ role: "user", content: "Check the weather" }],
       styleId: "sweet",
       executionMode: "work",
     }, deps)
@@ -371,7 +371,7 @@ describe("build-options", () => {
     deps.toolRegistry.getEnabled = () => [{ id: "music_search" }]
 
     const result = await buildAgentRunOptions({
-      messages: [{ role: "user", content: "网易云上搜一下左转灯" }],
+      messages: [{ role: "user", content: "Search for left turn signal on NetEase Cloud" }],
       styleId: "default",
       executionMode: "chat",
     }, deps)
@@ -388,12 +388,12 @@ describe("build-options", () => {
     ]
 
     const daily = await buildAgentRunOptions({
-      messages: [{ role: "user", content: "看看网易云今日推荐" }],
+      messages: [{ role: "user", content: "Check today's NetEase Cloud recommendations" }],
       styleId: "default",
       executionMode: "chat",
     }, deps)
     const generic = await buildAgentRunOptions({
-      messages: [{ role: "user", content: "有点无聊，想听歌" }],
+      messages: [{ role: "user", content: "A bit bored, want to listen to music" }],
       styleId: "default",
       executionMode: "chat",
     }, deps)
@@ -407,12 +407,12 @@ describe("build-options", () => {
     deps.prepareCitaTurn = vi.fn(async () => ({
       contextBlock: "[CITA_CONTEXT]\n{\"focusedContexts\":[{\"contextRef\":\"music-candidate-1\"}]}\n[/CITA_CONTEXT]",
       contextPackage: {
-        originalQuery: "第二首",
-        contextualizedQuery: "播放当前网易云日推第二首",
+        originalQuery: "Second song",
+        contextualizedQuery: "Play current NetEase Cloud daily recommendation track 2",
         resolvedReferences: [],
       },
     }))
-    const originalUserMessage = { role: "user", content: "第二首" }
+    const originalUserMessage = { role: "user", content: "Second song" }
 
     const result = await buildAgentRunOptions({
       messages: [originalUserMessage],
@@ -425,8 +425,8 @@ describe("build-options", () => {
     expect(result.options.messages.at(-1)).toEqual(originalUserMessage)
     expect(result.options.toolSystemContent).toContain("[CITA_CONTEXT]")
     expect(result.options.toolSystemContent).toContain("music-candidate-1")
-    expect(result.options.originalQuery).toBe("第二首")
-    expect(result.options.contextualizedQuery).toBe("播放当前网易云日推第二首")
+    expect(result.options.originalQuery).toBe("Second song")
+    expect(result.options.contextualizedQuery).toBe("Play current NetEase Cloud daily recommendation track 2")
     expect(result.options.citaContextBlock).toContain("music-candidate-1")
     expect(result.options).not.toHaveProperty("requiredToolName")
     expect(result.options).not.toHaveProperty("requiredToolArgs")
@@ -437,7 +437,7 @@ describe("build-options", () => {
     deps.prepareCitaTurn = vi.fn(async () => ({ contextBlock: "" }))
 
     const result = await buildAgentRunOptions({
-      messages: [{ role: "user", content: "第二首" }],
+      messages: [{ role: "user", content: "Second song" }],
       style: "01_default.md",
       sessionId: "conversation-1",
     }, deps)
@@ -450,7 +450,7 @@ describe("build-options", () => {
     deps.buildSkillCatalog = () => "SKILL_CATALOG"
 
     const result = await buildAgentRunOptions({
-      messages: [{ role: "user", content: "好无聊" }],
+      messages: [{ role: "user", content: "So bored" }],
       style: "01_default.md",
     }, deps)
 
@@ -464,7 +464,7 @@ describe("build-options", () => {
     deps.buildAutoInjectedSoulContext = () => "SOUL_MUSIC_REPLY_RULES"
 
     const result = await buildAgentRunOptions({
-      messages: [{ role: "user", content: "今日推荐呢" }],
+      messages: [{ role: "user", content: "Where are daily recommendations" }],
       style: "01_default.md",
     }, deps)
 
@@ -475,7 +475,7 @@ describe("build-options", () => {
 
   it("attaches direct image content blocks to the latest user message", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cyrene-image-direct-"))
-    const imagePath = path.join(dir, "图 像.png")
+    const imagePath = path.join(dir, "image.png")
     fs.writeFileSync(imagePath, Buffer.from([
       0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
       0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
@@ -483,40 +483,40 @@ describe("build-options", () => {
 
     const result = await buildAgentRunOptions({
       messages: [
-        { role: "user", content: "上一轮" },
-        { role: "assistant", content: "好的" },
-        { role: "user", content: "请看这张图" },
+        { role: "user", content: "Previous round" },
+        { role: "assistant", content: "Sure" },
+        { role: "user", content: "Look at this image" },
       ],
       style: "01_default.md",
-      imageAttachments: [{ name: "图 像.png", filePath: imagePath, mime: "image/png" }],
+      imageAttachments: [{ name: "image.png", filePath: imagePath, mime: "image/png" }],
     }, createBuildDeps())
 
     const latestUser = result.options.messages.at(-1)
     expect(latestUser?.content).toEqual([
-      { type: "text", text: "请看这张图" },
+      { type: "text", text: "Look at this image" },
       {
         type: "image_url",
         image_url: { url: expect.stringMatching(/^data:image\/png;base64,/) },
       },
     ])
-    // 第一期：原始 messages 不含 system，所以 messages[0] 就是首条用户消息
-    expect(result.options.messages[0].content).toBe("上一轮")
+    // Phase 1: original messages do not contain system, so messages[0] is first user message
+    expect(result.options.messages[0].content).toBe("Previous round")
   })
 
   it("builds caption fallback messages for direct image send failures", async () => {
     const deps = createBuildDeps()
-    deps.captionImageForFallback = async () => ({ ok: true, caption: "画面里有一张安装截图" })
+    deps.captionImageForFallback = async () => ({ ok: true, caption: "There is an installation screenshot on screen" })
 
     const result = await buildAgentRunOptions({
-      messages: [{ role: "user", content: "这图哪里不对？" }],
+      messages: [{ role: "user", content: "What is wrong with this image?" }],
       style: "01_default.md",
       imageAttachments: [{ name: "setup.png", filePath: "C:\\tmp\\setup.png", mime: "image/png" }],
     }, deps)
 
     const fallbackMessages = await result.options.imageCaptionFallback?.()
     const userMessage = fallbackMessages?.at(-1)
-    expect(userMessage?.content).toContain("这图哪里不对？")
-    expect(userMessage?.content).toContain("setup.png: 画面里有一张安装截图")
+    expect(userMessage?.content).toContain("What is wrong with this image?")
+    expect(userMessage?.content).toContain("setup.png: There is an installation screenshot on screen")
     expect(userMessage?.content).not.toContain("image_url")
   })
 
@@ -530,9 +530,9 @@ describe("build-options", () => {
     const deps: OnRunFinishedDeps = {
       loadModelSettings: () => ({ provider: "test", baseUrl: "", model: "", apiKey: "", runtimeSync: "off" }),
       scheduleMemoryWrite: () => {},
-      inferRuntimeState: () => ({ status: "陪伴中" }),
-      runtimeState: { status: "陪伴中", feeling: "温柔", expression: 0, updatedAt: 0 },
-      feelingToExpression: { "温柔": 0 },
+      inferRuntimeState: () => ({ status: "accompanying" }),
+      runtimeState: { status: "accompanying", feeling: "gentle", expression: 0, updatedAt: 0 },
+      feelingToExpression: { "gentle": 0 },
       setRuntimeState: () => {},
       stickerEmbeddingIndex: null,
       getEmbeddingProvider: () => null,
@@ -544,12 +544,12 @@ describe("build-options", () => {
       getChatWindow: () => null,
     }
 
-    await onAgentRunFinished({ reply: "好呀", toolResults: [] }, "今天有点累", deps, "wechat")
+    await onAgentRunFinished({ reply: "Sure thing", toolResults: [] }, "A bit tired today", deps, "wechat")
 
     expect(recordRelationshipTurn).toHaveBeenCalledWith({
-      userText: "今天有点累",
-      assistantText: "好呀",
-      cyreneFeeling: "温柔",
+      userText: "A bit tired today",
+      assistantText: "Sure thing",
+      cyreneFeeling: "gentle",
       channel: "wechat",
     })
   })
@@ -569,9 +569,9 @@ describe("build-options", () => {
         stickerSimilarityThreshold: 0.55,
       }),
       scheduleMemoryWrite: () => {},
-      inferRuntimeState: () => ({ status: "陪伴中" }),
-      runtimeState: { status: "陪伴中", feeling: "温柔", expression: 0, updatedAt: 0 },
-      feelingToExpression: { "温柔": 0 },
+      inferRuntimeState: () => ({ status: "accompanying" }),
+      runtimeState: { status: "accompanying", feeling: "gentle", expression: 0, updatedAt: 0 },
+      feelingToExpression: { "gentle": 0 },
       setRuntimeState: () => {},
       stickerEmbeddingIndex: null,
       getStickerEmbeddingIndex: () => latestIndex,
@@ -590,10 +590,10 @@ describe("build-options", () => {
       }),
     }
 
-    await onAgentRunFinished({ reply: "来，抱抱你", toolResults: [] }, "今天好累", deps)
+    await onAgentRunFinished({ reply: "Here, giving you a hug", toolResults: [] }, "So tired today", deps)
 
     expect(matchSticker).toHaveBeenCalledWith(
-      "来，抱抱你\n今天好累",
+      "Here, giving you a hug\nSo tired today",
       expect.anything(),
       latestIndex,
       0.55,
@@ -608,11 +608,11 @@ describe("build-options", () => {
     const scheduleMemoryWrite = vi.fn()
     const matchSticker = vi.fn(async () => null)
     const latestIndex = [{ id: "thinking", embedding: [1, 0] }]
-    const hugeDoc = "超长文档内容".repeat(1000)
+    const hugeDoc = "very long document content ".repeat(1000)
     const latestUserText = [
-      "帮我总结这个 md",
-      "【本轮文件】\n📝 notes.md（附件，内容已注入本轮上下文）",
-      `【文档内容】\n文档 notes.md 内容：\n${hugeDoc}`,
+      "Help me summarize this md",
+      "[Files for this turn]\nnotes.md (attachment, content injected into this turn context)",
+      `[Document content]\nDocument notes.md content:\n${hugeDoc}`,
     ].join("\n\n")
     const deps: OnRunFinishedDeps = {
       loadModelSettings: () => ({
@@ -625,9 +625,9 @@ describe("build-options", () => {
         stickerSimilarityThreshold: 0.55,
       }),
       scheduleMemoryWrite,
-      inferRuntimeState: () => ({ status: "陪伴中" }),
-      runtimeState: { status: "陪伴中", feeling: "温柔", expression: 0, updatedAt: 0 },
-      feelingToExpression: { "温柔": 0 },
+      inferRuntimeState: () => ({ status: "accompanying" }),
+      runtimeState: { status: "accompanying", feeling: "gentle", expression: 0, updatedAt: 0 },
+      feelingToExpression: { "gentle": 0 },
       setRuntimeState: () => {},
       stickerEmbeddingIndex: latestIndex,
       getEmbeddingProvider: () => ({ embed: async () => [1, 0] }),
@@ -639,11 +639,11 @@ describe("build-options", () => {
       getChatWindow: () => null,
     }
 
-    await onAgentRunFinished({ reply: "总结好了", toolResults: [] }, latestUserText, deps)
+    await onAgentRunFinished({ reply: "Summary finished", toolResults: [] }, latestUserText, deps)
 
-    expect(scheduleMemoryWrite).toHaveBeenCalledWith("帮我总结这个 md", "总结好了")
+    expect(scheduleMemoryWrite).toHaveBeenCalledWith("Help me summarize this md", "Summary finished")
     expect(matchSticker).toHaveBeenCalledWith(
-      "总结好了\n帮我总结这个 md",
+      "Summary finished\nHelp me summarize this md",
       expect.anything(),
       latestIndex,
       0.55,
@@ -658,9 +658,9 @@ describe("build-options", () => {
       loadModelSettings: () => ({ provider: "test", baseUrl: "", model: "", apiKey: "", runtimeSync: "llm" }),
       scheduleMemoryWrite,
       scheduleSocialAtomExtraction,
-      inferRuntimeState: () => ({ status: "陪伴中" }),
-      runtimeState: { status: "陪伴中", feeling: "温柔", expression: 0, updatedAt: 0 },
-      feelingToExpression: { "温柔": 0 },
+      inferRuntimeState: () => ({ status: "accompanying" }),
+      runtimeState: { status: "accompanying", feeling: "gentle", expression: 0, updatedAt: 0 },
+      feelingToExpression: { "gentle": 0 },
       setRuntimeState: () => {},
       stickerEmbeddingIndex: null,
       getEmbeddingProvider: () => null,
@@ -674,7 +674,7 @@ describe("build-options", () => {
     const retrievedAtoms: SocialAtom[] = []
 
     await onAgentRunFinished({
-      reply: "海风确实很舒服。",
+      reply: "The sea breeze is indeed very pleasant.",
       toolResults: [],
       executionMode: "chat",
       socialContext: {
@@ -685,14 +685,14 @@ describe("build-options", () => {
         retrievedAtoms,
         now: 100,
       },
-    }, "我喜欢海边。", deps)
+    }, "I like the seaside.", deps)
 
     expect(scheduleMemoryWrite).not.toHaveBeenCalled()
     expect(observeRuntimeState).not.toHaveBeenCalled()
     expect(scheduleSocialAtomExtraction).toHaveBeenCalledWith({
       conversationId: "chat-a",
-      userTurn: { id: "user-1", role: "user", text: "我喜欢海边。" },
-      assistantTurn: { id: "assistant-1", role: "assistant", text: "海风确实很舒服。" },
+      userTurn: { id: "user-1", role: "user", text: "I like the seaside." },
+      assistantTurn: { id: "assistant-1", role: "assistant", text: "The sea breeze is indeed very pleasant." },
       retrievedAtoms,
       now: 100,
     })

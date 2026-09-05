@@ -1,27 +1,27 @@
-// 上下文管理器 —— 防止 FC 循环里 conversation 无限增长导致超时/爆窗。
+// Context manager - Prevents conversation unbounded growth in FC loop.
 //
-// 两道防线（分层兜底）：
-//   ① 工具结果入队前截断（truncateToolResult）—— 防单条大结果爆窗
-//   ② 窗口级压缩（compressConversation）—— 防多轮累积爆窗
+// Two defensive tiers:
+//   1. Pre-enqueue truncation of tool results (truncateToolResult)
+//   2. Window-level compression (compressConversation)
 //
-// 阈值设计（基于 128K context window 的云端大模型预算）：
-//   系统提示（人格+工具schema+策略段）  ≈ 6K tokens
-//   模型输出预留（thinking+回复）        ≈ 4K tokens
-//   安全余量                             ≈ 4K tokens
+// Threshold design (based on 128K context window budget):
+//   System prompt ≈ 6K tokens
+//   Model output reservation ≈ 4K tokens
+//   Safety margin ≈ 4K tokens
 //   ────────────────────────────
-//   FC 循环 tool results 可用空间        ≈ 114K tokens
+//   Available space for FC loop tool results ≈ 114K tokens
 //
-//   单条截断 12000 字符（≈4K tokens）—— 不超过总窗口 3%，兜极端大结果
-//   窗口压缩 80000 字符（≈27K tokens）—— 约跑 6-8 轮重工具后触发，不频繁
+//   Single-entry truncation 12000 chars (≈4K tokens)
+//   Window compression 80000 chars (≈27K tokens)
 
 const TOOL_RESULT_MAX_CHARS = 12000;
 const WINDOW_COMPRESS_THRESHOLD_TOKENS = 27000;
 const WINDOW_COMPRESS_THRESHOLD_CHARS = 80000;
-const KEEP_RECENT_ROUNDS = 6; // 压缩时保留最近 6 轮完整（system + 最近对话 + 工具结果）
+const KEEP_RECENT_ROUNDS = 6; // Keep latest 6 rounds completely during compression (system + recent dialogue + tool results)
 
 /**
- * 截断单条工具返回内容。超长内容截断后标注原始长度。
- * 作用在 execResults（进 conversation 的那条），allToolResults 保留完整原文。
+ * Truncates single tool return content, appending original length notice if truncated.
+ * Applied to execResults (entering conversation); allToolResults retains full original output.
  */
 export function truncateToolResult(content: string, maxChars: number = TOOL_RESULT_MAX_CHARS): string {
   if (content.length <= maxChars) return content;
@@ -30,15 +30,15 @@ export function truncateToolResult(content: string, maxChars: number = TOOL_RESU
 }
 
 /**
- * 粗估 token 数。不引入 tiktoken，按字符数估算：
- *   中文 1 字符 ≈ 1 token，英文 4 字符 ≈ 1 token，混合取 chars/3 粗估。
+ * Rough token estimation without external dependencies.
+ * Approximately chars / 3 for mixed text.
  */
 export function estimateTokens(text: string): number {
   return Math.ceil(text.length / 3);
 }
 
 /**
- * 估算整个 conversation 数组的 token 总量。
+ * Estimates total tokens in conversation array.
  */
 function contentToText(content: unknown): string {
   if (typeof content === "string") return content;
@@ -65,17 +65,17 @@ export function estimateConversationTokens(messages: Array<{ content: unknown }>
 }
 
 /**
- * 窗口级压缩：conversation 超阈值时，把旧的轮次摘要化。
+//   2. Window-level compression (compressConversation)
  *
- * 策略：
- *   - system 消息（role=system）：永远保留
- *   - 最近 KEEP_RECENT_ROUNDS 轮：完整保留
- *   - 更早的轮次：
- *     - tool/assistant 消息内容超 500 字符 → 截断到 200 字符 + "[compressed]"
- *     - 短消息原样保留
- *   - 压缩后仍超阈值 → 从最早的非 system 消息开始丢弃
+ * Strategy:
+ *   - system message (role=system): always preserved
+ *   - recent KEEP_RECENT_ROUNDS rounds: preserved completely
+ *   - earlier rounds:
+ *     - tool/assistant message content > 500 chars -> truncate to 200 chars + "[compressed]"
+ *     - short messages preserved as-is
+ *   - if still exceeding threshold after compression -> discard starting from earliest non-system message
  *
- * 返回压缩后的新数组（不修改原数组）。
+ * Returns compressed new array (does not modify input).
  */
 export function compressConversation<T extends { role?: string; content?: unknown }>(
   messages: T[],
@@ -96,7 +96,7 @@ export function compressConversation<T extends { role?: string; content?: unknow
     }
   }
 
-  // 需要压缩的：非 system 消息中，超出最近 keepRecent 条的部分
+  // To compress: non-system messages beyond recent keepRecent items
   const compressFromIndex = nonSystemIndices.length > keepRecent
     ? nonSystemIndices[nonSystemIndices.length - keepRecent]
     : -1;
@@ -115,7 +115,7 @@ export function compressConversation<T extends { role?: string; content?: unknow
     }
   }
 
-  // 压缩后仍超阈值 → 从最早的非 system 消息开始丢弃
+  // If still exceeding threshold after compression -> discard starting from earliest non-system message
   let compressedChars = result.reduce((sum, m) => sum + contentToText(m.content).length, 0);
   while (compressedChars > thresholdChars) {
     const firstNonSystem = result.findIndex(m => m.role !== "system");

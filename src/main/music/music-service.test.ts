@@ -64,7 +64,7 @@ beforeEach(() => {
   beginTool.mockReset(); checkTool.mockReset(); cancelTool.mockReset(); validateTool.mockReset();
   searchTool.mockReset(); dailyTool.mockReset();
   playTool.mockReset();
-  playTool.mockImplementation((args: { id: string; type: string }) => `已发送播放指令: ${args.type} ${args.id}`);
+  playTool.mockImplementation((args: { id: string; type: string }) => `\u5df2\u53d1\u9001\u64ad\u653e\u6307\u4ee4: ${args.type} ${args.id}`);
   isRegistered.mockReset(); openExternal.mockReset();
   clientInstances.length = 0;
 });
@@ -204,7 +204,7 @@ describe("MusicService", () => {
 
   it("playTrack preserves the MCP browser fallback state", async () => {
     playTool.mockResolvedValue(
-      "⚠️ 未检测到客户端，已在浏览器中播放: https://music.163.com/#/song?id=123",
+      "\u26a0\ufe0f \u672a\u68c0\u6d4b\u5230\u5ba2\u6237\u7aef\uff0c\u5df2\u5728\u6d4f\u89c8\u5668\u4e2d\u64ad\u653e: https://music.163.com/#/song?id=123",
     );
     const s = new MusicService(PATHS);
     const r = await s.playTrackFromUi("123");
@@ -223,12 +223,12 @@ describe("MusicService", () => {
   });
 
   it("plays a resolved candidate only inside the Agent run that fetched it", async () => {
-    searchTool.mockResolvedValue([{ id: 123, name: "稻香", artist: "周杰伦" }]);
+    searchTool.mockResolvedValue([{ id: 123, name: "Dao Xiang", artist: "Jay Chou" }]);
     isRegistered.mockResolvedValue(true);
     openExternal.mockResolvedValue(undefined);
     const s = new MusicService(PATHS);
     await s.start();
-    const set = await s.searchTracks("稻香", "c1", 5, { resolutionRunId: "run-1", purpose: "play" });
+    const set = await s.searchTracks("Dao Xiang", "c1", 5, { resolutionRunId: "run-1", purpose: "play" });
 
     await expect(s.playTrack({
       provider: set.provider,
@@ -249,14 +249,14 @@ describe("MusicService", () => {
 
   it("plays only the displayed subset across later Agent runs", async () => {
     searchTool.mockResolvedValue([
-      { id: 123, name: "稻香", artist: "周杰伦" },
-      { id: 456, name: "晴天", artist: "周杰伦" },
+      { id: 123, name: "Dao Xiang", artist: "Jay Chou" },
+      { id: 456, name: "Sunny Day", artist: "Jay Chou" },
     ]);
     isRegistered.mockResolvedValue(true);
     openExternal.mockResolvedValue(undefined);
     const s = new MusicService(PATHS);
     await s.start();
-    const set = await s.searchTracks("周杰伦", "c1", 5, { resolutionRunId: "run-1" });
+    const set = await s.searchTracks("Jay Chou", "c1", 5, { resolutionRunId: "run-1" });
     await s.presentTracks({ setId: set.setId, conversationId: "c1", trackIds: ["456"] });
     s.markTracksPresented(set.setId, "c1", ["456"]);
 
@@ -277,10 +277,10 @@ describe("MusicService", () => {
   });
 
   it("rejects a provider or track id not contained in the real candidate set", async () => {
-    searchTool.mockResolvedValue([{ id: 123, name: "稻香", artist: "周杰伦" }]);
+    searchTool.mockResolvedValue([{ id: 123, name: "Dao Xiang", artist: "Jay Chou" }]);
     const s = new MusicService(PATHS);
     await s.start();
-    const set = await s.searchTracks("稻香", "c1", 5, { resolutionRunId: "run-1", purpose: "play" });
+    const set = await s.searchTracks("Dao Xiang", "c1", 5, { resolutionRunId: "run-1", purpose: "play" });
 
     await expect(s.playTrack({ ...set, trackId: "999", runId: "run-1" } as never))
       .rejects.toThrow(/E_TRACK_NOT_IN_SET/);

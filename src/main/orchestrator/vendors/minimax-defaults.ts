@@ -1,4 +1,4 @@
-const MINIMAX_PROVIDER = "MiniMax（稀宇科技）";
+const MINIMAX_PROVIDERS = new Set(["MiniMax", "MiniMax\uff08\u7a00\u5b87\u79d1\u6280\uff09"]);
 const LEGACY_ANTHROPIC_DEFAULT = "https://api.minimaxi.com/anthropic";
 const OPENAI_DEFAULT = "https://api.minimaxi.com/v1";
 
@@ -10,7 +10,7 @@ export function migrateLegacyMinimaxDefaults<T extends {
   explicitTransport?: TransportPreference;
 }>(provider: string, profile: T): T {
   if (
-    provider !== MINIMAX_PROVIDER
+    !MINIMAX_PROVIDERS.has(provider)
     || profile.baseUrl !== LEGACY_ANTHROPIC_DEFAULT
     || profile.explicitTransport === "anthropic"
   ) return profile;

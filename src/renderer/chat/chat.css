@@ -84,8 +84,8 @@ body {
   min-width: 0;
 }
 
-/* 胶囊容器：把「昔涟 · 状态」框成一组，玻璃拟态半透明胶囊，
-   视觉上跟 loader 区分开，又不抢 loader。 */
+/* ：「 · 」，Transparent，
+ loader ， loader。 */
 .chat__title-meta {
   display: inline-flex;
   align-items: center;
@@ -105,7 +105,7 @@ body {
   text-shadow: 0 0 16px rgba(236, 72, 153, 0.24);
 }
 
-/* 标题栏头像：默认主题显示白线稿 PNG，白调主题切换为黑色线条 SVG。 */
+/* TitleAvatar： PNG，Pearl white theme SVG。 */
 .chat__name-avatar {
   display: block;
   width: 20px;
@@ -120,22 +120,22 @@ body {
   display: block;
 }
 
-/* 名字与状态之间的分隔点：弱化，不抢名字 */
+/* ：， */
 .chat__name-sep {
   color: var(--rb-text-faint);
   font-size: 13px;
   user-select: none;
 }
 
-/* 状态文字：胶囊背景由 .chat__title-meta 承载，这里只管文字色 */
+/* ：Background .chat__title-meta ， */
 .chat__hint {
   font: var(--rb-text-micro);
   color: var(--rb-text-muted);
   white-space: nowrap;
 }
 
-/* 左上角触发按钮：内嵌旋转 loader 动画，点击调出会话侧栏（侧栏逻辑后续接入）。
-   loader 来自 Uiverse.io，配色改成粉紫系跟主题统一，用 --size 缩到 30px 塞进标题栏。 */
+/* Button： loader ，（）。
+ loader Uiverse.io，， --size 30px Title。 */
 .chat__status-btn {
   -webkit-app-region: no-drag;
   flex: 0 0 auto;
@@ -159,7 +159,7 @@ body {
   --color-four: var(--rb-violet-600);
   --color-five: var(--rb-pink-300);
   --time-animation: 2s;
-  --size: 0.3; /* 100px × 0.3 = 30px，跟其他标题栏按钮一致 */
+  --size: 0.3; /* 100px × 0.3 = 30px，TitleButton */
   position: relative;
   border-radius: 50%;
   transform: scale(var(--size));
@@ -303,8 +303,8 @@ body {
   -webkit-app-region: no-drag;
 }
 
-/* Work / Chat 始终可见的分段开关。外壳保持低对比，
-   当前项用抬起的玻璃片强调，避免与右侧下拉控件混淆。 */
+/* Work / Chat 。，
+ ，Right。 */
 .mode-switch {
   display: inline-grid;
   grid-template-columns: repeat(2, minmax(72px, 1fr));
@@ -426,9 +426,9 @@ body {
   box-shadow: 0 0 20px rgba(236, 72, 153, 0.56), inset 0 1px 0 rgba(255, 255, 255, 0.22);
 }
 
-/* ===== Body: 会话侧栏 + (标题栏/消息区) 横向行容器 =====
-   侧栏贯穿从顶到底（含标题栏高度），标题栏+消息流整体在侧栏右侧；
-   输入框/file-tags 留在 body 外，保持全宽不动。 */
+/* ===== Body: + (Title/) =====
+ （Title），Title+Right；
+ Input field/file-tags body ，。 */
 .chat__body {
   position: relative;
   z-index: 1;
@@ -437,7 +437,7 @@ body {
   min-height: 0;
 }
 
-/* 右侧纵向列：标题栏 + 消息区（含空态遮罩） */
+/* Right：Title + （） */
 .chat__main {
   position: relative;
   display: flex;
@@ -447,8 +447,8 @@ body {
   min-height: 0;
 }
 
-/* 会话侧栏（点左上角 loader 展开）。默认 hidden，挤压式占 240px。
-   玻璃拟态背景 + 右边框分隔，跟 settings 导航栏风格一致。 */
+/* （ loader ）。 hidden， 240px。
+ Background + Border， settings 。 */
 .chat__rail {
   flex: 0 0 240px;
   display: flex;
@@ -458,7 +458,7 @@ body {
   background: rgba(255, 255, 255, 0.04);
   border-right: 1px solid var(--rb-border-soft);
   overflow: hidden;
-  z-index: 2; /* 压过 .chat__empty-state 的 absolute 遮罩，保证侧栏不被空态盖住 */
+  z-index: 2; /* .chat__empty-state absolute ， */
 }
 
 .chat__rail[hidden] {
@@ -859,8 +859,8 @@ body {
   padding: 0 4px;
 }
 
-/* actions 行：喇叭 + 复制 + 时间 水平排，气泡下方。
-   在 .msg--user 下由父 .msg__body 的 align-items: flex-end 自动推到右边。 */
+/* actions ： + + ，Bubble。
+ .msg--user .msg__body align-items: flex-end 。 */
 .msg__actions {
   display: flex;
   flex-direction: row;
@@ -868,9 +868,9 @@ body {
   gap: 6px;
 }
 
-/* model 消息朗读按钮 — 用 SVG 图标，主题色用 currentColor
-   默认保持可见（0.7 透明度），hover/active 加深。播放态由 .msg.is-speaking .msg__speak 控制。
-   形状：圆角正方形（不是圆），跟其他小图标按钮（attach / sticker-btn）视觉一致。 */
+/* model Button — SVG ， currentColor
+ （0.7 Transparent），hover/active 。 .msg.is-speaking .msg__speak 。
+ ：Radius（），Button（attach / sticker-btn）。 */
 .msg__speak {
   flex: 0 0 auto;
   width: 26px;
@@ -895,7 +895,7 @@ body {
   color: var(--rb-text-default);
 }
 
-/* 播放中状态：父级 .msg 被加 .is-speaking class */
+/* ： .msg .is-speaking class */
 .msg.is-speaking .msg__speak {
   opacity: 1;
   background: var(--rb-pink-50);
@@ -904,15 +904,15 @@ body {
   box-shadow: 0 0 0 3px var(--rb-pink-100);
 }
 
-/* 静态喇叭图标：换肤时跟着 currentColor 走，不写死颜色 */
+/* ： currentColor ，Color */
 .msg__speak-icon {
   display: block;
   pointer-events: none;
 }
 
-/* 三条音波的波浪动画：
-   每条 path 用 transform-origin: center 做 scaleY 脉冲，
-   错相位延迟形成连续的"声波"效果。波浪颜色全部 currentColor。 */
+/* ：
+ path transform-origin: center scaleY ，
+ ""。Color currentColor。 */
 .msg__speak-wave {
   transform-box: fill-box;
   transform-origin: center;
@@ -927,14 +927,14 @@ body {
   50%      { transform: scaleY(1.0);  opacity: 1.0; }
 }
 
-/* 尊重 prefers-reduced-motion：波浪停掉 */
+/* prefers-reduced-motion： */
 @media (prefers-reduced-motion: reduce) {
   .msg__speak-wave { animation: none; }
 }
 
-/* ── 消息复制按钮 ──
-   跟喇叭按钮同样的圆角正方形小方块，但默认可见度更低（0.55），避免视觉太抢。
-   user / model 消息都挂，复制后图标变 ✓ + 文案"已复制"，1.5s 复原。 */
+/* ── Button ──
+ ButtonRadius，（0.55），。
+ user / model ， ✓ + ""，1.5s 。 */
 .msg__copy {
   flex: 0 0 auto;
   height: 26px;
@@ -972,7 +972,7 @@ body {
   white-space: nowrap;
 }
 
-/* 复制成功态：图标变绿勾，背景变浅绿，按钮自动扩宽容纳文案 */
+/* ：，Background，Button */
 .msg__copy.is-copied {
   opacity: 1;
   color: #15803d;
@@ -982,7 +982,7 @@ body {
 }
 
 
-/* ── 文件上传按钮 ── */
+/* ── Button ── */
 .chat__attach {
   flex: 0 0 auto;
   width: 40px;
@@ -1039,7 +1039,7 @@ body {
   color: var(--rb-text-on-pink);
 }
 
-/* ── 表情包按钮 ── */
+/* ── ExpressionButton ── */
 .chat__sticker-btn {
   flex: 0 0 auto;
   width: 40px;
@@ -1080,7 +1080,7 @@ body {
   color: var(--rb-text-on-pink);
 }
 
-/* ── 表情包选择面板 ── */
+/* ── Expression ── */
 .sticker-picker {
   position: absolute;
   bottom: 72px;
@@ -1137,7 +1137,7 @@ body {
   padding: 24px 0;
 }
 
-/* ── 文件预览标签 ── */
+/* ── ── */
 .chat__file-tag {
   display: inline-flex;
   align-items: center;
@@ -1194,6 +1194,7 @@ body {
   z-index: 1;
   display: flex;
   align-items: flex-end;
+  justify-content: center;
   gap: 12px;
   padding: 18px 88px 26px;
   background: linear-gradient(180deg, var(--rb-bg-1), var(--rb-bg-1));
@@ -1202,7 +1203,8 @@ body {
 }
 
 #input {
-  flex: 1;
+  flex: 1 1 auto;
+  max-width: 900px;
   resize: none;
   padding: 14px 18px;
   background: rgba(255, 255, 255, 0.08);
@@ -1213,6 +1215,8 @@ body {
   line-height: 1.5;
   max-height: 160px;
   outline: none;
+  overflow-y: hidden;
+  overflow-x: hidden;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 10px 28px rgba(0, 0, 0, 0.16);
   transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
 }
@@ -1224,12 +1228,56 @@ body {
 }
 #input::-webkit-scrollbar { width: 6px; }
 #input::-webkit-scrollbar-track { background: transparent; }
+#input::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
 #input::-webkit-scrollbar-thumb {
   background: var(--rb-border-strong);
   border-radius: 999px;
 }
 #input::-webkit-scrollbar-thumb:hover {
   background: var(--rb-pink-glow);
+}
+
+.cowatch-btn--recording {
+  background: rgba(239, 68, 68, 0.25) !important;
+  border-color: #ef4444 !important;
+  color: #ef4444 !important;
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.45) !important;
+  animation: cowatch-pulse 1.8s infinite ease-in-out;
+  position: relative;
+}
+
+@keyframes cowatch-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+  }
+}
+
+.cowatch-btn--recording::after {
+  content: "REC";
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  background: #ef4444;
+  color: #ffffff;
+  font-size: 8px;
+  font-weight: 800;
+  padding: 1px 3px;
+  border-radius: 4px;
+  letter-spacing: 0.5px;
+  line-height: 1;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  animation: cowatch-blink 1.2s infinite alternate;
+}
+
+@keyframes cowatch-blink {
+  from { opacity: 1; }
+  to { opacity: 0.35; }
 }
 
 #input:focus {
@@ -1408,7 +1456,7 @@ body {
   30% { opacity: 1; }
 }
 
-/* 工具调用提示：FC 循环里模型调工具时，气泡显示"🔧 调用中：xxx" */
+/* ：FC ，Bubble"🔧 ：xxx" */
 .msg__tool-tip {
   display: flex;
   align-items: center;
@@ -1427,13 +1475,13 @@ body {
   letter-spacing: 0.02em;
 }
 
-/* 工具完成：淡出，准备让位给文字流 */
+/* ：， */
 .msg__tool-tip--done {
   opacity: 0.4;
 }
 
-/* ── 天气卡片（天气工具返回结构化数据时渲染）── */
-/* 类名严格对齐 weather-cards.html 参考设计 */
+/* ── （）── */
+/* weather-cards.html */
 .weather-card {
   flex: 0 1 440px;
   width: fit-content;
@@ -1462,7 +1510,7 @@ body {
   50%      { transform: translateY(-6px); }
 }
 
-/* ── 顶部信息条：日期 / 更新时间 / 地区 + 数据源标签 ── */
+/* ── Top： / / + ── */
 .weather-card .card-header {
   display: flex;
   justify-content: space-between;
@@ -1505,7 +1553,7 @@ body {
   padding: 3px 10px; border-radius: 999px;
 }
 
-/* ── 核心天气区：动画插画 + 温度 ── */
+/* ── ： + ── */
 .weather-card .current-weather {
   display: flex;
   align-items: center;
@@ -1514,14 +1562,14 @@ body {
   padding: 20px 0 16px;
 }
 
-/* ── 天气插画（纯 CSS 图形，含动画）── */
+/* ── （ CSS ，）── */
 .illustration {
   position: relative;
   width: 116px; height: 106px;
   flex-shrink: 0;
 }
 
-/* 太阳 */
+/* */
 .illustration .sun { position: absolute; top: 8px; left: 10px; width: 66px; height: 66px; }
 .illustration .sun-core {
   position: absolute; inset: 9px;
@@ -1554,7 +1602,7 @@ body {
 .illustration .sun-rays span:nth-child(7) { transform: rotate(270deg) translateY(-42px); }
 .illustration .sun-rays span:nth-child(8) { transform: rotate(315deg) translateY(-42px); }
 
-/* 云朵 */
+/* */
 .illustration .cloud {
   position: absolute;
   right: 0; bottom: 16px;
@@ -1577,7 +1625,7 @@ body {
   50%      { transform: translateY(-7px); }
 }
 
-/* 雨滴 */
+/* */
 .illustration .rain { position: absolute; right: 8px; bottom: -4px; display: none; gap: 9px; }
 .illustration .rain span {
   width: 5px; height: 11px;
@@ -1594,7 +1642,7 @@ body {
   100% { transform: translateY(20px); opacity: 0; }
 }
 
-/* 雪花 */
+/* */
 .illustration .snow { position: absolute; right: 4px; bottom: -2px; display: none; gap: 8px; }
 .illustration .snow span {
   font-size: 13px;
@@ -1610,7 +1658,7 @@ body {
   100% { transform: translate(-6px, 22px) rotate(180deg); opacity: 0; }
 }
 
-/* 闪电 */
+/* */
 .illustration .bolt {
   display: none; position: absolute;
   right: 30px; bottom: 4px;
@@ -1627,7 +1675,7 @@ body {
   85% { opacity: 0.3; }
 }
 
-/* 按插画类别控制元素显隐（JS 切换 weather-* 类名） */
+/* （JS weather-* ） */
 .illustration .rain, .illustration .snow, .illustration .bolt { display: none; }
 .illustration.weather-clear   .cloud { display: none; }
 .illustration.weather-cloudy  .cloud { right: 2px; bottom: 24px; }
@@ -1641,7 +1689,7 @@ body {
 .illustration.weather-snow    .snow  { display: flex; }
 .illustration.weather-thunder .bolt  { display: block; }
 
-/* 温度与天气描述 */
+/* */
 .weather-card .current-info { text-align: left; }
 .weather-card .temp-row { display: flex; align-items: flex-start; line-height: 1; }
 .weather-card .temp-value {
@@ -1666,7 +1714,7 @@ body {
   padding: 4px 12px; border-radius: 999px;
 }
 
-/* ── 数据区：2×2 网格（Open-Meteo）/ 3 列（高德）── */
+/* ── ：2×2 （Open-Meteo）/ 3 （）── */
 .weather-card .details-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -1700,7 +1748,7 @@ body {
 .weather-card .detail-label { font-size: 11px; color: var(--rb-weather-text-muted); letter-spacing: 1px; }
 .weather-card .detail-value { font-size: 14px; font-weight: 700; color: var(--rb-weather-text-strong); white-space: nowrap; }
 
-/* ── 可折叠高级数据区（仅数据完整的 Open-Meteo 卡片使用）── */
+/* ── （ Open-Meteo ）── */
 .weather-card .advanced-toggle {
   width: 100%; margin-top: 14px;
   padding: 11px 16px;
@@ -1760,7 +1808,7 @@ body {
 .weather-card .adv-label { font-size: 11px; color: var(--rb-weather-text-muted); letter-spacing: 1px; }
 .weather-card .adv-value { font-size: 14px; font-weight: 700; color: var(--rb-weather-text-strong); white-space: nowrap; }
 
-/* ── 底部数据来源 ── */
+/* ── Bottom ── */
 .weather-card .card-footer {
   margin-top: 16px;
   padding-top: 12px;
@@ -1770,7 +1818,7 @@ body {
   color: var(--rb-weather-text-faint);
 }
 
-/* ── 预报折叠区（与 advanced-toggle 同结构）── */
+/* ── （ advanced-toggle ）── */
 .weather-card .forecast-toggle {
   width: 100%; margin-top: 10px;
   padding: 11px 16px;
@@ -1846,7 +1894,7 @@ body {
   transition: width 0.4s ease;
 }
 
-/* 空态：当前会话无消息时显示（设置面板"+新对话"或删除清空后的过渡态） */
+/* ：（Settings"+"） */
 .chat__empty-state {
   position: absolute;
   inset: 0;
@@ -1876,7 +1924,7 @@ body {
   letter-spacing: 0.5px;
 }
 
-/* 快捷预设胶囊：空对话时显示在 empty-state 文本下方，水平居中折行 */
+/* ： empty-state ， */
 .chat__quick-presets {
   display: flex;
   flex-wrap: wrap;
@@ -1884,7 +1932,7 @@ body {
   gap: 10px;
   max-width: 420px;
   margin-top: 8px;
-  pointer-events: auto; /* 父容器 #chat-empty 是 pointer-events:none，必须单独开启 */
+  pointer-events: auto; /* #chat-empty pointer-events:none， */
 }
 
 .chat__preset {
@@ -1921,7 +1969,7 @@ body {
   white-space: nowrap;
 }
 
-/* ── 任务进度面板（todo_write 工具触发，顶部居中浮层，毛玻璃风格）── */
+/* ── （todo_write ，Top，）── */
 .todo-panel {
   position: absolute;
   top: 66px;
@@ -1953,7 +2001,7 @@ body {
   pointer-events: none;
 }
 
-/* 收缩态：隐藏 body（分隔线+进度条+列表），只留 header */
+/* ： body（+Progress bar+）， header */
 .todo-panel--collapsed .todo-panel__body {
   max-height: 0;
   opacity: 0;
@@ -2011,7 +2059,7 @@ body {
   color: rgba(255,255,255,0.9);
 }
 
-/* 分隔线 */
+/* */
 .todo-panel__divider {
   width: 100%;
   height: 1px;
@@ -2020,7 +2068,7 @@ body {
   margin: 0;
 }
 
-/* 进度条 */
+/* Progress bar */
 .todo-panel__progress {
   display: flex;
   align-items: center;
@@ -2049,7 +2097,7 @@ body {
   white-space: nowrap;
 }
 
-/* 任务列表 */
+/* */
 .todo-list {
   display: flex;
   flex-direction: column;
@@ -2126,7 +2174,7 @@ body {
   to { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 
-/* ── 用户选择卡片（歧义消解器：模糊需求时弹卡片让用户选）── */
+/* ── （：）── */
 .choice-card {
   margin: 4px 0 8px 46px;
   padding: 14px 16px;
@@ -2275,15 +2323,15 @@ body {
   cursor: default;
 }
 
-/* 已解决状态：整卡片变暗 */
+/* ： */
 .choice-card--resolved {
   opacity: 0.6;
 }
 
 /* ============================================================
-   权限审批卡片（per-action 档位下，工具调用前弹出让用户确认）
-   默认（经典 + 抛光粉共享暗色） + 珠光白主题特殊样式
-   ============================================================ */
+ （per-action ，）
+ （ + ） + 
+ ============================================================ */
 @keyframes approval-fade-in {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
@@ -2438,7 +2486,7 @@ body {
   border-color: rgba(255,90,120,0.32);
 }
 
-/* ── 珠光白主题（白底粉/黑 accent）── */
+/* ── （/ accent）── */
 [data-ui-theme="pearl-white"] .approval-card {
   background: rgba(255,255,255,0.86);
   border: 1.5px solid rgba(255,143,184,0.32);
@@ -2539,7 +2587,7 @@ body {
   border-color: rgba(220,40,80,0.36);
 }
 
-/* ── 网易云推荐 AG-UI 卡片 ── */
+/* ── AG-UI ── */
 .music-agui-card {
   width: min(420px, calc(100vw - 112px));
   margin-top: 8px;
@@ -2604,7 +2652,7 @@ body {
 [data-ui-theme="pearl-white"] .music-agui-card__order,
 [data-ui-theme="pearl-white"] .music-agui-card__meta span { color: #8b7180; }
 
-/* ── Task Plan 进度卡 ───────────────────── */
+/* ── Task Plan ───────────────────── */
 .plan-card {
   position: absolute;
   z-index: 500;

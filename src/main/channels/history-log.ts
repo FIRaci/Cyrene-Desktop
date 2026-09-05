@@ -1,41 +1,40 @@
-// channels/history-log —— 渠道侧每个 sender 的对话历史 (滑窗用).
+// channels/history-log - Conversation history per sender on the channel side (sliding window).
 //
-// 每个 sessionId 对应 userData/channels/history/<sessionId>.jsonl
-// 启动时把整个文件读进内存, append 时只追加. 文件按 MAX_LINES 截断防膨胀.
+// Each sessionId maps to userData/channels/history/<sessionId>.jsonl
+// Loaded into memory on demand, appended during conversation. Truncated at MAX_FILE_LINES.
 //
-// 数据流:
-//   dispatcher.handleIncoming 入站/出站 → appendHistory(senderSessionId, role, content)
-//   dispatcher.handleIncoming 下一轮进 → loadRecentHistory(senderSessionId, 16) 拉最近 16 条
+// Data flow:
+//   dispatcher.handleIncoming inbound/outbound -> appendHistory(senderSessionId, role, content)
+//   dispatcher.handleIncoming next turn -> loadRecentHistory(senderSessionId, 16) retrieves recent 16 items
 //
-// 跟 message-log 的区别:
-//   message-log 是"运营可见"的人类可读日志 (UI 显示给人看)
-//   history-log 是 agent 喂的"对话上下文", LLM 需要, 机器格式
+// Difference from message-log:
+//   message-log is human-readable operational logs for UI display
+//   history-log is conversational context for the LLM agent
 //
-// 跟 RAG 索引 (indexConversationTurn) 的区别:
-//   RAG 是语义检索 (cosine similarity), 长期持久
-//   history-log 是精确窗口 (sliding window), 短期明确
+// Difference from RAG indexing (indexConversationTurn):
+//   RAG is semantic retrieval (cosine similarity), persistent long-term
+//   history-log is an exact sliding window, short-term and explicit
 import * as fs from "fs";
 import * as path from "path";
 import { app } from "electron";
 
 const LOG = "[ChannelHistory]";
 
-/** 一条消息: 谁说的 + 内容 + 时间戳 ISO */
+/** History entry: speaker role + content + ISO timestamp */
 export interface HistoryEntry {
   role: "user" | "assistant";
   content: string;
   at: string;
 }
 
-const MAX_FILE_LINES = 200; // 最近 200 条, 远大于滑动窗口 16
+const MAX_FILE_LINES = 200; // Keep up to 200 items, ample headroom over sliding window 16
 
 function dir(): string {
   return path.join(app.getPath("userData"), "channels", "history");
 }
 
-/** sessionId 可能不安全做文件名, 用 sha256 hex 兜底. dispatcher 给的已是 hash+prefix 形式也 OK. */
+/** Sanitize sessionId for filename safety. */
 function safeName(sessionId: string): string {
-  // dispatcher 的 sessionId 形如 "channel:feishu:e72a9d...", 替换 : 为 _ 即可
   return sessionId.replace(/[:/\\<>:"|?*]/g, "_");
 }
 
@@ -43,7 +42,7 @@ function filePath(sessionId: string): string {
   return path.join(dir(), `${safeName(sessionId)}.jsonl`);
 }
 
-/** 追加一条. role 只能是 user/assistant (dispatcher 内部强制). */
+/** Append an entry. Role must be user or assistant. */
 export function appendHistory(sessionId: string, role: "user" | "assistant", content: string): void {
   if (!sessionId || !content) return;
   const entry: HistoryEntry = { role, content, at: new Date().toISOString() };
@@ -51,7 +50,6 @@ export function appendHistory(sessionId: string, role: "user" | "assistant", con
   try {
     fs.mkdirSync(dir(), { recursive: true });
     fs.appendFileSync(fp, JSON.stringify(entry) + "\n", "utf8");
-    // 文件过大时截断 (只留最后 MAX_FILE_LINES 行)
     const buf = fs.readFileSync(fp, "utf8");
     const lines = buf.split("\n");
     if (lines.length > MAX_FILE_LINES + 1) {
@@ -63,7 +61,7 @@ export function appendHistory(sessionId: string, role: "user" | "assistant", con
   }
 }
 
-/** 读最近 N 条历史, 按时间顺序 (旧 → 新). */
+/** Read recent N entries in chronological order (old -> new). */
 export function loadRecentHistory(sessionId: string, limit: number): HistoryEntry[] {
   if (!sessionId || limit <= 0) return [];
   const fp = filePath(sessionId);
@@ -82,7 +80,6 @@ export function loadRecentHistory(sessionId: string, limit: number): HistoryEntr
         /* skip bad line */
       }
     }
-    // 取尾部 limit 条
     const sliced = parsed.slice(-limit);
     return sliced;
   } catch (err) {
@@ -91,7 +88,7 @@ export function loadRecentHistory(sessionId: string, limit: number): HistoryEntr
   }
 }
 
-/** 启动时所有 session 文件预读 (可选, dispatcher 用不到, 给将来 Phase 4 调试 UI 留接口). */
+/** Preload all session files (placeholder for debugging UI). */
 export function reloadAllHistory(): Map<string, HistoryEntry[]> {
   const out = new Map<string, HistoryEntry[]>();
   try {
@@ -99,7 +96,6 @@ export function reloadAllHistory(): Map<string, HistoryEntry[]> {
     for (const name of fs.readdirSync(dir())) {
       if (!name.endsWith(".jsonl")) continue;
       const sid = name.replace(/\.jsonl$/, "").replace(/_/g, ":");
-      // 不尝试反推回原 sessionId, 这里只是占位接口, Phase 4 可优化
       out.set(sid, loadRecentHistory(sid, MAX_FILE_LINES));
     }
   } catch {

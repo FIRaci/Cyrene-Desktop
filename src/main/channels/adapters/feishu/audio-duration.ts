@@ -1,20 +1,18 @@
-// 估算本地 MP3 文件的时长（毫秒），用于飞书 SDK 的 LarkChannel.send({ audio: { duration } })。
+// Estimates local MP3 audio duration in milliseconds for Feishu SDK LarkChannel.send({ audio: { duration } }).
 //
-// 飞书 SDK 的 MediaUploader.resolveDuration 只对 Opus 自动解析，
-// 对 MP3 直接抛 "duration could not be determined for audio; pass it explicitly"。
+// Feishu SDK MediaUploader.resolveDuration only parses Opus automatically,
+// and throws "duration could not be determined for audio; pass it explicitly" for MP3.
 //
-// 我们采用三段 fallback（按可靠性 + 复杂度排序）：
-//   1. ffprobe — 精确（系统装 ffmpeg 就有，零依赖）
-//   2. MP3 frame header 解析 — 精确（CBR mp3 准）
-//   3. 文件大小 / 假定 128kbps — 估算（保底，不会让 SDK fail）
-//
-// 都不引入 native 模块（避免 music-metadata v11 ESM 问题）。
+// Three-tier fallback (ordered by reliability + complexity):
+//   1. ffprobe - precise (available when system has ffmpeg, zero native dependency)
+//   2. MP3 frame header parsing - accurate for CBR MP3
+//   3. File size / assumed 128 kbps - safe baseline estimate
 import * as fs from "fs";
 import { spawn } from "child_process";
 
 const LOG = "[FeishuAudioDuration]";
 
-/** 兜底估算：按 128 kbps CBR 推算。返回整数毫秒。 */
+/** Fallback estimation: based on 128 kbps CBR. Returns integer milliseconds. */
 function estimateByFileSize(filePath: string): number | undefined {
   try {
     const stat = fs.statSync(filePath);
@@ -27,7 +25,7 @@ function estimateByFileSize(filePath: string): number | undefined {
   }
 }
 
-/** 用 ffprobe 拿时长。ffprobe -show_entries format=duration -of json file */
+/** Probe duration using ffprobe. */
 function probeWithFfprobe(filePath: string, ffprobePath: string): Promise<number | undefined> {
   return new Promise((resolve) => {
     try {
@@ -81,14 +79,13 @@ function probeWithFfprobe(filePath: string, ffprobePath: string): Promise<number
   });
 }
 
-/** 用 Node 内置 Buffer 解析 MP3 frame header → 算出 bitrate + duration。
- *  对 CBR mp3 精确, 对 VBR 不准 (但仍能给出近似值)。 */
+/** Parses MP3 frame headers to calculate bitrate and duration using Node Buffer. */
 function parseMp3Duration(filePath: string): number | undefined {
   try {
     const buf = fs.readFileSync(filePath);
     if (buf.length < 4) return undefined;
 
-    // 跳 ID3v2 头: 'ID3' + 10 bytes header, size 在第 6-9 字节 (synsafe integer)
+    // Skip ID3v2 tag: 'ID3' + 10 bytes header, size in bytes 6-9 (synsafe integer)
     let offset = 0;
     if (buf[0] === 0x49 && buf[1] === 0x44 && buf[2] === 0x33) {
       const size =
@@ -99,7 +96,7 @@ function parseMp3Duration(filePath: string): number | undefined {
       offset = 10 + size;
     }
 
-    // 找第一个 11-bit 全 1 的 frame header
+    // Locate first 11-bit syncword frame header
     while (offset + 4 <= buf.length) {
       if (
         buf[offset] === 0xff &&
@@ -113,15 +110,15 @@ function parseMp3Duration(filePath: string): number | undefined {
     if (offset + 4 > buf.length) return undefined;
     const header = buf.readUInt32BE(offset);
 
-    // MPEG-1 Layer III bitrate 查表 (kbps)
+    // MPEG-1 Layer III bitrate table (kbps)
     const BITRATE_M1_L3 = [
       0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 0,
     ];
-    // MPEG-2 Layer III bitrate 查表
+    // MPEG-2 Layer III bitrate table
     const BITRATE_M2_L3 = [
       0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160, 0,
     ];
-    // sample rate 查表 (Hz)
+    // Sample rate table (Hz)
     const SAMPLERATE = [44100, 48000, 32000, 0];
 
     const versionId = (header >> 19) & 0x3; // 11=MPEG1, 10=MPEG2
@@ -130,7 +127,7 @@ function parseMp3Duration(filePath: string): number | undefined {
     const srIdx = (header >> 10) & 0x3;
     const padding = (header >> 9) & 0x1;
 
-    if (versionId !== 3 || layerId !== 1) return undefined; // 不支持的格式
+    if (versionId !== 3 || layerId !== 1) return undefined;
     if (bitrateIdx === 0 || bitrateIdx === 15) return undefined;
     if (srIdx === 3) return undefined;
 
@@ -144,26 +141,18 @@ function parseMp3Duration(filePath: string): number | undefined {
 
     const audioBytes = buf.length - offset;
     const totalFrames = audioBytes / frameSize;
-    const durationSec = totalFrames * 1152 / sampleRate; // Layer III 每帧 1152 samples
+    const durationSec = totalFrames * 1152 / sampleRate; // 1152 samples per Layer III frame
     return Math.round(durationSec * 1000);
   } catch {
     return undefined;
   }
 }
 
-/** 读本地音频文件时长（毫秒）。失败返回 undefined（调用方决定 fallback）。
- *
- *  三段 fallback:
- *    1) ffprobe (如果系统装了)
- *    2) MP3 frame header 解析
- *    3) 文件大小 / 128kbps 估算 (兜底, 让 SDK 不至于 duration=0 报错)
- */
+/** Reads duration of local audio file in milliseconds. Returns undefined on failure. */
 export async function getAudioDurationMs(filePath: string): Promise<number | undefined> {
-  // 仅 mp3 / m4a / ogg 走这个 helper. 其它格式飞书 SDK sendVideo/sendFile 不需要这个分支
   if (!filePath || !fs.existsSync(filePath)) return undefined;
 
-  // 1) ffprobe (优先 - 精确)
-  // 测试环境用 CYRENE_SKIP_FFPROBE=1 跳过加速; 真实环境仍然走 ffprobe
+  // 1) ffprobe (preferred, exact)
   if (!process.env.CYRENE_SKIP_FFPROBE) {
     const candidates = [
       "ffprobe",
@@ -180,15 +169,15 @@ export async function getAudioDurationMs(filePath: string): Promise<number | und
     }
   }
 
-  // 2) 自己解析 mp3 frame header (纯 Buffer, 零依赖)
+  // 2) Parse MP3 frame header (zero native dependency)
   const fromHeader = parseMp3Duration(filePath);
   if (fromHeader) {
-  console.log(LOG, `Parsed MP3 header: ${fromHeader}ms`);
+    console.log(LOG, `Parsed MP3 header: ${fromHeader}ms`);
     return fromHeader;
   }
   console.log(LOG, `Could not parse MP3 header (file may not be MP3): ${filePath}`);
 
-  // 3) 兜底估算
+  // 3) File size estimate fallback
   const est = estimateByFileSize(filePath);
   if (est) {
     console.warn(LOG, `Estimated duration: ${est}ms (install ffprobe for better accuracy)`);

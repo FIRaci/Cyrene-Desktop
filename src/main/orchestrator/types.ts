@@ -1,29 +1,29 @@
 // Orchestrator types
 
-// ToolCallResult: 单次工具调用的结果
+// ToolCallResult: Result of a single tool call
 export interface ToolCallResult {
   toolId: string;
   args: Record<string, unknown>;
   output: string;
   status: "succeeded" | "failed";
   errorCode?: string;
-  // 完成语义：该工具步骤是否已经结束（默认 true，由 normalizer 推导）
+  // Completion semantics: whether tool step has ended (defaults to true, derived by normalizer)
   terminal?: boolean;
-  // 完成语义：失败后是否值得重试（默认 false，由 normalizer 推导）
+  // Completion semantics: whether failure warrants retry (defaults to false, derived by normalizer)
   retryable?: boolean;
-  // 本次调用未真正执行，是 ExecutionLedger 缓存命中
+  // Call was not actually executed; hit ExecutionLedger cache
   deduplicated?: boolean;
   /** false means the failure happened before Tool Runtime was invoked. */
   toolExecuted?: false;
-  /** 稳定能力标识（从 ToolDefinition.capability ?? toolId 取值） */
+  /** Stable capability identifier (derived from ToolDefinition.capability ?? toolId) */
   capabilityId?: string;
-  /** 计划模式：所属计划 ID */
+  /** Plan mode: parent plan ID */
   planId?: string;
-  /** 计划模式：所属步骤 ID */
+  /** Plan mode: parent step ID */
   stepId?: string;
-  /** 计划模式：步骤执行周期 ID（覆盖整个步骤从开始到完成/失败） */
+  /** Plan mode: step execution cycle ID (covers entire step from start to completion/failure) */
   stepExecutionId?: string;
-  /** 计划模式：单次 act 尝试 ID */
+  /** Plan mode: single act attempt ID */
   stepAttemptId?: string;
 }
 
@@ -31,8 +31,8 @@ export interface ToolExecutionOutcome {
   output: string;
   status: "succeeded" | "failed";
   errorCode?: string;
-  // 完成语义：该工具步骤是否已经结束（默认 true，由 normalizer 推导）
+  // Completion semantics: whether tool step has ended (defaults to true, derived by normalizer)
   terminal?: boolean;
-  // 完成语义：失败后是否值得重试（默认 false，由 normalizer 推导）
+  // Completion semantics: whether failure warrants retry (defaults to false, derived by normalizer)
   retryable?: boolean;
 }

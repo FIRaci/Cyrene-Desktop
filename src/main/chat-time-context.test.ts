@@ -41,7 +41,7 @@ describe("chat time context", () => {
   });
 
   it("defaults to Asia/Shanghai when profile timezone missing/invalid and no fallback given", () => {
-    // 需求：用户时区 → Asia/Shanghai，全链路不再回退到系统时区。
+    // Default timezone: Asia/Shanghai.
     expect(resolveChatContextTimezone()).toBe("Asia/Shanghai");
     expect(resolveChatContextTimezone("")).toBe("Asia/Shanghai");
     expect(resolveChatContextTimezone("bad/timezone")).toBe("Asia/Shanghai");
@@ -49,14 +49,14 @@ describe("chat time context", () => {
 
   it("prefixes each timestamped message with concise local time", () => {
     const result = buildConversationTimeContext([
-      { role: "user", content: "今天有点累", at: Date.UTC(2026, 6, 12, 12, 0) },
-      { role: "assistant", content: "早点休息", at: Date.UTC(2026, 6, 12, 12, 2) },
-      { role: "assistant", content: "没有时间戳" },
+      { role: "user", content: "Feeling tired today", at: Date.UTC(2026, 6, 12, 12, 0) },
+      { role: "assistant", content: "Rest early", at: Date.UTC(2026, 6, 12, 12, 2) },
+      { role: "assistant", content: "No timestamp" },
     ], "Asia/Taipei");
 
-    expect(result.messages[0].content).toBe("[2026-07-12 20:00, Asia/Taipei]\n今天有点累");
-    expect(result.messages[1].content).toBe("[2026-07-12 20:02, Asia/Taipei]\n早点休息");
-    expect(result.messages[2].content).toBe("没有时间戳");
+    expect(result.messages[0].content).toBe("[2026-07-12 20:00, Asia/Taipei]\nFeeling tired today");
+    expect(result.messages[1].content).toBe("[2026-07-12 20:02, Asia/Taipei]\nRest early");
+    expect(result.messages[2].content).toBe("No timestamp");
     expect(result.timeContext).toContain("Bracketed timestamps at the start of earlier messages");
     expect(result.timeContext).toContain("Do not repeat, quote, or output these bracketed timestamp labels");
     expect(result.timeContext).not.toMatch(/[\u3400-\u9fff]/u);
@@ -64,8 +64,8 @@ describe("chat time context", () => {
 
   it("does not add a gap notice below one hour", () => {
     const result = buildConversationTimeContext([
-      { role: "assistant", content: "上一条", at: Date.UTC(2026, 6, 13, 2, 1) },
-      { role: "user", content: "本轮", at: Date.UTC(2026, 6, 13, 3, 0) },
+      { role: "assistant", content: "Previous message", at: Date.UTC(2026, 6, 13, 2, 1) },
+      { role: "user", content: "Current turn", at: Date.UTC(2026, 6, 13, 3, 0) },
     ], "Asia/Taipei");
 
     expect(result.timeContext).not.toContain("Time since the previous valid chat message");
@@ -73,10 +73,10 @@ describe("chat time context", () => {
 
   it("adds one neutral gap notice only for the latest user message and previous valid message", () => {
     const result = buildConversationTimeContext([
-      { role: "user", content: "昨天先说一句", at: Date.UTC(2026, 6, 12, 0, 0) },
-      { role: "user", content: "今天有点累", at: Date.UTC(2026, 6, 12, 12, 0) },
-      { role: "assistant", content: "早点休息", at: Date.UTC(2026, 6, 12, 12, 2) },
-      { role: "user", content: "我回来啦", at: Date.UTC(2026, 6, 13, 3, 0) },
+      { role: "user", content: "Said something yesterday", at: Date.UTC(2026, 6, 12, 0, 0) },
+      { role: "user", content: "Feeling tired today", at: Date.UTC(2026, 6, 12, 12, 0) },
+      { role: "assistant", content: "Rest early", at: Date.UTC(2026, 6, 12, 12, 2) },
+      { role: "user", content: "I am back", at: Date.UTC(2026, 6, 13, 3, 0) },
     ], "Asia/Taipei");
 
     expect(result.timeContext).toBe([
@@ -94,24 +94,24 @@ describe("chat time context", () => {
 
   it("skips the gap notice when the latest user or previous valid message has no timestamp", () => {
     expect(buildConversationTimeContext([
-      { role: "assistant", content: "上一条" },
-      { role: "user", content: "本轮", at: Date.UTC(2026, 6, 13, 3, 0) },
+      { role: "assistant", content: "Previous message" },
+      { role: "user", content: "Current turn", at: Date.UTC(2026, 6, 13, 3, 0) },
     ], "Asia/Taipei").timeContext).toContain("TIMESTAMP_USAGE_RULES");
 
     expect(buildConversationTimeContext([
-      { role: "assistant", content: "上一条", at: Date.UTC(2026, 6, 13, 2, 0) },
-      { role: "user", content: "本轮" },
+      { role: "assistant", content: "Previous message", at: Date.UTC(2026, 6, 13, 2, 0) },
+      { role: "user", content: "Current turn" },
     ], "Asia/Taipei").timeContext).toContain("TIMESTAMP_USAGE_RULES");
   });
 
   it("strips leaked leading chat timestamp metadata from model replies", () => {
     expect(stripLeakedChatTimeContext([
       "[2026-07-13 13:36, Asia/Shanghai]",
-      "怎么啦，看起来不太高兴的样子…",
-    ].join("\n"))).toBe("怎么啦，看起来不太高兴的样子…");
+      "What is wrong, you look a bit unhappy...",
+    ].join("\n"))).toBe("What is wrong, you look a bit unhappy...");
 
-    expect(stripLeakedChatTimeContext("正常提到 [2026-07-13 13:36, Asia/Shanghai] 不处理")).toBe(
-      "正常提到 [2026-07-13 13:36, Asia/Shanghai] 不处理",
+    expect(stripLeakedChatTimeContext("Normally mentioning [2026-07-13 13:36, Asia/Shanghai] is not stripped")).toBe(
+      "Normally mentioning [2026-07-13 13:36, Asia/Shanghai] is not stripped",
     );
   });
 });

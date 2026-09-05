@@ -1,10 +1,10 @@
-// 记忆压缩 + Reflection 引擎
+// Memory Compression + Reflection Engine
 //
-// 每 20 轮触发一次：
-//   阶段 A — 记忆压缩：聚类相似 L2 条目，合并为一条总结
-//   阶段 B — Reflection：审视当前 L0/L1，建议更新
+// Triggered every 20 rounds:
+//   Phase A — Memory Compression: clusters similar L2 entries, merges them into a summary
+//   Phase B — Reflection: reviews current L0/L1, suggests updates
 //
-// 通过 enqueueLLMTask 在后台执行，不影响主对话流程。
+// Executed in the background via enqueueLLMTask without affecting main chat flow.
 
 import { memoryStore } from "./memory-store";
 import type { L0WritableField } from "./memory-store";
@@ -20,7 +20,7 @@ import { recordUsage } from "../token-usage-store";
 import { commitMemoryCompression } from "./memory-compression-transaction";
 import { isModelEndpointUsable } from "../../shared/model-endpoint";
 
-// ── LLM 调用（复用与 MemoryJudge 相同的 API 模式） ──
+// ── LLM Invocation (reuses the same API pattern as MemoryJudge) ──
 
 interface ModelSettings {
   provider: string;
@@ -31,7 +31,7 @@ interface ModelSettings {
 }
 
 function loadModelSettings(): ModelSettings {
-  const defaults = { provider: "DeepSeek（深度求索）", baseUrl: "https://api.deepseek.com", model: "deepseek-v4-pro", apiKey: "" };
+  const defaults = { provider: "DeepSeek", baseUrl: "https://api.deepseek.com", model: "deepseek-v4-pro", apiKey: "" };
   try {
     const filePath = path.join(app.getPath("userData"), "model-settings.json");
     if (!fs.existsSync(filePath)) return defaults;
@@ -67,7 +67,7 @@ async function callLLM(messages: Array<{ role: "system" | "user"; content: strin
   };
 
   try {
-    // 走 adapter（之前直接写 OpenAI body / Bearer / choices 解析，anthropic 端点会拿到空串）
+    // Use adapter for provider-agnostic request/response handling
     const adapter = getAdapterForConfig(cfg);
     const http = adapter.buildRequest({
       model: cfg.model,
@@ -102,9 +102,9 @@ async function callLLM(messages: Array<{ role: "system" | "user"; content: strin
   }
 }
 
-// ── 工具函数 ──
+// ── Utility Functions ──
 
-/** 从文本中提取 JSON 对象数组（容错：截断、markdown 包裹） */
+/** Extract JSON object array from text (tolerant: truncation, markdown fences) */
 function extractJsonArray(raw: string): unknown[] | null {
   let text = raw.replace(/```json\s*/gi, "").replace(/```\s*/gi, "").trim();
   const start = text.indexOf("[");
@@ -113,7 +113,7 @@ function extractJsonArray(raw: string): unknown[] | null {
 
   try { const parsed = JSON.parse(text); if (Array.isArray(parsed)) return parsed; } catch { /* fall through */ }
 
-  // 截断救场：逐个捞取完整对象
+  // Truncation rescue: extract complete objects one by one
   const results: unknown[] = [];
   let i = 0;
   while (i < text.length) {
@@ -135,7 +135,7 @@ function extractJsonArray(raw: string): unknown[] | null {
   return results.length > 0 ? results : null;
 }
 
-// ── 阶段 A：记忆压缩 ──
+// ── Phase A: Memory Compression ──
 
 const SIMILARITY_THRESHOLD = 0.85;
 const MIN_GROUP_SIZE = 3;
@@ -150,18 +150,18 @@ async function compressMemories(): Promise<number> {
   const activeL2 = allL2.filter((m) => m.status === "active" && !m.isSummary && m.ragId);
 
   if (activeL2.length < MIN_GROUP_SIZE) {
-    console.log("[MemoryCompressor] 活跃 L2 条目不足，跳过压缩");
+    console.log("[MemoryCompressor] Insufficient active L2 items, skipping compression");
     return 0;
   }
 
-  // 从 RAG 库获取 user_memory 条目，建立 ragId → embedding 映射
+  // Fetch user_memory entries from RAG to build ragId -> embedding map
   const ragEntries = getEntriesBySource("user_memory");
   const embeddingMap = new Map<string, number[]>();
   for (const re of ragEntries) {
     embeddingMap.set(re.id, re.embedding);
   }
 
-  // 为每个 L2 条目配对 embedding
+  // Pair each L2 item with embedding
   const withEmbedding: GroupedEntry[] = [];
   for (const l2 of activeL2) {
     if (l2.ragId) {
@@ -171,11 +171,11 @@ async function compressMemories(): Promise<number> {
   }
 
   if (withEmbedding.length < MIN_GROUP_SIZE) {
-    console.log("[MemoryCompressor] 带 embedding 的条目不足，跳过压缩");
+    console.log("[MemoryCompressor] Insufficient items with embedding, skipping compression");
     return 0;
   }
 
-  // 贪心聚类：取一条作为种子，找所有与其相似度 >= 阈值的条目
+  // Greedy clustering: pick seed, find all entries with similarity >= threshold
   const used = new Set<string>();
   const groups: GroupedEntry[][] = [];
 
@@ -200,31 +200,31 @@ async function compressMemories(): Promise<number> {
   }
 
   if (groups.length === 0) {
-    console.log("[MemoryCompressor] 未找到可压缩的条目组");
+    console.log("[MemoryCompressor] No compressible groups found");
     return 0;
   }
 
-  console.log(`[MemoryCompressor] 发现 ${groups.length} 个可压缩组`);
+  console.log(`[MemoryCompressor] Found ${groups.length} compressible groups`);
 
-  // 对每组调 LLM 生成总结
+  // Call LLM for each group to generate summary
   let totalCompressed = 0;
   for (const group of groups) {
     try {
       const texts = group.map((g) => `- ${g.l2.content}`);
       const prompt = [
-        "你是一个记忆总结助手。以下是一组相似的用户记忆条目，请将它们合并成一条简洁的总结。",
-        "要求：",
-        "- 保留所有关键信息，去重",
-        "- 用中文自然语言",
-        "- 控制在 100 字以内",
-        "- 直接输出总结文本，不要额外解释",
+        "You are a memory summarization assistant. Below is a set of similar user memory entries, please merge them into a concise summary.",
+        "Requirements:",
+        "- Retain all key information, deduplicate",
+        "- Use natural English",
+        "- Keep within 100 words",
+        "- Output summary text directly without extra explanations",
         "",
-        "记忆条目：",
+        "Memory items:",
         ...texts,
       ].join("\n");
 
       const summary = await callLLM([
-        { role: "system", content: "你是一个简洁的记忆总结助手。" },
+        { role: "system", content: "You are a concise memory summarization assistant." },
         { role: "user", content: prompt },
       ], 300);
 
@@ -259,24 +259,24 @@ async function compressMemories(): Promise<number> {
         warn: (message, error) => console.warn(`[MemoryCompressor] ${message}:`, error),
       });
 
-      // 记录日志
+      // Log reflection
       await memoryStore.appendReflectionLog({
         type: "compression",
-        summary: `压缩 ${subEntryIds.length} 条记忆为一条总结`,
-        details: `原条目：${texts.join(" | ")}\n总结：${cleanSummary}`,
+        summary: `Compressed ${subEntryIds.length} memories into one summary`,
+        details: `Original entries: ${texts.join(" | ")}\nSummary: ${cleanSummary}`,
       });
 
       totalCompressed += subEntryIds.length;
-      console.log(`[MemoryCompressor] 压缩了 ${subEntryIds.length} 条 → "${cleanSummary.slice(0, 40)}"`);
+      console.log(`[MemoryCompressor] Compressed ${subEntryIds.length} items -> "${cleanSummary.slice(0, 40)}"`);
     } catch (err) {
-      console.warn("[MemoryCompressor] 组压缩失败:", err);
+      console.warn("[MemoryCompressor] Group compression failed:", err);
     }
   }
 
   return totalCompressed;
 }
 
-// ── 阶段 B：Reflection（L0/L1 元认知更新） ──
+// ── Phase B: Reflection (L0/L1 Metacognitive Updates) ──
 
 async function runReflection(): Promise<void> {
   try {
@@ -284,23 +284,23 @@ async function runReflection(): Promise<void> {
     const l1 = await memoryStore.getL1();
 
     if (l0.isPinned) {
-      console.log("[Reflection] L0 已锁定，跳过更新建议");
+      console.log("[Reflection] L0 is pinned, skipping update recommendations");
     }
 
-    // 构建 LLM prompt
+    // Build LLM prompt
     const currentProfile = [
-      "当前用户画像：",
-      l0.preferredName ? `  称呼：${l0.preferredName}` : "",
-      l0.occupation ? `  职业：${l0.occupation}` : "",
-      l0.longTermInterests ? `  长期兴趣：${l0.longTermInterests}` : "",
+      "Current User Profile:",
+      l0.preferredName ? `  Preferred Name: ${l0.preferredName}` : "",
+      l0.occupation ? `  Occupation: ${l0.occupation}` : "",
+      l0.longTermInterests ? `  Long-term Interests: ${l0.longTermInterests}` : "",
       l0.language ? `  Preferred language: ${l0.language}` : "",
-      l0.permanentNote ? `  备注：${l0.permanentNote}` : "",
+      l0.permanentNote ? `  Permanent Note: ${l0.permanentNote}` : "",
       "",
-      "当前近期状态：",
-      l1.recentGoals ? `  最近目标：${l1.recentGoals}` : "",
-      l1.recentPreferences ? `  近期偏好：${l1.recentPreferences}` : "",
-      l1.currentProject ? `  当前项目：${l1.currentProject}` : "",
-      `  对话轮数：${l1.roundCount}`,
+      "Current Recent State:",
+      l1.recentGoals ? `  Recent Goals: ${l1.recentGoals}` : "",
+      l1.recentPreferences ? `  Recent Preferences: ${l1.recentPreferences}` : "",
+      l1.currentProject ? `  Current Project: ${l1.currentProject}` : "",
+      `  Round Count: ${l1.roundCount}`,
     ].filter(Boolean).join("\n");
 
     const fieldDescriptions = Object.entries(L0_FIELD_DESCRIPTIONS)
@@ -308,31 +308,31 @@ async function runReflection(): Promise<void> {
       .join("\n");
 
     const prompt = [
-      "你是一个用户画像反思助手。",
-      "回顾与用户的长期互动，判断是否需要更新用户画像或近期状态。",
+      "You are a user profile reflection assistant.",
+      "Review long-term interactions with the user and determine if user profile or recent state should be updated.",
       "",
       currentProfile,
       "",
-      "请分析：",
-      "1. 是否有信息可以更新 L0 字段（稳定身份信息）？",
-      `   可用字段：\n${fieldDescriptions}`,
-      "2. 是否有信息可以更新 L1 字段（近期目标/偏好/项目）？",
+      "Please analyze:",
+      "1. Is there information to update L0 fields (stable identity)?",
+      `   Available fields:\n${fieldDescriptions}`,
+      "2. Is there information to update L1 fields (recent goals/preferences/projects)?",
       "",
-      "如果没有需要更新的信息，返回空数组 []。",
-      "如果需要更新，以 JSON 数组格式返回，每个元素包含：",
-      '{ "layer": "L0"|"L1", "field": "字段名", "content": "新值", "confidence": 0.0~1.0 }',
+      "If no update is needed, return empty array [].",
+      "If update is needed, return in JSON array format, each element containing:",
+      '{ "layer": "L0"|"L1", "field": "fieldName", "content": "newValue", "confidence": 0.0~1.0 }',
       "",
-      "只输出 JSON，不要额外解释。",
+      "Output JSON only without extra explanations.",
     ].join("\n");
 
     const raw = await callLLM([
-      { role: "system", content: "你是一个谨慎的用户画像反思助手。只输出 JSON 数组。" },
+      { role: "system", content: "You are a prudent user profile reflection assistant. Output JSON array only." },
       { role: "user", content: prompt },
     ], 500);
 
     const parsed = extractJsonArray(raw);
     if (!parsed || parsed.length === 0) {
-      console.log("[Reflection] 无 L0/L1 更新建议");
+      console.log("[Reflection] No L0/L1 update suggestions");
       return;
     }
 
@@ -352,51 +352,50 @@ async function runReflection(): Promise<void> {
         await memoryStore.upsertL0Field(field as L0WritableField, content.trim());
         await memoryStore.appendReflectionLog({
           type: "l0_update",
-          summary: `L0.${field} 更新为 "${content.slice(0, 30)}"（置信度 ${confidence.toFixed(2)}）`,
+          summary: `L0.${field} updated to "${content.slice(0, 30)}" (confidence ${confidence.toFixed(2)})`,
         });
         updateCount++;
-        console.log(`[Reflection] L0.${field} 更新: "${content.slice(0, 30)}"`);
+        console.log(`[Reflection] L0.${field} updated: "${content.slice(0, 30)}"`);
       } else if (layer === "L1") {
-        const l1Field = /目标|想要|计划|打算/.test(content) ? "recentGoals" : "recentPreferences";
+        const l1Field = /goal|want|plan|aim|intend/i.test(content) ? "recentGoals" : "recentPreferences";
         await memoryStore.replaceL1Field(l1Field, content.trim());
         await memoryStore.appendReflectionLog({
           type: "l1_update",
-          summary: `L1.${l1Field} 更新为 "${content.slice(0, 30)}"（置信度 ${confidence.toFixed(2)}）`,
+          summary: `L1.${l1Field} updated to "${content.slice(0, 30)}" (confidence ${confidence.toFixed(2)})`,
         });
         updateCount++;
-        console.log(`[Reflection] L1.${l1Field} 更新: "${content.slice(0, 30)}"`);
+        console.log(`[Reflection] L1.${l1Field} updated: "${content.slice(0, 30)}"`);
       }
     }
 
-    console.log(`[Reflection] 完成，更新了 ${updateCount} 个字段`);
+    console.log(`[Reflection] Done, updated ${updateCount} fields`);
   } catch (err) {
-    console.warn("[Reflection] 执行失败:", err);
+    console.warn("[Reflection] Execution failed:", err);
   }
 }
 
-// ── 公开入口 ──
+// ── Public API ──
 
 /**
- * 运行记忆压缩 + Reflection。
- * 由 scheduleMemoryWrite 在每 20 轮时触发。
+ * Run memory compression + Reflection.
+ * Triggered by scheduleMemoryWrite every 20 rounds.
  */
 export async function runReflectionAndCompression(): Promise<void> {
-  console.log("[Memory] 开始 20 轮 Reflection + 记忆压缩...");
+  console.log("[Memory] Starting 20-round Reflection + memory compression...");
 
-  // 阶段 A：记忆压缩
+  // Phase A: Memory compression
   const compressed = await compressMemories();
-  console.log(`[Memory] 压缩完成，共压缩 ${compressed} 条原始记忆`);
+  console.log(`[Memory] Compression complete, compressed ${compressed} raw memories in total`);
 
-  // 阶段 B：Reflection（L0/L1 元认知更新）
+  // Phase B: Reflection (L0/L1 metacognitive updates)
   await runReflection();
 
-  // 重建 RAG 索引（数据有变化）
+  // Rebuild RAG index on data changes
   try {
     const { JsonVectorStore } = await import("../rag/vectorstore");
-    // 通过重新 import 触发不了实例方法，下面通过公开方法访问
-    // 实际会在下次 search 时惰性重建
-    console.log("[Memory] 向量索引已标记脏，下次搜索时自动重建");
+    // Lazy rebuild will trigger on next search
+    console.log("[Memory] Vector index marked dirty, will auto-rebuild on next search");
   } catch { /* ignore */ }
 
-  console.log("[Memory] Reflection + 压缩流程完成");
+  console.log("[Memory] Reflection + compression workflow finished");
 }

@@ -1,5 +1,5 @@
-// screenshot —— desktopCapturer 截主屏 → PNG base64 + 实际尺寸。
-// Electron 内置，免装库。返回的 width/height 用于 VLM 坐标归一化转像素。
+// screenshot — desktopCapturer captures main screen -> PNG base64 + actual dimensions.
+// Built into Electron, no extra libs needed. Returned width/height converts normalized VLM coordinates to pixels.
 
 import { desktopCapturer, screen } from "electron";
 import type { ImgData } from "./vlm-locator";
@@ -9,7 +9,7 @@ export interface ScreenshotResult extends ImgData {
   height: number;
 }
 
-/** 截取主屏幕，返回 PNG base64 + 实际像素尺寸。失败返回 null。 */
+/** Captures primary display, returning PNG base64 + actual pixel dimensions. Returns null on failure. */
 export async function captureScreen(): Promise<ScreenshotResult | null> {
   const display = screen.getPrimaryDisplay();
   const { width, height } = display.size;

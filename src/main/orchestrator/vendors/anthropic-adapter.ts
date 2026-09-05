@@ -1,9 +1,9 @@
-// Anthropic transport —— MiniMax（主推）/ Claude
-// 请求体协议：POST {baseUrl}/v1/messages（baseUrl 已含 /v1 时只加 /messages）
-// system 顶层 + messages[].content 为 content block 数组 + tools[].input_schema
+// Anthropic transport -- MiniMax / Claude
+// Request body protocol: POST {baseUrl}/v1/messages (only appends /messages if baseUrl already contains /v1)
+// system top-level + messages[].content is content block array + tools[].input_schema
 //
-// 鉴权由 authHeaderFor 根据 capability.authStyle 决定——Anthropic transport
-// 也可以配 bearer（如 MiMo /anthropic 端点）。
+// Authentication is determined by authHeaderFor based on capability.authStyle--Anthropic transport
+// can also use bearer (e.g. MiMo /anthropic endpoint).
 import {
   ChatMessage, ChatRequest, ChatResponse, ChatVendorAdapter,
   HttpRequest, ProviderCapability, StreamChunk, StreamEvent,
@@ -30,11 +30,11 @@ interface ContentBlock {
 }
 
 /**
- * 把统一消息翻译成 Anthropic wire messages。
- * system 抽出来单独返回（Anthropic system 是顶层字段）。
- * 关键：assistant 若带 rawAssistant（上一轮原始 content block 数组）则原样回传，
- * 保证 thinking / tool_use block 完整回灌（MiniMax 多轮强制要求）。
- * tool 结果：Anthropic 用 user 角色的 tool_result block，同轮多个合并到同一条 user message。
+ * Translate unified messages to Anthropic wire messages.
+ * Extracts system message separately (Anthropic system is a top-level field).
+ * Key: if assistant has rawAssistant (raw content block array from prior turn), return it intact,
+ * ensuring thinking / tool_use blocks are returned intact (mandatory for MiniMax multi-turn).
+ * Tool results: Anthropic uses user-role tool_result blocks, merging multiple in same round into one user message.
  */
 function toWireMessages(messages: ChatMessage[]): {
   system: string | undefined;
@@ -100,10 +100,10 @@ export class AnthropicAdapter implements ChatVendorAdapter {
       messages,
       stream: req.stream ?? false,
     };
-    // temperature 只在调用方显式传时才塞进 body，让厂商用默认值避免型号约束冲突
+    // temperature only injected when explicitly passed, letting vendor use default to avoid model conflicts
     if (req.temperature !== undefined) body.temperature = req.temperature;
     if (req.topP !== undefined) body.top_p = req.topP;
-    // system + 主动缓存（MiniMax/Claude：cache_control: ephemeral 打在 system block 上）
+    // system + active caching (MiniMax/Claude: cache_control: ephemeral placed on system block)
     if (system) {
       if (this.capability.cacheStrategy === "cache_control") {
         body.system = [{ type: "text", text: system, cache_control: { type: "ephemeral" } }];
@@ -118,7 +118,7 @@ export class AnthropicAdapter implements ChatVendorAdapter {
         input_schema: t.parameters,
       }));
       if (req.toolChoiceOverride) {
-        // Action Gate 专用：直接指定 tool_choice wire 值，绕过 resolveToolChoicePolicy
+        // Action Gate specific: explicitly specify tool_choice wire value, bypassing resolveToolChoicePolicy
         switch (req.toolChoiceOverride.kind) {
           case "named":
             body.tool_choice = { type: "tool", name: req.toolChoiceOverride.toolName };
@@ -133,7 +133,7 @@ export class AnthropicAdapter implements ChatVendorAdapter {
             body.tool_choice = { type: "none" };
             break;
           case "omit":
-            // 不发 tool_choice 字段
+            // Do not send tool_choice field
             break;
         }
       } else if (req.toolChoiceIntent) {
@@ -174,7 +174,7 @@ export class AnthropicAdapter implements ChatVendorAdapter {
         },
       };
     }
-    // 推理控制：按 (providerId, model) 解析 capability，调用 applyReasoningPreference 转换 body。
+    // Reasoning control: resolve capability by (providerId, model), call applyReasoningPreference to transform body.
     const reasoningCap = resolveReasoningCapability(this.capability.id, cfg.model);
     const finalBody = applyReasoningPreference(
       body,
@@ -227,7 +227,7 @@ export class AnthropicAdapter implements ChatVendorAdapter {
     }
 
     const stopReason = data.stop_reason ?? "end_turn";
-    // 调度层用 toolCalls.length>0 判断是否继续；finishReason 也映射成 OpenAI 习惯便于日志统一
+    // Orchestrator uses toolCalls.length>0 to decide whether to continue; finishReason mapped to OpenAI conventions for unified logs
     const finishReason =
       stopReason === "tool_use" ? "tool_calls"
       : stopReason === "end_turn" ? "stop"
@@ -239,11 +239,11 @@ export class AnthropicAdapter implements ChatVendorAdapter {
       ...(text ? { content: text } : {}),
       ...(thinking ? { thinking } : {}),
       ...(toolCalls.length > 0 ? { toolCalls } : {}),
-      // 关键：原样保留 content block 数组，下一轮 buildRequest 直接回传给厂商
+      // Key: retain original content block array to send back in next round buildRequest
       rawAssistant: blocks,
     };
 
-    // 提取 token 用量（Anthropic 协议: input_tokens/output_tokens）
+    // Extract token usage (Anthropic protocol: input_tokens/output_tokens)
     const usage = data.usage
       ? { input: data.usage.input_tokens ?? 0, output: data.usage.output_tokens ?? 0 }
       : undefined;
@@ -252,12 +252,12 @@ export class AnthropicAdapter implements ChatVendorAdapter {
   }
 
   buildStreamRequest(req: ChatRequest, cfg: VendorConfig): HttpRequest {
-    // 复用 buildRequest：adapter 内部已按 req.stream 写 body，强制 stream=true
+    // Reuse buildRequest: adapter writes body per req.stream, forcing stream=true
     return this.buildRequest({ ...req, stream: true }, cfg);
   }
 
   parseStreamEvent(event: StreamEvent): StreamChunk | null {
-    // Anthropic 流式：eventType 是事件名，data 是 JSON
+    // Anthropic streaming: eventType is event name, data is JSON
     let parsed: { delta?: { type?: string; text?: string; thinking?: string; partial_json?: string }; usage?: { input_tokens?: number; output_tokens?: number } };
     try {
       parsed = JSON.parse(event.data);
@@ -272,8 +272,8 @@ export class AnthropicAdapter implements ChatVendorAdapter {
         const chunk: StreamChunk = {};
         if (d.type === "text_delta" && typeof d.text === "string") chunk.deltaText = d.text;
         if (d.type === "thinking_delta" && typeof d.thinking === "string") chunk.deltaThinking = d.thinking;
-        // 暂不实现：d.type === "input_json_delta" → 累积到 deltaToolCalls
-        // 当前三个调用点都不带 tools；未来若需要流式 tool_use 增量，单独实现 + 加测试即可。
+        // Not implemented: d.type === "input_json_delta" -> accumulate to deltaToolCalls
+        // Current callers do not use tools; implement when streaming tool_use increments are needed.
         return Object.keys(chunk).length > 0 ? chunk : null;
       }
       case "message_delta": {
@@ -289,7 +289,7 @@ export class AnthropicAdapter implements ChatVendorAdapter {
       }
       case "message_stop":
         return { done: true };
-      // 其他事件（message_start / content_block_start / content_block_stop / ping 等）静默忽略
+      // Other events (message_start, content_block_start, ping, etc.) silently ignored
       default:
         return null;
     }
@@ -298,8 +298,8 @@ export class AnthropicAdapter implements ChatVendorAdapter {
   appendToolResults(messages: ChatMessage[], results: ToolExecutionResult[]): ChatMessage[] {
     const next = messages.slice();
     for (const r of results) {
-      // 统一层一律 push role:"tool"；Anthropic 的合并（同轮 tool_result 进同一条 user message）
-      // 由 buildRequest 的 toWireMessages 负责，这里保持 transport 无关。
+      // Unified layer pushes role:"tool"; Anthropic merging (tool_result into user message)
+      // is handled by toWireMessages in buildRequest, staying transport-agnostic here.
       next.push({
         role: "tool",
         toolCallId: r.toolCall.id,
@@ -318,7 +318,7 @@ export class AnthropicAdapter implements ChatVendorAdapter {
       const req: ChatRequest = {
         model: cfg.model,
         messages: [{ role: "user", content: "Ping. Reply with only: ok" }],
-        // 不传 temperature：某些模型只允许特定值，传 0 会报错
+        // Omit temperature: certain models only permit specific values, 0 causes errors
         stream: false,
       };
       const http = this.buildRequest(req, cfg);

@@ -3,7 +3,7 @@ import { migrateLegacyMinimaxDefaults } from "./minimax-defaults";
 
 describe("migrateLegacyMinimaxDefaults", () => {
   test("moves the shipped legacy auto config to the OpenAI endpoint", () => {
-    expect(migrateLegacyMinimaxDefaults("MiniMax（稀宇科技）", {
+    expect(migrateLegacyMinimaxDefaults("MiniMax", {
       baseUrl: "https://api.minimaxi.com/anthropic",
       explicitTransport: "auto",
     })).toEqual({
@@ -17,6 +17,6 @@ describe("migrateLegacyMinimaxDefaults", () => {
       baseUrl: "https://api.minimaxi.com/anthropic",
       explicitTransport: "anthropic" as const,
     };
-    expect(migrateLegacyMinimaxDefaults("MiniMax（稀宇科技）", profile)).toEqual(profile);
+    expect(migrateLegacyMinimaxDefaults("MiniMax", profile)).toEqual(profile);
   });
 });

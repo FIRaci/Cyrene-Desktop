@@ -7,7 +7,7 @@ function clientReturning(value: unknown) {
 
 describe("NeteaseMusicProvider MCP playback", () => {
   it("plays a track through cloud_music_play with the upstream schema", async () => {
-    const client = clientReturning("已发送播放指令: song 255667");
+    const client = clientReturning("\u5df2\u53d1\u9001\u64ad\u653e\u6307\u4ee4: song 255667");
     const provider = new NeteaseMusicProvider(client as never);
 
     await expect(provider.playTrack("255667")).resolves.toEqual({
@@ -23,7 +23,7 @@ describe("NeteaseMusicProvider MCP playback", () => {
 
   it("normalizes the upstream browser fallback without claiming client dispatch", async () => {
     const client = clientReturning(
-      "⚠️ 未检测到客户端，已在浏览器中播放: https://music.163.com/#/playlist?id=456",
+      "\u26a0\ufe0f \u672a\u68c0\u6d4b\u5230\u5ba2\u6237\u7aef\uff0c\u5df2\u5728\u6d4f\u89c8\u5668\u4e2d\u64ad\u653e: https://music.163.com/#/playlist?id=456",
     );
     const provider = new NeteaseMusicProvider(client as never);
 
@@ -35,8 +35,8 @@ describe("NeteaseMusicProvider MCP playback", () => {
   });
 
   it.each([
-    ["播放失败: access denied", "E_PLAYBACK_DISPATCH_FAILED"],
-    ["上游返回了从未见过的内容", "E_PLAYBACK_RESULT_UNKNOWN"],
+    ["\u64ad\u653e\u5931\u8d25: access denied", "E_PLAYBACK_DISPATCH_FAILED"],
+    ["upstream returned unrecognized content", "E_PLAYBACK_RESULT_UNKNOWN"],
   ])("rejects a failed or unknown upstream result: %s", async (raw, code) => {
     const provider = new NeteaseMusicProvider(clientReturning(raw) as never);
     await expect(provider.playTrack("123")).rejects.toMatchObject({ code });

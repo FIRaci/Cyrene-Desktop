@@ -20,28 +20,28 @@ function succeededNonTerminal(toolId: string): ToolCallResult {
 describe("runAgentGraph", () => {
   it("routes a terminal act success directly to Soul without re-consulting decide", async () => {
     const decisions: ActionDecision[] = [
-      { decision: "act", capability: "music.play_track", objective: "播放已选择歌曲", targetRefs: ["ctx_song_1"], afterSuccess: "respond" },
+      { decision: "act", capability: "music.play_track", objective: "play selected track", targetRefs: ["ctx_song_1"], afterSuccess: "respond" },
     ];
     const decide = vi.fn(async () => decisions.shift()!);
     const execute = vi.fn(async () => [succeeded("music_play_track")]);
     const respond = vi.fn(async (state) => {
       expect(state.toolResults).toHaveLength(1);
-      return "已处理";
+      return "Processed";
     });
 
     const result = await runAgentGraph({
-      originalQuery: "播放第一首",
-      contextualizedQuery: "播放当前日推第一首",
+      originalQuery: "Play track 1",
+      contextualizedQuery: "Play current daily recommendation track 1",
       citaContextBlock: "[CITA_CONTEXT]",
-      messages: [{ role: "user", content: "播放第一首" }],
+      messages: [{ role: "user", content: "Play track 1" }],
       availableCapabilities: ["music.play_track"],
     }, { decide, execute, respond });
 
-    // routeAfterTool 在工具成功后直接路由到 soul，decide 只调 1 次
+    // routeAfterTool routes directly to soul after tool succeeds, decide called only 1 time
     expect(decide).toHaveBeenCalledTimes(1);
     expect(execute).toHaveBeenCalledTimes(1);
     expect(respond).toHaveBeenCalledTimes(1);
-    expect(result.reply).toBe("已处理");
+    expect(result.reply).toBe("Processed");
     expect(result.toolResults).toHaveLength(1);
     expect(result.iterationCount).toBe(1);
   });
@@ -50,38 +50,38 @@ describe("runAgentGraph", () => {
     const decisions: ActionDecision[] = [
       {
         decision: "ask_user",
-        reason: "存在多个版本",
+        reason: "Multiple versions exist",
         missingFields: [{
           field: "version",
-          reason: "歌曲版本不明确",
+          reason: "Song version unclear",
           required: true,
           typeHint: "single_select",
-          candidateHints: ["Live 版", "录音室版"],
+          candidateHints: ["Live version", "Studio version"],
           allowCustom: true,
         }],
       },
-      { decision: "respond", reason: "已获得用户选择" },
+      { decision: "respond", reason: "User selection obtained" },
     ];
     const decide = vi.fn(async () => decisions.shift()!);
     const execute = vi.fn();
     const askUser = vi.fn(async () => ({
       requestId: "choice-1",
-      answers: [{ field: "version", selectedValues: ["Live 版"] }],
+      answers: [{ field: "version", selectedValues: ["Live version"] }],
     }));
     const respond = vi.fn(async (state) => {
       expect(state.clarificationAnswers).toEqual([{
         requestId: "choice-1",
-        answers: [{ field: "version", selectedValues: ["Live 版"] }],
+        answers: [{ field: "version", selectedValues: ["Live version"] }],
       }]);
-      expect(state.messages.at(-1)).toEqual({ role: "user", content: "播放左转灯" });
-      return "好的，按 Live 版继续。";
+      expect(state.messages.at(-1)).toEqual({ role: "user", content: "Play Left Turn Signal" });
+      return "Sure, continuing with Live version.";
     });
 
     const result = await runAgentGraph({
-      originalQuery: "播放左转灯",
-      contextualizedQuery: "播放左转灯，但存在多个版本",
+      originalQuery: "Play Left Turn Signal",
+      contextualizedQuery: "Play Left Turn Signal, but multiple versions exist",
       citaContextBlock: "[CITA_CONTEXT]",
-      messages: [{ role: "user", content: "播放左转灯" }],
+      messages: [{ role: "user", content: "Play Left Turn Signal" }],
       availableCapabilities: ["music.search", "music.play_track"],
     }, ({
       decide,
@@ -93,155 +93,155 @@ describe("runAgentGraph", () => {
     expect(execute).not.toHaveBeenCalled();
     expect(askUser).toHaveBeenCalledTimes(1);
     expect(decide).toHaveBeenCalledTimes(2);
-    expect(result.reply).toBe("好的，按 Live 版继续。");
+    expect(result.reply).toBe("Sure, continuing with Live version.");
   });
 
   it("stops an endless act loop at the configured iteration limit", async () => {
     await expect(runAgentGraph({
-      originalQuery: "继续尝试",
-      contextualizedQuery: "继续尝试",
+      originalQuery: "Keep trying",
+      contextualizedQuery: "Keep trying",
       citaContextBlock: "",
-      messages: [{ role: "user", content: "继续尝试" }],
+      messages: [{ role: "user", content: "Keep trying" }],
       availableCapabilities: ["music.play_track"],
     }, {
-      decide: async () => ({ decision: "act", capability: "music.play_track", objective: "重试", targetRefs: [], afterSuccess: "replan" as const }),
+      decide: async () => ({ decision: "act", capability: "music.play_track", objective: "retry", targetRefs: [], afterSuccess: "replan" as const }),
       execute: async () => [succeeded("music_play_track")],
-      respond: async () => "不会到这里",
+      respond: async () => "Should not reach here",
       maxIterations: 2,
     })).rejects.toMatchObject({ code: "E_AGENT_GRAPH_ITERATION_LIMIT" });
   });
 
   it("uses its own iteration guard before LangGraph's recursion guard", async () => {
     await expect(runAgentGraph({
-      originalQuery: "继续尝试",
-      contextualizedQuery: "继续尝试",
+      originalQuery: "Keep trying",
+      contextualizedQuery: "Keep trying",
       citaContextBlock: "",
-      messages: [{ role: "user", content: "继续尝试" }],
+      messages: [{ role: "user", content: "Keep trying" }],
       availableCapabilities: ["music.play_track"],
     }, {
-      decide: async () => ({ decision: "act", capability: "music.play_track", objective: "重试", targetRefs: [], afterSuccess: "replan" as const }),
+      decide: async () => ({ decision: "act", capability: "music.play_track", objective: "retry", targetRefs: [], afterSuccess: "replan" as const }),
       execute: async () => [succeeded("music_play_track")],
-      respond: async () => "不会到这里",
+      respond: async () => "Should not reach here",
       maxIterations: 12,
     })).rejects.toMatchObject({ code: "E_AGENT_GRAPH_ITERATION_LIMIT" });
   });
 
   it("routes to Soul directly when a terminal act succeeds with afterSuccess=respond", async () => {
     const decide = vi.fn(async () => ({
-      decision: "act" as const, capability: "music.play_track", objective: "播放",
+      decision: "act" as const, capability: "music.play_track", objective: "play",
       targetRefs: ["ctx_song_1"], afterSuccess: "respond" as const,
     }));
     const execute = vi.fn(async () => [succeeded("music_play_track")]);
-    const respond = vi.fn(async () => "已发送播放请求。");
+    const respond = vi.fn(async () => "Play request sent.");
 
     const result = await runAgentGraph({
-      originalQuery: "播放第四首",
-      contextualizedQuery: "播放第四首",
+      originalQuery: "Play track 4",
+      contextualizedQuery: "Play track 4",
       citaContextBlock: "",
-      messages: [{ role: "user", content: "播放第四首" }],
+      messages: [{ role: "user", content: "Play track 4" }],
       availableCapabilities: ["music.play_track"],
     }, { decide, execute, respond });
 
-    // 单步任务：工具成功后 routeAfterTool 直接路由到 soul，decide 只调 1 次
+    // Single-step task: routeAfterTool routes directly to soul after tool succeeds, decide called once
     expect(decide).toHaveBeenCalledTimes(1);
     expect(execute).toHaveBeenCalledTimes(1);
     expect(respond).toHaveBeenCalledTimes(1);
-    expect(result.reply).toBe("已发送播放请求。");
+    expect(result.reply).toBe("Play request sent.");
   });
 
   it("routes back to decide when afterSuccess=replan and the tool succeeded terminally", async () => {
     const decisions: ActionDecision[] = [
-      { decision: "act", capability: "music.play_track", objective: "播放第一首", targetRefs: ["ctx_song_1"], afterSuccess: "replan" },
-      { decision: "respond", reason: "完成" },
+      { decision: "act", capability: "music.play_track", objective: "play track 1", targetRefs: ["ctx_song_1"], afterSuccess: "replan" },
+      { decision: "respond", reason: "Done" },
     ];
     const decide = vi.fn(async () => decisions.shift()!);
     const execute = vi.fn(async () => [succeeded("music_play_track")]);
-    const respond = vi.fn(async () => "完成。");
+    const respond = vi.fn(async () => "Done.");
 
     const result = await runAgentGraph({
-      originalQuery: "播放第一首然后搜索",
-      contextualizedQuery: "播放第一首然后搜索",
+      originalQuery: "Play track 1 then search",
+      contextualizedQuery: "Play track 1 then search",
       citaContextBlock: "",
-      messages: [{ role: "user", content: "播放第一首然后搜索" }],
+      messages: [{ role: "user", content: "Play track 1 then search" }],
       availableCapabilities: ["music.play_track"],
     }, { decide, execute, respond });
 
-    // 多步任务：第一次 act+replan 成功后回 decide，第二次 decide 决定 respond
+    // Multi-step task: return to decide after first act+replan succeeds, second decide chooses respond
     expect(decide).toHaveBeenCalledTimes(2);
     expect(execute).toHaveBeenCalledTimes(1);
     expect(respond).toHaveBeenCalledTimes(1);
-    expect(result.reply).toBe("完成。");
+    expect(result.reply).toBe("Done.");
   });
 
   it("routes to Soul directly when a failed tool is not retryable", async () => {
     const decide = vi.fn(async () => ({
-      decision: "act" as const, capability: "music.play_track", objective: "播放",
+      decision: "act" as const, capability: "music.play_track", objective: "play",
       targetRefs: ["ctx_song_1"], afterSuccess: "respond" as const,
     }));
     const execute = vi.fn(async () => [failed("music_play_track", false)]);
-    const respond = vi.fn(async () => "播放失败，请稍后再试。");
+    const respond = vi.fn(async () => "Playback failed, please try again later.");
 
     const result = await runAgentGraph({
-      originalQuery: "播放第四首",
-      contextualizedQuery: "播放第四首",
+      originalQuery: "Play track 4",
+      contextualizedQuery: "Play track 4",
       citaContextBlock: "",
-      messages: [{ role: "user", content: "播放第四首" }],
+      messages: [{ role: "user", content: "Play track 4" }],
       availableCapabilities: ["music.play_track"],
     }, { decide, execute, respond });
 
-    // 不可重试失败：直接进 soul，不回 decide
+    // Non-retryable failure: proceed directly to soul, do not return to decide
     expect(decide).toHaveBeenCalledTimes(1);
     expect(execute).toHaveBeenCalledTimes(1);
     expect(respond).toHaveBeenCalledTimes(1);
-    expect(result.reply).toBe("播放失败，请稍后再试。");
+    expect(result.reply).toBe("Playback failed, please try again later.");
   });
 
   it("routes back to decide when a failed tool is retryable", async () => {
     const decisions: ActionDecision[] = [
-      { decision: "act", capability: "music.play_track", objective: "播放", targetRefs: ["ctx_song_1"], afterSuccess: "respond" },
-      { decision: "respond", reason: "放弃重试" },
+      { decision: "act", capability: "music.play_track", objective: "play", targetRefs: ["ctx_song_1"], afterSuccess: "respond" },
+      { decision: "respond", reason: "give up retry" },
     ];
     const decide = vi.fn(async () => decisions.shift()!);
     const execute = vi.fn(async () => [failed("music_play_track", true)]);
-    const respond = vi.fn(async () => "重试失败。");
+    const respond = vi.fn(async () => "Retry failed.");
 
     const result = await runAgentGraph({
-      originalQuery: "播放第四首",
-      contextualizedQuery: "播放第四首",
+      originalQuery: "Play track 4",
+      contextualizedQuery: "Play track 4",
       citaContextBlock: "",
-      messages: [{ role: "user", content: "播放第四首" }],
+      messages: [{ role: "user", content: "Play track 4" }],
       availableCapabilities: ["music.play_track"],
     }, { decide, execute, respond });
 
-    // 可重试失败：回 decide 让 LLM 决定重试还是放弃
+    // Retryable failure: return to decide to let LLM choose between retry or giving up
     expect(decide).toHaveBeenCalledTimes(2);
     expect(execute).toHaveBeenCalledTimes(1);
     expect(respond).toHaveBeenCalledTimes(1);
-    expect(result.reply).toBe("重试失败。");
+    expect(result.reply).toBe("Retry failed.");
   });
 
   it("routes back to decide when a succeeded tool is not terminal", async () => {
     const decisions: ActionDecision[] = [
-      { decision: "act", capability: "music.play_track", objective: "开始监听", targetRefs: ["ctx_song_1"], afterSuccess: "respond" },
-      { decision: "respond", reason: "完成" },
+      { decision: "act", capability: "music.play_track", objective: "start listening", targetRefs: ["ctx_song_1"], afterSuccess: "respond" },
+      { decision: "respond", reason: "Done" },
     ];
     const decide = vi.fn(async () => decisions.shift()!);
     const execute = vi.fn(async () => [succeededNonTerminal("music_play_track")]);
-    const respond = vi.fn(async () => "完成。");
+    const respond = vi.fn(async () => "Done.");
 
     const result = await runAgentGraph({
-      originalQuery: "开始监听",
-      contextualizedQuery: "开始监听",
+      originalQuery: "Start listening",
+      contextualizedQuery: "Start listening",
       citaContextBlock: "",
-      messages: [{ role: "user", content: "开始监听" }],
+      messages: [{ role: "user", content: "Start listening" }],
       availableCapabilities: ["music.play_track"],
     }, { decide, execute, respond });
 
-    // terminal=false：回 decide，不直接进 soul
+    // terminal=false: return to decide, do not enter soul directly
     expect(decide).toHaveBeenCalledTimes(2);
     expect(execute).toHaveBeenCalledTimes(1);
     expect(respond).toHaveBeenCalledTimes(1);
-    expect(result.reply).toBe("完成。");
+    expect(result.reply).toBe("Done.");
   });
 
   it("routes refresh_state failure to refresh, then back to decide for re-decision", async () => {
@@ -250,27 +250,27 @@ describe("runAgentGraph", () => {
       { decision: "respond", reason: "recovered" },
     ];
     const decide = vi.fn(async (state) => {
-      // 第二次 decide 应该能看到上一次失败信息
+      // Second decide should be able to see previous failure info
       if (decide.mock.calls.length === 2) {
         expect(state.lastGateFailure).toEqual({ code: "TARGET_REF_INVALID", disposition: "refresh_state" });
       }
       return decisions.shift()!;
     });
     const execute = vi.fn();
-    const respond = vi.fn(async () => "已恢复");
+    const respond = vi.fn(async () => "Recovered");
 
     const result = await runAgentGraph({
-      originalQuery: "播放第三首",
-      contextualizedQuery: "播放第三首",
+      originalQuery: "Play track 3",
+      contextualizedQuery: "Play track 3",
       citaContextBlock: "",
-      messages: [{ role: "user", content: "播放第三首" }],
+      messages: [{ role: "user", content: "Play track 3" }],
       availableCapabilities: ["music.play_track"],
     }, { decide, execute, respond });
 
     expect(decide).toHaveBeenCalledTimes(2);
     expect(execute).not.toHaveBeenCalled();
     expect(respond).toHaveBeenCalledTimes(1);
-    expect(result.reply).toBe("已恢复");
+    expect(result.reply).toBe("Recovered");
     expect(result.refreshCount).toBe(1);
   });
 
@@ -281,21 +281,21 @@ describe("runAgentGraph", () => {
     ];
     const decide = vi.fn(async () => decisions.shift()!);
     const execute = vi.fn();
-    const respond = vi.fn(async () => "失败");
+    const respond = vi.fn(async () => "Failed");
 
     const result = await runAgentGraph({
-      originalQuery: "播放第三首",
-      contextualizedQuery: "播放第三首",
+      originalQuery: "Play track 3",
+      contextualizedQuery: "Play track 3",
       citaContextBlock: "",
-      messages: [{ role: "user", content: "播放第三首" }],
+      messages: [{ role: "user", content: "Play track 3" }],
       availableCapabilities: ["music.play_track"],
     }, { decide, execute, respond, maxRefresh: 1 });
 
-    // 第一次 failure -> refresh；第二次 failure -> refreshCount 已达上限 -> soul
+    // First failure -> refresh; second failure -> refreshCount reached limit -> soul
     expect(decide).toHaveBeenCalledTimes(2);
     expect(execute).not.toHaveBeenCalled();
     expect(respond).toHaveBeenCalledTimes(1);
-    expect(result.reply).toBe("失败");
+    expect(result.reply).toBe("Failed");
     expect(result.refreshCount).toBe(1);
   });
 
@@ -308,17 +308,17 @@ describe("runAgentGraph", () => {
       toolExecuted: false as const,
     }));
     const execute = vi.fn();
-    const respond = vi.fn(async () => "失败");
+    const respond = vi.fn(async () => "Failed");
 
     const result = await runAgentGraph({
-      originalQuery: "测试",
-      contextualizedQuery: "测试",
+      originalQuery: "test",
+      contextualizedQuery: "test",
       citaContextBlock: "",
-      messages: [{ role: "user", content: "测试" }],
+      messages: [{ role: "user", content: "test" }],
       availableCapabilities: ["music.play_track"],
     }, { decide, execute, respond });
 
-    // fail_closed 不走 refresh，直接进 soul
+    // fail_closed does not refresh, proceeds directly to soul
     expect(decide).toHaveBeenCalledTimes(1);
     expect(respond).toHaveBeenCalledTimes(1);
     expect(result.refreshCount).toBe(0);
@@ -330,7 +330,7 @@ describe("runAgentGraph", () => {
         id: "plan_1",
         conversationId: "c1",
         goal,
-        steps: [{ id: "s1", objective: "步骤一", status: "pending" as const, completionPolicy: { allOf: [{ kind: "tool_succeeded" as const, capabilityId: "x" }] }, toolCallCount: 0, retryCount: 0 }],
+        steps: [{ id: "s1", objective: "step 1", status: "pending" as const, completionPolicy: { allOf: [{ kind: "tool_succeeded" as const, capabilityId: "x" }] }, toolCallCount: 0, retryCount: 0 }],
         status: "running" as const,
         skillIds: [],
         createdAt: Date.now(),
@@ -349,23 +349,23 @@ describe("runAgentGraph", () => {
       const createPlan = vi.fn(async () => {
         callCount++;
         if (callCount === 1) throw new Error("Plan creation failed: code=MODEL_REQUEST_FAILED HTTP 529");
-        return makePlanGoal("成功目标");
+        return makePlanGoal("Successful goal");
       });
       const decide = vi.fn(async () => ({ decision: "respond" as const, reason: "done" }));
       const execute = vi.fn(async () => []);
-      const respond = vi.fn(async () => "计划已创建");
+      const respond = vi.fn(async () => "Plan created");
 
       const result = await runAgentGraph({
-        originalQuery: "搜索新闻整理文档",
-        contextualizedQuery: "搜索新闻整理文档",
+        originalQuery: "Search news and organize document",
+        contextualizedQuery: "Search news and organize document",
         citaContextBlock: "",
-        messages: [{ role: "user", content: "搜索新闻整理文档" }],
+        messages: [{ role: "user", content: "Search news and organize document" }],
         availableCapabilities: ["web_search"],
       }, { decide, execute, createPlan, route: planRoute, respond });
 
       expect(createPlan).toHaveBeenCalledTimes(2);
       expect(result.taskPlan).toBeDefined();
-      expect(result.taskPlan!.goal).toBe("成功目标");
+      expect(result.taskPlan!.goal).toBe("Successful goal");
     });
 
     it("does not retry on HTTP 401 (auth failure)", async () => {
@@ -374,13 +374,13 @@ describe("runAgentGraph", () => {
       });
       const decide = vi.fn(async () => ({ decision: "respond" as const, reason: "done" }));
       const execute = vi.fn(async () => []);
-      const respond = vi.fn(async () => "降级");
+      const respond = vi.fn(async () => "Degraded");
 
       await runAgentGraph({
-        originalQuery: "测试",
-        contextualizedQuery: "测试",
+        originalQuery: "test",
+        contextualizedQuery: "test",
         citaContextBlock: "",
-        messages: [{ role: "user", content: "测试" }],
+        messages: [{ role: "user", content: "test" }],
         availableCapabilities: ["x"],
       }, { decide, execute, createPlan, route: planRoute, respond });
 
@@ -394,13 +394,13 @@ describe("runAgentGraph", () => {
       });
       const decide = vi.fn(async () => ({ decision: "respond" as const, reason: "done" }));
       const execute = vi.fn(async () => []);
-      const respond = vi.fn(async () => "降级");
+      const respond = vi.fn(async () => "Degraded");
 
       const result = await runAgentGraph({
-        originalQuery: "测试",
-        contextualizedQuery: "测试",
+        originalQuery: "test",
+        contextualizedQuery: "test",
         citaContextBlock: "",
-        messages: [{ role: "user", content: "测试" }],
+        messages: [{ role: "user", content: "test" }],
         availableCapabilities: ["x"],
       }, { decide, execute, createPlan, route: planRoute, respond });
 
@@ -415,13 +415,13 @@ describe("runAgentGraph", () => {
       const createPlan = vi.fn(async () => { throw abortErr; });
       const decide = vi.fn(async () => ({ decision: "respond" as const, reason: "done" }));
       const execute = vi.fn(async () => []);
-      const respond = vi.fn(async () => "取消");
+      const respond = vi.fn(async () => "Cancelled");
 
       await runAgentGraph({
-        originalQuery: "测试",
-        contextualizedQuery: "测试",
+        originalQuery: "test",
+        contextualizedQuery: "test",
         citaContextBlock: "",
-        messages: [{ role: "user", content: "测试" }],
+        messages: [{ role: "user", content: "test" }],
         availableCapabilities: ["x"],
       }, { decide, execute, createPlan, route: planRoute, respond });
 
@@ -434,13 +434,13 @@ describe("runAgentGraph", () => {
       });
       const decide = vi.fn(async () => ({ decision: "respond" as const, reason: "done" }));
       const execute = vi.fn(async () => []);
-      const respond = vi.fn(async () => "降级");
+      const respond = vi.fn(async () => "Degraded");
 
       const result = await runAgentGraph({
-        originalQuery: "测试",
-        contextualizedQuery: "测试",
+        originalQuery: "test",
+        contextualizedQuery: "test",
         citaContextBlock: "",
-        messages: [{ role: "user", content: "测试" }],
+        messages: [{ role: "user", content: "test" }],
         availableCapabilities: ["x"],
       }, { decide, execute, createPlan, route: planRoute, respond });
 
@@ -454,7 +454,7 @@ describe("runAgentGraph", () => {
       return {
         id: "plan_1",
         conversationId: "c1",
-        goal: "测试计划",
+        goal: "Test plan",
         steps: steps.map((s) => ({
           id: s.id,
           objective: s.objective,
@@ -478,10 +478,10 @@ describe("runAgentGraph", () => {
 
     it("completes multi-step plan: step1 → step2 → plan completed → soul", async () => {
       const plan = makePlanResult([
-        { id: "s1", objective: "搜索", capabilityId: "web_search" },
-        { id: "s2", objective: "整理", capabilityId: "write_word" },
+        { id: "s1", objective: "search", capabilityId: "web_search" },
+        { id: "s2", objective: "organize", capabilityId: "write_word" },
       ]);
-      // s1 先 pending，s2 先 pending；planVerify 会依次推进
+      // s1 pending first, s2 pending first; planVerify will advance sequentially
       let currentStep = "s1";
       let step1Done = false;
 
@@ -491,23 +491,23 @@ describe("runAgentGraph", () => {
         return [succeeded("write_word")];
       });
       const decide = vi.fn(async () => {
-        // Plan 模式下 decide 为当前步骤选择工具
+        // In Plan mode, decide selects tool for current step
         if (currentStep === "s1") {
-          return { decision: "act" as const, capability: "web_search", objective: "搜索", targetRefs: [] as string[], afterSuccess: "respond" as const };
+          return { decision: "act" as const, capability: "web_search", objective: "search", targetRefs: [] as string[], afterSuccess: "respond" as const };
         }
-        return { decision: "act" as const, capability: "write_word", objective: "整理", targetRefs: [] as string[], afterSuccess: "respond" as const };
+        return { decision: "act" as const, capability: "write_word", objective: "organize", targetRefs: [] as string[], afterSuccess: "respond" as const };
       });
       const planVerify = vi.fn(async () => {
-        // 模拟 verifyStep：检查当前步骤是否完成
+        // Simulate verifyStep: check if current step is completed
         if (currentStep === "s1") {
           step1Done = true;
           return { status: "completed" as const };
         }
         return { status: "completed" as const };
       });
-      const respond = vi.fn(async () => "计划已完成");
+      const respond = vi.fn(async () => "Plan completed");
 
-      // 重写 execute 以根据 currentStepId 切换
+      // Rewrite execute to switch based on currentStepId
       const originalExecute = execute;
       const wrappedExecute = vi.fn(async (state, _decision) => {
         currentStep = state.currentStepId ?? "s1";
@@ -515,28 +515,28 @@ describe("runAgentGraph", () => {
       });
 
       const result = await runAgentGraph({
-        originalQuery: "搜索新闻整理成文档",
-        contextualizedQuery: "搜索新闻整理成文档",
+        originalQuery: "Search news and organize into document",
+        contextualizedQuery: "Search news and organize into document",
         citaContextBlock: "",
-        messages: [{ role: "user", content: "搜索新闻整理成文档" }],
+        messages: [{ role: "user", content: "Search news and organize into document" }],
         availableCapabilities: ["web_search", "write_word"],
       }, { decide, execute: wrappedExecute, createPlan, route: planRoute, planVerify, respond });
 
-      // createPlan 应被调用
+      // createPlan should be called
       expect(createPlan).toHaveBeenCalledTimes(1);
-      // planVerify 应被调用2次（每个步骤一次）
+      // planVerify should be called twice (once per step)
       expect(planVerify).toHaveBeenCalledTimes(2);
-      // plan 应标记为 completed
+      // plan should be marked as completed
       expect(result.taskPlan?.status).toBe("completed");
-      // 最终应进入 soul 生成回复
+      // eventually should enter soul to generate reply
       expect(respond).toHaveBeenCalledTimes(1);
     });
 
     it("handles step failure → replan → continue with replacement steps", async () => {
       const plan = makePlanResult([
-        { id: "s1", objective: "搜索", capabilityId: "web_search" },
-        { id: "s2", objective: "失败步骤", capabilityId: "failing_tool" },
-        { id: "s3", objective: "整理", capabilityId: "write_word" },
+        { id: "s1", objective: "search", capabilityId: "web_search" },
+        { id: "s2", objective: "failing step", capabilityId: "failing_tool" },
+        { id: "s3", objective: "organize", capabilityId: "write_word" },
       ]);
 
       let verifyCallCount = 0;
@@ -549,9 +549,9 @@ describe("runAgentGraph", () => {
         return [succeeded("write_word")];
       });
       const decide = vi.fn(async () => {
-        if (currentStep === "s1") return { decision: "act" as const, capability: "web_search", objective: "搜索", targetRefs: [] as string[], afterSuccess: "respond" as const };
-        if (currentStep === "s2") return { decision: "act" as const, capability: "failing_tool", objective: "失败步骤", targetRefs: [] as string[], afterSuccess: "respond" as const };
-        return { decision: "act" as const, capability: "write_word", objective: "整理", targetRefs: [] as string[], afterSuccess: "respond" as const };
+        if (currentStep === "s1") return { decision: "act" as const, capability: "web_search", objective: "search", targetRefs: [] as string[], afterSuccess: "respond" as const };
+        if (currentStep === "s2") return { decision: "act" as const, capability: "failing_tool", objective: "failing step", targetRefs: [] as string[], afterSuccess: "respond" as const };
+        return { decision: "act" as const, capability: "write_word", objective: "organize", targetRefs: [] as string[], afterSuccess: "respond" as const };
       });
       const planVerify = vi.fn(async () => {
         verifyCallCount++;
@@ -560,17 +560,17 @@ describe("runAgentGraph", () => {
         return { status: "completed" as const }; // replacement step completed
       });
       const planReplan = vi.fn(async () => {
-        // 返回替代步骤
+        // Return replacement step
         return [{
           id: "r1",
-          objective: "替代步骤",
+          objective: "replacement step",
           status: "pending" as const,
           completionPolicy: { allOf: [{ kind: "tool_succeeded" as const, capabilityId: "write_word" }] },
           toolCallCount: 0,
           retryCount: 0,
         }];
       });
-      const respond = vi.fn(async () => "计划已完成（含重规划）");
+      const respond = vi.fn(async () => "Plan completed (with replan)");
 
       const wrappedExecute = vi.fn(async (state, decision) => {
         currentStep = state.currentStepId ?? "s1";
@@ -578,18 +578,18 @@ describe("runAgentGraph", () => {
       });
 
       const result = await runAgentGraph({
-        originalQuery: "测试",
-        contextualizedQuery: "测试",
+        originalQuery: "test",
+        contextualizedQuery: "test",
         citaContextBlock: "",
-        messages: [{ role: "user", content: "测试" }],
+        messages: [{ role: "user", content: "test" }],
         availableCapabilities: ["web_search", "write_word"],
       }, { decide, execute: wrappedExecute, createPlan, route: planRoute, planVerify, planReplan, respond });
 
-      // planReplan 应被调用1次（s2 失败后）
+      // planReplan should be called once (after s2 fails)
       expect(planReplan).toHaveBeenCalledTimes(1);
-      // plan 最终应 completed
+      // plan should finally be completed
       expect(result.taskPlan?.status).toBe("completed");
-      // replanCount 应为1
+      // replanCount should be 1
       expect(result.replanCount).toBe(1);
     });
   });

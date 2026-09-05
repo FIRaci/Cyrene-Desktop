@@ -6,8 +6,8 @@ import type { SocialExtractionInput } from "./types";
 function extractionInput(): SocialExtractionInput {
   return {
     conversationId: "chat-a",
-    userTurn: { id: "user-1", role: "user", text: "我喜欢海边。" },
-    assistantTurn: { id: "assistant-1", role: "assistant", text: "海风确实很舒服。" },
+    userTurn: { id: "user-1", role: "user", text: "I like the seaside." },
+    assistantTurn: { id: "assistant-1", role: "assistant", text: "The sea breeze is indeed very pleasant." },
     retrievedAtoms: [],
     now: 100,
   };
@@ -20,9 +20,9 @@ describe("social context scheduler", () => {
       operations: [{
         operation: "add",
         type: "long_term",
-        content: "用户喜欢海边",
+        content: "User likes the seaside",
         evidenceTurnId: "user-1",
-        evidenceQuote: "我喜欢海边",
+        evidenceQuote: "I like the seaside",
       }],
     }));
     const enqueue = vi.fn((_label: string, task: () => Promise<void>) => task());
@@ -41,16 +41,16 @@ describe("social context scheduler", () => {
         {
           operation: "add",
           type: "long_term",
-          content: "用户喜欢海边",
+          content: "User likes the seaside",
           evidenceTurnId: "user-1",
-          evidenceQuote: "我喜欢海边",
+          evidenceQuote: "I like the seaside",
         },
         {
           op: "add",
           type: "long_term",
-          content: "错误字段不应被部分写入",
+          content: "Invalid fields should not be partially written",
           evidenceTurnId: "user-1",
-          evidenceQuote: "我喜欢海边",
+          evidenceQuote: "I like the seaside",
         },
       ],
     });
@@ -58,9 +58,9 @@ describe("social context scheduler", () => {
       operations: [{
         operation: "add",
         type: "long_term",
-        content: "用户喜欢海边",
+        content: "User likes the seaside",
         evidenceTurnId: "user-1",
-        evidenceQuote: "我喜欢海边",
+        evidenceQuote: "I like the seaside",
       }],
     });
     const store = createSocialAtomStore();
@@ -100,9 +100,9 @@ describe("social context scheduler", () => {
       operations: [{
         op: "add",
         type: "long_term",
-        content: "用户喜欢海边",
+        content: "User likes the seaside",
         evidenceTurnId: "user-1",
-        evidenceQuote: "我喜欢海边",
+        evidenceQuote: "I like the seaside",
       }],
     });
     const store = createSocialAtomStore();

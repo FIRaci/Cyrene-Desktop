@@ -1,11 +1,11 @@
-// 历史对话召回工具 —— 让昔涟能"回忆"滚出上下文窗口的对话。
+// History conversation recall tool - Allows Cyrene to "recall" conversations scrolled out of context window.
 //
-// 设计（见 docs/history-and-skill-architecture.md）：
-// - 不切分、不压缩、不启发式。全部历史无损存入向量库，模型主动召回。
-// - 存：每轮 user + assistant 消息用 addMemory 存入 source="chat_history"
-// - 取：recall_history 工具语义检索，按时间排序返回
+// Design (see docs/history-and-skill-architecture.md):
+// - No chunking, no compression, no heuristics. Full history losslessly stored in vector store, recalled actively by model.
+// - Store: each round user + assistant message saved via addMemory with source="chat_history"
+// - Retrieve: recall_history tool semantic search, returned in chronological order
 //
-// 复用现有 RAG 引擎（addMemory / searchHistoryEntries），不另建存储层。
+// Reuses existing RAG engine (addMemory / searchHistoryEntries), no separate storage layer.
 
 import { addMemory, searchHistoryEntries } from "../rag";
 import { toolRegistry } from "./tool-registry";
@@ -14,9 +14,9 @@ import { currentUserTimezone } from "./built-in-tools";
 const LOG_PREFIX = "[History]";
 
 /**
- * 把一轮对话存入向量库。在 agui-bridge 的 complete 回调里调用。
- * user 和 assistant 各存一条，方便按角色召回。
- * 失败不抛错（历史存储是副作用，不能影响主流程）。
+ * Store turn conversation into vector store. Called in agui-bridge complete callback.
+ * Stores one entry each for user and assistant for role-based recall.
+ * Failures do not throw (history storage is a side effect, cannot affect main flow).
  */
 export async function indexConversationTurn(
   sessionId: string,
@@ -36,7 +36,7 @@ export async function indexConversationTurn(
   }
 }
 
-/** 注册 recall_history 工具。在 startup 调一次。 */
+/** Register recall_history tool. Called once at startup. */
 export function registerRecallHistoryTool(): void {
   toolRegistry.register({
     id: "recall_history",
@@ -76,13 +76,13 @@ export function registerRecallHistoryTool(): void {
         return `[recall_history] No conversation history found for "${query}"`;
       }
 
-      // 按时间正序（最早的在前），让对话脉络自然
+      // Chronological order (earliest first) for natural conversation flow
       const sorted = [...filtered].sort((a, b) => a.createdAt - b.createdAt);
 
       const lines = sorted.map(h => {
         const date = new Date(h.createdAt).toLocaleString("en-US", { timeZone: currentUserTimezone() });
         const role = h.metadata?.role === "user" ? "User" : "Cyrene";
-        // 截断过长内容，避免吃太多 token
+        // Truncate excessive content to avoid consuming excessive tokens
         const text = h.text.length > 300 ? h.text.slice(0, 300) + "..." : h.text;
         return `[${date}] ${role}: ${text}`;
       });

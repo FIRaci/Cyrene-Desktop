@@ -21,15 +21,15 @@ function serviceDouble() {
 
 function understanding(input: TurnUnderstandingInput): TurnUnderstanding {
   const candidate = input.availableContexts.find((context) => context.kind === "candidate" && context.position === 1);
-  if (input.originalQuery === "第一首吧" && candidate) {
+  if (input.originalQuery === "the first one please" && candidate) {
     return {
-      resolvedReferences: [{ surface: "第一首", targetRef: candidate.contextRef, relation: "candidate_position" }],
+      resolvedReferences: [{ surface: "the first one", targetRef: candidate.contextRef, relation: "candidate_position" }],
       focusedEntityRefs: [candidate.contextRef],
-      contextualizedQuery: `用户选择当前歌曲候选中的第一首《${candidate.label}》。`,
+      contextualizedQuery: `User selects the first track "${candidate.label}" among current song candidates.`,
       rewriteStatus: "rewritten",
     };
   }
-  if (input.originalQuery === "第四首名字挺怪") {
+  if (input.originalQuery === "the fourth one has a weird title") {
     return {
       resolvedReferences: [],
       focusedEntityRefs: [],
@@ -72,7 +72,7 @@ describe("CITA music vertical", () => {
       setId: "raw-set", provider: "netease-cloud-music", source: "daily_recommendation",
       createdAt: 900, expiresAt: 9_000, conversationId: "c1",
       tracks: [
-        { id: "11", name: "胆小鬼", artists: ["梁咏琪"] },
+        { id: "11", name: "Coward", artists: ["Gigi Leung"] },
         { id: "22", name: "Chasing Tonight", artists: ["zoolor"] },
       ],
     };
@@ -81,15 +81,15 @@ describe("CITA music vertical", () => {
     const tool = buildMusicTools(env.service as never, env.hooks)
       .find((candidate) => candidate.id === "music_get_daily_recommendations")!;
 
-    await tool.execute({}, { userQuery: "今日推荐", conversationId: "c1", contextRefs: env.refs });
+    await tool.execute({}, { userQuery: "daily recommendations", conversationId: "c1", contextRefs: env.refs });
     const candidates = env.store.snapshot("c1").contexts.filter((context) => context.kind === "candidate");
     expect(candidates.map((context) => [context.position, context.label, context.presented])).toEqual([
-      [1, "胆小鬼", true],
+      [1, "Coward", true],
       [2, "Chasing Tonight", true],
     ]);
 
     const prepared = await env.cita.prepareTurn({
-      conversationId: "c1", turnId: "turn-2", originalQuery: "第一首吧", recentDialogue: [],
+      conversationId: "c1", turnId: "turn-2", originalQuery: "the first one please", recentDialogue: [],
     });
     expect(prepared.contextPackage).toMatchObject({
       resolvedReferences: [{ targetRef: candidates[0].contextRef }],
@@ -102,23 +102,23 @@ describe("CITA music vertical", () => {
   it("keeps comments and affirmations as cognition rather than execution directives", async () => {
     const env = setup();
     const comment = await env.cita.prepareTurn({
-      conversationId: "c1", turnId: "turn-comment", originalQuery: "第四首名字挺怪", recentDialogue: [],
+      conversationId: "c1", turnId: "turn-comment", originalQuery: "the fourth one has a weird title", recentDialogue: [],
     });
     expect(comment.contextBlock).not.toContain("toolName");
 
     const withoutQuestion = await env.cita.prepareTurn({
-      conversationId: "c1", turnId: "turn-no-question", originalQuery: "好啊", recentDialogue: [],
+      conversationId: "c1", turnId: "turn-no-question", originalQuery: "sure", recentDialogue: [],
     });
 
     env.cita.ingest({
       type: "context_upserted", eventId: "awaiting-1", conversationId: "c1", occurredAt: 1_000, source: "test",
       context: {
         contextRef: "ctx_awaiting", conversationId: "c1", domain: "dialogue", kind: "awaiting_question",
-        label: "是否播放当前歌曲", lifecycle: "active", source: "runtime_event",
+        label: "whether to play current track", lifecycle: "active", source: "runtime_event",
       },
     });
     const withQuestion = await env.cita.prepareTurn({
-      conversationId: "c1", turnId: "turn-question", originalQuery: "好啊", recentDialogue: [],
+      conversationId: "c1", turnId: "turn-question", originalQuery: "sure", recentDialogue: [],
     });
     expect(env.service.playTrack).not.toHaveBeenCalled();
   });
@@ -128,11 +128,11 @@ describe("CITA music vertical", () => {
     const daily = {
       setId: "daily", provider: "netease-cloud-music", source: "daily_recommendation",
       createdAt: 900, expiresAt: 9_000, conversationId: "c1",
-      tracks: [{ id: "11", name: "日推歌", artists: ["A"] }],
+      tracks: [{ id: "11", name: "Daily Song", artists: ["A"] }],
     };
     const search = {
-      ...daily, setId: "search", source: "search", query: "左转灯",
-      tracks: [{ id: "22", name: "左转灯", artists: ["派伟俊"] }],
+      ...daily, setId: "search", source: "search", query: "Left Turn Light",
+      tracks: [{ id: "22", name: "Left Turn Light", artists: ["Patrick Brasca"] }],
     };
     env.service.getDailyRecommendations.mockResolvedValue(daily);
     env.service.searchTracks.mockResolvedValue(search);
@@ -140,9 +140,9 @@ describe("CITA music vertical", () => {
     const tools = buildMusicTools(env.service as never, env.hooks);
 
     await tools.find((tool) => tool.id === "music_get_daily_recommendations")!
-      .execute({}, { userQuery: "日推", conversationId: "c1", contextRefs: env.refs });
+      .execute({}, { userQuery: "daily recommendations", conversationId: "c1", contextRefs: env.refs });
     await tools.find((tool) => tool.id === "music_search")!
-      .execute({ keyword: "左转灯", purpose: "discover" }, { userQuery: "搜左转灯", conversationId: "c1", contextRefs: env.refs });
+      .execute({ keyword: "Left Turn Light", purpose: "discover" }, { userQuery: "search Left Turn Light", conversationId: "c1", contextRefs: env.refs });
 
     const sources = env.store.snapshot("c1").contexts
       .filter((context) => context.kind === "candidate")

@@ -5,7 +5,7 @@ import { testVendorConnection } from "./test-connection";
 describe("testVendorConnection", () => {
   test("uses the runtime config without dropping transport or reasoning", async () => {
     const cfg: VendorConfig = {
-      provider: "MiniMax（稀宇科技）",
+      provider: "MiniMax",
       baseUrl: "https://api.minimaxi.com/v1",
       model: "MiniMax-M3",
       apiKey: "secret",

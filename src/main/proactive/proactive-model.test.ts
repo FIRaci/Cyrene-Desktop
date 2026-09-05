@@ -30,7 +30,7 @@ describe("runProactiveModel", () => {
 
   it("builds one non-streaming request with no tool capability", async () => {
     mocks.parseResponse.mockReturnValue({
-      text: '{"decision":"send","text":"休息一下吧♪"}',
+      text: '{"decision":"send","text":"Take a break now♪"}',
       usage: { input: 12, output: 8 },
     });
     const fetchFn = vi.fn(async () => new Response(JSON.stringify({ ok: true }), {
@@ -52,7 +52,7 @@ describe("runProactiveModel", () => {
     expect(request.stream).toBe(false);
     expect(request).not.toHaveProperty("tools");
     expect(JSON.stringify(request)).not.toContain("tool_calls");
-    expect(result).toEqual({ kind: "send", text: "休息一下吧♪" });
+    expect(result).toEqual({ kind: "send", text: "Take a break now♪" });
     expect(mocks.recordUsage).toHaveBeenCalledWith(12, 8, 1);
   });
 

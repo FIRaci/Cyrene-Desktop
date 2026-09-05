@@ -1,19 +1,19 @@
-// 子代理（Sub-agent）—— 把重任务委托给独立 FC 循环执行，隔离上下文。
+// Sub-agent: delegates heavy tasks to independent FC loop, isolating context.
 //
-// 核心思路：
-//   主 agent 调 delegate_task 工具 → execute 内部跑一个受限的 runFunctionCallingLoop
-//   → 子代理有自己的 conversation（用完即弃）
-//   → 执行完只返回结构化摘要给主 agent
-//   → 主 agent 的 conversation 只多一条摘要，不被重工具的过程数据污染
+// Core concept:
+//   Main agent calls delegate_task tool -> execute runs restricted runFunctionCallingLoop
+//   -> sub-agent maintains its own disposable conversation
+//   -> returns structured summary to main agent upon completion
+//   -> keeps main agent context clean from verbose intermediate data
 //
-// 触发条件（调用链深度判断）：
-//   单次工具调用能完成 → 不需要子代理
-//   需要 ≥2 步工具调用且中间结果不需要用户确认 → 子代理化
+// Trigger conditions:
+//   Single tool invocation -> sub-agent not needed
+//   Multi-step calls without user confirmation -> sub-agent delegation
 //
-// 子代理限制：
-//   - 最多 8 轮（主 agent 是 20 轮）
-//   - 每轮超时 60s（主 agent 是 75s）
-//   - 只暴露轻量工具（不暴露 delegate_task 自身，防递归）
+// Sub-agent limits:
+//   - Max 8 rounds (main agent is 20 rounds)
+//   - 60s per-round timeout (main agent is 75s)
+//   - Exposes lightweight tools (disallows recursive delegation)
 
 import { runFunctionCallingLoop } from "./function-calling";
 import { toolRegistry } from "./tool-registry";
@@ -21,17 +21,17 @@ import { truncateToolResult } from "./context-manager";
 
 const LOG_PREFIX = "[SubAgent]";
 
-/** 子代理限制。比主 agent 更紧——子代理是执行层，不该跑太久。 */
+/** Sub-agent constraints: tighter limits for execution layer. */
 const SUB_AGENT_MAX_ROUNDS = 8;
 const SUB_AGENT_TIMEOUT_MS = 60_000;
 
-/** 子代理不能调用的工具（防递归 + 防重复权限审批）。 */
+/** Disallowed tools in sub-agent (prevents recursion and duplicate approvals). */
 const BLOCKED_TOOLS = new Set([
-  "delegate_task",     // 防递归
-  "ask_user_choice",   // 子代理不该跟用户交互（只有主 agent 能弹卡片）
+  "delegate_task",     // Prevent recursion
+  "ask_user_choice",   // Sub-agent cannot interact directly with user
 ]);
 
-/** 子代理返回的结构化结果。 */
+/** Structured result returned by sub-agent. */
 export interface SubAgentResult {
   status: "success" | "error";
   summary: string;
@@ -41,17 +41,17 @@ export interface SubAgentResult {
   recoverable?: boolean;
 }
 
-/** LLM 配置注入器（由 index.ts 启动时调 setDelegateSettings 设置）。 */
+/** Injected LLM settings getter (set by index.ts via setDelegateSettings). */
 let delegateSettingsGetter: (() => { provider: string; baseUrl: string; model: string; apiKey: string }) | null = null;
 
-/** index.ts 启动时调用，注入 LLM 配置获取器给子代理。 */
+/** Called on startup to inject settings getter for sub-agent. */
 export function setDelegateSettings(getter: () => { provider: string; baseUrl: string; model: string; apiKey: string }): void {
   delegateSettingsGetter = getter;
 }
 
 /**
- * 启动子代理执行一个子任务。
- * 子代理有自己独立的 conversation，执行完返回结构化摘要。
+ * Launch sub-agent to execute sub-task.
+ * Sub-agent maintains isolated conversation, returning structured summary.
  */
 export async function runSubAgent(task: string): Promise<SubAgentResult> {
   if (!delegateSettingsGetter) {
@@ -65,7 +65,7 @@ export async function runSubAgent(task: string): Promise<SubAgentResult> {
 
   const settings = delegateSettingsGetter();
 
-  // 临时屏蔽子代理不该用的工具
+  // Temporarily hide disallowed tools from sub-agent
   const hiddenTools: string[] = [];
   for (const toolId of BLOCKED_TOOLS) {
     const tool = toolRegistry.getById(toolId);
@@ -76,7 +76,7 @@ export async function runSubAgent(task: string): Promise<SubAgentResult> {
   }
 
   try {
-    console.log(LOG_PREFIX, "启动子代理任务:", task.slice(0, 100));
+    console.log(LOG_PREFIX, "Starting sub-agent task:", task.slice(0, 100));
 
     const subMessages = [
       {
@@ -98,24 +98,24 @@ export async function runSubAgent(task: string): Promise<SubAgentResult> {
     const reply = result.reply || "(no response)";
     const toolCount = result.toolResults.length;
 
-    // 收集产出文件（从工具结果里提取路径）
+    // Collect generated files (extract paths from tool results)
     const artifacts: string[] = [];
     const keyFacts: Record<string, unknown> = {};
     for (const tr of result.toolResults) {
-      // 提取 write_* 工具的输出路径
-      const pathMatch = tr.output.match(/已生成[：:]\s*(.+)/);
+      // Extract output paths from write_* tools
+      const pathMatch = tr.output.match(/(?:Generated|Created|\u5df2\u751f\u6210)[：:]\s*(.+)/i);
       if (pathMatch) artifacts.push(pathMatch[1].trim());
-      // 提取汇率数据
+      // Extract exchange rate data
       const rateMatch = tr.output.match(/(\d+(?:\.\d+)?)\s*(USD|EUR|CNY)\s*=\s*(\d+(?:\.\d+)?)\s*(USD|EUR|CNY)/);
       if (rateMatch) {
         keyFacts[rateMatch[2] + "_to_" + rateMatch[4]] = Number(rateMatch[3]);
       }
     }
 
-    // 判断是否达到最大轮数（可能没完成）
+    // Check if max rounds reached (potentially incomplete)
     const hitMaxRounds = toolCount > 0 && reply.length < 50;
 
-    console.log(LOG_PREFIX, "子代理完成:", reply.slice(0, 100), "工具调用:", toolCount);
+    console.log(LOG_PREFIX, "Sub-agent complete:", reply.slice(0, 100), "tools called:", toolCount);
 
     return {
       status: hitMaxRounds ? "error" : "success",
@@ -127,8 +127,8 @@ export async function runSubAgent(task: string): Promise<SubAgentResult> {
     };
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
-    const isTimeout = errMsg.includes("AbortError") || errMsg.includes("超时");
-    console.error(LOG_PREFIX, "子代理失败:", errMsg);
+    const isTimeout = errMsg.includes("AbortError") || errMsg.includes("timeout") || errMsg.includes("\u8d85\u65f6");
+    console.error(LOG_PREFIX, "Sub-agent failed:", errMsg);
 
     return {
       status: "error",
@@ -137,7 +137,7 @@ export async function runSubAgent(task: string): Promise<SubAgentResult> {
       summary: "Sub-agent execution failed: " + errMsg.slice(0, 200),
     };
   } finally {
-    // 恢复被隐藏的工具
+    // Restore previously hidden tools
     for (const toolId of hiddenTools) {
       const tool = toolRegistry.getById(toolId);
       if (tool) tool.enabled = true;

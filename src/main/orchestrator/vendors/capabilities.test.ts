@@ -3,54 +3,54 @@ import { PROVIDER_CAPABILITIES, getCapability } from "./capabilities";
 import { getAdapterForConfig } from "./index";
 
 describe("PROVIDER_CAPABILITIES — schema smoke", () => {
-  test("每条 capability 都有 id 与 displayName，且非空", () => {
+  test("every capability has id and displayName, and is non-empty", () => {
     for (const cap of PROVIDER_CAPABILITIES) {
       expect(cap.id, `entry missing id`).toBeTruthy();
       expect(cap.displayName, `entry ${cap.id} missing displayName`).toBeTruthy();
     }
   });
 
-  test("id 唯一（不允许两条 capability 共享同一 id）", () => {
+  test("id is unique (no two capabilities share the same id)", () => {
     const ids = PROVIDER_CAPABILITIES.map((c) => c.id);
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  test("displayName 唯一（不允许两条 capability 共享同一显示名）", () => {
+  test("displayName is unique (no two capabilities share the same display name)", () => {
     const names = PROVIDER_CAPABILITIES.map((c) => c.displayName);
     expect(new Set(names).size).toBe(names.length);
   });
 
-  test("MiMo（小米）条目存在且关键字段齐全", () => {
-    const mimo = getCapability("MiMo（小米）");
+  test("MiMo entry exists and key fields are complete", () => {
+    const mimo = getCapability("MiMo");
     expect(mimo).toBeDefined();
     expect(mimo?.id).toBe("mimo");
-    expect(mimo?.displayName).toBe("MiMo（小米）");
+    expect(mimo?.displayName).toBe("MiMo");
   });
 
-  test("豆包替换火山 AgentPlan，使用官方方舟 Chat Completions 入口", () => {
-    expect(getCapability("豆包（火山方舟）")).toMatchObject({
+  test("Doubao uses official Ark Chat Completions endpoint", () => {
+    expect(getCapability("Doubao")).toMatchObject({
       id: "doubao",
       transport: "openai",
       baseUrl: "https://ark.cn-beijing.volces.com/api/v3",
       defaultModel: "doubao-seed-2-1-pro-260628",
     });
-    expect(getCapability("火山 AgentPlan（火山引擎）")).toBeUndefined();
+    expect(getCapability("Volcengine")).toBeUndefined();
     expect(PROVIDER_CAPABILITIES.some((capability) => capability.id === "volcengine")).toBe(false);
   });
 });
 
-describe("PROVIDER_CAPABILITIES — 已知条目存在性回归", () => {
-  test("MiniMax 默认使用 OpenAI 兼容入口", () => {
-    expect(getCapability("MiniMax（稀宇科技）")).toMatchObject({
+describe("PROVIDER_CAPABILITIES — known entry presence regression", () => {
+  test("MiniMax defaults to OpenAI-compatible endpoint", () => {
+    expect(getCapability("MiniMax")).toMatchObject({
       transport: "openai",
       baseUrl: "https://api.minimaxi.com/v1",
       authStyle: "bearer",
     });
   });
 
-  test("MiniMax 默认配置生成 OpenAI chat/completions 与 Bearer 请求", () => {
+  test("MiniMax default config generates OpenAI chat/completions and Bearer request", () => {
     const cfg = {
-      provider: "MiniMax（稀宇科技）",
+      provider: "MiniMax",
       baseUrl: "https://api.minimaxi.com/v1",
       model: "MiniMax-M3",
       apiKey: "test-key",
@@ -68,18 +68,18 @@ describe("PROVIDER_CAPABILITIES — 已知条目存在性回归", () => {
     expect(request.headers["x-api-key"]).toBeUndefined();
   });
 
-  test("9 家 provider 的 displayName 都在表中", () => {
+  test("all 9 provider displayNames are in table", () => {
     const names = new Set(PROVIDER_CAPABILITIES.map((c) => c.displayName));
     for (const expected of [
-      "MiniMax（稀宇科技）",
-      "DeepSeek（深度求索）",
-      "豆包（火山方舟）",
-      "GLM（智谱）",
-      "Kimi（月之暗面）",
-      "Qwen（通义千问）",
-      "ChatGPT（OpenAI）",
-      "Claude（Anthropic）",
-      "MiMo（小米）",
+      "MiniMax",
+      "DeepSeek",
+      "Doubao",
+      "GLM",
+      "Kimi",
+      "Qwen",
+      "ChatGPT",
+      "Claude",
+      "MiMo",
     ]) {
       expect(names.has(expected), `missing displayName: ${expected}`).toBe(true);
     }

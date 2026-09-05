@@ -24,19 +24,20 @@ export interface InteractionOptions {
   clickThreshold?: number;
   onTrigger?: (area: HitAreaDef) => void;
   onMiss?: (area: HitAreaDef) => void;
-  onPetting?: () => void;
+  onPetting?: (x?: number, y?: number) => void;
+  onHeadPat?: (x?: number, y?: number) => void;
 }
 
 const PETTING_ACTIONS: Array<{ group: string; motionName: string; expressionName?: string }> = [
-  { group: "动作#6", motionName: "笑一笑吧~" },
-  { group: "动作#6", motionName: "Wink~" },
-  { group: "动作#6", motionName: "我可爱吧~" },
-  { group: "表情#2", motionName: "开心眼", expressionName: "开心眼" },
-  { group: "表情3#4", motionName: "闪耀", expressionName: "闪耀" },
+  { group: "\u52a8\u4f5c#6", motionName: "\u7b11\u4e00\u7b11\u5427~" },
+  { group: "\u52a8\u4f5c#6", motionName: "Wink~" },
+  { group: "\u52a8\u4f5c#6", motionName: "\u6211\u53ef\u7231\u5427~" },
+  { group: "\u8868\u60c5#2", motionName: "\u5f00\u5fc3\u773c", expressionName: "\u5f00\u5fc3\u773c" },
+  { group: "\u8868\u60c53#4", motionName: "\u95ea\u8000", expressionName: "\u95ea\u8000" },
 ];
 
 /**
- * Maps pointer clicks on the Live2D canvas to model hit-area actions.
+ * Maps pointer clicks & head-patting gestures on the Live2D canvas to model actions.
  */
 export class InteractionController {
   private readonly canvas: HTMLCanvasElement;
@@ -45,8 +46,16 @@ export class InteractionController {
   private readonly clickThreshold: number;
   private readonly options: InteractionOptions;
 
+  private isPointerDown = false;
   private downX = 0;
   private downY = 0;
+  private lastMoveX = 0;
+  private strokeAccum = 0;
+  private lastDirection = 0; // -1: left, 1: right
+  private strokeDirectionChanges = 0;
+  private didTriggerHeadPat = false;
+  private lastPatTimestamp = 0;
+
   private downHits: HitAreaDef[] = [];
   private suppressGesture = false;
   private disposed = false;
@@ -64,46 +73,111 @@ export class InteractionController {
     this.hitAreaByName = new Map(hitAreaDefs.map((a) => [a.name, a]));
 
     canvas.addEventListener("pointerdown", this.handleDown);
+    canvas.addEventListener("pointermove", this.handleMove);
     canvas.addEventListener("pointerup", this.handleUp);
     canvas.addEventListener("pointercancel", this.handleCancel);
   }
 
   private handleDown = (e: PointerEvent): void => {
     if (this.disposed) return;
+    if (e.button !== undefined && e.button !== 0) return;
     if (e.altKey) {
       this.suppressGesture = true;
+      this.isPointerDown = false;
       this.downHits = [];
       return;
     }
     this.suppressGesture = false;
+    this.isPointerDown = true;
     this.downX = e.clientX;
     this.downY = e.clientY;
+    this.lastMoveX = e.clientX;
+    this.strokeAccum = 0;
+    this.lastDirection = 0;
+    this.strokeDirectionChanges = 0;
+    this.didTriggerHeadPat = false;
     this.downHits = this.resolveHits(e.clientX, e.clientY);
+  };
+
+  private handleMove = (e: PointerEvent): void => {
+    if (this.disposed || !this.isPointerDown || this.suppressGesture || e.altKey) return;
+
+    const canvasH = this.canvas.clientHeight || window.innerHeight || 500;
+    // Head region is roughly upper 55% of the pet window
+    const isInHeadZone = e.clientY <= canvasH * 0.55;
+
+    if (isInHeadZone) {
+      const dx = e.clientX - this.lastMoveX;
+      if (Math.abs(dx) > 2) {
+        const currentDir = dx > 0 ? 1 : -1;
+        if (this.lastDirection !== 0 && currentDir !== this.lastDirection) {
+          this.strokeDirectionChanges += 1;
+        }
+        this.lastDirection = currentDir;
+        this.strokeAccum += Math.abs(dx);
+        this.lastMoveX = e.clientX;
+
+        // Trigger head pat if rubbing stroke detected (back & forth rubbing >= 40px with >= 1 direction reversal)
+        const now = Date.now();
+        if (
+          !this.didTriggerHeadPat &&
+          ((this.strokeAccum >= 40 && this.strokeDirectionChanges >= 1) || this.strokeAccum >= 70)
+        ) {
+          if (now - this.lastPatTimestamp > 2500) {
+            this.lastPatTimestamp = now;
+            this.didTriggerHeadPat = true;
+            this.strokeAccum = 0;
+            this.strokeDirectionChanges = 0;
+            void this.triggerHeadPat(e.clientX, e.clientY);
+          }
+        }
+      }
+    } else {
+      this.lastMoveX = e.clientX;
+    }
   };
 
   private handleUp = (e: PointerEvent): void => {
     if (this.disposed) return;
+    if (e.button !== undefined && e.button !== 0) {
+      this.isPointerDown = false;
+      this.downHits = [];
+      this.didTriggerHeadPat = false;
+      return;
+    }
+    this.isPointerDown = false;
     if (e.altKey || this.suppressGesture) {
       this.suppressGesture = false;
       this.downHits = [];
+      this.didTriggerHeadPat = false;
       return;
     }
+
+    if (this.didTriggerHeadPat) {
+      this.didTriggerHeadPat = false;
+      this.downHits = [];
+      return;
+    }
+
     const dx = e.clientX - this.downX;
     const dy = e.clientY - this.downY;
     const dist = Math.hypot(dx, dy);
     const hits = this.downHits;
     this.downHits = [];
     if (dist > this.clickThreshold) return;
+
     if (hits.length > 0) {
       void this.fire(hits);
     } else {
-      void this.playPettingAction();
+      void this.playPettingAction(e.clientX, e.clientY);
     }
   };
 
   private handleCancel = (): void => {
     this.suppressGesture = false;
+    this.isPointerDown = false;
     this.downHits = [];
+    this.didTriggerHeadPat = false;
   };
 
   private resolveHits(x: number, y: number): HitAreaDef[] {
@@ -149,7 +223,17 @@ export class InteractionController {
     }
   }
 
-  private async playPettingAction(): Promise<void> {
+  private async triggerHeadPat(x?: number, y?: number): Promise<void> {
+    this.options.onHeadPat?.(x, y);
+    await this.playMotionOrExpression();
+  }
+
+  private async playPettingAction(x?: number, y?: number): Promise<void> {
+    this.options.onPetting?.(x, y);
+    await this.playMotionOrExpression();
+  }
+
+  private async playMotionOrExpression(): Promise<void> {
     const action = PETTING_ACTIONS[Math.floor(Math.random() * PETTING_ACTIONS.length)];
     const defs = this.model.internalModel.motionManager.definitions[action.group];
     if (defs) {
@@ -157,7 +241,6 @@ export class InteractionController {
       if (idx >= 0) {
         try {
           if (await this.model.motion(action.group, idx)) {
-            this.options.onPetting?.();
             return;
           }
         } catch {}
@@ -165,9 +248,7 @@ export class InteractionController {
     }
     const exp = action.expressionName ?? action.motionName;
     try {
-      if (await this.model.expression(exp)) {
-        this.options.onPetting?.();
-      }
+      await this.model.expression(exp);
     } catch {}
   }
 
@@ -175,6 +256,7 @@ export class InteractionController {
     if (this.disposed) return;
     this.disposed = true;
     this.canvas.removeEventListener("pointerdown", this.handleDown);
+    this.canvas.removeEventListener("pointermove", this.handleMove);
     this.canvas.removeEventListener("pointerup", this.handleUp);
     this.canvas.removeEventListener("pointercancel", this.handleCancel);
   }

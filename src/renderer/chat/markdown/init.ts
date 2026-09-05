@@ -1,7 +1,7 @@
 /**
- * Markdown 渲染模块统一入口。
+ * Unified entry point for Markdown rendering module.
  *
- * main.ts 只从 `./markdown/init` 导入，不直接依赖内部模块。
+ * main.ts imports only from `./markdown/init` without directly depending on internal modules.
  */
 
 export { renderMarkdown, escapeHtml, getMd, MARKDOWN_PARSE_LIMIT, MESSAGE_CHAR_LIMIT, RENDER_VERSION } from "./markdown-renderer";
@@ -18,9 +18,9 @@ import "./markdown.css";
 import "katex/dist/katex.min.css";
 
 /**
- * 初始化 Markdown 渲染系统：
- * - 异步启动 Shiki highlighter（不 await，不阻塞聊天）
- * - 代码块复制按钮事件委托需由 main.ts 单独调用 initCodeBlockController
+ * Initialize Markdown rendering system:
+ * - Asynchronously start Shiki highlighter (no await, does not block chat)
+ * - Code block copy button event delegation must be called separately by main.ts via initCodeBlockController
  */
 export function initMarkdownRenderer(): void {
   void initHighlighter();

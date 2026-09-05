@@ -9,8 +9,8 @@ const LOG_PREFIX = "[Cyrene]";
 export const PLAYWRIGHT_MCP_ID = "playwright-mcp";
 
 /**
- * 已下架的内置 MCP server id 列表 —— 启动时从 mcp-servers.json 中清理。
- * 仅当 id 在此名单内才会被清理，不会误删用户自定义 MCP。
+ * Retired built-in MCP server id list — cleaned up from mcp-servers.json at startup.
+ * Only ids in this allowlist are removed, preserving user custom MCP servers.
  */
 export const REMOVED_BUILTIN_MCP_IDS: readonly string[] = ["firecrawl-hosted"];
 

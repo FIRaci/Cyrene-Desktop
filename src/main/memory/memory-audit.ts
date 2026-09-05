@@ -29,10 +29,10 @@ export interface MemoryAuditSummary {
   byCode: Record<string, number>
 }
 
-const ABSOLUTE_TERMS = ["只", "永远", "从不", "一定", "完全", "绝对", "以后都", "不再"]
+const ABSOLUTE_TERMS = ["only", "always", "never", "definitely", "completely", "absolutely", "forever"]
 
 function hasEvidenceForTerm(term: string, evidence: MemoryEvidence[]): boolean {
-  return evidence.some((item) => item.quoteSnippet.includes(term))
+  return evidence.some((item) => item.quoteSnippet.toLowerCase().includes(term))
 }
 
 function evidenceForMemory(memory: L2Memory, evidenceById: Map<string, MemoryEvidence>): MemoryEvidence[] {
@@ -50,8 +50,8 @@ function addResolutionLinkFinding(findings: MemoryAuditFinding[], memory: L2Memo
     code: "broken_resolution_link",
     severity: "warning",
     l2Id: memory.id,
-    message: `L2 ${memory.id} 的 ${field} 为空，历史解析链不完整。`,
-    suggestion: "人工复核该条记忆是否应保持当前状态，或补齐/清理解析链路。",
+    message: `L2 ${memory.id} has empty ${field}, historical resolution chain is incomplete.`,
+    suggestion: "Manually review whether this memory should maintain its current state, or complete/clean up the resolution chain.",
     details: { status: memory.status, field },
   })
 }
@@ -70,30 +70,30 @@ export function auditMemoryStore(store: MemoryStore): MemoryAuditFinding[] {
         code: "empty_evidence_chain",
         severity: "warning",
         l2Id: memory.id,
-        message: `L2 ${memory.id} 没有 evidenceIds，无法回看原始依据。`,
-        suggestion: "把它列入人工复核清单；若内容无法追溯，建议降权或归档。",
+        message: `L2 ${memory.id} has no evidenceIds, unable to trace original basis.`,
+        suggestion: "Add it to the manual review list; if content is untraceable, recommend downweighting or archiving.",
       })
     } else if (hasMissingEvidence(memory, evidenceById)) {
       findings.push({
         code: "missing_evidence",
         severity: "error",
         l2Id: memory.id,
-        message: `L2 ${memory.id} 引用了不存在的 evidenceId。`,
-        suggestion: "检查 memory.json 历史迁移结果；缺失证据的高层记忆不要自动提升到核心画像。",
+        message: `L2 ${memory.id} references non-existent evidenceId.`,
+        suggestion: "Check memory.json historical migration results; high-level memories missing evidence should not be automatically promoted to core persona.",
         details: { evidenceIds: memory.evidenceIds },
       })
     }
 
     const overclaimedTerms = ABSOLUTE_TERMS.filter((term) => (
-      memory.content.includes(term) && !hasEvidenceForTerm(term, linkedEvidence)
+      memory.content.toLowerCase().includes(term) && !hasEvidenceForTerm(term, linkedEvidence)
     ))
     if (overclaimedTerms.length > 0) {
       findings.push({
         code: "absolute_overclaim",
         severity: "warning",
         l2Id: memory.id,
-        message: `L2 ${memory.id} 含绝对化表达，但证据原文没有对应词。`,
-        suggestion: "人工复核是否为模型推断过度；必要时改写为更窄、更有上下文的 L2。",
+        message: `L2 ${memory.id} contains absolute claims, but original evidence lacks corresponding terms.`,
+        suggestion: "Manually review whether the model over-generalized; rewrite to a narrower, more contextual L2 if necessary.",
         details: { terms: overclaimedTerms },
       })
     }
@@ -103,8 +103,8 @@ export function auditMemoryStore(store: MemoryStore): MemoryAuditFinding[] {
         code: "active_conflict_marker",
         severity: "warning",
         l2Id: memory.id,
-        message: `L2 ${memory.id} 仍为 ${memory.status}，但保留 conflictWith 标记。`,
-        suggestion: "检查对应 conflict log 是否已 resolved；若已解析，清理旧冲突标记或调整状态。",
+        message: `L2 ${memory.id} remains ${memory.status}, but retains conflictWith marker.`,
+        suggestion: "Check if corresponding conflict log is resolved; if resolved, clean up legacy conflict marker or adjust status.",
         details: { conflictWith: memory.conflictWith, status: memory.status },
       })
     }
@@ -114,8 +114,8 @@ export function auditMemoryStore(store: MemoryStore): MemoryAuditFinding[] {
         code: "stale_sync_status",
         severity: "info",
         l2Id: memory.id,
-        message: `L2 ${memory.id} 仍处于 pending_sync 且没有 ragId。`,
-        suggestion: "下次启动同步任务时优先补偿；若内容已过期可直接归档。",
+        message: `L2 ${memory.id} remains in pending_sync without ragId.`,
+        suggestion: "Prioritize compensation during next sync task; archive directly if content is stale.",
       })
     }
 

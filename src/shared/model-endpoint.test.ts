@@ -27,7 +27,7 @@ describe("model endpoint usability", () => {
 
   it("still requires authentication for cloud and legacy provider profiles", () => {
     expect(isModelEndpointUsable({
-      provider: "DeepSeek（深度求索）",
+      provider: "DeepSeek",
       baseUrl: "https://api.deepseek.com",
       model: "deepseek-chat",
       apiKey: "",

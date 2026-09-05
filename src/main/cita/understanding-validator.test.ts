@@ -10,7 +10,7 @@ function context(overrides: Partial<ModelVisibleContext> = {}): ModelVisibleCont
     conversationId: "conversation-a",
     domain: "music",
     kind: "candidate",
-    label: "胆小鬼 - 梁咏琪",
+    label: "Coward - Gigi Leung",
     position: 1,
     presented: true,
     lifecycle: "active",
@@ -25,7 +25,7 @@ function input(availableContexts = [context()]): TurnUnderstandingInput {
     conversationId: "conversation-a",
     turnId: "turn-2",
     stateRevision: 2,
-    originalQuery: "第一首吧",
+    originalQuery: "the first one please",
     availableContexts,
     recentDialogue: [],
     recentEvents: [],
@@ -35,12 +35,12 @@ function input(availableContexts = [context()]): TurnUnderstandingInput {
 function candidate(overrides: Partial<TurnUnderstanding> = {}): TurnUnderstanding {
   return {
     resolvedReferences: [{
-      surface: "第一首",
+      surface: "the first one",
       targetRef: "music-candidate-1",
       relation: "candidate_position",
     }],
     focusedEntityRefs: ["music-candidate-1"],
-    contextualizedQuery: "用户选择当前候选中的第一首《胆小鬼》。",
+    contextualizedQuery: "User selects the first track 'Coward' among current candidates.",
     rewriteStatus: "rewritten",
     ...overrides,
   };
@@ -65,7 +65,7 @@ describe("validateUnderstanding", () => {
     if (result.status !== "degraded") throw new Error("expected degraded result");
     expect(result.understanding.resolvedReferences).toEqual([]);
     expect(result.understanding.focusedEntityRefs).toEqual([]);
-    expect(result.understanding.contextualizedQuery).toBe("第一首吧");
+    expect(result.understanding.contextualizedQuery).toBe("the first one please");
     expect(result.understanding.rewriteStatus).toBe("insufficient_context");
     expect(result.reasons).toContain("cross_conversation_ref:music-candidate-1");
   });
@@ -80,7 +80,7 @@ describe("validateUnderstanding", () => {
     expect(result.status).toBe("degraded");
     if (result.status === "degraded") {
       expect(result.reasons).toContain("expired_ref:music-candidate-1");
-      expect(result.understanding.contextualizedQuery).toBe("第一首吧");
+      expect(result.understanding.contextualizedQuery).toBe("the first one please");
     }
   });
 
@@ -94,22 +94,22 @@ describe("validateUnderstanding", () => {
     expect(result.status).toBe("degraded");
     if (result.status === "degraded") {
       expect(result.reasons).toContain("unpresented_ref:music-candidate-1");
-      expect(result.understanding.contextualizedQuery).toBe("第一首吧");
+      expect(result.understanding.contextualizedQuery).toBe("the first one please");
     }
   });
 
   it("removes invented references and unsupported rewritten facts", () => {
     const invented = candidate({
-      resolvedReferences: [{ surface: "那首", targetRef: "invented-ref", relation: "focused" }],
+      resolvedReferences: [{ surface: "that track", targetRef: "invented-ref", relation: "focused" }],
       focusedEntityRefs: ["invented-ref"],
-      contextualizedQuery: "播放模型凭空想出的歌曲。",
+      contextualizedQuery: "Play song hallucinated by model.",
     });
     const result = validateUnderstanding(input(), invented, now);
 
     expect(result.status).toBe("degraded");
     if (result.status === "degraded") {
       expect(result.understanding.resolvedReferences).toEqual([]);
-      expect(result.understanding.contextualizedQuery).toBe("第一首吧");
+      expect(result.understanding.contextualizedQuery).toBe("the first one please");
       expect(result.reasons).toContain("unknown_ref:invented-ref");
     }
   });
@@ -122,7 +122,7 @@ describe("validateUnderstanding", () => {
 
     expect(result.status).toBe("degraded");
     if (result.status === "degraded") {
-      expect(result.understanding.contextualizedQuery).toBe("第一首吧");
+      expect(result.understanding.contextualizedQuery).toBe("the first one please");
     }
   });
 });

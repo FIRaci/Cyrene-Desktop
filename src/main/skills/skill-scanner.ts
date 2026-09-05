@@ -1,6 +1,6 @@
-// Skill 扫描器 —— frontmatter 解析 + 目录扫描。
-// 纯函数模块：parseSkillFrontmatter / scanSkills 不依赖 electron，便于单测。
-// electron 相关（app.getPath）由调用方 initSkills 注入路径。
+// Skill scanner — frontmatter parser + directory scanner.
+// Pure function module: parseSkillFrontmatter / scanSkills do not depend on electron, making unit testing straightforward.
+// Electron specifics (app.getPath) are injected by the caller in initSkills.
 
 import * as fs from "fs";
 import * as path from "path";
@@ -20,16 +20,16 @@ function readManifest(skillDir: string, id: string): SkillManifest | undefined {
   }
 }
 
-/** gray-matter 解析结果的最小结构（不依赖其类型导出，规避 export = 的类型访问问题）。 */
+/** Minimal structure for gray-matter parse results (avoids export = typing access issues). */
 interface MatterResult {
   data: Record<string, unknown>;
   content: string;
 }
 
 /**
- * 解析 SKILL.md 文本：frontmatter（name/description/tools?/version?/autoInject?）+ 正文。
- * 纯函数，不碰 fs/electron。
- * 返回 null 表示不合规（缺 name/description、tools 非 array、或无 frontmatter）。
+ * Parse SKILL.md text: frontmatter (name/description/tools?/version?/autoInject?) + body.
+ * Pure function, does not touch fs/electron.
+ * Returns null on invalid format (missing name/description, tools not array, or no frontmatter).
  */
 export function parseSkillFrontmatter(content: string): ParsedSkill | null {
   let parsed: MatterResult;
@@ -52,15 +52,15 @@ export function parseSkillFrontmatter(content: string): ParsedSkill | null {
 }
 
 /**
- * 扫描单个 skill 根目录，返回合规的 SkillEntry 列表。
- * 纯函数：只依赖传入的目录路径，不碰 electron。
+ * Scan a single skill root directory, returning a list of valid SkillEntry objects.
+ * Pure function: only depends on passed directory path, does not touch electron.
  *
- * @param dir skill 根目录（其下每个子目录是一个 skill）
- * @param source 这批 skill 的来源标记（builtin/user）
+ * @param dir Skill root directory (each subdirectory is a skill)
+ * @param source Source origin marker for this batch (builtin/user)
  *
- * 不合规的 skill（无 SKILL.md、frontmatter 解析失败）跳过并 warn，不抛错。
- * enabled 统一默认 true，由 initSkills 合并 settings.json 覆盖。
- * 跨源覆盖（user 覆盖 builtin）由 initSkills 合并时处理，不在本函数。
+ * Invalid skills (missing SKILL.md, frontmatter parse failure) are skipped with a warning without throwing errors.
+ * enabled defaults to true, merged and overridden by initSkills with settings.json.
+ * Cross-source override (user overrides builtin) is handled in initSkills during merge, not in this function.
  */
 export function scanSkills(dir: string, source: "builtin" | "user"): SkillEntry[] {
   let entries: string[] = [];
@@ -69,7 +69,7 @@ export function scanSkills(dir: string, source: "builtin" | "user"): SkillEntry[
       .filter(e => e.isDirectory())
       .map(e => e.name);
   } catch {
-    return [];  // 目录不存在或无权限
+    return [];  // Directory does not exist or permission denied
   }
   const result: SkillEntry[] = [];
   for (const id of entries) {
@@ -93,7 +93,7 @@ export function scanSkills(dir: string, source: "builtin" | "user"): SkillEntry[
     if (parsed.name !== id) {
       console.warn(`[Skills] name(${parsed.name}) ≠ directory name(${id}), using directory name as id`);
     }
-    // 列 references 文件名清单（不含内容）
+    // List references filenames (excluding contents)
     let references: string[] = [];
     const refDir = path.join(skillDir, "references");
     try {

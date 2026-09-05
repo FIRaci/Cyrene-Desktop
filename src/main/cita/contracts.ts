@@ -93,7 +93,7 @@ export interface ContextPackage {
   rewriteStatus: TurnUnderstanding["rewriteStatus"];
   resolvedReferences: TurnUnderstanding["resolvedReferences"];
   focusedContexts: ModelVisibleContext[];
-  /** 当前仍可引用的已展示上下文。它是证据，不代表 CITA 替 Agent 做了决定。 */
+  /** Displayed context that can still be referenced currently. It serves as evidence, not as CITA making decisions on behalf of Agent. */
   supportingContexts?: ModelVisibleContext[];
   semanticStatus: "ready" | "degraded" | "unavailable";
   stateRevision: number;

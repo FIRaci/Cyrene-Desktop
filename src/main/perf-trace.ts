@@ -1,19 +1,19 @@
-// Agent 回复性能追踪：在关键阶段记录耗时，帮助定位"回复慢"的瓶颈。
+// Agent reply performance tracing: records elapsed time across stages to identify latency bottlenecks.
 //
-// 设计：
-//   - 模块级单例，一次只追踪一个 turn（agent 回复通常串行，并发时自动 dump 旧 turn）。
-//   - 日志前缀 [Perf]，终端 grep "[Perf]" 即可看到完整链路。
-//   - 三种 API：
-//       perf.track("name", async () => ...)  -- 异步追踪（推荐，自动管 begin/end）
-//       const t = perf.begin("name"); ...; t.end()  -- 手动追踪
-//       perf.mark("checkpoint")  -- 仅标记时间点
-//   - turn 结束时 perf.dump() 打印汇总表（含每阶段耗时 + 占比）。
+// Design:
+//   - Module-level singleton, tracks one turn at a time (automatically dumps previous turn if concurrent).
+//   - Log prefix [Perf], grep "[Perf]" in terminal to inspect traces.
+//   - Three APIs:
+//       perf.track("name", async () => ...)  -- async tracing (recommended, manages begin/end)
+//       const t = perf.begin("name"); ...; t.end()  -- manual tracing
+//       perf.mark("checkpoint")  -- timestamp checkpoint only
+//   - Call perf.dump() at turn completion to print summary table.
 //
-// 用法示例：
+// Usage example:
 //   perf.beginTurn("desktop");
 //   const ctx = await perf.track("always_on_context", () => buildAlwaysOnContext(...));
 //   const t = perf.begin("cita_prepare"); ...; t.end();
-//   perf.dump();  // 在 complete 回调或 finally 中调用
+//   perf.dump();  // Call in complete callback or finally
 
 import { debugLog, debugWarn } from "./agent-log";
 
@@ -38,7 +38,7 @@ function tPlus(): number {
 }
 
 export const perf = {
-  /** 开始追踪一个 turn。如果上一个 turn 未 dump，自动先 dump。 */
+  /** Starts tracking a turn. Automatically dumps previous turn if not yet dumped. */
   beginTurn(label = ""): void {
     if (turnStart > 0) {
       debugWarn(`${PREFIX} previous turn "${turnLabel}" not dumped, auto-dumping before new turn`);
@@ -51,8 +51,8 @@ export const perf = {
   },
 
   /**
-   * 开始一个阶段的计时。返回 { end } 用于结束计时。
-   * 嵌套使用时建议用 perf.track() 避免忘记 end。
+   * Starts timing a stage. Returns { end } to conclude timing.
+   * Prefer perf.track() for nested scopes to ensure proper closing.
    */
   begin(name: string): { end: (extra?: string) => void } {
     const start = now();
@@ -69,7 +69,7 @@ export const perf = {
     };
   },
 
-  /** 异步追踪一个阶段，自动管 begin/end。 */
+  /** Asynchronously tracks a stage, automatically managing begin/end. */
   async track<T>(name: string, fn: () => Promise<T>): Promise<T> {
     const timer = this.begin(name);
     try {
@@ -79,12 +79,12 @@ export const perf = {
     }
   },
 
-  /** 标记一个时间点（不计时，仅记录）。 */
+  /** Marks a timestamp checkpoint (does not measure duration). */
   mark(name: string): void {
     debugLog(`${PREFIX} --- ${name} t+${tPlus()}ms`);
   },
 
-  /** 打印汇总表并重置。在 turn 结束时调用。 */
+  /** Prints summary table and resets state. Call when turn ends. */
   dump(): void {
     if (turnStart === 0) return;
     const total = now() - turnStart;

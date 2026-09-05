@@ -1,6 +1,6 @@
-// settings-store —— game-bot 配置存取。userData/game-bot-settings.json。
-// 照 index.ts 的 GeneralSettings 模式：load / save / normalize 三件套。
-// 唯一碰 electron（app.getPath）。
+// settings-store — game-bot settings persistence. userData/game-bot-settings.json.
+// Follows GeneralSettings pattern: load / save / normalize triad.
+// Only module touching electron (app.getPath).
 
 import * as fs from "fs";
 import * as path from "path";
@@ -10,7 +10,7 @@ import { DEFAULT_OLLAMA_BASE_URL, DEFAULT_OLLAMA_VISION_MODEL } from "../../shar
 export interface GameBotSettings {
   enabled: boolean;
   exePath: string;
-  activeRecipe: string;   // 脚本文件名（去 .yaml）
+  activeRecipe: string;   // Script filename (excluding .yaml)
   vlm: {
     baseUrl: string;
     apiKey: string;

@@ -1,9 +1,9 @@
-// script-parser 单测 —— YAML 文本 → GameRecipe 解析 + 校验。
+// script-parser unit tests — YAML text -> GameRecipe parsing + validation.
 import { describe, it, expect } from "vitest";
 import { parseRecipe } from "./script-parser";
 
 describe("parseRecipe", () => {
-  it("解析合法完整脚本（含所有原语 + branch 嵌套）", () => {
+  it("parses valid complete script (including all primitives + nested branch)", () => {
     const yaml = [
       'name: star-rail-daily',
       'exe: "${exe_path}"',
@@ -14,9 +14,9 @@ describe("parseRecipe", () => {
       '  - key: F4',
       '  - click: center',
       '  - vlm_click: { ref: download_btn, repeat: 3, interval: 1s }',
-      '  - vlm_select: "支援列表第一个"',
-      '  - vlm_check: { id: has_update, ask: "有更新弹窗吗？" }',
-      '  - vlm_compare: { id: st, ask: "匹配哪个", refs: [a, b] }',
+      '  - vlm_select: "First item in support list"',
+      '  - vlm_check: { id: has_update, ask: "Is there an update dialog?" }',
+      '  - vlm_compare: { id: st, ask: "Which one matches?", refs: [a, b] }',
       '  - branch:',
       '      if: "${has_update}"',
       '      then:',
@@ -37,13 +37,13 @@ describe("parseRecipe", () => {
       type: "vlm_click", ref: "download_btn", repeat: 3, interval: 1000, retry: 2,
     });
     expect(r.recipe.steps[5]).toEqual({
-      type: "vlm_select", desc: "支援列表第一个", retry: 2,
+      type: "vlm_select", desc: "First item in support list", retry: 2,
     });
     expect(r.recipe.steps[6]).toEqual({
-      type: "vlm_check", id: "has_update", ask: "有更新弹窗吗？",
+      type: "vlm_check", id: "has_update", ask: "Is there an update dialog?",
     });
     expect(r.recipe.steps[7]).toEqual({
-      type: "vlm_compare", id: "st", ask: "匹配哪个", refs: ["a", "b"],
+      type: "vlm_compare", id: "st", ask: "Which one matches?", refs: ["a", "b"],
     });
     const br = r.recipe.steps[8];
     expect(br.type).toBe("branch");
@@ -54,48 +54,48 @@ describe("parseRecipe", () => {
     }
   });
 
-  it("缺 name 报错", () => {
+  it("throws on missing name", () => {
     const r = parseRecipe("exe: x\nsteps: []");
     expect(r.ok).toBe(false);
   });
 
-  it("缺 steps 报错", () => {
+  it("throws on missing steps", () => {
     const r = parseRecipe("name: x\nexe: y");
     expect(r.ok).toBe(false);
   });
 
-  it("未知原语报错", () => {
+  it("throws on unknown primitive", () => {
     const r = parseRecipe("name: x\nexe: y\nsteps:\n  - unknown_op: foo");
     expect(r.ok).toBe(false);
   });
 
-  it("wait 纯数字当 ms", () => {
+  it("treats pure number wait as ms", () => {
     const r = parseRecipe("name: x\nexe: y\nsteps:\n  - wait: 500");
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.recipe.steps[0]).toEqual({ type: "wait", ms: 500 });
   });
 
-  it("wait ms 单位", () => {
+  it("parses wait with ms unit", () => {
     const r = parseRecipe("name: x\nexe: y\nsteps:\n  - wait: 250ms");
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.recipe.steps[0]).toEqual({ type: "wait", ms: 250 });
   });
 
-  it("click 坐标形式", () => {
+  it("parses click coordinate format", () => {
     const r = parseRecipe("name: x\nexe: y\nsteps:\n  - click: { x: 100, y: 200 }");
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.recipe.steps[0]).toEqual({ type: "click", target: { x: 100, y: 200 } });
   });
 
-  it("vlm_check 缺 id 报错", () => {
-    const r = parseRecipe('name: x\nexe: y\nsteps:\n  - vlm_check: { ask: "有吗" }');
+  it("throws when vlm_check lacks id", () => {
+    const r = parseRecipe('name: x\nexe: y\nsteps:\n  - vlm_check: { ask: "Is it there?" }');
     expect(r.ok).toBe(false);
   });
 
-  it("非法 YAML 报错", () => {
+  it("throws on invalid YAML", () => {
     const r = parseRecipe("name: x\n  bad: : :");
     expect(r.ok).toBe(false);
   });

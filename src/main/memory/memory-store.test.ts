@@ -32,8 +32,8 @@ describe("memoryStore", () => {
   it("persists L2 conflict markers and status changes", async () => {
     const { memoryStore } = await import("./memory-store")
     const existing = await memoryStore.addL2Memory({
-      content: "用户喜欢香菇",
-      triggerText: "我喜欢香菇",
+      content: "User likes mushrooms",
+      triggerText: "I like mushrooms",
       sourceConversationId: "test",
       ragId: "rag_existing",
       isPinned: false,
@@ -58,8 +58,8 @@ describe("memoryStore", () => {
   it("keeps pinned L2 memories active when marking conflicts", async () => {
     const { memoryStore } = await import("./memory-store")
     const existing = await memoryStore.addL2Memory({
-      content: "用户喜欢平菇",
-      triggerText: "我喜欢平菇",
+      content: "User likes oyster mushrooms",
+      triggerText: "I like oyster mushrooms",
       sourceConversationId: "test",
       ragId: "rag_existing",
       isPinned: true,
@@ -74,15 +74,15 @@ describe("memoryStore", () => {
   it("decays only unpinned active L2 memories with positive weight", async () => {
     const { memoryStore } = await import("./memory-store")
     const active = await memoryStore.addL2Memory({
-      content: "用户正在练琴",
-      triggerText: "我最近在练琴",
+      content: "User is practicing piano",
+      triggerText: "I have been practicing piano lately",
       sourceConversationId: "test",
       ragId: "rag_active",
       isPinned: false,
     })
     const pinned = await memoryStore.addL2Memory({
-      content: "用户固定喜欢中文",
-      triggerText: "我一直用中文",
+      content: "User prefers English",
+      triggerText: "I always use English",
       sourceConversationId: "test",
       ragId: "rag_pinned",
       isPinned: true,
@@ -109,10 +109,10 @@ describe("memoryStore", () => {
 
   it("updates L0 and L2 through atomic write APIs", async () => {
     const { memoryStore } = await import("./memory-store")
-    await memoryStore.upsertL0Field("preferredName", "伙伴")
+    await memoryStore.upsertL0Field("preferredName", "Partner")
     const memory = await memoryStore.addL2Memory({
-      content: "用户最近在做记忆系统重构",
-      triggerText: "我们重构记忆系统",
+      content: "User is refactoring the memory system",
+      triggerText: "We are refactoring the memory system",
       sourceConversationId: "test",
       ragId: "rag_memory_refactor",
       isPinned: false,
@@ -124,7 +124,7 @@ describe("memoryStore", () => {
     const updated = allL2.find((item) => item.id === memory.id)!
     const traceEvents = readTraceEvents()
 
-    expect(l0.preferredName).toBe("伙伴")
+    expect(l0.preferredName).toBe("Partner")
     expect(l0.updatedAt).toBeGreaterThan(0)
     expect(updated.weight).toBe(12)
     expect(updated.accessCount).toBe(1)
@@ -136,8 +136,8 @@ describe("memoryStore", () => {
   it("does not downgrade an active memory when recording a recall", async () => {
     const { memoryStore } = await import("./memory-store")
     const memory = await memoryStore.addL2Memory({
-      content: "用户喜欢香菇",
-      triggerText: "我喜欢香菇",
+      content: "User likes mushrooms",
+      triggerText: "I like mushrooms",
       sourceConversationId: "test",
       ragId: "rag_active_recall",
       isPinned: false,
@@ -155,8 +155,8 @@ describe("memoryStore", () => {
     async (status) => {
       const { memoryStore } = await import("./memory-store")
       const memory = await memoryStore.addL2Memory({
-        content: `终止状态 ${status}`,
-        triggerText: "测试终止状态",
+        content: `Terminal status ${status}`,
+        triggerText: "Testing terminal status",
         sourceConversationId: "test",
         ragId: `rag_${status}`,
         isPinned: false,
@@ -174,9 +174,9 @@ describe("memoryStore", () => {
 
   it("creates evidence for new L2 memories with bounded snippets", async () => {
     const { memoryStore } = await import("./memory-store")
-    const longTrigger = "证据".repeat(180)
+    const longTrigger = "evidence ".repeat(45)
     const memory = await memoryStore.addL2Memory({
-      content: "用户希望记忆系统保留证据链",
+      content: "User wants memory system to retain evidence chains",
       triggerText: longTrigger,
       sourceConversationId: "conv_evidence",
       sourceMessageIds: ["msg_1", "msg_2"],
@@ -200,7 +200,7 @@ describe("memoryStore", () => {
   it("deletes evidence together with a rolled-back L2 memory", async () => {
     const { memoryStore } = await import("./memory-store")
     const memory = await memoryStore.addL2Memory({
-      content: "临时压缩摘要",
+      content: "Temporary compression summary",
       triggerText: "compression",
       sourceConversationId: "test",
       isPinned: false,
@@ -218,8 +218,8 @@ describe("memoryStore", () => {
   it("marks L2 sync status and persists rag ids", async () => {
     const { memoryStore } = await import("./memory-store")
     const memory = await memoryStore.addL2Memory({
-      content: "用户喜欢可靠的长期记忆",
-      triggerText: "长期记忆要可靠",
+      content: "User likes reliable long-term memory",
+      triggerText: "Long-term memory must be reliable",
       sourceConversationId: "test",
       isPinned: false,
       syncStatus: "pending_sync",
@@ -406,15 +406,15 @@ describe("memoryStore", () => {
   it("applies preference evolution by creating resolved memory and marking old entries", async () => {
     const { memoryStore } = await import("./memory-store")
     const oldMemory = await memoryStore.addL2Memory({
-      content: "用户喜欢跑步",
-      triggerText: "我喜欢跑步",
+      content: "User likes running",
+      triggerText: "I like running",
       sourceConversationId: "test",
       ragId: "rag_old",
       isPinned: false,
     })
     const newMemory = await memoryStore.addL2Memory({
-      content: "用户不喜欢跑步",
-      triggerText: "我现在不喜欢跑步",
+      content: "User dislikes running",
+      triggerText: "I dislike running now",
       sourceConversationId: "test",
       ragId: "rag_new",
       isPinned: false,
@@ -430,8 +430,8 @@ describe("memoryStore", () => {
 
     const applied = await memoryStore.applyResolverResolution(log.id, {
       resolutionType: "preference_evolution",
-      resolvedSummary: "用户过去喜欢跑步，但现在不喜欢跑步。",
-      reason: "用户表达了当前偏好变化。",
+      resolvedSummary: "User liked running in the past, but dislikes running now.",
+      reason: "User expressed a change in current preference.",
       confidence: 0.88,
       actions: {
         createResolvedMemory: true,
@@ -446,7 +446,7 @@ describe("memoryStore", () => {
     const conflictLogs = await memoryStore.getConflictLogs()
     const resolvedMemory = allL2.find((memory) => memory.id === applied?.resolutionMemoryId)
 
-    expect(resolvedMemory?.content).toBe("用户过去喜欢跑步，但现在不喜欢跑步。")
+    expect(resolvedMemory?.content).toBe("User liked running in the past, but dislikes running now.")
     expect(allL2.find((memory) => memory.id === oldMemory.id)?.status).toBe("superseded")
     expect(allL2.find((memory) => memory.id === newMemory.id)?.status).toBe("merged")
     expect(conflictLogs[0]).toMatchObject({
@@ -460,15 +460,15 @@ describe("memoryStore", () => {
   it("marks direct conflicts as clarification needed without creating resolved memory", async () => {
     const { memoryStore } = await import("./memory-store")
     const oldMemory = await memoryStore.addL2Memory({
-      content: "用户喜欢被叫 Playa",
-      triggerText: "叫我 Playa",
+      content: "User likes being called Playa",
+      triggerText: "Call me Playa",
       sourceConversationId: "test",
       ragId: "rag_old",
       isPinned: false,
     })
     const newMemory = await memoryStore.addL2Memory({
-      content: "用户不喜欢被叫 Playa",
-      triggerText: "别叫我 Playa",
+      content: "User does not like being called Playa",
+      triggerText: "Don't call me Playa",
       sourceConversationId: "test",
       ragId: "rag_new",
       isPinned: false,
@@ -484,7 +484,7 @@ describe("memoryStore", () => {
 
     await memoryStore.applyResolverResolution(log.id, {
       resolutionType: "direct_conflict",
-      reason: "称呼偏好直接冲突，需要自然澄清。",
+      reason: "Addressing preference directly conflicts, needs natural clarification.",
       confidence: 0.82,
       actions: {
         createResolvedMemory: false,
@@ -539,12 +539,12 @@ describe("memoryStore", () => {
     fs.writeFileSync(
       memoryPath,
       JSON.stringify({
-        l0: { preferredName: "伙伴" },
+        l0: { preferredName: "Partner" },
         l1: { roundCount: 7 },
         l2: [{
           id: "l2_legacy",
-          content: "旧记忆",
-          triggerText: "旧触发",
+          content: "Old memory",
+          triggerText: "Old trigger",
           sourceConversationId: "test",
           createdAt: 1,
           lastAccessedAt: 1,
@@ -568,7 +568,7 @@ describe("memoryStore", () => {
 
     expect(store.schemaVersion).toBe(2)
     expect(persisted.schemaVersion).toBe(2)
-    expect(store.l0.preferredName).toBe("伙伴")
+    expect(store.l0.preferredName).toBe("Partner")
     expect(store.l1.roundCount).toBe(7)
     expect(store.l2[0].syncStatus).toBe("synced")
     expect(store.l2[0].evidenceIds).toEqual([])

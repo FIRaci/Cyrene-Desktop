@@ -29,7 +29,7 @@ describe("legacy screenshot overlay removal", () => {
       "utf8",
     );
 
-    expect(chatHtml).not.toContain("截图功能重构中，暂时禁用");
+    expect(chatHtml).not.toContain("\u622a\u56fe\u529f\u80fd\u91cd\u6784\u4e2d\uff0c\u6682\u65f6\u7981\u7528");
     expect(chatHtml).toMatch(/<button[^>]+id="screenshot-btn"/);
     expect(chatHtml).toMatch(/id="file-input"[^>]+accept="[^"]*\.png/);
   });

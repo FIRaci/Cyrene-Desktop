@@ -1,11 +1,11 @@
-// channels/inbound-server —— 本地 HTTP server，给外部渠道（OpenClaw / Feishu）回调用。
+// channels/inbound-server - Local HTTP server for external channel callbacks (OpenClaw / Feishu).
 //
-// 安全策略：
-//   - 只绑 127.0.0.1，外部网络不可达
-//   - 共享密钥 header：X-Cyrene-Channel-Secret（启动时自动生成 32 字节 hex）
-//   - 路由前缀：/channels/<id>/inbound   /channels/<id>/healthz
+// Security policy:
+//   - Bound exclusively to 127.0.0.1; unreachable from external network.
+//   - Shared secret header: X-Cyrene-Channel-Secret (auto-generated 32-byte hex at startup).
+//   - Route prefixes: /channels/<id>/inbound, /channels/<id>/healthz
 //
-// Phase 0 只搭骨架（健康检查 + 路由框架）。Phase 1 接入 wechat 路由，Phase 2 接入 feishu 路由。
+// Phase 0: Scaffolding (health checks + routing framework). Phase 1: wechat route, Phase 2: feishu route.
 import * as http from "http";
 import { createHmac, randomBytes, timingSafeEqual } from "crypto";
 import { loadChannelsSettings, saveChannelsSettings } from "./settings-store";
@@ -14,7 +14,7 @@ import type { ChannelId, IncomingMessage } from "./types";
 
 const LOG = "[InboundServer]";
 
-/** 给定 channelId + raw payload → IncomingMessage。每个 adapter 自己注册。 */
+/** Maps channelId + raw payload -> IncomingMessage. Registered by each adapter. */
 export type NormalizeFn = (channel: ChannelId, raw: unknown) => IncomingMessage | null;
 
 interface InboundRoute {
@@ -24,16 +24,16 @@ interface InboundRoute {
 
 const routes: InboundRoute[] = [];
 
-/** adapter 在 start() 时调用一次注册自己的路由。重复注册按 id 覆盖。 */
+/** Adapter registers its route once during start(). Duplicate registrations overwrite by ID. */
 export function registerInboundRoute(channel: ChannelId, normalize: NormalizeFn): void {
   const existing = routes.findIndex((r) => r.channel === channel);
   if (existing >= 0) routes[existing] = { channel, normalize };
   else routes.push({ channel, normalize });
 }
 
-/** 内部：检查共享密钥（仅当 secret 已设置时强制校验） */
+/** Internal: verify shared secret (enforced only when secret is configured) */
 function checkSecret(req: http.IncomingMessage, secret: string): boolean {
-  if (!secret) return true; // 未启用时不校验
+  if (!secret) return true;
   const got = req.headers["x-cyrene-channel-secret"];
   if (typeof got !== "string") return false;
   const expected = Buffer.from(secret, "utf8");
@@ -42,7 +42,7 @@ function checkSecret(req: http.IncomingMessage, secret: string): boolean {
   return timingSafeEqual(expected, actual);
 }
 
-/** 内部：读 body */
+/** Internal: read request body */
 function readBody(req: http.IncomingMessage, max = 4 * 1024 * 1024): Promise<string> {
   return new Promise((resolve, reject) => {
     let total = 0;
@@ -61,7 +61,7 @@ function readBody(req: http.IncomingMessage, max = 4 * 1024 * 1024): Promise<str
   });
 }
 
-/** 内部：构造响应 */
+/** Internal: send JSON response */
 function sendJson(res: http.ServerResponse, status: number, body: unknown): void {
   res.writeHead(status, { "content-type": "application/json; charset=utf-8" });
   res.end(JSON.stringify(body));
@@ -72,13 +72,13 @@ async function handleRequest(
   res: http.ServerResponse,
   secret: string,
 ): Promise<void> {
-  // 健康检查：免密钥
+  // Healthcheck: no secret required
   if (req.url === "/channels/healthz" && req.method === "GET") {
     sendJson(res, 200, { ok: true, channels: channelManager.listChannels() });
     return;
   }
 
-  // 入站路由：/channels/<id>/inbound
+  // Inbound route: /channels/<id>/inbound
   const m = /^\/channels\/([^/]+)\/inbound\/?$/.exec(req.url || "");
   if (m && req.method === "POST") {
     const channelId = decodeURIComponent(m[1]) as ChannelId;
@@ -111,7 +111,7 @@ async function handleRequest(
       sendJson(res, 200, { ok: true, ignored: true });
       return;
     }
-    // 同步给 adapter.onMessage handler；handler 是 dispatcher
+    // Pass synchronously to adapter.onMessage handler (dispatcher)
     const adapter = channelManager.getAdapter(channelId);
     if (!adapter || !adapter.onMessage) {
       sendJson(res, 503, { ok: false, error: "adapter not ready" });
@@ -119,7 +119,7 @@ async function handleRequest(
     }
     try {
       const outgoing = await adapter.onMessage(msg);
-      // 当前只回 ack；adapters 自己负责把 outgoing 真的发出去
+      // Return ack; adapter sends outgoing message
       sendJson(res, 200, { ok: true, replied: outgoing != null });
     } catch (err) {
       console.error(LOG, `Handler failed [${channelId}]:`, err);
@@ -139,10 +139,9 @@ export interface InboundServerHandle {
 let server: http.Server | null = null;
 let currentHandle: InboundServerHandle | null = null;
 
-/** 启动 inbound-server（idempotent：如果已起且端口一致，直接返回现有 handle） */
+/** Start inbound-server (idempotent: if already listening on same port, returns current handle) */
 export async function startInboundServer(): Promise<InboundServerHandle> {
   const settings = loadChannelsSettings();
-  // 共享密钥：首次启动若为空则生成 32 字节随机
   let secret = settings.sharedSecret;
   if (!secret) {
     const random = randomBytes(32).toString("hex");
@@ -154,10 +153,10 @@ export async function startInboundServer(): Promise<InboundServerHandle> {
     return currentHandle;
   }
 
-  // 启动策略：
-  // 1) 优先用 settings.inboundPort（如果非 0）
-  // 2) 被占 → fallback 到 0（OS 随机分）
-  // 3) 仍被占 → 最多重试 3 次（每次都换 server 实例）
+  // Startup strategy:
+  // 1) Prefer settings.inboundPort (if non-zero)
+  // 2) Fallback to 0 (OS random assigned port)
+  // 3) Retry up to 3 times
   const tryPorts: Array<number | "random"> = [];
   if (settings.inboundPort > 0) tryPorts.push(settings.inboundPort);
   tryPorts.push("random");
@@ -166,7 +165,6 @@ export async function startInboundServer(): Promise<InboundServerHandle> {
   let actualPort = 0;
   for (const target of tryPorts) {
     if (server) {
-      // 关闭上次失败遗留的实例
       try {
         await new Promise<void>((r) => server!.close(() => r()));
       } catch {
@@ -210,7 +208,7 @@ export async function startInboundServer(): Promise<InboundServerHandle> {
 
   const port = actualPort;
 
-  // 把真实端口写回 settings（如果原来是 0 或撞了端口）
+  // Persist actual port back to settings if changed
   if (settings.inboundPort !== port) {
     saveChannelsSettings({ inboundPort: port });
   }
@@ -224,7 +222,7 @@ export async function startInboundServer(): Promise<InboundServerHandle> {
             server = null;
             currentHandle = null;
             resolve();
-            });
+          });
         } else {
           resolve();
         }
@@ -234,14 +232,14 @@ export async function startInboundServer(): Promise<InboundServerHandle> {
   return currentHandle;
 }
 
-/** 关闭（app 退出时调） */
+/** Stop server on app quit */
 export async function stopInboundServer(): Promise<void> {
   if (currentHandle) {
     await currentHandle.close();
   }
 }
 
-/** 给 runtime 计算一个 HMAC（用作 X-Cyrene-Channel-Secret 的 payload 签名场景，备用） */
+/** Calculate an HMAC for payload signing */
 export function signPayload(payload: string, secret: string): string {
   return createHmac("sha256", secret).update(payload).digest("hex");
 }

@@ -3,7 +3,7 @@ import type { TurnUnderstanding } from "./contracts";
 const RELATIONS = new Set(["direct", "candidate_position", "previous", "focused", "comparison_item"]);
 const REWRITE_STATUSES = new Set(["unchanged", "rewritten", "insufficient_context"]);
 
-/** 旧值兼容映射：contextualized -> rewritten, ambiguous -> insufficient_context */
+/** Legacy value compatibility mapping: contextualized -> rewritten, ambiguous -> insufficient_context */
 function normalizeRewriteStatus(value: unknown): TurnUnderstanding["rewriteStatus"] {
   if (typeof value !== "string" || !value) throw new Error("rewriteStatus is invalid");
   if (value === "contextualized") return "rewritten";
@@ -30,7 +30,7 @@ function array(value: unknown, label: string, max: number): unknown[] {
 export function parseTurnUnderstanding(value: unknown): TurnUnderstanding {
   const root = object(value, "TurnUnderstanding");
 
-  // 先提取需要的 4 个字段，忽略多余的旧字段（dialogueAct / topicTransition / uncertainties）
+  // First extract 4 required fields, ignoring extra legacy fields (dialogueAct / topicTransition / uncertainties)
   const resolvedReferences = array(root.resolvedReferences, "resolvedReferences", 32).map((item, index) => {
     const ref = object(item, `resolvedReferences[${index}]`);
     if (!RELATIONS.has(ref.relation as string)) throw new Error(`resolvedReferences[${index}].relation is invalid`);

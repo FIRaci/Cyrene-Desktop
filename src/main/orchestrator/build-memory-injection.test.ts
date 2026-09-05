@@ -43,18 +43,18 @@ describe("buildMemoryInjection", () => {
   it("records injected user memory l2 ids from RAG metadata", async () => {
     ragMock.searchMemoryEntries.mockResolvedValue([{
       id: "rag_run",
-      text: "用户喜欢跑步",
+      text: "User likes running",
       createdAt: Date.now(),
       score: 0.8,
       metadata: { l2Id: "l2_run" },
     }])
     const { buildMemoryInjection } = await import("./index")
 
-    const context = await buildMemoryInjection("跑步")
+    const context = await buildMemoryInjection("running")
 
-    expect(context).toContain("用户喜欢跑步")
+    expect(context).toContain("User likes running")
     expect(wasRecentlyInjectedMemory("l2_run")).toBe(true)
-    expect(ragMock.searchMemoryEntries).toHaveBeenCalledWith("跑步", "user_memory", 5)
+    expect(ragMock.searchMemoryEntries).toHaveBeenCalledWith("running", "user_memory", 5)
   })
 })
 
@@ -77,10 +77,10 @@ describe("buildAlwaysOnContext", () => {
     const { buildAlwaysOnContext } = await import("./index")
 
     await buildAlwaysOnContext(
-      "请总结这个文档\n\n【文档内容】\n文档里写着 迷迷 和 PHILIA093。",
+      "Please summarize this document\n\n[Document content]\nThe document says Mimi and PHILIA093.",
       [],
     )
 
-    expect(ragMock.updateWorldbookActivation).toHaveBeenCalledWith("请总结这个文档", "")
+    expect(ragMock.updateWorldbookActivation).toHaveBeenCalledWith("Please summarize this document", "")
   })
 })

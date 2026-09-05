@@ -1,37 +1,37 @@
-// two-phase-fc-loop —— 两阶段 FC 循环的核心状态机。
+// two-phase-fc-loop -- Core state machine for two-phase FC loop.
 //
-// 第一期（system 分阶段）：
-//   TOOL_PHASE（每轮）
+// Phase 1 (phased system prompts):
+//   TOOL_PHASE (each round)
 //     1. req.messages = [{ role: "system", content: toolSystemContent }, ...conversation]
 //     2. req.tools = tools
-//     3. 发送 → 解析
-//     4. 若 chat.toolCalls.length > 0：
-//        - conversation.push(chat.assistantMessage) （带 tool_calls 的 assistant 必须保留）
-//        - 遍历执行工具 → appendToolResults
-//        - 继续 TOOL_PHASE
-//     5. 否则（无 tool_calls）：
-//        - 工具阶段自由文本 **不写入 conversation**，不发给用户
-//        - 切 SOUL_PHASE
+//     3. Send -> parse
+//     4. If chat.toolCalls.length > 0:
+//        - conversation.push(chat.assistantMessage) (retaining tool_calls)
+//        - Iterate tool execution -> appendToolResults
+//        - Continue TOOL_PHASE
+//     5. Otherwise (no tool_calls):
+//        - Free text from tool phase is NOT written to conversation
+//        - Switch to SOUL_PHASE
 //
-//   边界：
-//     - 达到 maxToolRounds → SOUL_PHASE（强制总结）
-//     - 连续 maxConsecutiveTimeouts 次超时 → SOUL_PHASE（异常兜底）
-//     - 工具执行异常且无法继续 → SOUL_PHASE
+//   Boundaries:
+//     - Reaching maxToolRounds -> SOUL_PHASE (forced summary)
+//     - Consecutive timeouts -> SOUL_PHASE (fallback)
+//     - Tool execution error -> SOUL_PHASE
 //
 //   SOUL_PHASE
-//     1. 构造 soulMessages：[{ role: "system", content: soulSystemBaseContent + 动态 soulToolResultsSummary }, ...conversation]
-//        - role:tool 保留协议消息；另注入结构化 ToolExecutionContext 供 Soul 核对本轮事实
-//        - conversation 不含工具阶段自由文本
+//     1. Construct soulMessages: [{ role: "system", content: soulSystemBaseContent + dynamic soulToolResultsSummary }, ...conversation]
+//        - role:tool retains protocol messages; inject ToolExecutionContext for fact verification
+//        - conversation does not contain tool phase free text
 //     2. req.messages = soulMessages
-//     3. req.tools 不携带（避免再次进入工具决策）
-//     4. 发送 → 解析 → emit TEXT_MESSAGE 流
-//     5. 返回结果
+//     3. req.tools omitted (prevents re-entering tool decision)
+//     4. Send -> parse -> emit TEXT_MESSAGE stream
+//     5. Return result
 //
-// 约束：
-//   - 这是第一期唯一的 FC 状态机实现。
-//   - CyreneAgent / Scheduler / Legacy 都应调用它（第一期先迁移 CyreneAgent，其他后续）。
-//   - 不再持有 fcMessages 注入 system，原始 messages 由调用方传进来（不含 system）。
-//   - 不输出任何 AG-UI 事件，只输出 TwoPhaseEvent（中性事件），由 CyreneAgent 包装成 AG-UI。
+// Constraints:
+//   - Canonical FC state machine implementation.
+//   - Called by CyreneAgent / Scheduler / Legacy.
+//   - Raw messages passed by caller without system message.
+//   - Outputs TwoPhaseEvent (neutral events), wrapped into AG-UI by CyreneAgent.
 
 import { recordUsage } from "../token-usage-store";
 import { stripLeakedChatTimeContext } from "../chat-time-context";
@@ -60,7 +60,7 @@ export interface AgentLoopSettings {
   reasoning?: import("../../shared/reasoning").ReasoningPreference;
 }
 
-/** FC 循环中性事件。CyreneAgent 把它包成 AG-UI BaseEvent。 */
+/** Neutral FC loop events wrapped into AG-UI BaseEvent by CyreneAgent. */
 export type TwoPhaseEvent =
   | { type: "step_started"; stepName: string }
   | { type: "step_finished"; stepName: string }
@@ -77,15 +77,15 @@ export type SoulPhaseReason = "no_tool" | "max_rounds" | "timeout" | "tool_error
 export interface TwoPhaseFcOptions {
   settings: AgentLoopSettings;
   adapter: ChatVendorAdapter;
-  /** 原始消息（不含 system）。FC 循环按阶段动态注入 system。 */
+  /** Raw messages (without system). FC loop injects system dynamically. */
   messages: ChatMessage[];
-  /** 工具列表（含未启用时调度层负责过滤；这里传已过滤的）。 */
+  /** Tool list (pre-filtered). */
   tools: ToolDefinition[];
-  /** 工具阶段使用的 system prompt（仅含工具调度规则 + 自动生成的工具目录）。 */
+  /** Tool phase system prompt. */
   toolSystemContent: string;
-  /** Soul 阶段使用的基础 system prompt（人设 + 环境/记忆/关系/附件）。 */
+  /** Soul phase base system prompt. */
   soulSystemBaseContent: string;
-  /** 只应用到 Soul 阶段最终自然语言回复。 */
+  /** Only applied to final Soul natural language reply. */
   soulSampling?: ApprovedStyleSampling;
   timeoutMs: number;
   maxToolRounds?: number;
@@ -93,16 +93,16 @@ export interface TwoPhaseFcOptions {
   maxConsecutiveTimeouts?: number;
   forceSummaryTimeoutMs?: number;
   imageCaptionFallback?: () => Promise<ChatMessage[]>;
-  /** 工具执行器（封装权限检查 + execute + 异常转 output 字符串）。
-   *  由调用方（CyreneAgent）注入。 */
+  /** Tool executor (wraps permission check + execute + error handling).
+   *  Injected by caller (CyreneAgent). */
   executeTool: (tc: ToolCall, runnableToolIds: Set<string>) => Promise<string | ToolExecutionOutcome>;
-  /** 可选：构建额外的业务摘要；权威执行事实始终由 ToolExecutionContext 注入。 */
+  /** Optional: construct extra summary. */
   buildSoulToolResultsSummary?: (results: ToolCallResult[]) => string;
-  /** 事件回调。 */
+  /** Event callback. */
   onEvent?: (event: TwoPhaseEvent) => void;
-  /** 记录 token 用量的回调（默认走 recordUsage）。 */
+  /** Token usage callback (defaults to recordUsage). */
   recordUsage?: (input: number, output: number, calls: number) => void;
-  /** 用户取消信号。 */
+  /** User cancellation signal. */
   signal?: AbortSignal;
 }
 
@@ -205,11 +205,11 @@ const SOUL_NO_TOOL_DIRECTIVE = [
 ].join("\n");
 
 function stripTextualToolProtocol(text: string): string {
-  // MiniMax 内部协议使用 \uffff 作为分隔符；合法回复中不应出现
+  // MiniMax internal protocol uses \uffff as delimiter; not present in valid replies
   const uffffIndex = text.indexOf("\uffff");
   if (uffffIndex >= 0) text = text.slice(0, uffffIndex);
-  // 中文标签协议块：[系统提示]/[工具调用]/[工具结果]
-  const labelIndex = text.search(/\[系统提示\]|\[工具调用\]|\[工具结果\]/);
+  // Protocol label blocks: [System Prompt] / [Tool Call] / [Tool Result]
+  const labelIndex = text.search(/(?:\[\u7cfb\u7edf\u63d0\u793a\]|\[\u5de5\u5177\u8c03\u7528\]|\[\u5de5\u5177\u7ed3\u679c\]|\[System Prompt\]|\[Tool Call\]|\[Tool Result\])/i);
   if (labelIndex >= 0) text = text.slice(0, labelIndex);
   return text
     .split("]<]minimax[>[").join("")
@@ -238,14 +238,14 @@ function buildToolSpecs(tools: ReadonlyArray<ToolDefinition>): Array<{ name: str
 }
 
 /**
- * 在 conversation 前注入 system message。
+ * Inject system message before conversation.
  */
 function withSystem(conv: ChatMessage[], systemContent: string): ChatMessage[] {
   return [{ role: "system", content: systemContent }, ...conv];
 }
 
 /**
- * 执行一轮 LLM 调用，返回解析后的 ChatResponse。处理 abort / 超时 / HTTP 错误。
+ * Execute one round LLM call, returning parsed ChatResponse. Handles abort/timeout/HTTP errors.
  */
 async function callOnce(
   adapter: ChatVendorAdapter,
@@ -272,7 +272,7 @@ async function callOnce(
 }
 
 /**
- * 把 ChatVendorAdapter + VendorConfig 包成可调用的 fetch helper。
+ * Wraps ChatVendorAdapter + VendorConfig into callable fetch helper.
  */
 async function callAdapter(
   adapter: ChatVendorAdapter,
@@ -304,7 +304,7 @@ async function callAdapter(
 }
 
 /**
- * 主入口：两阶段 FC 循环。
+ * Main entrypoint: two-phase FC loop.
  */
 export async function runTwoPhaseFcLoop(options: TwoPhaseFcOptions): Promise<TwoPhaseFcResult> {
   const {
@@ -331,10 +331,10 @@ export async function runTwoPhaseFcLoop(options: TwoPhaseFcOptions): Promise<Two
   const runnableToolIds = new Set(tools.filter((t) => t.enabled).map((t) => t.id));
   const allToolResults: ToolCallResult[] = [];
 
-  console.log(LOG_PREFIX, `可用工具: ${toolSpecs.map((t) => t.name).join(", ") || "(无)"}`);
-  console.log(LOG_PREFIX, "原始消息数:", messages.length, "最后一角色:", messages[messages.length - 1]?.role);
+  console.log(LOG_PREFIX, `Available tools: ${toolSpecs.map((t) => t.name).join(", ") || "(none)"}`);
+  console.log(LOG_PREFIX, "Raw messages count:", messages.length, "Last role:", messages[messages.length - 1]?.role);
 
-  // conversation 不含 system，FC 循环按阶段动态注入
+  // conversation does not include system; FC loop injects dynamically
   let conversation: ChatMessage[] = messages.map((m) => ({ ...m }));
   const startTime = Date.now();
   let accInput = 0;
@@ -345,23 +345,23 @@ export async function runTwoPhaseFcLoop(options: TwoPhaseFcOptions): Promise<Two
   const switchToImageCaptionFallback = async (reason: string): Promise<boolean> => {
     if (usedImageCaptionFallback || !imageCaptionFallback) return false;
     usedImageCaptionFallback = true;
-    console.warn(LOG_PREFIX, "图片直发失败，回退 caption 后重试:", reason);
+    console.warn(LOG_PREFIX, "Direct image send failed, falling back to caption retry:", reason);
     conversation = await imageCaptionFallback();
     return true;
   };
 
-  // ── TOOL_PHASE 主循环 ──
+  // -- TOOL_PHASE main loop --
   for (let round = 0; round < maxToolRounds; round++) {
     if (signal?.aborted) {
       throw new Error("run cancelled");
     }
     if (Date.now() - startTime > timeoutMs) {
-      console.warn(LOG_PREFIX, "Function Calling 超时，在第 " + (round + 1) + " 轮退出");
+      console.warn(LOG_PREFIX, "Function Calling timeout, exiting at round " + (round + 1));
       break;
     }
 
     onEvent?.({ type: "step_started", stepName: `tool-round-${round + 1}` });
-    console.log(LOG_PREFIX, "第 " + (round + 1) + " 轮 LLM 调用（TOOL_PHASE）...");
+    console.log(LOG_PREFIX, "Round " + (round + 1) + " LLM call (TOOL_PHASE)...");
 
     let req: ChatRequest = {
       model: options.settings.model,
@@ -377,10 +377,10 @@ export async function runTwoPhaseFcLoop(options: TwoPhaseFcOptions): Promise<Two
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") {
         consecutiveTimeouts++;
-        console.warn(LOG_PREFIX, "第 " + (round + 1) + " 轮 LLM 请求超时，连续第 " + consecutiveTimeouts + " 次");
+        console.warn(LOG_PREFIX, "Round " + (round + 1) + " LLM request timeout, consecutive count " + consecutiveTimeouts);
         onEvent?.({ type: "step_finished", stepName: `tool-round-${round + 1}` });
         if (consecutiveTimeouts >= maxConsecutiveTimeouts) {
-          console.warn(LOG_PREFIX, "连续 " + maxConsecutiveTimeouts + " 次超时，触发 SOUL_PHASE");
+          console.warn(LOG_PREFIX, "Consecutive timeouts reached " + maxConsecutiveTimeouts + ", triggering SOUL_PHASE");
           break;
         }
         continue;
@@ -401,17 +401,17 @@ export async function runTwoPhaseFcLoop(options: TwoPhaseFcOptions): Promise<Two
 
     console.log(
       LOG_PREFIX,
-      "第 " + (round + 1) + " 轮完成 finish=" + chat.finishReason +
-      " toolCalls=" + chat.toolCalls.length + " 耗时=" + (Date.now() - startTime) + "ms",
+      "Round " + (round + 1) + " complete finish=" + chat.finishReason +
+      " toolCalls=" + chat.toolCalls.length + " latency=" + (Date.now() - startTime) + "ms",
     );
 
-    // 请求成功，重置连续超时计数
+    // Reset consecutive timeout count on success
     consecutiveTimeouts = 0;
 
-    // 情况 1：模型要调工具 → 把 assistant 消息加入 conversation（带 tool_calls）
+    // Case 1: Model requested tool calls -> append assistant message with tool_calls
     if (chat.toolCalls.length > 0) {
       conversation.push(chat.assistantMessage);
-      console.log(LOG_PREFIX, "模型请求调用 " + chat.toolCalls.length + " 个工具:", chat.toolCalls.map((tc) => tc.name).join(", "));
+      console.log(LOG_PREFIX, "Model requested " + chat.toolCalls.length + " tools:", chat.toolCalls.map((tc) => tc.name).join(", "));
 
       const execResults: ToolExecutionResult[] = [];
       for (const tc of chat.toolCalls) {
@@ -428,10 +428,10 @@ export async function runTwoPhaseFcLoop(options: TwoPhaseFcOptions): Promise<Two
         try {
           args = JSON.parse(tc.arguments || "{}");
         } catch {
-          console.warn(LOG_PREFIX, "工具参数 JSON 解析失败:", tc.arguments?.slice(0, 100));
+          console.warn(LOG_PREFIX, "Tool argument JSON parse failed:", tc.arguments?.slice(0, 100));
         }
 
-        console.log(LOG_PREFIX, "执行工具:", tc.name, JSON.stringify(args).slice(0, 200));
+        console.log(LOG_PREFIX, "Execute tool:", tc.name, JSON.stringify(args).slice(0, 200));
 
         let outcome: ToolExecutionOutcome;
         try {
@@ -442,7 +442,7 @@ export async function runTwoPhaseFcLoop(options: TwoPhaseFcOptions): Promise<Two
         } catch (err) {
           const errMsg = err instanceof Error ? err.message : String(err);
           outcome = { output: errMsg, status: "failed", errorCode: "E_TOOL_EXECUTION_FAILED" };
-          console.error(LOG_PREFIX, "工具执行失败 [" + tc.name + "]:", errMsg);
+          console.error(LOG_PREFIX, "Tool execution failed [" + tc.name + "]:", errMsg);
         }
         const output = outcome.output;
         console.log(
@@ -452,7 +452,7 @@ export async function runTwoPhaseFcLoop(options: TwoPhaseFcOptions): Promise<Two
         const resultLog = tc.name.startsWith("music_")
           ? truncateToolResult(output).slice(0, 500)
           : `length=${output.length}`;
-        console.log(LOG_PREFIX, "工具结果:", tc.name, resultLog);
+        console.log(LOG_PREFIX, "Tool result:", tc.name, resultLog);
 
         allToolResults.push({
           toolId: tc.name,
@@ -479,8 +479,8 @@ export async function runTwoPhaseFcLoop(options: TwoPhaseFcOptions): Promise<Two
       continue;
     }
 
-    // 情况 2：模型没有调工具 → 切 SOUL_PHASE
-    // 关键：工具阶段的 chat.text **不写入 conversation**，不发给用户。
+    // Case 2: Model did not call tools -> switch to SOUL_PHASE
+    // Key: chat.text from tool phase is NOT written to conversation
     onEvent?.({ type: "step_finished", stepName: `tool-round-${round + 1}` });
     return await runSoulPhase({
       adapter,
@@ -501,11 +501,11 @@ export async function runTwoPhaseFcLoop(options: TwoPhaseFcOptions): Promise<Two
     });
   }
 
-  // 达到 maxToolRounds，触发 SOUL_PHASE 强制总结
+  // Reached maxToolRounds, trigger SOUL_PHASE forced summary
   if (signal?.aborted) {
     throw new Error("run cancelled");
   }
-  console.warn(LOG_PREFIX, "达到最大轮数 " + maxToolRounds + "，触发 SOUL_PHASE 强制总结");
+  console.warn(LOG_PREFIX, "Reached max rounds " + maxToolRounds + ", triggering SOUL_PHASE forced summary");
   return await runSoulPhase({
     adapter,
     cfg: options.settings,
@@ -526,7 +526,7 @@ export async function runTwoPhaseFcLoop(options: TwoPhaseFcOptions): Promise<Two
 }
 
 /**
- * SOUL_PHASE：构造最终 soul 请求，发出 text message，返回结果。
+ * SOUL_PHASE: construct final soul request, emit text message, return result.
  */
 async function runSoulPhase(args: {
   adapter: ChatVendorAdapter;
@@ -564,16 +564,16 @@ async function runSoulPhase(args: {
   } = args;
 
   onEvent?.({ type: "step_started", stepName: `soul-phase-${reason}` });
-  console.log(LOG_PREFIX, "进入 SOUL_PHASE, reason=" + reason);
+  console.log(LOG_PREFIX, "Entering SOUL_PHASE, reason=" + reason);
 
-  // Soul 接收清洗后的投影上下文，不再接收原始 [TOOL_EXECUTION_CONTEXT]。
+  // Soul receives projected context
   const soulResultsSummary = buildSoulToolResultsSummary(allToolResults);
   const soulExecutionContext = formatSoulExecutionContext(buildSoulExecutionContext(allToolResults, tools));
   const finalSystemContent = [soulSystemBaseContent, soulResultsSummary, SOUL_NO_TOOL_DIRECTIVE, soulExecutionContext]
     .filter(Boolean)
     .join("\n\n");
 
-  // Soul 请求**不带 tools** 字段
+  // Soul request omits tools field
   let req: ChatRequest = {
     model: cfg.model,
     messages: withSystem(conversation, finalSystemContent),
@@ -623,11 +623,11 @@ async function runSoulPhase(args: {
       soulPhaseReason: reason,
     };
   } catch (err) {
-    // 兜底再失败也别让整个 run 崩掉。用已收集的工具结果拼一个"任务中断"文案降级返回。
+    // Fallback on total failure: return task interruption message
     const errReason = err instanceof Error && err.name === "AbortError"
       ? "The final response request timed out"
       : (err instanceof Error ? err.message : String(err));
-    console.error(LOG_PREFIX, "SOUL_PHASE 也失败，降级返回已有结果:", errReason);
+    console.error(LOG_PREFIX, "SOUL_PHASE failed, returning existing results:", errReason);
     const fallback = buildFallbackReply(allToolResults, errReason);
     const textMessageId = `msg-${Date.now()}`;
     emitTextMessage(onEvent, textMessageId, fallback);

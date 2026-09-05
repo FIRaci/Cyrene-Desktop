@@ -264,10 +264,10 @@ function prepareFile(filePath: string): WorkerPrepareFileResult {
   } catch (error) {
     return { kind: "unsupported", name, reason: error instanceof Error ? error.message : String(error) };
   }
-  if (!stat.isFile()) return { kind: "unsupported", name, reason: "不是文件" };
+  if (!stat.isFile()) return { kind: "unsupported", name, reason: "Not a regular file" };
 
   const ext = path.extname(filePath).toLowerCase();
-  if (isUnsupportedExt(ext)) return { kind: "unsupported", name, reason: `暂不支持的文件格式 ${ext}（MVP-0 仅支持文本）` };
+  if (isUnsupportedExt(ext)) return { kind: "unsupported", name, reason: `Unsupported file format ${ext} (only text is supported)` };
 
   let buffer: Buffer;
   try {
@@ -275,7 +275,7 @@ function prepareFile(filePath: string): WorkerPrepareFileResult {
   } catch (error) {
     return { kind: "unsupported", name, reason: error instanceof Error ? error.message : String(error) };
   }
-  if (isBinary(buffer)) return { kind: "unsupported", name, reason: "二进制文件，暂不支持" };
+  if (isBinary(buffer)) return { kind: "unsupported", name, reason: "Binary file, not currently supported" };
   const text = buffer.toString("utf-8");
   if (!text.trim()) return { kind: "empty", name };
   if (text.length <= SMALL_THRESHOLD) return { kind: "text", name, text };

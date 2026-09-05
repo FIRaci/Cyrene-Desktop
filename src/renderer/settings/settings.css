@@ -1,4 +1,4 @@
-/* 柱状图/用量进度条共享样式（与 tasks 窗口共用） */
+/* Bar chart/UsageProgress bar（ tasks ） */
 @import "../ui/chart.css";
 
 html,
@@ -332,9 +332,40 @@ body {
   transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
 }
 
-.field select option {
-  color: var(--rb-text-on-pink);
-  background: var(--rb-bg-elevated);
+select,
+.field select {
+  padding: 10px 32px 10px 12px;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23f472b6' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 10px 10px;
+  color-scheme: dark;
+}
+
+select:hover,
+.field select:hover {
+  background-color: rgba(255, 255, 255, 0.10);
+  border-color: rgba(255, 182, 220, 0.35);
+}
+
+select option,
+select optgroup,
+.field select option,
+.field select optgroup {
+  background-color: #241e42;
+  color: #fdf2f8;
+  padding: 8px 12px;
+}
+
+select option:checked,
+select option:hover,
+.field select option:checked,
+.field select option:hover {
+  background-color: #3b2d64;
+  color: #ffffff;
 }
 
 .field input::placeholder,
@@ -405,7 +436,7 @@ body {
   color: #fda4af;
 }
 
-/* TTS provider 底部操作行：复用 .save-btn 与 .save-status 主题样式，只补布局 */
+/* TTS provider Bottom： .save-btn .save-status ， */
 .tts-config-actions {
   display: flex;
   align-items: center;
@@ -435,7 +466,7 @@ body {
   cursor: not-allowed;
 }
 
-/* 次要按钮变体：用于"测试连接"等非主操作，避免和"保存"按钮抢视觉权重 */
+/* Button：""，""Button */
 .save-btn--ghost {
   background: transparent;
   color: rgba(255, 182, 220, 0.85);
@@ -448,7 +479,7 @@ body {
 }
 
 
-/* ── 模型参数 ── */
+/* ── ── */
 .api-section-divider {
   border: none;
   border-top: 1px solid rgba(255, 182, 220, 0.12);
@@ -563,10 +594,10 @@ body {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
-/* 偏好设置面板：每行右侧按钮组固定 3 列宽度且右边界对齐到同一条竖线。
-   - 覆盖默认 setting-row 的 space-between，改用 flex-start + margin-left: auto，避免按钮少的行被拉宽。
-   - .option-blocks 固定为 3 列 grid：所有行的按钮组宽度恒定，最后一个按钮右边界自然对齐。
-   - 利用 grid-column 让按钮从右往左落位：3 个按钮占第 1/2/3 列，2 个按钮占第 2/3 列（最左列留空）。 */
+/* Settings：RightButton 3 。
+ - setting-row space-between， flex-start + margin-left: auto，Button。
+ - .option-blocks 3 grid：Button，Button。
+ - grid-column Button：3 Button 1/2/3 ，2 Button 2/3 （）。 */
 #preferences-form .setting-row {
   justify-content: flex-start;
 }
@@ -586,10 +617,10 @@ body {
   gap: 8px;
 }
 
-/* 区分总子元素数：
-   - 3 个按钮：默认 auto-placement 占第 1/2/3 列（无需额外规则）。
-   - 2 个按钮：第一个锚定到第 2 列，第二个放到第 3 列，第 1 列留空。
-     用 :first-child:nth-last-child(2) 精确选中只有 2 个子元素时的第一个孩子。 */
+/* ：
+ - 3 Button： auto-placement 1/2/3 （）。
+ - 2 Button： 2 ， 3 ， 1 。
+ :first-child:nth-last-child(2) 2 。 */
 #preferences-form .setting-row .option-blocks > :first-child:nth-last-child(2) {
   grid-column-start: 2;
 }
@@ -626,7 +657,7 @@ body {
   accent-color: var(--rb-pink-500);
 }
 
-/* 截图热键输入框 */
+/* Input field */
 .hotkey-input {
   min-width: 0;
   width: auto;
@@ -1329,7 +1360,7 @@ body {
   box-shadow: 0 8px 18px rgba(236, 72, 153, 0.28);
 }
 
-/* �Զ��嵯���������� */
+/* �Զ������������ */
 .cy-modal-overlay {
   position: fixed;
   inset: 0;
@@ -1459,7 +1490,7 @@ body {
   box-shadow: 0 8px 18px rgba(236, 72, 153, 0.28);
 }
 
-/* 记忆面板 */
+/* */
 .memory-card {
   background: var(--rb-card-bg);
   border: 1px solid var(--rb-border-strong);
@@ -1674,7 +1705,7 @@ body {
   font-size: 11px;
 }
 
-/* 用户字段（默认城市等）：和 tts-field 复用粉紫主题输入框 */
+/* （）： tts-field Input field */
 .user-profile-fields {
   margin-top: 16px;
   display: grid;
@@ -1687,7 +1718,27 @@ body {
   line-height: 1.5;
 }
 
-/* 性别选择器：三档按钮组 */
+.weather-privacy-badge {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 11px;
+  margin: 4px 0 10px;
+  border-radius: 12px;
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(52, 211, 153, 0.28);
+  color: #a7f3d0;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.weather-privacy-badge__icon {
+  font-size: 13px;
+  flex-shrink: 0;
+  line-height: 1.3;
+}
+
+/* ：Button */
 .gender-select {
   display: flex;
   gap: 6px;
@@ -1721,7 +1772,7 @@ body {
   border-color: rgba(255, 182, 220, 0.24);
 }
 
-/* 白调主题：未选中态文字/边框加深，避免在白底上太淡 */
+/* Pearl white theme：/Border， */
 [data-ui-theme="pearl-white"] .gender-select__btn {
   color: var(--rb-text-muted);
   border-color: var(--rb-pink-200);
@@ -1739,7 +1790,7 @@ body {
 }
 
 
-/* 插件面板 */
+/* */
 .plugin-panel-heading {
   display: flex;
   align-items: center;
@@ -1803,7 +1854,7 @@ body {
   opacity: 0.5;
 }
 
-/* 常驻绿灯：内置工具不可关闭，显示绿色圆点 */
+/* ：， */
 .plugin-always-on {
   color: #4ade80;
   font-size: 14px;
@@ -1822,7 +1873,7 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.08);
   font-size: 22px;
 }
-/* 高德出行的箭头 SVG 视觉重心偏右，靠加大容器右 padding 让它视觉居中 */
+/* SVG ， padding */
 .plugin-card__icon--nudge-left {
   padding: 0 3px 0 0;
   justify-items: center;
@@ -1842,7 +1893,7 @@ body {
   font: var(--rb-text-small);
 }
 
-/* 插件卡片内可折叠的配置区（key 输入等） */
+/* （key ） */
 .plugin-config {
   display: none;
   margin-top: 12px;
@@ -1917,7 +1968,7 @@ body {
   background: var(--rb-text-on-pink);
 }
 
-/* 本地文件权限胶囊（分段选择器） */
+/* （） */
 .plugin-perm-capsule {
   display: inline-flex;
   flex-shrink: 0;
@@ -1948,7 +1999,7 @@ body {
   box-shadow: 0 0 14px rgba(236, 72, 153, 0.26);
 }
 
-/* 生活工具手风琴 */
+/* */
 .plugin-card--accordion {
   display: block;
 }
@@ -2014,7 +2065,7 @@ body {
   margin-top: 2px;
 }
 
-/* 视觉模型配置区 */
+/* */
 .vision-config-section {
   margin-top: 20px;
   padding-top: 16px;
@@ -2030,7 +2081,7 @@ body {
 .vision-config-heading h2 { margin: 0 0 4px; font-size: 16px; }
 .vision-config-heading p { margin: 0; font-size: 12px; opacity: 0.7; }
 
-/* 高级运行设置折叠标题 */
+/* SettingsTitle */
 .advanced-toggle {
   display: flex;
   gap: 12px;
@@ -2064,7 +2115,7 @@ body {
 }
 #advanced-fields-wrap[hidden] { display: none; }
 
-/* 多模态开关行 */
+/* */
 .vision-multimodal-row {
   display: flex;
   align-items: center;
@@ -2083,12 +2134,12 @@ body {
   margin: 8px 0 12px;
 }
 
-/* 多模态开关 ON 时隐藏视觉配置区 */
+/* ON */
 #vision-fields-wrap.is-hidden {
   display: none;
 }
 
-/* Base URL 重置按钮 */
+/* Base URL Button */
 .base-url-row {
   display: flex;
   gap: 8px;
@@ -2117,7 +2168,7 @@ body {
   color: var(--rb-text-on-pink);
 }
 
-/* 厂商卡片网格 + 官网链接 */
+/* + */
 .preset-row {
   margin-top: 6px;
 }
@@ -2192,7 +2243,7 @@ body {
   max-width: 100%;
 }
 
-/* 自定义端点：与官方厂商卡片共用主表单，但明确标注高级与非官方边界。 */
+/* ：，。 */
 .custom-endpoint-controls {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -2354,7 +2405,7 @@ body {
   padding: 0 2px 11px 18px;
 }
 
-/* 模型厂商 Work 流程适配 说明按钮 + 弹窗内容 */
+/* Work DescriptionButton + Modal */
 .work-flow-adapt-row {
   display: flex;
   justify-content: flex-start;
@@ -2398,7 +2449,7 @@ body {
   color: var(--rb-text-strong);
 }
 
-/* 弹窗内 markdown 渲染（设置窗未加载 markdown.css，按 modal 作用域补样式） */
+/* Modal markdown （Settings markdown.css， modal ） */
 .work-flow-adapt-table h2 {
   margin: 18px 0 10px;
   color: var(--rb-text-strong);
@@ -2448,7 +2499,7 @@ body {
   color: var(--rb-text-default);
 }
 
-/* 详细文档弹窗：完整 md 渲染（设置窗未加载 markdown.css，按 modal 作用域补全样式） */
+/* Modal： md （Settings markdown.css， modal ） */
 .work-flow-doc h1 {
   margin: 0 0 12px;
   color: var(--rb-text-strong);
@@ -2541,7 +2592,7 @@ body {
   line-height: 1.5;
 }
 
-/* fenced code block（fence renderer 会包一层 .code-block + 头部 + 复制按钮） */
+/* fenced code block（fence renderer .code-block + + Button） */
 .work-flow-doc .code-block {
   margin: 0 0 12px;
   border-radius: 10px;
@@ -2593,7 +2644,7 @@ body {
   line-height: 1.5;
 }
 
-/* 白调主题：代码块改为浅底深字，避免黑底在白模态上突兀 */
+/* Pearl white theme：Code block， */
 [data-ui-theme="pearl-white"] .work-flow-doc pre {
   background: var(--rb-pink-50);
   border-color: var(--rb-pink-200);
@@ -2629,7 +2680,7 @@ body {
   color: var(--rb-pink-700);
 }
 
-/* 白调主题 */
+/* Pearl white theme */
 [data-ui-theme="pearl-white"] .preset-card {
   color: var(--rb-text-muted);
   background: rgba(0, 0, 0, 0.02);
@@ -2688,12 +2739,13 @@ body {
   }
 }
 
-/* 白调主题下 Kimi logo 换用深色版本 */
-[data-ui-theme="pearl-white"] .preset-card[data-provider="Kimi（月之暗面）"] .preset-card__logo img {
+/* Kimi logo uses dark version in pearl-white theme */
+[data-ui-theme="pearl-white"] .preset-card[data-provider="Kimi"] .preset-card__logo img,
+[data-ui-theme="pearl-white"] .preset-card[data-provider="Kimi (Moonshot AI)"] .preset-card__logo img {
   content: url("/icons/providers/kimi-light.svg");
 }
 
-/* 昵称 + 前往官网按钮并排 */
+/* + Button */
 .nickname-row {
   display: flex;
   gap: 8px;
@@ -2729,13 +2781,13 @@ body {
 }
 
 /* ============================================================
-   💬 聊天面板：会话列表
-   - 顶部"+新对话"按钮（铺满宽度，带 hover/active 动效）
-   - 列表项三列：标题 / 时间+identity 标签 / 🗑️
-   - hover 整行高亮，🗑️ 默认半透明，hover 变红警告
-   - 空态：📭 + 一行提示文案
-   - 底部："打开存储位置"按钮 + 路径说明
-   ============================================================ */
+ 💬 Chat panel：Session list
+ - Top"+"Button（， hover/active ）
+ - ：Title / +identity / 🗑️
+ - hover Highlight，🗑️ Transparent，hover 
+ - ：📭 + 
+ - Bottom：""Button + Description
+ ============================================================ */
 
 .chat-sessions {
   display: flex;
@@ -2827,7 +2879,7 @@ body {
 	  color: var(--rb-text-strong);
 	}
 
-/* 左侧：标题 + meta 纵向堆叠，吃满剩余宽度 */
+/* Left：Title + meta ， */
 .chat-sessions__main {
   flex: 1 1 auto;
   min-width: 0;
@@ -2869,7 +2921,7 @@ body {
 }
 
 
-/* 右侧：操作按钮组（✏️ 🗑️ 常规态 / ✓ ✕ 编辑态） */
+/* Right：Button（✏️ 🗑️ / ✓ ✕ ） */
 .chat-sessions__actions {
   flex: 0 0 auto;
   display: flex;
@@ -2896,7 +2948,7 @@ body {
   justify-content: center;
 }
 
-/* 编辑态的 ✓/✕ 始终可见（不受 hover 限制） */
+/* ✓/✕ （ hover ） */
 .chat-sessions__confirm-rename,
 .chat-sessions__cancel-rename {
   opacity: 1;
@@ -2977,15 +3029,15 @@ body {
 }
 
 /* ============================================================
-   📊 Token 用量面板
-   柱状图用共享 chart.css；Hero/三小框/时间范围/波浪图/tooltip 在这里定义
-   ============================================================ */
+ 📊 Token Usage
+ Bar chart chart.css；Hero///Wave chart/tooltip 
+ ============================================================ */
 
 #token-panel .panel-body {
   max-width: 720px;
 }
 
-/* 时间范围切换按钮组 */
+/* Button */
 .token-range {
   display: flex;
   gap: 6px;
@@ -3016,12 +3068,12 @@ body {
   box-shadow: 0 0 12px rgba(236, 72, 153, 0.35);
 }
 
-/* 白调主题：选中态文字改为深色，避免白字看不清 */
+/* Pearl white theme：， */
 [data-ui-theme="pearl-white"] .token-range__btn.is-active {
   color: #1d1d1f;
 }
 
-/* Hero 区：总消耗(左大字) + 请求数(右上小字) */
+/* Hero ：() + () */
 .token-hero {
   display: flex;
   align-items: flex-start;
@@ -3076,7 +3128,7 @@ body {
   color: var(--rb-text-default);
 }
 
-/* 三小框：输入/输出/命中 */
+/* ：// */
 .token-stats {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -3110,7 +3162,7 @@ body {
   color: rgba(254, 247, 255, 0.92);
 }
 
-/* 小节标题 */
+/* Title */
 .token-section-title {
   font-size: 13px;
   font-weight: 600;
@@ -3122,7 +3174,7 @@ body {
   margin: 0 0 18px;
 }
 
-/* token 面板柱子：独立类名，不用共享 .chart-bar（避免 ::before 伪元素干扰） */
+/* token ：， .chart-bar（ ::before ） */
 .token-bar {
   position: relative;
   display: flex;
@@ -3170,7 +3222,7 @@ body {
   color: rgba(235, 229, 245, 0.52);
 }
 
-/* 波浪图容器 */
+/* Wave chart */
 .token-trend-wrap {
   position: relative;
   height: 200px;
@@ -3181,7 +3233,7 @@ body {
   border: 1px solid rgba(255, 182, 220, 0.12);
 }
 
-/* hover tooltip 浮层（柱状图和波浪图共用） */
+/* hover tooltip （Bar chartWave chart） */
 .token-tooltip {
   position: fixed;
   z-index: 9999;
@@ -3230,7 +3282,7 @@ body {
   line-height: 1.5;
 }
 
-/* 空态：无用量数据时 */
+/* ：Usage */
 .token-empty {
   display: flex;
   flex-direction: column;
@@ -3263,14 +3315,14 @@ body {
   margin: 0;
 }
 
-/* 图表区无数据时隐藏 */
+/* Chart */
 #token-charts.is-hidden {
   display: none;
 }
 
 /* ============================================================
-   🎙️ TTS 设置面板
-   ============================================================ */
+ 🎙️ TTS Settings
+ ============================================================ */
 
 .tts-section {
   margin-bottom: 24px;
@@ -3285,7 +3337,7 @@ body {
   border-bottom: 1px solid rgba(255, 182, 220, 0.12);
 }
 
-/* 标题里嵌品牌 logo（目前只用于 Mossland；MiniMax logo 走 .tts-clone-logo 在 h3 里） */
+/* Title logo（ Mossland；MiniMax logo .tts-clone-logo h3 ） */
 .tts-section__title--logo {
   display: inline-flex;
   align-items: center;
@@ -3294,12 +3346,12 @@ body {
 }
 .tts-mossland-logo {
   flex: 0 0 auto;
-  /* 宽度由 SVG 属性 width="55" height="20" 给出，按 1652×599 viewBox 等比缩放 */
+  /* SVG width="55" height="20" ， 1652×599 viewBox */
   display: inline-block;
-  /* currentColor 跟随 .tts-section__title 的 color，dark / pearl-white 双主题自适应 */
+  /* currentColor .tts-section__title color，dark / pearl-white Adaptive */
 }
 
-/* 引擎选择卡片 */
+/* */
 .tts-engines {
   display: flex;
   flex-wrap: wrap;
@@ -3332,11 +3384,11 @@ body {
   box-shadow: 0 0 14px rgba(236, 72, 153, 0.22);
 }
 
-/* 占位 / 敬请期待卡：data-mode="coming-soon"（不会被通用 click handler 选中） */
+/* / Coming soon：data-mode="coming-soon"（ click handler ） */
 .tts-engine.is-coming-soon {
   cursor: not-allowed;
   opacity: 0.55;
-  /* 阻止 hover 高亮，避免误导用户以为可点 */
+  /* hover Highlight， */
 }
 .tts-engine.is-coming-soon:hover {
   background: rgba(255, 255, 255, 0.04);
@@ -3378,7 +3430,7 @@ body {
   text-transform: uppercase;
 }
 
-/* 引擎配置表单 */
+/* */
 .tts-config {
   margin-bottom: 20px;
 }
@@ -3417,7 +3469,7 @@ body {
   background: rgba(255, 255, 255, 0.08);
 }
 
-/* 合成模型下拉：匹配 tts-field input 的粉紫主题 */
+/* ： tts-field input */
 .tts-field select {
   flex: 1;
   padding: 8px 12px;
@@ -3465,7 +3517,7 @@ body {
   line-height: 1.6;
 }
 
-/* 音色快速复刻区 */
+/* Voice */
 .tts-clone-section {
   margin-top: 24px;
   padding: 16px;
@@ -3481,7 +3533,7 @@ body {
   margin: 0 0 6px;
 }
 
-/* 标题行：标题 + 右侧"ⓘ 复刻须知"按钮 */
+/* Title：Title + Right"ⓘ "Button */
 .tts-clone-title-row {
   display: flex;
   align-items: center;
@@ -3505,8 +3557,8 @@ body {
   font-family: inherit;
 }
 
-/* MiniMax 品牌 logo：固定用官方渐变色，不跟随主题。
-   14px 略小于 emoji，与"音色快速复刻"标题文字基线对齐。 */
+/* MiniMax logo：，。
+ 14px emoji，"Voice"Title。 */
 .tts-clone-logo {
   flex: 0 0 auto;
   width: 18px;
@@ -3527,7 +3579,7 @@ body {
   line-height: 1.5;
 }
 
-/* 费用 / 过期警告行 */
+/* / */
 .tts-clone-warning {
   margin: 0 0 14px;
   padding: 10px 12px;
@@ -3559,7 +3611,7 @@ body {
   color: #ffe2d6;
 }
 
-/* 规格说明模态框内的分组 */
+/* SpecificationDescription */
 .tts-clone-spec-block {
   margin: 10px 0 14px;
 }
@@ -3602,7 +3654,7 @@ body {
   font-weight: 600;
 }
 
-/* 富文本说明模态框（规格说明用）。复用 cy-modal 样式但加宽 body 并允许纵向滚动。 */
+/* Description（SpecificationDescription）。 cy-modal body 。 */
 .cy-html-modal {
   width: min(560px, 92vw);
   max-height: 86vh;
@@ -3622,10 +3674,10 @@ body {
   margin: 0 0 6px;
 }
 
-/* ===== pearl-white 主题覆盖（默认主题沿用上方暗色配色） =====
-   注意：暗色默认主题的所有色都是针对深底设计的浅色字 / 半透明边框，
-   套到白底上全部消失。这里只为本次新增的元素覆盖，主题文件里已有的
-   .tts-clone-section / .tts-clone-title / .tts-clone-hint 等都已覆盖。 */
+/* ===== pearl-white （） =====
+ ： / TransparentBorder，
+ 。，
+ .tts-clone-section / .tts-clone-title / .tts-clone-hint 。 */
 [data-ui-theme="pearl-white"] .tts-clone-info-btn {
   color: var(--rb-pink-700);
   background: var(--rb-pink-50);
@@ -3638,8 +3690,8 @@ body {
 }
 
 [data-ui-theme="pearl-white"] .tts-clone-warning {
-  color: #8a4a14;                       /* 深棕：白底上读得清 */
-  background: #fff5e6;                  /* 实色浅橙底 */
+  color: #8a4a14;                       /* ： */
+  background: #fff5e6;                  /* */
   border-color: #f5d4a8;
 }
 [data-ui-theme="pearl-white"] .tts-clone-warning strong {
@@ -3653,8 +3705,8 @@ body {
   color: var(--rb-pink-700);
 }
 
-/* 模态框 body 与富文本元素：dark 默认下"rgb 浅紫 + 黑底 code"
-   在白底上不可读。复用主题文件里 .cy-modal 的覆盖规则，body 与代码块单独适配。 */
+/* body ：dark "rgb + code"
+ 。 .cy-modal ，body Code block。 */
 [data-ui-theme="pearl-white"] .cy-html-modal__body {
   color: var(--rb-text-default);
 }
@@ -3692,7 +3744,7 @@ body {
 .tts-clone-status.is-error { color: #f87171; }
 .tts-clone-status.is-loading { color: var(--rb-text-muted); }
 
-/* Mossland 已克隆音色列表（拉取 GET /v1/audio/voices 后渲染） */
+/* Mossland Voice（ GET /v1/audio/voices ） */
 .tts-mossland-voice-list {
   list-style: none;
   margin: 10px 0 0;
@@ -3742,7 +3794,7 @@ body {
   border-color: rgba(255, 182, 220, 0.55);
 }
 
-/* ── Skill 面板 ── */
+/* ── Skill ── */
 .skill-row {
   display: flex;
   align-items: center;
@@ -4013,7 +4065,7 @@ body {
   font-size: 13px;
 }
 
-/* ── 添加表情包弹窗 ── */
+/* ── ExpressionModal ── */
 .sticker-add-overlay {
   position: fixed;
   inset: 0;
@@ -4101,7 +4153,7 @@ body {
   margin-top: 14px;
 }
 
-/* ===== channels-panel (连接手机) ===== */
+/* ===== channels-panel () ===== */
 .channels-card {
   margin-top: 18px;
   padding: 16px 18px;
@@ -4234,7 +4286,7 @@ body {
 .channels-feedback--err { color: rgba(248, 113, 113, 0.92); }
 .channels-feedback--info { color: rgba(250, 204, 21, 0.92); }
 
-/* 微信扫码登录 QR 弹窗（modal overlay） */
+/* QR Modal（modal overlay） */
 .channels-qr-modal {
   position: fixed;
   inset: 0;
@@ -4242,7 +4294,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  /* 隐藏时彻底消失 */
+  /* */
   &[hidden] { display: none; }
 }
 .channels-qr-modal__backdrop {
@@ -4274,7 +4326,7 @@ body {
   height: 220px;
   display: block;
   background: #f5f5f5;
-  /* JS 根据是否有 src 显隐，避免没拿到 dataURL 时显示裂图占位 */
+  /* JS src ， dataURL */
 }
 .channels-qr-modal__img.is-empty {
   display: none;
@@ -4333,7 +4385,7 @@ body {
   word-break: break-word;
 }
 
-/* 渠道工具权限 radio 组 */
+/* radio */
 .tool-permission-group {
   display: flex;
   flex-direction: column;

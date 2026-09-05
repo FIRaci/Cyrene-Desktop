@@ -22,6 +22,9 @@ export const IPC = {
   PET_VISIBILITY_CHANGED: "pet:visibility-changed",
   PET_AGENT_EVENT: "pet:agent-event",
   PET_SHOW_CONTEXT_MENU: "pet:show-context-menu",
+  PET_TOGGLE_MINI_CHAT: "pet:toggle-mini-chat",
+  PET_TOGGLE_VOICE: "pet:toggle-voice",
+  PET_SPEAK: "pet:speak",
   APP_QUIT: "app:quit",
 
   // log window (response & activity log)
@@ -29,6 +32,9 @@ export const IPC = {
   LOG_ENTRY: "log:entry",
   LOG_CLOSE: "log:close",
   LOG_MINIMIZE: "log:minimize",
+  LOG_CLEAR: "log:clear",
+  LOG_PUSH_ENTRY: "log:push-entry",
+  LOG_CLEARED: "log:cleared",
 
   // chat window
   CHAT_MINIMIZE: "chat:minimize",
@@ -41,11 +47,11 @@ export const IPC = {
   CHAT_CANCEL_DOCUMENT_INDEX: "chat:cancel-document-index",
   CHAT_CAPTION_IMAGE: "chat:caption-image",
   CHAT_GET_IMAGE_SEND_STRATEGY: "chat:get-image-send-strategy",
-  // 推理下拉（chat 窗口：原子读 + providerKey 写）
+  // Reasoning dropdown (chat window: atomic read + providerKey write)
   CHAT_GET_REASONING_STATE: "chat:get-reasoning-state",
   CHAT_SET_REASONING: "chat:set-reasoning",
 
-  // AG-UI 事件流
+  // AG-UI event stream
   AGUI_RUN: "agui:run",
   AGUI_EVENT: "agui:event",
   AGUI_CANCEL: "agui:cancel",
@@ -66,7 +72,7 @@ export const IPC = {
   // settings window
   SETTINGS_MINIMIZE: "settings:minimize",
   SETTINGS_CLOSE: "settings:close",
-  // main → settings 窗口：要求切到指定标签（已打开时用）
+  // main -> settings window: Request switch to specified tab (when already open)
   SETTINGS_SWITCH_SECTION: "settings:switch-section",
   SETTINGS_GET_CONFIG: "settings:get-config",
   SETTINGS_SAVE_CONFIG: "settings:save-config",
@@ -88,7 +94,7 @@ export const IPC = {
   SETTINGS_SET_PET_ALWAYS_ON_TOP: "settings:set-pet-always-on-top",
   SETTINGS_SET_PET_VISIBLE: "settings:set-pet-visible",
   SETTINGS_SET_PET_ZOOM: "settings:set-pet-zoom",
-  // main → pet window：推送当前 zoom 因子，渲染进程据此重算 scale
+  // main -> pet window: Push current zoom factor, renderer recalculates scale accordingly
   PET_ZOOM: "pet:zoom",
   SETTINGS_PREVIEW_RUNTIME_SYNC: "settings:preview-runtime-sync",
   SETTINGS_OPEN_STICKER_MANAGER: "settings:open-sticker-manager",
@@ -106,17 +112,17 @@ export const IPC = {
   CHATS_DELETE: "chats:delete",
   CHATS_OPEN_FOLDER: "chats:open-folder",
   CHATS_MIGRATE_LEGACY: "chats:migrate-legacy",
-  // 任意会话变动后 main → 所有渲染窗口 broadcast，触发列表/标题刷新
+  // Broadcast from main to all renderer windows after any session change, triggering list/title refresh
   CHATS_CHANGED: "chats:changed",
-  // 设置中心 → main：要求打开聊天窗口并加载指定 sessionId
+  // Settings center -> main: Request opening chat window and loading specified sessionId
   CHATS_OPEN_IN_CHAT_WINDOW: "chats:open-in-chat-window",
-  // main → 聊天窗口：要求切到指定 sessionId（窗口已存在时用）
+  // main -> chat window: Request switch to specified sessionId (when window exists)
   CHATS_SWITCH_SESSION: "chats:switch-session",
-  // 聊天窗口 → main：声明当前活跃 sessionId（用于设置面板"删除当前会话"时差异化提示）
+  // Chat window -> main: Declare current active sessionId (for differentiated prompt when deleting in settings)
   CHATS_SET_ACTIVE_SESSION: "chats:set-active-session",
-  // renderer → main: 查询当前活跃 sessionId（设置面板初次打开时用）
+  // renderer -> main: Query current active sessionId (used when settings panel first opens)
   CHATS_GET_ACTIVE_SESSION: "chats:get-active-session",
-  // main → 所有窗口：活跃 sessionId 变化时广播
+  // main -> all windows: Broadcast when active sessionId changes
   CHATS_ACTIVE_SESSION_CHANGED: "chats:active-session-changed",
 
 // sticker manager window
@@ -141,7 +147,7 @@ export const IPC = {
   LIVE2D_SPEECH_PREPARE: "live2d:speech-prepare",
   LIVE2D_MOUTH_START: "live2d:mouth-start",
   LIVE2D_MOUTH_STOP: "live2d:mouth-stop",
-  LIVE2D_PLAY_ACTION: "live2d:play-action",        // 主进程 → 桌宠窗口：执行动作（motion 或 expression）
+  LIVE2D_PLAY_ACTION: "live2d:play-action",        // Main process -> pet window: Execute action (motion or expression)
   LIVE2D_GET_MAIN_DIAGNOSTICS: "live2d:get-main-diagnostics",
   // embedding model status
   EMBEDDING_GET_STATUS: "embedding:get-status",
@@ -190,9 +196,9 @@ export const IPC = {
   SCHEDULER_FIRE_NOW: "scheduler:fire-now",
   SCHEDULER_GET_HISTORY: "scheduler:get-history",
   SCHEDULER_GET_TOOLS: "scheduler:get-tools",
-  SCHEDULER_CHANGED: "scheduler:changed",  // main → renderer：任务列表变更通知
+  SCHEDULER_CHANGED: "scheduler:changed",  // main -> renderer: Task list change notification
 
-  // game-bot（游戏代肝）
+  // game-bot (Game Automation)
   GAME_BOT_GET_CONFIG: "game-bot:get-config",
   GAME_BOT_SAVE_CONFIG: "game-bot:save-config",
   GAME_BOT_LIST_RECIPES: "game-bot:list-recipes",
@@ -205,57 +211,59 @@ export const IPC = {
   // token usage statistics
   TOKEN_USAGE_GET: "token-usage:get",
 
-  // TTS 语音合成
-  TTS_UPLOAD: "tts:upload",          // 上传音频文件 → file_id
-  TTS_CLONE: "tts:clone",           // 音色快速复刻 → voice_id
-  TTS_SYNTHESIZE: "tts:synthesize", // 语音合成 → audio buffer(base64)
-  TTS_SYNTHESIZE_CACHED: "tts:synthesize-cached", // 语音合成 + 本地音频缓存
-  // 流式语音合成（边合成边播，首字延迟低）
-  TTS_STREAM_START: "tts:stream-start",           // 渲染端 → main：启动流式合成
-  TTS_AUDIO_CHUNK: "tts:audio-chunk",             // main → 渲染端：推一段音频 base64
-  TTS_STREAM_END: "tts:stream-end",               // main → 渲染端：流式结束（含 cacheKey）
-  TTS_STREAM_ERROR: "tts:stream-error",           // main → 渲染端：流式错误
-  TTS_SAVE_SETTINGS: "tts:save-settings",   // 保存 TTS 配置
-  TTS_LOAD_SETTINGS: "tts:load-settings",   // 加载 TTS 配置
-  TTS_PICK_AUDIO: "tts:pick-audio",         // 选择音频文件（dialog）
-  TTS_SYNTHESIZE_GPTSOVITS: "tts:synthesize-gptsovits",             // GPT-SoVITS 合成 → base64
-  TTS_SYNTHESIZE_CACHED_GPTSOVITS: "tts:synthesize-cached-gptsovits", // GPT-SoVITS 合成 + 本地缓存
-  TTS_SYNTHESIZE_CUSTOM_CLOUD: "tts:synthesize-custom-cloud",             // 自定义云端 TTS 合成 → base64
-  TTS_SYNTHESIZE_CACHED_CUSTOM_CLOUD: "tts:synthesize-cached-custom-cloud", // 自定义云端 TTS 合成 + 本地缓存
-  TTS_SYNTHESIZE_MIMO: "tts:synthesize-mimo",             // 小米 MiMo TTS 合成 → base64
-  TTS_SYNTHESIZE_CACHED_MIMO: "tts:synthesize-cached-mimo", // 小米 MiMo TTS 合成 + 本地缓存
-  TTS_SYNTHESIZE_MOSSLAND: "tts:synthesize-mossland",       // Mossland (api.mosi.cn) 合成 → base64
-  TTS_SYNTHESIZE_CACHED_MOSSLAND: "tts:synthesize-cached-mossland", // Mossland 合成 + 本地缓存
-  TTS_CLONE_MOSSLAND: "tts:clone-mossland",           // Mossland 克隆音色（multipart 上传）
-  TTS_LIST_MOSSLAND_VOICES: "tts:list-mossland-voices", // Mossland 拉取账号下音色列表
+  // TTS speech synthesis
+  TTS_UPLOAD: "tts:upload",          // Upload audio file -> file_id
+  TTS_CLONE: "tts:clone",           // Quick voice clone -> voice_id
+  TTS_SYNTHESIZE: "tts:synthesize", // Speech synthesis -> audio buffer (base64)
+  TTS_SYNTHESIZE_CACHED: "tts:synthesize-cached", // Speech synthesis + local audio cache
+  // Streaming speech synthesis (play while synthesizing, low first-byte latency)
+  TTS_STREAM_START: "tts:stream-start",           // Renderer -> main: Start streaming synthesis
+  TTS_AUDIO_CHUNK: "tts:audio-chunk",             // main -> renderer: Push an audio chunk in base64
+  TTS_STREAM_END: "tts:stream-end",               // main -> renderer: Stream ended (includes cacheKey)
+  TTS_STREAM_ERROR: "tts:stream-error",           // main -> renderer: Streaming error
+  TTS_SAVE_SETTINGS: "tts:save-settings",   // Save TTS config
+  TTS_LOAD_SETTINGS: "tts:load-settings",   // Load TTS config
+  TTS_PICK_AUDIO: "tts:pick-audio",         // Pick audio file (dialog)
+  TTS_SYNTHESIZE_GPTSOVITS: "tts:synthesize-gptsovits",             // GPT-SoVITS synthesis -> base64
+  TTS_SYNTHESIZE_CACHED_GPTSOVITS: "tts:synthesize-cached-gptsovits", // GPT-SoVITS synthesis + local cache
+  TTS_SYNTHESIZE_CUSTOM_CLOUD: "tts:synthesize-custom-cloud",             // Custom cloud TTS synthesis -> base64
+  TTS_SYNTHESIZE_CACHED_CUSTOM_CLOUD: "tts:synthesize-cached-custom-cloud", // Custom cloud TTS synthesis + local cache
+  TTS_SYNTHESIZE_MIMO: "tts:synthesize-mimo",             // Xiaomi MiMo TTS synthesis -> base64
+  TTS_SYNTHESIZE_CACHED_MIMO: "tts:synthesize-cached-mimo", // Xiaomi MiMo TTS synthesis + local cache
+  TTS_SYNTHESIZE_MOSSLAND: "tts:synthesize-mossland",       // Mossland (api.mosi.cn) synthesis -> base64
+  TTS_SYNTHESIZE_CACHED_MOSSLAND: "tts:synthesize-cached-mossland", // Mossland synthesis + local cache
+  TTS_CLONE_MOSSLAND: "tts:clone-mossland",           // Mossland voice clone (multipart upload)
+  TTS_LIST_MOSSLAND_VOICES: "tts:list-mossland-voices", // Mossland list voices under account
+  TTS_SYNTHESIZE_ONLINE: "tts:synthesize-online",       // Online Chinese/Multi-language TTS synthesis -> base64
+  TTS_TRANSLATE_TO_CHINESE: "tts:translate-to-chinese", // Translate text to Chinese for voice output
 
   // agent permission level (file/shell access)
   PERMISSION_GET_LEVEL: "permission:get-level",
   PERMISSION_SET_LEVEL: "permission:set-level",
-  // main → renderer：要求审批
+  // main -> renderer: Request approval
   PERMISSION_APPROVAL_REQUEST: "permission:approval-request",
-  // renderer → main：审批结果回传
+  // renderer -> main: Return approval result
   PERMISSION_APPROVAL_RESOLVE: "permission:approval-resolve",
 
   // user choice card (ambiguity resolver)
-  // 卡片展示走 AGUI_EVENT 的 CUSTOM 事件（与天气卡片同通道）
-  // renderer → main：回传用户选择
+  // Card display uses AGUI_EVENT CUSTOM event (shared channel with weather card)
+  // renderer -> main: Return user choice
   CHOICE_RESOLVE: "choice:resolve",
 
   // call window (voice call)
-  CALL_OPEN: "call:open",                 // sidebar → main：打开通话窗口
-  CALL_START: "call:start",               // renderer → main：开始通话（初始化 ASR）
-  CALL_AUDIO_FRAME: "call:audio-frame",    // renderer → main：PCM 音频帧
+  CALL_OPEN: "call:open",                 // sidebar -> main: Open call window
+  CALL_START: "call:start",               // renderer -> main: Start call (initialize ASR)
+  CALL_AUDIO_FRAME: "call:audio-frame",    // renderer -> main: PCM audio frame
   CALL_ASR_RESULT: "call:asr-result",
-  CALL_SUBMIT_TEXT: "call:submit-text",     // main → renderer：ASR 识别结果
-  CALL_TURN_END: "call:turn-end",         // renderer → main：VAD 静默，结束本轮
-  CALL_TTS_AUDIO: "call:tts-audio",       // main → renderer：TTS 音频
-  CALL_TTS_DONE: "call:tts-done",         // renderer → main：TTS 播放完毕
-  CALL_STATE: "call:state",               // main → renderer：状态变更
-  CALL_ERROR: "call:error",               // main → renderer：错误
-  CALL_STOP: "call:stop",                 // renderer → main：挂断
+  CALL_SUBMIT_TEXT: "call:submit-text",     // main -> renderer: ASR recognition result
+  CALL_TURN_END: "call:turn-end",         // renderer -> main: VAD silence, end current turn
+  CALL_TTS_AUDIO: "call:tts-audio",       // main -> renderer: TTS audio
+  CALL_TTS_DONE: "call:tts-done",         // renderer -> main: TTS playback completed
+  CALL_STATE: "call:state",               // main -> renderer: State change
+  CALL_ERROR: "call:error",               // main -> renderer: Error
+  CALL_STOP: "call:stop",                 // renderer -> main: Hang up
 
-  // 多渠道（Phase 0 骨架，Phase 1+ 实装微信/飞书）
+  // Multi-channel (Phase 0 skeleton, Phase 1+ WeChat / Feishu)
   CHANNELS_GET_CONFIG: "channels:get-config",
   CHANNELS_SAVE_CONFIG: "channels:save-config",
   CHANNELS_LIST: "channels:list",
@@ -263,7 +271,7 @@ export const IPC = {
   CHANNELS_GET_STATUS: "channels:get-status",
   CHANNELS_INSTALL_PROGRESS: "channels:install-progress",     // main → renderer
   CHANNELS_STATUS_CHANGED: "channels:status-changed",         // main → renderer
-  // 微信专属
+  // WeChat specific
   CHANNELS_WECHAT_INSTALL: "channels:wechat:install",
   CHANNELS_WECHAT_LOGIN_START: "channels:wechat:login-start",
   CHANNELS_WECHAT_LOGIN_CANCEL: "channels:wechat:login-cancel",
@@ -276,10 +284,10 @@ export const IPC = {
   CHANNELS_WECHAT_RUNTIME_DETECT: "channels:wechat:runtime-detect",
   CHANNELS_WECHAT_RUNTIME_INSTALL: "channels:wechat:runtime-install",
   CHANNELS_WECHAT_RUNTIME_UPDATE: "channels:wechat:runtime-update",
-  // 飞书专属
+  // Feishu specific
   CHANNELS_FEISHU_TEST_CONNECTION: "channels:feishu:test-connection",
   CHANNELS_FEISHU_TEST_WEBHOOK_REACHABLE: "channels:feishu:test-webhook-reachable",
-  // Phase 3.4：消息日志
+  // Phase 3.4: Message log
   CHANNELS_LOG_GET: "channels:log:get",
   CHANNELS_LOG_CLEAR: "channels:log:clear",
 
@@ -304,8 +312,16 @@ export const IPC = {
   SCREENSHOT_HOTKEY_CAPTURE_START: "screenshot:hotkey-capture-start",
   SCREENSHOT_HOTKEY_CAPTURE_END: "screenshot:hotkey-capture-end",
   SCREENSHOT_INSTANT_LOOK: "screenshot:instant-look",
+  // Co-watch persistent mode (auto-capture loop)
+  COWATCH_TOGGLE: "cowatch:toggle",
+  COWATCH_GET_STATE: "cowatch:get-state",
+  COWATCH_STATE_CHANGED: "cowatch:state-changed",
+  COWATCH_TRIGGER_OBSERVATION: "cowatch:trigger-observation",
 
   // Auto Updater
   APP_CHECK_FOR_UPDATES: "app:check-for-updates",
+
+  // Weather Telemetry
+  WEATHER_GET_CURRENT: "weather:get-current",
 } as const;
 

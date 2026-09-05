@@ -28,20 +28,20 @@ describe("requestUserClarification", () => {
     registerChoiceIpc();
 
     const pending = requestUserClarification({
-      intro: "伙伴，还需要确认两件事呀。",
+      intro: "Partner, two things still need confirmation.",
       questions: [{
         field: "topic",
-        question: "这份文档主要写什么？",
+        question: "What is the primary topic of this document?",
         type: "text",
         options: [],
         allowCustom: false,
-        freeTextPlaceholder: "例如：项目说明",
+        freeTextPlaceholder: "e.g. Project overview",
       }],
       deferredFields: [],
     });
     const answer: AskUserAnswer = {
       requestId: sent!.id,
-      answers: [{ field: "topic", customText: "项目说明" }],
+      answers: [{ field: "topic", customText: "Project overview" }],
     };
     const ipcHandler = handle.mock.calls[0]?.[1] as (
       event: unknown,

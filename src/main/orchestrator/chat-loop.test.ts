@@ -38,8 +38,8 @@ class FakeAdapter implements ChatVendorAdapter {
 
   parseResponse(): ChatResponse {
     return {
-      assistantMessage: { role: "assistant", content: "只是陪你聊聊。" },
-      text: "只是陪你聊聊。",
+      assistantMessage: { role: "assistant", content: "Just chatting with you." },
+      text: "Just chatting with you.",
       toolCalls: [],
       finishReason: "stop",
       raw: {},
@@ -79,7 +79,7 @@ describe("runChatLoop", () => {
     const result = await runChatLoop({
       settings: { provider: "test", baseUrl: "https://test", model: "m", apiKey: "k" },
       adapter,
-      messages: [{ role: "user", content: "陪我聊聊" }],
+      messages: [{ role: "user", content: "Chat with me" }],
       soulSystemBaseContent: "SOUL_SYSTEM",
       soulSampling: { temperature: 0.82, frequencyPenalty: 0.2 },
       timeoutMs: 30_000,
@@ -89,16 +89,40 @@ describe("runChatLoop", () => {
 
     expect(adapter.requests).toHaveLength(1);
     expect(adapter.requests[0].messages[0]).toEqual({ role: "system", content: "SOUL_SYSTEM" });
-    expect(adapter.requests[0].messages[1]).toEqual({ role: "user", content: "陪我聊聊" });
+    expect(adapter.requests[0].messages[1]).toEqual({ role: "user", content: "Chat with me" });
     expect(adapter.requests[0].tools).toBeUndefined();
     expect(adapter.requests[0].structuredOutput).toBeUndefined();
     expect(adapter.requests[0].temperature).toBe(0.82);
     expect(adapter.requests[0].frequencyPenalty).toBe(0.2);
     expect(result.toolResults).toEqual([]);
-    expect(result.reply).toBe("只是陪你聊聊。");
+    expect(result.reply).toBe("Just chatting with you.");
     expect(result.totalUsage).toEqual({ input: 12, output: 6 });
     expect(recordUsage).toHaveBeenCalledWith(12, 6, 1);
     expect(onEvent).toHaveBeenCalledWith(expect.objectContaining({ type: "text_message_start" }));
     expect(onEvent).toHaveBeenCalledWith(expect.objectContaining({ type: "text_message_end" }));
+  });
+
+  it("falls back to response.thinking when response.text is empty", async () => {
+    const adapter = new FakeAdapter();
+    adapter.parseResponse = () => ({
+      assistantMessage: { role: "assistant", content: "" },
+      text: "",
+      thinking: "I am thinking about your question...",
+      toolCalls: [],
+      finishReason: "stop",
+      raw: {},
+      usage: { input: 10, output: 5 },
+    });
+
+    const result = await runChatLoop({
+      settings: { provider: "test", baseUrl: "https://test", model: "m", apiKey: "k" },
+      adapter,
+      messages: [{ role: "user", content: "Hello" }],
+      soulSystemBaseContent: "SOUL_SYSTEM",
+      timeoutMs: 30_000,
+      recordUsage: vi.fn(),
+    });
+
+    expect(result.reply).toBe("I am thinking about your question...");
   });
 });

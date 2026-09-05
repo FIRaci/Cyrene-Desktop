@@ -84,7 +84,7 @@ describe("CyreneAgent", () => {
           model: "m",
           apiKey: "k",
         },
-        messages: [{ role: "user", content: "播放这首歌" }],
+        messages: [{ role: "user", content: "play this song" }],
         timeoutMs: 1000,
         tools: [],
         toolSystemContent: "TOOL",
@@ -168,16 +168,16 @@ describe("classifyRunError", () => {
 
   it("returns fixed safe message for unknown plain Error (no raw message leak)", () => {
     const result = classifyRunError(
-      new Error("模型请求失败：HTTP 529 - {\"error\":{\"message\":\"overloaded\"}}"),
+      new Error("Model request failed: HTTP 529 - {\"error\":{\"message\":\"overloaded\"}}"),
       undefined,
       "run-7", "conv-7", "decide", false,
     );
     expect(result.source).toBe("upstream_cleanup");
-    // 白名单策略：未知 plain Error 使用固定安全消息，绝不展示原始 message
+    // Whitelist policy: unknown plain Error uses fixed safe message
     expect(result.userMessage).toBe("The request failed. Please try again.");
     expect(result.userMessage).not.toContain("HTTP");
     expect(result.userMessage).not.toContain("overloaded");
-    // 原始 message 保留在 diagnostics 供内部日志
+    // Raw message retained in diagnostics for logging
     expect(result.diagnostics.errorMessage).toContain("HTTP 529");
   });
 
@@ -205,11 +205,11 @@ describe("classifyRunError", () => {
   });
 
   it("call timeout after unsubscribe still classifies as call_timeout (first-source-wins)", () => {
-    // 模拟：先 call_timeout，然后 user_cancelled
-    // 由于 first-source-wins，abortSource 应该是 call_timeout
+    // Mock: call_timeout followed by user_cancelled
+    // first-source-wins: abortSource should be call_timeout
     const result = classifyRunError(
       new DOMException("aborted", "AbortError"),
-      "call_timeout",  // 第一个来源
+      "call_timeout",  // First source
       "run-9", "conv-9", "soul", true,
     );
     expect(result.source).toBe("call_timeout");
@@ -219,7 +219,7 @@ describe("classifyRunError", () => {
   it("AgentRuntimeError E_MODEL_REQUEST_FAILED returns safe message, not raw HTTP body", () => {
     const err = new AgentRuntimeError(
       "E_MODEL_REQUEST_FAILED",
-      "模型请求失败：HTTP 529 - {\"error\":{\"message\":\"overloaded\",\"type\":\"too_many_requests\"}}",
+      "Model request failed: HTTP 529 - {\"error\":{\"message\":\"overloaded\",\"type\":\"too_many_requests\"}}",
     );
     const result = classifyRunError(
       err, undefined, "run-10", "conv-10", "soul", false,
@@ -253,7 +253,7 @@ describe("classifyRunError", () => {
   it("AgentRuntimeError with HTTP 429 extracts status to diagnostics", () => {
     const err = new AgentRuntimeError(
       "E_MODEL_REQUEST_FAILED",
-      "模型请求失败：HTTP 429 - rate limited",
+      "Model request failed: HTTP 429 - rate limited",
     );
     const result = classifyRunError(
       err, undefined, "run-13", "conv-13", "decide", false,
@@ -265,7 +265,7 @@ describe("classifyRunError", () => {
   it("AgentRuntimeError without HTTP status still returns safe message", () => {
     const err = new AgentRuntimeError(
       "E_MODEL_REQUEST_FAILED",
-      "模型请求失败：connection refused",
+      "Model request failed: connection refused",
     );
     const result = classifyRunError(
       err, undefined, "run-14", "conv-14", "soul", true,
@@ -277,7 +277,7 @@ describe("classifyRunError", () => {
 
   it("unknown plain Error with HTTP body → fixed safe message, no leak", () => {
     const err = new Error(
-      '模型请求失败：HTTP 529 - {"error":{"message":"overloaded","request_id":"abc-123"}} Authorization: Bearer xxx',
+      'Model request failed: HTTP 529 - {"error":{"message":"overloaded","request_id":"abc-123"}} Authorization: Bearer xxx',
     );
     const result = classifyRunError(err, undefined, "run-15", "conv-15", "decide", false);
     expect(result.userMessage).toBe("The request failed. Please try again.");
@@ -286,14 +286,14 @@ describe("classifyRunError", () => {
     expect(result.userMessage).not.toContain("request_id");
     expect(result.userMessage).not.toContain("Authorization");
     expect(result.userMessage).not.toContain("Bearer");
-    // 原始信息保留在 diagnostics
+    // Raw message retained in diagnostics
     expect(result.diagnostics.errorMessage).toContain("HTTP 529");
   });
 
   it("AgentExecutionError passes through cause to diagnostics (cause chain intact)", () => {
     const innerErr = new AgentRuntimeError(
       "E_MODEL_REQUEST_FAILED",
-      "模型请求失败：HTTP 500 - internal",
+      "Model request failed: HTTP 500 - internal",
     );
     const execStatus = {
       phase: "soul" as const,

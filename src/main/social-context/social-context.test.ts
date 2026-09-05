@@ -26,10 +26,10 @@ describe("social atom store", () => {
   it("isolates conversations and filters expired or inactive atoms", () => {
     const store = createSocialAtomStore();
     store.replaceForTest([
-      atom("a", "用户喜欢海边"),
-      atom("b", "另一个会话", { conversationId: "chat-b" }),
-      atom("c", "已经过期", { expiresAt: 10 }),
-      atom("d", "已被纠正", { status: "superseded" }),
+      atom("a", "User likes the seaside"),
+      atom("b", "Another conversation", { conversationId: "chat-b" }),
+      atom("c", "Already expired", { expiresAt: 10 }),
+      atom("d", "Already corrected", { status: "superseded" }),
     ]);
 
     expect(store.listActive("chat-a", 20).map((item) => item.id)).toEqual(["a"]);
@@ -38,13 +38,13 @@ describe("social atom store", () => {
 
   it("adds a correction atom and marks its target superseded", () => {
     const store = createSocialAtomStore();
-    store.replaceForTest([atom("old", "用户住在上海")]);
+    store.replaceForTest([atom("old", "User lives in Shanghai")]);
 
     store.applyOperations("chat-a", [{
       operation: "supersede",
-      atom: atom("new", "用户已经搬到杭州", {
+      atom: atom("new", "User already moved to Hangzhou", {
         evidenceTurnId: "user-2",
-        evidenceQuote: "我搬到杭州了",
+        evidenceQuote: "I moved to Hangzhou",
       }),
       targetAtomId: "old",
     }], 100);
@@ -57,10 +57,10 @@ describe("social atom store", () => {
   it("resolves only an active open loop without creating a new atom", () => {
     const store = createSocialAtomStore();
     store.replaceForTest([
-      atom("loop", "用户还没有回答周末是否有空", {
+      atom("loop", "User has not answered if free this weekend", {
         type: "open_loop",
         evidenceTurnId: "assistant-1",
-        evidenceQuote: "你周末有空吗",
+        evidenceQuote: "Are you free this weekend",
         expiresAt: 500,
       }),
     ]);
@@ -69,7 +69,7 @@ describe("social atom store", () => {
       operation: "resolve",
       targetAtomId: "loop",
       evidenceTurnId: "user-2",
-      evidenceQuote: "周末有空",
+      evidenceQuote: "free on weekends",
     }], 100);
 
     expect(store.getById("loop")?.status).toBe("resolved");
@@ -78,9 +78,9 @@ describe("social atom store", () => {
 
   it("deduplicates retry writes by stable evidence turn and normalized content", () => {
     const store = createSocialAtomStore();
-    const first = atom("first", "用户喜欢海边", {
+    const first = atom("first", "User likes the seaside", {
       evidenceTurnId: "user-1",
-      evidenceQuote: "我喜欢海边",
+      evidenceQuote: "I like the seaside",
     });
     const retry = { ...first, id: "retry" };
 
@@ -95,15 +95,15 @@ describe("social atom retrieval", () => {
   it("uses lexical relevance with recency decay and returns at most five active atoms", () => {
     const now = Date.parse("2026-07-24T00:00:00Z");
     const atoms = [
-      atom("old-cat", "用户喜欢猫，也养过一只橘猫", { createdAt: now - 60 * 86_400_000 }),
-      atom("new-cat", "用户刚领养了一只布偶猫", { createdAt: now - 86_400_000 }),
-      atom("sea", "用户喜欢去海边散步", { createdAt: now - 1_000 }),
+      atom("old-cat", "User likes cats and raised an orange cat", { createdAt: now - 60 * 86_400_000 }),
+      atom("new-cat", "User just adopted a ragdoll cat", { createdAt: now - 86_400_000 }),
+      atom("sea", "User likes walking by the seaside", { createdAt: now - 1_000 }),
       ...Array.from({ length: 6 }, (_, index) => (
-        atom(`extra-${index}`, `用户提到猫的事情 ${index}`, { createdAt: now - index * 1_000 })
+        atom(`extra-${index}`, `User mentioned cat matter ${index}`, { createdAt: now - index * 1_000 })
       )),
     ];
 
-    const ranked = rankSocialAtoms("想聊聊我的猫", atoms, { now, limit: 5 });
+    const ranked = rankSocialAtoms("want to chat about my cat", atoms, { now, limit: 5 });
 
     expect(ranked).toHaveLength(5);
     expect(ranked[0].id).not.toBe("old-cat");
@@ -112,9 +112,9 @@ describe("social atom retrieval", () => {
 
   it("returns no unrelated facts but can surface a recent open loop", () => {
     const now = 1_000_000;
-    const ranked = rankSocialAtoms("晚上好", [
-      atom("fact", "用户喜欢潜水", { createdAt: now - 1_000 }),
-      atom("loop", "用户还没回答今天有没有吃饭", {
+    const ranked = rankSocialAtoms("good evening", [
+      atom("fact", "User likes diving", { createdAt: now - 1_000 }),
+      atom("loop", "User has not answered if ate today", {
         type: "open_loop",
         createdAt: now - 1_000,
         expiresAt: now + 1_000,

@@ -25,8 +25,8 @@ function setup(overrides: Record<string, unknown> = {}) {
   };
   const commitMessage = vi.fn(async () => ({ kind: "committed" as const }));
   const saveState = vi.fn();
-  const runModel = vi.fn(async () => ({ kind: "send" as const, text: "休息一下吧♪" }));
-  const getFallback = vi.fn(async () => ({ text: "预设关心", payload: { audio: true } }));
+  const runModel = vi.fn(async () => ({ kind: "send" as const, text: "Take a break now♪" }));
+  const getFallback = vi.fn(async () => ({ text: "Preset care", payload: { audio: true } }));
   const service = createProactiveChatService({
     loadState: () => state,
     saveState,
@@ -81,7 +81,7 @@ describe("proactive chat service", () => {
     await ctx.service.evaluateCandidate(candidate);
     expect(ctx.getFallback).toHaveBeenCalledOnce();
     expect(ctx.commitMessage).toHaveBeenCalledWith(expect.objectContaining({
-      text: "预设关心",
+      text: "Preset care",
       source: "fallback",
     }));
 

@@ -18,7 +18,7 @@ import {
   type ImportFn,
 } from "./file-ingest";
 
-// ── Helper: 临时目录 ──
+// ── Helper: Temporary Directory ──
 let tmpDir: string;
 function fixture(...segments: string[]): string {
   return path.join(tmpDir, ...segments);
@@ -40,25 +40,25 @@ afterEach(() => {
 
 // ── isBinary ──
 describe("isBinary", () => {
-  it("普通文本 → false", () => {
+  it("plain text -> false", () => {
     expect(isBinary(Buffer.from("hello world"))).toBe(false);
   });
-  it("含 null 字节 → true", () => {
+  it("with null byte -> true", () => {
     expect(isBinary(Buffer.from([0x00, 0x48, 0x69]))).toBe(true);
   });
-  it("空 buffer → false", () => {
+  it("empty buffer -> false", () => {
     expect(isBinary(Buffer.alloc(0))).toBe(false);
   });
-  it("纯 null 字节 → true", () => {
+  it("pure null bytes -> true", () => {
     expect(isBinary(Buffer.alloc(10, 0x00))).toBe(true);
   });
-  it("只含第一个 null → true", () => {
+  it("starts with null -> true", () => {
     expect(isBinary(Buffer.from([0x48, 0x00, 0x69]))).toBe(true);
   });
 });
 
 // ── isTextExt / isUnsupportedExt ──
-describe("扩展名判断", () => {
+describe("Extension detection", () => {
   it("isTextExt true", () => {
     expect(isTextExt(".txt")).toBe(true);
     expect(isTextExt(".md")).toBe(true);
@@ -67,7 +67,7 @@ describe("扩展名判断", () => {
     expect(isTextExt(".json")).toBe(true);
     expect(isTextExt(".svg")).toBe(true);
   });
-  it("isTextExt false（无扩展名/zip）", () => {
+  it("isTextExt false (no extension/zip)", () => {
     expect(isTextExt("")).toBe(false);
     expect(isTextExt(".zip")).toBe(false);
   });
@@ -83,7 +83,7 @@ describe("扩展名判断", () => {
     expect(isUnsupportedExt("")).toBe(false);
     expect(isUnsupportedExt(".unknown")).toBe(false);
   });
-  it("isImageExt true 且返回图片 mime", () => {
+  it("isImageExt true and returns image mime", () => {
     expect(isImageExt(".png")).toBe(true);
     expect(isImageExt(".JPG")).toBe(true);
     expect(isImageExt(".webp")).toBe(true);
@@ -94,7 +94,7 @@ describe("扩展名判断", () => {
 });
 
 describe("describePendingAttachment", () => {
-  it("拖入阶段只按扩展名登记 pending，不读取或索引文档", () => {
+  it("pending stage registers files without immediate reading or indexing", () => {
     const text = describePendingAttachment(fixture("notes.md"));
     expect(text).toMatchObject({
       name: "notes.md",
@@ -106,20 +106,20 @@ describe("describePendingAttachment", () => {
     expect(text).not.toHaveProperty("chunks");
   });
 
-  it("拖入阶段把明确不支持的二进制或媒体格式标记为 unsupported", () => {
+  it("pending stage marks unsupported binary/media formats as unsupported", () => {
     expect(describePendingAttachment(fixture("setup.exe"))).toMatchObject({
       name: "setup.exe",
       kind: "unsupported",
-      reason: "暂不支持的文件格式 .exe",
+      reason: "Unsupported file format .exe",
     });
     expect(describePendingAttachment(fixture("voice.wav"))).toMatchObject({
       name: "voice.wav",
       kind: "unsupported",
-      reason: "暂不支持的文件格式 .wav",
+      reason: "Unsupported file format .wav",
     });
   });
 
-  it("拖入阶段仍然为图片返回安全 previewUrl", () => {
+  it("pending stage returns previewUrl for images", () => {
     const image = describePendingAttachment(fixture("screen shot.png"));
     expect(image.kind).toBe("image");
     if (image.kind === "image") {
@@ -138,17 +138,17 @@ describe("ingestOneFile", () => {
     mockImport = vi.fn().mockResolvedValue({ importId: "import-test", chunkCount: 3 });
   });
 
-  it("小文本文件 → kind:text 内容返回", async () => {
-    const fp = write("hello.txt", "Hello, 世界！");
+  it("small text file -> kind:text returns content", async () => {
+    const fp = write("hello.txt", "Hello, world!");
     const r = await ingestOneFile(fp, mockImport);
     expect(r.kind).toBe("text");
     if (r.kind === "text") {
-      expect(r.text).toBe("Hello, 世界！");
+      expect(r.text).toBe("Hello, world!");
     }
     expect(mockImport).not.toHaveBeenCalled();
   });
 
-  it("大文本文件（>30k） → kind:indexed 调用 importFn", async () => {
+  it("large text file (>30k) -> kind:indexed calls importFn", async () => {
     const big = "x".repeat(SMALL_THRESHOLD + 1);
     const fp = write("big.txt", big);
     const r = await ingestOneFile(fp, mockImport);
@@ -160,7 +160,7 @@ describe("ingestOneFile", () => {
     expect(mockImport).toHaveBeenCalledWith(big, "big.txt");
   });
 
-  it("大文本文件返回本轮索引的 importId", async () => {
+  it("large text file returns importId", async () => {
     const importForTurn = vi.fn().mockResolvedValue({ importId: "import-current", chunkCount: 3 });
     const fp = write("turn.md", "x".repeat(SMALL_THRESHOLD + 1));
 
@@ -226,62 +226,62 @@ describe("ingestOneFile", () => {
     });
   });
 
-  it("正好等于阈值 → kind:indexed（含边界）", async () => {
+  it("exact threshold boundary -> kind:indexed", async () => {
     const exact = "x".repeat(SMALL_THRESHOLD);
     const fp = write("exact.txt", exact);
     const r = await ingestOneFile(fp, mockImport);
-    // > threshold 才索引，== threshold 应算小（<=）
+    // Index when > threshold
     expect(r.kind).toBe("text");
     expect(mockImport).not.toHaveBeenCalled();
   });
 
-  it("空文件 → kind:empty", async () => {
+  it("empty file -> kind:empty", async () => {
     const fp = write("empty.txt", "");
     const r = await ingestOneFile(fp, mockImport);
     expect(r.kind).toBe("empty");
     expect(mockImport).not.toHaveBeenCalled();
   });
 
-  it("仅空白字符 → kind:empty", async () => {
+  it("whitespace only -> kind:empty", async () => {
     const fp = write("spaces.txt", "   \n\t  ");
     const r = await ingestOneFile(fp, mockImport);
     expect(r.kind).toBe("empty");
   });
 
-  it("压缩包 (.zip) → kind:unsupported", async () => {
+  it("archive (.zip) -> kind:unsupported", async () => {
     const fp = write("archive.zip", makeBin(100));
     const r = await ingestOneFile(fp, mockImport);
     expect(r.kind).toBe("unsupported");
     if (r.kind === "unsupported") {
-      expect(r.reason).toBe("暂不支持的文件格式 .zip（MVP-0 仅支持文本）");
+      expect(r.reason).toBe("Unsupported file format .zip (only text is supported)");
     }
   });
 
-  it("图片 (.png) → kind:unsupported", async () => {
+  it("image (.png) -> kind:unsupported", async () => {
     const fp = write("img.png", makeBin(100));
     const r = await ingestOneFile(fp, mockImport);
     expect(r.kind).toBe("unsupported");
   });
 
-  it("无扩展名、二进制（含 null 字节） → unsupported", async () => {
-    const fp = write("noext", Buffer.from([0x00, ...makeBin(99)])); // 头字节是 0x00
+  it("no extension, binary (null bytes) -> unsupported", async () => {
+    const fp = write("noext", Buffer.from([0x00, ...makeBin(99)])); // First byte is 0x00
     const r = await ingestOneFile(fp, mockImport);
     expect(r.kind).toBe("unsupported");
   });
 
-  it("无扩展名、文本 → text", async () => {
+  it("no extension, text -> text", async () => {
     const fp = write("readme", "This is my readme.");
     const r = await ingestOneFile(fp, mockImport);
     expect(r.kind).toBe("text");
   });
 
-  it("文本扩展名但含 null 字节 → unsupported（二进制兜底）", async () => {
+  it("text extension with null bytes -> unsupported", async () => {
     const fp = write("corrupt.txt", Buffer.from([0x48, 0x00, 0x69]));
     const r = await ingestOneFile(fp, mockImport);
     expect(r.kind).toBe("unsupported");
   });
 
-  it("importFn 抛错 → kind:indexed 但 chunks:0 不阻塞", async () => {
+  it("importFn error -> kind:indexed with chunks:0 without blocking", async () => {
     const mockFailing = vi.fn().mockRejectedValue(new Error("embedding failed"));
     const big = "x".repeat(SMALL_THRESHOLD + 1);
     const fp = write("bad.txt", big);
@@ -293,7 +293,7 @@ describe("ingestOneFile", () => {
     }
   });
 
-  it("文件不存在 → unsupported", async () => {
+  it("file does not exist -> unsupported", async () => {
     const r = await ingestOneFile(fixture("nonexistent.txt"), mockImport);
     expect(r.kind).toBe("unsupported");
     if (r.kind === "unsupported") expect(r.reason).toContain("ENOENT");
@@ -302,13 +302,13 @@ describe("ingestOneFile", () => {
 
 // ── walkDir ──
 describe("walkDir", () => {
-  it("空目录 → []", () => {
+  it("empty directory -> []", () => {
     const empty = fixture("empty");
     fs.mkdirSync(empty, { recursive: true });
     expect(walkDir(empty)).toEqual([]);
   });
 
-  it("含多个文件 → 返回路径列表（相对化？）", () => {
+  it("multiple files -> returns path list", () => {
     write("a.txt", "a");
     write("b.md", "b");
     write("c.ts", "c");
@@ -318,7 +318,7 @@ describe("walkDir", () => {
     expect(r).toContain("c.ts");
   });
 
-  it("嵌套目录 → 递归返回", () => {
+  it("nested directory -> recursive return", () => {
     write("sub/a.md", "a");
     write("sub/deep/b.txt", "b");
     const r = walkDir(tmpDir).map((f) => path.relative(tmpDir, f).replace(/\\/g, "/"));
@@ -326,7 +326,7 @@ describe("walkDir", () => {
     expect(r).toContain("sub/deep/b.txt");
   });
 
-  it("跳过隐藏文件（. 开头）", () => {
+  it("skip hidden files (starting with .)", () => {
     write(".hidden", "secret");
     write("visible.txt", "hello");
     const r = walkDir(tmpDir).map((f) => path.relative(tmpDir, f));
@@ -334,8 +334,8 @@ describe("walkDir", () => {
     expect(r).toContain("visible.txt");
   });
 
-  it("跳过无权限目录（graceful）", () => {
-    // 不可能跨平台可靠制造无权限目录，只验证不抛
+  it("skip unreadable directories gracefully", () => {
+    // Verify it does not throw
     write("ok.txt", "ok");
     expect(() => walkDir(tmpDir)).not.toThrow();
   });
@@ -348,7 +348,7 @@ describe("ingestPaths", () => {
     mockImport = vi.fn().mockResolvedValue({ importId: "import-test", chunkCount: 2 });
   });
 
-  it("单个文件 → [Attachment]", async () => {
+  it("single file -> [Attachment]", async () => {
     const fp = write("single.txt", "hello");
     const r = await ingestPaths([fp], mockImport);
     expect(r).toHaveLength(1);
@@ -356,7 +356,7 @@ describe("ingestPaths", () => {
     expect(r[0].name).toBe("single.txt");
   });
 
-  it("目录 → 递归所有文件", async () => {
+  it("directory -> recursive all files", async () => {
     write("a.txt", "small");
     write("sub/b.md", "also small");
     const r = await ingestPaths([tmpDir], mockImport);
@@ -366,7 +366,7 @@ describe("ingestPaths", () => {
     expect(names).toContain("sub/b.md");
   });
 
-  it("混合输入（文件+目录+二进制）", async () => {
+  it("mixed input (file + dir + binary)", async () => {
     const fp = write("notes.txt", "some text");
     write("sub/img.png", makeBin(100));
     write("sub/code.js", "const x = 1;");
@@ -376,23 +376,23 @@ describe("ingestPaths", () => {
     expect(r.filter((a) => a.kind === "unsupported")).toHaveLength(1);
   });
 
-  it("不存在路径 → 跳过不抛", async () => {
+  it("non-existent path -> skip without throwing", async () => {
     const r = await ingestPaths([fixture("nope.txt"), fixture("alsonope")], mockImport);
     expect(r).toHaveLength(0);
   });
 
-  it("路径重复 → 去重", async () => {
+  it("duplicate paths -> deduplicate", async () => {
     const fp = write("dedup.txt", "once");
     const r = await ingestPaths([fp, fp, fp], mockImport);
     expect(r).toHaveLength(1);
   });
 });
 
-// ── 工具 ──
+// ── Utility ──
 function makeBin(size: number): Buffer {
   const b = Buffer.alloc(size);
-  for (let i = 0; i < size; i++) b[i] = (i + 0x80) & 0xff; // >127，非 ASCII
-  // 头 4KB 不含 null（模拟真实二进制文件）
+  for (let i = 0; i < size; i++) b[i] = (i + 0x80) & 0xff; // Non-ASCII
+  // First 4KB without null
   for (let i = 0; i < size && i < 4096; i++) {
     if (b[i] === 0) b[i] = 0xff;
   }

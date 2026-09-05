@@ -1,24 +1,24 @@
-// vision-captioner —— 唯一接触多模态协议的地方。
-// 通用视觉服务：给图片+用户问题→调视觉模型→返回文本。
-// 不关心图片来源（read_image 只是调用者之一），不碰文件系统。
-// 永远走 OpenAI 兼容 image_url 格式，不分 transport。
+// vision-captioner - Sole contact point with multimodal protocols.
+// Generic vision service: takes image + user query -> invokes vision model -> returns text.
+// Agnostic to image source (read_image is just one caller), never touches filesystem.
+// Always uses OpenAI-compatible image_url format, regardless of transport.
 //
-// 判断全交给视觉模型：不本地判断"具体vs泛泛"，把用户原话+图片一起发，
-// 配框架指令让视觉模型自己理解任务。
+// Decisions are delegated entirely to the vision model: instead of locally discerning "specific vs broad",
+// sends the original user utterance together with image, guided by framing instructions.
 
 import { modelAuthorizationHeaders } from "../../shared/model-endpoint";
 
-/** 视觉模型配置（OpenAI 兼容）。 */
+/** Vision model configuration (OpenAI compatible). */
 export interface VisionConfig {
-  baseUrl: string;  // 如 https://api.openai.com/v1
+  baseUrl: string;  // e.g. https://api.openai.com/v1
   apiKey: string;
-  model: string;    // 如 gpt-4o / glm-5v-turbo / qwen-vl-max
+  model: string;    // e.g. gpt-4o / glm-5v-turbo / qwen-vl-max
 }
 
-/** 图片数据（不含 data: 前缀的纯 base64）。 */
+/** Image data (raw base64 without data: prefix). */
 export interface VisionImage {
   base64: string;
-  mime: string;  // 如 "image/png"
+  mime: string;  // e.g. "image/png"
 }
 
 const VISION_TIMEOUT_MS = 30_000;
@@ -26,13 +26,13 @@ const VISION_ERROR_PREFIX = "[Runtime error]";
 
 /** Recognize current failures and legacy localized failures during migration. */
 export function isVisionCaptionError(value: string): boolean {
-  return value.startsWith(VISION_ERROR_PREFIX) || value.startsWith("[错误");
+  return value.startsWith(VISION_ERROR_PREFIX) || value.startsWith("[\u9519\u8bef");
 }
 
 /**
- * 构造框架指令。判断全交给视觉模型——它本身是语言模型，
- * 理解"几只猫"是要数数、"有没有错别字"是 OCR，比本地正则/分类都准。
- * 指令含简洁约束，防止长文本回灌撑爆主模型上下文（连续看多图时尤其关键）。
+ * Construct framing instructions. Judgment is delegated entirely to the vision model.
+ * It understands whether "how many cats" means counting, or "are there typos" means OCR.
+ * Instructions contain brevity constraints to prevent long text from overwhelming primary model context.
  */
 function buildInstruction(userQuery: string): string {
   if (userQuery && userQuery.trim()) {
@@ -49,11 +49,11 @@ function buildInstruction(userQuery: string): string {
 }
 
 /**
- * 调视觉模型分析图片。
- * @param image 图片数据
- * @param userQuery 用户当前问题；空串表示无明确问题（走通用描述）
- * @param config 视觉模型配置
- * @returns 视觉模型的文本回答；失败返回 [错误·...] 字符串
+ * Invokes vision model to analyze an image.
+ * @param image Image data
+ * @param userQuery User query; empty string represents generic description
+ * @param config Vision model config
+ * @returns Textual response; returns error string on failure
  */
 export async function captionImage(
   image: VisionImage,
@@ -63,7 +63,7 @@ export async function captionImage(
   const instruction = buildInstruction(userQuery);
   const dataUrl = "data:" + image.mime + ";base64," + image.base64;
 
-  // 永远 OpenAI 兼容格式：image_url content block
+  // Always OpenAI compatible format: image_url content block
   const body = {
     model: config.model,
     messages: [
@@ -75,20 +75,19 @@ export async function captionImage(
         ],
       },
     ],
-    // 不传 temperature：不同模型约束不同（如 Kimi k2.6 只允许 1），
-    // 传固定值会在某些模型上报错。让各家用自己的默认值，可用性优先于确定性。
-    // 确定性由 buildInstruction 里的"简洁/直接"指令约束保证。
-    // 视觉描述用不到 4096 默认值，512 够用且防回灌撑爆主模型上下文。
-    // 只传 max_tokens（最通用）。不传 max_completion_tokens——火山不允许两者同时设，
-    // MiniMax 虽标 max_tokens 弃用但仍兼容（弃用≠删除）。
+    // Omit temperature: different models impose different constraints.
+    // Let each vendor use defaults for maximum compatibility.
+    // Determinism is guaranteed by brevity instructions in buildInstruction.
+    // 512 max_tokens suffices to prevent bloating primary context.
+    // Only pass max_tokens for broadest compatibility.
     max_tokens: 512,
     stream: false,
   };
 
   const url = buildChatCompletionsUrl(config.baseUrl);
 
-  // 进度信号（实现要求，非可选）：调用期间界面可能"卡住"30s，必须留日志
-  console.log("[Vision] 调用视觉模型:", config.model, "url=" + url, "query.len=" + userQuery.length);
+  // Progress signal: logs duration and endpoint
+  console.log("[Vision] Calling vision model:", config.model, "url=" + url, "query.len=" + userQuery.length);
   const startMs = Date.now();
 
   const controller = new AbortController();
@@ -106,7 +105,7 @@ export async function captionImage(
 
     if (!resp.ok) {
       const errText = await resp.text().catch(() => "");
-      console.error("[Vision] 请求失败 HTTP " + resp.status, errText.slice(0, 200));
+      console.error("[Vision] Request failed HTTP " + resp.status, errText.slice(0, 200));
       return VISION_ERROR_PREFIX + " Vision model request failed: HTTP " + resp.status + " " + errText.slice(0, 200);
     }
 
@@ -115,26 +114,26 @@ export async function captionImage(
     };
     const text = data.choices?.[0]?.message?.content ?? "";
     if (!text) {
-      console.error("[Vision] 视觉模型未返回有效内容");
+      console.error("[Vision] Vision model returned no valid content");
       return VISION_ERROR_PREFIX + " The vision model returned no usable content";
     }
 
-    console.log("[Vision] 完成，耗时=" + (Date.now() - startMs) + "ms，返回长度=" + text.length);
+    console.log("[Vision] Done, duration=" + (Date.now() - startMs) + "ms, response length=" + text.length);
     return text;
   } catch (err) {
     if (err instanceof Error && err.name === "AbortError") {
-      console.error("[Vision] 请求超时");
+      console.error("[Vision] Request timed out");
       return VISION_ERROR_PREFIX + " The vision model request timed out";
     }
     const msg = err instanceof Error ? err.message : String(err);
-    console.error("[Vision] 请求异常:", msg);
+    console.error("[Vision] Request error:", msg);
     return VISION_ERROR_PREFIX + " Vision model request failed: " + msg;
   } finally {
     clearTimeout(timer);
   }
 }
 
-/** 拼接 baseUrl + /chat/completions，兼容用户填的带或不带尾斜杠。 */
+/** Join baseUrl + /chat/completions, handling optional trailing slash. */
 function buildChatCompletionsUrl(baseUrl: string): string {
   const trimmed = baseUrl.trim().replace(/\/+$/, "");
   if (trimmed.endsWith("/chat/completions")) return trimmed;

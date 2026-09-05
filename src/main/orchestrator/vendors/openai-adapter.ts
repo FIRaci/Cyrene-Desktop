@@ -1,5 +1,5 @@
-// OpenAI 兼容 transport —— 覆盖 豆包 / DeepSeek / GLM / Kimi / Qwen / ChatGPT
-// 请求体协议：POST {baseUrl}/chat/completions，messages + tools[].type=function
+// OpenAI-compatible transport -- covers Doubao / DeepSeek / GLM / Kimi / Qwen / ChatGPT
+// Request body protocol: POST {baseUrl}/chat/completions, messages + tools[].type=function
 import {
   ChatMessage, ChatRequest, ChatResponse, ChatVendorAdapter,
   HttpRequest, ProviderCapability, StreamChunk, StreamEvent,
@@ -16,7 +16,7 @@ function buildUrl(baseUrl: string): string {
   return `${trimmed}/chat/completions`;
 }
 
-/** 把统一消息翻译成 OpenAI wire messages。 */
+/** Translate unified messages to OpenAI wire messages. */
 function toWireMessages(messages: ChatMessage[]): unknown[] {
   return messages.map(m => {
     if (m.role === "system") return { role: "system", content: m.content ?? "" };
@@ -30,7 +30,7 @@ function toWireMessages(messages: ChatMessage[]): unknown[] {
       if (m.name) wire.name = m.name;
       return wire;
     }
-    // assistant：回传 content + tool_calls（OpenAI 多轮要求 assistant 消息带 tool_calls）
+    // assistant: return content + tool_calls (OpenAI multi-turn requires assistant message to include tool_calls)
     const wire: Record<string, unknown> = { role: "assistant", content: m.content || null };
     if (m.toolCalls && m.toolCalls.length > 0) {
       wire.tool_calls = m.toolCalls.map(tc => ({
@@ -61,20 +61,20 @@ export class OpenAICompatAdapter implements ChatVendorAdapter {
       messages: toWireMessages(req.messages),
       stream: req.stream ?? false,
     };
-    // temperature 只在调用方显式传时才塞进 body。
-    // 不传时让厂商用默认值——不同型号约束不同（如 Kimi k2.6 只允许 1），
-    // 硬编码兜底值会在某些模型上报错。
+    // temperature is only injected into body when explicitly passed.
+    // When omitted, let vendor use default--different models have different constraints (e.g. Kimi k2.6 only allows 1),
+    // Hardcoded fallbacks cause errors on certain models.
     if (req.temperature !== undefined) body.temperature = req.temperature;
     if (req.topP !== undefined) body.top_p = req.topP;
     if (req.frequencyPenalty !== undefined) body.frequency_penalty = req.frequencyPenalty;
     if (req.repetitionPenalty !== undefined) body.repetition_penalty = req.repetitionPenalty;
-    // maxTokens：调用方显式传时才塞（流式场景下通常不传）
+    // maxTokens: only passed when caller explicitly specifies (usually omitted in streaming)
     if (req.maxTokens !== undefined) body.max_tokens = req.maxTokens;
     const tools = toWireTools(req.tools);
     if (tools) {
       body.tools = tools;
       if (req.toolChoiceOverride) {
-        // Action Gate 专用：直接指定 tool_choice wire 值，绕过 resolveToolChoicePolicy
+        // Action Gate specific: explicitly specify tool_choice wire value, bypassing resolveToolChoicePolicy
         switch (req.toolChoiceOverride.kind) {
           case "named":
             body.tool_choice = { type: "function", function: { name: req.toolChoiceOverride.toolName } };
@@ -89,7 +89,7 @@ export class OpenAICompatAdapter implements ChatVendorAdapter {
             body.tool_choice = "none";
             break;
           case "omit":
-            // 不发 tool_choice 字段
+            // Do not send tool_choice field
             break;
         }
       } else if (req.toolChoiceIntent) {
@@ -130,8 +130,8 @@ export class OpenAICompatAdapter implements ChatVendorAdapter {
     ) {
       body.response_format = { type: "json_object" };
     }
-    // 推理控制：按 (providerId, model) 解析 capability，调用 applyReasoningPreference 转换 body。
-    // cfg.reasoning 缺省视为 auto（不发送任何字段）。
+    // Reasoning control: resolve capability by (providerId, model), call applyReasoningPreference to transform body.
+    // cfg.reasoning defaults to auto (no fields sent).
     const reasoningCap = resolveReasoningCapability(this.capability.id, cfg.model);
     const finalBody = applyReasoningPreference(
       body,
@@ -155,12 +155,12 @@ export class OpenAICompatAdapter implements ChatVendorAdapter {
   }
 
   buildStreamRequest(req: ChatRequest, cfg: VendorConfig): HttpRequest {
-    // 复用 buildRequest：adapter 内部已按 req.stream 写 body，强制 stream=true
+    // Reuse buildRequest: adapter writes body per req.stream, forcing stream=true
     return this.buildRequest({ ...req, stream: true }, cfg);
   }
 
   parseStreamEvent(event: StreamEvent): StreamChunk | null {
-    // OpenAI 流式：eventType 始终是 "data"（createSseReader 已统一）
+    // OpenAI streaming: eventType is always "data" (unified by createSseReader)
     const jsonStr = event.data.trim();
     if (!jsonStr) return null;
     if (jsonStr === "[DONE]") return { done: true };
@@ -172,7 +172,7 @@ export class OpenAICompatAdapter implements ChatVendorAdapter {
     }
     const delta = parsed?.choices?.[0]?.delta;
     if (!delta) {
-      // 流末尾的 usage 块（choices 为空但带 usage）
+      // Usage block at end of stream (choices empty but carries usage)
       if (parsed?.usage) {
         return {
           usage: {
@@ -186,9 +186,9 @@ export class OpenAICompatAdapter implements ChatVendorAdapter {
     const chunk: StreamChunk = {};
     if (typeof delta.content === "string") chunk.deltaText = delta.content;
     if (typeof delta.reasoning_content === "string") chunk.deltaThinking = delta.reasoning_content;
-    // 暂不实现：if (Array.isArray(delta.tool_calls)) chunk.deltaToolCalls = ...
-    // 当前三个调用点（MemoryJudge / memory-compressor / 心情观察器）都不带 tools，
-    // 未来若需要流式 tool_call 增量，单独实现 + 加测试即可。
+    // Unimplemented: if (Array.isArray(delta.tool_calls)) chunk.deltaToolCalls = ...
+    // Current callers do not use tools,
+    // implement separately with tests if streaming tool_call deltas are needed.
     return chunk;
   }
 
@@ -226,7 +226,7 @@ export class OpenAICompatAdapter implements ChatVendorAdapter {
       ...(thinking ? { thinking } : {}),
     };
 
-    // 提取 token 用量（OpenAI 协议: prompt_tokens/completion_tokens）
+    // Extract token usage (OpenAI protocol: prompt_tokens/completion_tokens)
     const usage = data.usage
       ? { input: data.usage.prompt_tokens ?? 0, output: data.usage.completion_tokens ?? 0 }
       : undefined;
@@ -256,8 +256,8 @@ export class OpenAICompatAdapter implements ChatVendorAdapter {
     return next;
   }
 
-  // Kimi：多轮 Agent 强烈建议传 prompt_cache_key（命中后 usage.cached_tokens 体现）。
-  // v1 用"厂商+模型"稳定 key 缓存 system/工具定义；v2 可换成会话级 key。
+  // Kimi: multi-turn agent strongly recommends prompt_cache_key (reflected in usage.cached_tokens).
+  // v1 uses stable "vendor+model" key for system/tool caching; v2 can use session-level key.
   applyCacheHints(req: ChatRequest, _cfg: VendorConfig): ChatRequest {
     if (this.capability.cacheStrategy !== "prompt_cache_key") return req;
     const extraBody = { ...(req.extraBody ?? {}), prompt_cache_key: `cyrene:${this.id}` };
@@ -272,7 +272,7 @@ export class OpenAICompatAdapter implements ChatVendorAdapter {
       const req: ChatRequest = {
         model: cfg.model,
         messages: [{ role: "user", content: "Ping. Reply with only: ok" }],
-        // 不传 temperature：某些模型（如 Kimi k2.6）只允许特定值，传 0 会报错
+        // Omit temperature: certain models (like Kimi k2.6) require specific values, 0 causes errors
         stream: false,
       };
       const http = this.buildRequest(req, cfg);

@@ -3,7 +3,7 @@ import { checkEmbeddingModelInstalled, getProjectModelsDir } from "./model-statu
 import * as path from "path";
 import * as os from "os";
 
-// ── 类型 ──
+// ── Types ──
 export type EmbeddingProviderIdentity = {
   provider: string;
   model: string;
@@ -24,7 +24,7 @@ export interface EmbeddingProvider {
   readonly workerConfig?: EmbeddingWorkerConfig;
 }
 
-// ── 模型注册表 ──
+// ── Model Registry ──
 interface ModelConfig {
   key: string;
   hfName: string;
@@ -38,8 +38,8 @@ const LOCAL_MODELS: Record<string, ModelConfig> = {
 
 const DEFAULT_MODEL_KEY = "minilm";
 
-// ── 本地 Pipeline ──
-// 每个模型 key 独立缓存 pipeline，支持多模型同时运行（minilm 管文档/记忆，bgem3 管场景识别）
+// ── Local Pipeline ──
+// Pipelines cached per model key for concurrent models
 const localPipelines: Map<string, any> = new Map();
 const localPipelineLoads: Map<string, Promise<any>> = new Map();
 let currentModelKey: string = DEFAULT_MODEL_KEY;
@@ -63,9 +63,9 @@ async function getLocalPipeline(modelKey?: string): Promise<any> {
     env.allowLocalModels = true;
     env.allowRemoteModels = false;
     env.useBrowserCache = false;
-    // 主路径：项目根 models/（用户实际放模型的地方）。
-    // 兜底：HF cache，通过 cache_dir 选项传给 pipeline。
-    // transformers 内部会按 (localModelPath, cache_dir) 顺序查找文件。
+    // Primary path: project root models/ (where user models are placed).
+    // Fallback: HF cache passed to pipeline via cache_dir option.
+    // Transformers will search files in order: (localModelPath, cache_dir).
     env.localModelPath = getProjectModelsDir();
     const pipe = await pipeline("feature-extraction", config.hfName, {
       cache_dir: path.join(os.homedir(), ".cache", "huggingface"),
@@ -86,7 +86,7 @@ export function createLocalEmbeddingProvider(modelKey?: string): EmbeddingProvid
   const config = LOCAL_MODELS[key];
   if (!config) throw new Error("Unknown embedding model: " + key);
 
-  // 模型缺失返回 null，调用方决定如何处理
+  // Returns null if model is missing
   if (!checkEmbeddingModelInstalled(key)) {
     return null;
   }
@@ -119,7 +119,7 @@ export function createLocalEmbeddingProvider(modelKey?: string): EmbeddingProvid
   };
 }
 
-// ── OpenAI 兼容 Provider ──
+// ── OpenAI Compatible Provider ──
 export function createOpenAIEmbeddingProvider(
   baseUrl: string,
   apiKey: string,
@@ -178,7 +178,7 @@ export function createOpenAIEmbeddingProvider(
   };
 }
 
-// ── 自动选择 Provider ──
+// ── Auto Provider Selection ──
 let cachedProvider: EmbeddingProvider | null = null;
 
 export function getEmbeddingProvider(
@@ -194,7 +194,7 @@ export function getEmbeddingProvider(
   } else if (mode === "cloud" && cloudBaseUrl && cloudApiKey) {
     cachedProvider = createOpenAIEmbeddingProvider(cloudBaseUrl, cloudApiKey);
   } else {
-    // auto 模式：优先 local，local 不存在且 cloud 配置完整时用 cloud，否则 null
+    // Auto mode: prefers local, falls back to cloud if configured, otherwise null
     const local = createLocalEmbeddingProvider(modelKey);
     if (local) {
       cachedProvider = local;
@@ -288,13 +288,13 @@ export function getEmbeddingDiagnostics(): {
   };
 }
 
-// ── 场景识别专用 provider（固定 bge-m3，不受 RAG 模型切换影响）──
+// ── Scene Recognition Dedicated Provider (fixed bge-m3) ──
 let sceneProvider: EmbeddingProvider | null = null;
 
 /**
- * 获取场景识别专用的 embedding provider（固定 bge-m3）。
- * 和文档/记忆的 provider 独立——RAG 切换模型不影响场景识别。
- * 模型不存在时返回 null。
+ * Get embedding provider dedicated to scene recognition (fixed bge-m3).
+ * Independent of document/memory provider.
+ * Returns null if model does not exist.
  */
 export function getSceneEmbeddingProvider(): EmbeddingProvider | null {
   if (!sceneProvider) {

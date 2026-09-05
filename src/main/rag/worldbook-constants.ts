@@ -1,6 +1,6 @@
-// ── Worldbook 集中常量 ──
-// 维护原则：所有"魔法数字"都集中在这里，方便后续调参。
-// 算法参数（Bu/Bm/γ/λ/α/β 等）走 DmaeParams；这里只放非算法常量。
+// ── Central Worldbook Constants ──
+// Principle: centralize non-algorithmic configuration constants here for easier tuning.
+// Algorithmic parameters (Bu/Bm/γ/λ/α/β, etc.) belong in DmaeParams.
 
 export const WORLDBOOK_CONSTANTS: {
   MAX_ACTIVE: number;
@@ -8,32 +8,29 @@ export const WORLDBOOK_CONSTANTS: {
   MIN_INTRINSIC_VALUE: number;
   EPSILON: number;
   FLOOR_TRIGGER_STATE: string;
-  STATES: {
-    readonly ACTIVE: "Active";
-    readonly DORMANT: "Dormant";
-    readonly ARCHIVED: "Archived";
-  };
 } = {
-  // ── State machine 业务参数 ──
-  MAX_ACTIVE: 8,                   // 终态注入上限（Scheduler 层硬上限，未来 v4 换 token-budget 背包）
-  DEFAULT_INTRINSIC_VALUE: 60,     // .md 未写 内在价值/初始分/intrinsic_value 时的 fallback
+  // ── State machine parameters ──
+  MAX_ACTIVE: 8,                   // Hard upper bound on active entries injected into context
+  DEFAULT_INTRINSIC_VALUE: 60,     // Fallback when .md does not specify intrinsic_value
 
-  // ── 数值安全 ──
-  MIN_INTRINSIC_VALUE: 1,          // QuadraticResistanceDecay 除零保护：sqrt(0) 会爆
-  EPSILON: 0.01,                   // Rm < D 不变量保护：Rm = clamp(Rm, 0, D - ε)
+  // ── Numerical safety ──
+  MIN_INTRINSIC_VALUE: 1,          // QuadraticResistanceDecay divide-by-zero protection: sqrt(0)
+  EPSILON: 0.01,                   // Invariant protection: Rm = clamp(Rm, 0, D - eps)
 
-  // ── Floor 语义 ──
-  FLOOR_TRIGGER_STATE: "Archived", // 仅 Archived 复活时触发 Floor（v3.4 已确立）
-
-  // ── 状态标签（导出来避免字符串散落各处） ──
-  STATES: {
-    ACTIVE: "Active",
-    DORMANT: "Dormant",
-    ARCHIVED: "Archived",
-  },
+  // ── Floor semantics ──
+  FLOOR_TRIGGER_STATE: "Archived", // Only trigger Floor when resurrecting from Archived
 };
 
-// 注入 Prompt 时使用的标签（orchestrator 拼接 .md 内容时引用）
-export const INJECTION_HEADER = "【已激活的世界知识】";
+// ── State labels ──
+export const WORLDBOOK_STATES = {
+  UNINITIALIZED: "Uninitialized",
+  ACTIVE: "Active",
+  DORMANT: "Dormant",
+  ARCHIVED: "Archived",
+} as const;
+
+// Header and preamble used when injecting world knowledge into orchestrator prompt
+export const INJECTION_HEADER = "[Activated World Knowledge]";
+
 export const INJECTION_PREAMBLE =
-  "以下内容已由当前用户消息触发，视为真实且已知。回复时请自然使用这些信息，不要说「不知道」、「第一次听说」或要求用户介绍，除非内容本身存在矛盾。";
+  "The following content has been triggered by the current user message and is considered true and established. Naturally incorporate this information in your reply without claiming not to know, having heard it for the first time, or asking the user to introduce it, unless the content itself is contradictory.";

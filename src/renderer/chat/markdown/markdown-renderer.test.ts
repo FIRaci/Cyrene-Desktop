@@ -1,19 +1,19 @@
 /**
- * markdown-renderer 单元测试
+ * markdown-renderer unit tests
  *
- * 测试环境为 Node（无 DOM），DOMPurify 需要 DOM 才能工作，
- * 因此 mock 为 identity（markdown-it html:false 已提供第一层 XSS 防护）。
+ * Test environment is Node (without DOM). DOMPurify requires a DOM,
+ * so it is mocked as identity (markdown-it html:false provides the first layer of XSS defense).
  *
- * @mdit/plugin-katex 在 Node 环境依赖 katex 的 renderToString，
- * mock 为简单的 span 包裹以验证公式识别。
+ * @mdit/plugin-katex in Node environment relies on katex renderToString;
+ * mocked as simple span wrapper to verify formula recognition.
  *
- * code-highlighter 在测试环境（Shiki 未初始化）时会走 fallback 路径，
- * 返回 <pre class="shiki"><code>escaped</code></pre>。
+ * code-highlighter in test environment (Shiki not initialized) takes fallback path,
+ * returning <pre class="shiki"><code>escaped</code></pre>.
  */
 
 import { describe, expect, test, vi } from "vitest";
 
-// mock DOMPurify（Node 环境无 DOM，identity 即可；markdown-it html:false 已转义）
+// mock DOMPurify (Node environment has no DOM, identity is sufficient; markdown-it html:false escapes)
 vi.mock("dompurify", () => ({
   default: {
     sanitize: (html: string) => html,
@@ -109,9 +109,9 @@ describe("renderMarkdown", () => {
     expect(result.content).toContain("TypeScript");
     expect(result.content).toContain('class="code-block__copy"');
     expect(result.content).toContain('class="code-block__code"');
-    // Shiki 未就绪时应该是 fallback <pre class="shiki">
+    // Fallback <pre class="shiki"> when Shiki is not ready
     expect(result.content).toContain('class="shiki"');
-    // 代码内容应该被转义
+    // Code content should be escaped
     expect(result.content).toContain("const x = 1;");
   });
 
@@ -229,63 +229,63 @@ describe("renderMarkdown - unknown/edge case languages", () => {
   });
 });
 
-describe("renderMarkdown - KaTeX 数学公式", () => {
-  test("行内公式 $E=mc^2$", () => {
-    const result = renderMarkdown("能量公式 $E=mc^2$ 很有名");
+describe("renderMarkdown - KaTeX Math Formulas", () => {
+  test("Inline formula $E=mc^2$", () => {
+    const result = renderMarkdown("Energy formula $E=mc^2$ is famous");
     expect(result.mode).toBe("html");
     expect(result.content).toContain("katex");
   });
 
-  test("块级公式 $$...$$", () => {
+  test("Block formula $$...$$", () => {
     const result = renderMarkdown("$$\np_i = \\frac{e^{z_i}}{\\sum_j e^{z_j}}\n$$");
     expect(result.mode).toBe("html");
     expect(result.content).toContain("katex-block");
   });
 
-  test("多个行内公式", () => {
-    const result = renderMarkdown("$a^2 + b^2 = c^2$ 和 $E=mc^2$ 都是公式");
+  test("Multiple inline formulas", () => {
+    const result = renderMarkdown("$a^2 + b^2 = c^2$ and $E=mc^2$ are both formulas");
     expect(result.mode).toBe("html");
     expect(result.content).toContain("katex");
-    // 应该有两个公式
+    // Should contain two formulas
     const matches = result.content.match(/class="katex"/g);
     expect(matches?.length).toBeGreaterThanOrEqual(2);
   });
 
-  test("普通美元符号不被误识别为公式", () => {
-    const result = renderMarkdown("这个花了 $5 和 $10");
+  test("Regular dollar signs are not misidentified as formulas", () => {
+    const result = renderMarkdown("This cost $5 and $10");
     expect(result.mode).toBe("html");
-    // $5 和 $10 不应该被识别为公式
+    // $5 and $10 should not be recognized as formulas
     expect(result.content).not.toContain('class="katex"');
     expect(result.content).toContain("$5");
     expect(result.content).toContain("$10");
   });
 
-  test("单个 $ 不触发公式", () => {
-    const result = renderMarkdown("价格是 $5");
+  test("Single $ does not trigger formula", () => {
+    const result = renderMarkdown("The price is $5");
     expect(result.mode).toBe("html");
     expect(result.content).not.toContain('class="katex"');
   });
 
-  test("无效 LaTeX 不崩溃（throwOnError:false）", () => {
+  test("Invalid LaTeX does not crash (throwOnError:false)", () => {
     const result = renderMarkdown("$\\invalidcommand{}$");
     expect(result.mode).toBe("html");
-    // 无效 LaTeX 应该显示 katex-error 或原始内容，不崩溃
+    // Invalid LaTeX should display katex-error or raw text without crashing
     expect(result.content).toContain("katex");
   });
 
-  test("公式和 Markdown 混合", () => {
-    const result = renderMarkdown("## 标题\n\n公式 $x^2$ 在这里\n\n```\ncode\n```");
+  test("Mixed formula and Markdown", () => {
+    const result = renderMarkdown("## Heading\n\nFormula $x^2$ is here\n\n```\ncode\n```");
     expect(result.mode).toBe("html");
-    expect(result.content).toContain("<h2>标题</h2>");
+    expect(result.content).toContain("<h2>Heading</h2>");
     expect(result.content).toContain("katex");
     expect(result.content).toContain("code-block");
   });
 
-  test("块级公式前后有文本", () => {
-    const result = renderMarkdown("前文\n\n$$\nx = y\n$$\n\n后文");
+  test("Block formula with surrounding text", () => {
+    const result = renderMarkdown("Before text\n\n$$\nx = y\n$$\n\nAfter text");
     expect(result.mode).toBe("html");
     expect(result.content).toContain("katex-block");
-    expect(result.content).toContain("前文");
-    expect(result.content).toContain("后文");
+    expect(result.content).toContain("Before text");
+    expect(result.content).toContain("After text");
   });
 });

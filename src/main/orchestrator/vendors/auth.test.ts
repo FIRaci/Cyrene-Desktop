@@ -32,23 +32,23 @@ describe("authHeaderFor", () => {
     expect(h).toEqual({ "x-api-key": "sk-test" });
   });
 
-  test("输出对象不暴露 apiKey 之外的敏感字符串", () => {
+  test("output object does not expose sensitive strings other than apiKey", () => {
     const h = authHeaderFor({ ...baseCap, authStyle: "bearer" }, "sk-very-secret-123");
-    // 输出序列化后必须只包含 apiKey 本身，不含其他秘密字段
+    // Serialized output must only contain apiKey, with no other secret fields
     const s = JSON.stringify(h);
     expect(s).toContain("sk-very-secret-123");
     expect(s).not.toContain("password");
     expect(s).not.toContain("token=");
   });
 
-  test("非法 authStyle 抛错（包含 displayName，不包含 apiKey）", () => {
+  test("invalid authStyle throws error (includes displayName, excludes apiKey)", () => {
     expect(() =>
-      authHeaderFor({ ...baseCap, displayName: "MiMo（小米）", authStyle: undefined as unknown as "bearer" }, "sk-very-secret"),
-    ).toThrow(/MiMo（小米）/);
+      authHeaderFor({ ...baseCap, displayName: "MiMo", authStyle: undefined as unknown as "bearer" }, "sk-very-secret"),
+    ).toThrow(/MiMo/);
     expect(() =>
       authHeaderFor({ ...baseCap, authStyle: "weird" as unknown as "bearer" }, "sk-very-secret"),
     ).toThrow(/invalid authStyle/);
-    // 抛错信息不应包含 apiKey 字面量
+    // Error message must not contain apiKey literal
     try {
       authHeaderFor({ ...baseCap, authStyle: undefined as unknown as "bearer" }, "sk-very-secret");
     } catch (e) {

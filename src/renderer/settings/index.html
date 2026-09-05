@@ -603,11 +603,11 @@
                 </div>
               </div>
               <div class="option-blocks option-blocks--wide" id="runtime-sync" role="radiogroup" aria-label="Status Bar Real-time Update Method">
-                <button type="button" class="option-block is-active" data-value="off" aria-pressed="true">Off</button>
+                <button type="button" class="option-block" data-value="off" aria-pressed="false">Off</button>
                 <button type="button" class="option-block" data-value="local" aria-pressed="false">Local Keywords</button>
-                <button type="button" class="option-block" data-value="llm" aria-pressed="false">LLM Analysis</button>
+                <button type="button" class="option-block is-active" data-value="llm" aria-pressed="true">LLM Analysis</button>
               </div>
-              <em class="field-note is-hidden" id="runtime-sync-note">LLM Mode calls the model one extra time per turn, consuming additional tokens.</em>
+              <em class="field-note" id="runtime-sync-note">LLM Mode calls the model one extra time per turn, consuming additional tokens.</em>
             </article>
 
             <article class="agent-setting-card agent-setting-card--full">
@@ -846,14 +846,14 @@
                   <input type="date" id="user-birthday" />
                 </div>
                 <div class="tts-field">
-                  <label for="user-default-city">Default City</label>
-                  <input type="text" id="user-default-city" placeholder="e.g., New York, London (Used for weather etc.)" />
+                  <label for="user-default-city">Current City / Location</label>
+                  <input type="text" id="user-default-city" placeholder="e.g., Hanoi, Tokyo, London (Used for weather & tools)" />
                 </div>
                 <div class="tts-field">
                   <label for="user-timezone">Timezone</label>
                   <select id="user-timezone" data-timezone-select></select>
                 </div>
-                <p class="user-field-hint">This info tells Cyrene how to address you and where you are. Default city is used for tools needing location; timezone is only for time calculation.</p>
+                <p class="user-field-hint">City is manual coarse location for weather and tool planning. Cyrene never accesses your GPS or traces your IP address.</p>
               </div>
             </div>
           </div>
@@ -1179,6 +1179,14 @@
                 <p>Check real-time weather and city forecasts. Open-Meteo needs no configuration, or use AMap (<a href="https://lbs.amap.com" target="_blank" rel="noopener">register a key</a>).</p>
                 <div class="plugin-config" id="plugin-weather-config">
                   <div class="tts-field">
+                    <label for="weather-city-input">Current Location / City</label>
+                    <input type="text" id="weather-city-input" placeholder="e.g., Hanoi, Tokyo, London" />
+                  </div>
+                  <div class="weather-privacy-badge">
+                    <span class="weather-privacy-badge__icon" aria-hidden="true">🛡️</span>
+                    <span>Manual coarse city only. Cyrene never accesses your GPS, never traces your IP, and never shares your personal location.</span>
+                  </div>
+                  <div class="tts-field">
                     <label for="weather-source">Weather Source</label>
                     <select id="weather-source">
                       <option value="open-meteo">Open-Meteo (No Config, Recommended)</option>
@@ -1192,7 +1200,7 @@
                     </div>
                     <p class="user-field-hint">AMap Open Platform → Console → App Management → Create 'Web Service' Key.</p>
                   </div>
-                  <p class="user-field-hint">Open-Meteo works out of the box. Default city is filled in 'My Info' panel.</p>
+                  <p class="user-field-hint">Open-Meteo works out of the box with zero configuration.</p>
                 </div>
               </div>
               <label class="plugin-switch" aria-label="Enable Weather Inquiry">
@@ -1658,6 +1666,11 @@
                   <span class="tts-engine__icon"><svg width="24" height="24" viewBox="0 0 48 48" fill="none" aria-hidden="true"><title>Off</title><rect opacity="0.01" x="30" y="18" width="13" height="13" fill="none"/><mask id="tts-off-mask" maskUnits="userSpaceOnUse" x="30" y="18" width="13" height="13" style="mask-type: alpha"><rect x="30" y="18" width="13" height="13" fill="#333"/></mask><g mask="url(#tts-off-mask)"><path d="M40.7348 20.2858L32.2495 28.7711" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M32.2496 20.2858L40.7349 28.7711" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></g><path d="M24 6V42C17 42 11.7985 32.8391 11.7985 32.8391H6C4.89543 32.8391 4 31.9437 4 30.8391V17.0108C4 15.9062 4.89543 15.0108 6 15.0108H11.7985C11.7985 15.0108 17 6 24 6Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/></svg></span>
                   <span class="tts-engine__name">Off</span>
                 </button>
+                <button type="button" class="tts-engine" data-engine="edge" role="radio" aria-checked="false">
+                  <span class="tts-engine__icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><title>Edge Neural</title><path d="M12 2a10 10 0 1 0 10 10H12V2z"/><path d="M12 12 2.1 12a10 10 0 0 0 16.8 6.9L12 12z"/></svg></span>
+                  <span class="tts-engine__name">Edge Neural</span>
+                  <span class="tts-engine__tag">Anime</span>
+                </button>
                 <button type="button" class="tts-engine" data-engine="minimax" role="radio" aria-checked="false">
                   <span class="tts-engine__icon"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><title>MiniMax</title><defs><linearGradient id="tts-minimax-gradient" x1="0%" x2="100.182%" y1="50.057%" y2="50.057%"><stop offset="0%" stop-color="#E2167E"/><stop offset="100%" stop-color="#FE603C"/></linearGradient></defs><path d="M16.278 2c1.156 0 2.093.927 2.093 2.07v12.501a.74.74 0 00.744.709.74.74 0 00.743-.709V9.099a2.06 2.06 0 012.071-2.049A2.06 2.06 0 0124 9.1v6.561a.649.649 0 01-.652.645.649.649 0 01-.653-.645V9.1a.762.762 0 00-.766-.758.762.762 0 00-.766.758v7.472a2.037 2.037 0 01-2.048 2.026 2.037 2.037 0 01-2.048-2.026v-12.5a.785.785 0 00-.788-.753.785.785 0 00-.789.752l-.001 15.904A2.037 2.037 0 0113.441 22a2.037 2.037 0 01-2.048-2.026V18.04c0-.356.292-.645.652-.645.36 0 .652.289.652.645v1.934c0 .263.142.506.372.638.23.131.514.131.744 0a.734.734 0 00.372-.638V4.07c0-1.143.937-2.07 2.093-2.07zm-5.674 0c1.156 0 2.093.927 2.093 2.07v11.523a.648.648 0 01-.652.645.648.648 0 01-.652-.645V4.07a.785.785 0 00-.789-.78.785.785 0 00-.789.78v14.013a2.06 2.06 0 01-2.07 2.048 2.06 2.06 0 01-2.071-2.048V9.1a.762.762 0 00-.766-.758.762.762 0 00-.766.758v3.8a2.06 2.06 0 01-2.071 2.049A2.06 2.06 0 010 12.9v-1.378c0-.357.292-.646.652-.646.36 0 .653.29.653.646V12.9c0 .418.343.757.766.757s.766-.339.766-.757V9.099a2.06 2.06 0 012.07-2.048 2.06 2.06 0 012.071 2.048v8.984c0 .419.343.758.767.758.423 0 .766-.339.766-.758V4.07c0-1.143.937-2.07 2.093-2.07z" fill="url(#tts-minimax-gradient)" fill-rule="nonzero"></path></svg></span>
                   <span class="tts-engine__name">MiniMax</span>
@@ -1690,6 +1703,17 @@
             </div>
 
             <!-- Configuration form for the selected engine -->
+            <div class="tts-config" id="tts-config-edge" hidden>
+              <h2 class="tts-section__title">Edge Neural (Anime Voice)</h2>
+              <div class="setting-desc" style="margin-bottom: 12px; color: var(--rb-text-muted); font-size: 12px; line-height: 1.5;">
+                High-fidelity, expressive neural anime companion voice (zh-CN-XiaoyiNeural). Zero setup, free, ethereal and lively tone matching Cyrene's character.
+              </div>
+              <div style="margin-top: 12px; display: flex; align-items: center; gap: 12px;">
+                <button type="button" class="btn btn--secondary" id="tts-edge-test">Test Voice</button>
+                <span id="tts-edge-test-status" class="save-status"></span>
+              </div>
+            </div>
+
             <div class="tts-config" id="tts-config-minimax" hidden>
               <h2 class="tts-section__title"><svg class="tts-clone-logo" width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><title>Minimax</title><defs><linearGradient id="lobe-icons-minimax-_R_2" x1="0%" x2="100.182%" y1="50.057%" y2="50.057%"><stop offset="0%" stop-color="#E2167E"></stop><stop offset="100%" stop-color="#FE603C"></stop></linearGradient></defs><path d="M16.278 2c1.156 0 2.093.927 2.093 2.07v12.501a.74.74 0 00.744.709.74.74 0 00.743-.709V9.099a2.06 2.06 0 012.071-2.049A2.06 2.06 0 0124 9.1v6.561a.649.649 0 01-.652.645.649.649 0 01-.653-.645V9.1a.762.762 0 00-.766-.758.762.762 0 00-.766.758v7.472a2.037 2.037 0 01-2.048 2.026 2.037 2.037 0 01-2.048-2.026v-12.5a.785.785 0 00-.788-.753.785.785 0 00-.789.752l-.001 15.904A2.037 2.037 0 0113.441 22a2.037 2.037 0 01-2.048-2.026V18.04c0-.356.292-.645.652-.645.36 0 .652.289.652.645v1.934c0 .263.142.506.372.638.23.131.514.131.744 0a.734.734 0 00.372-.638V4.07c0-1.143.937-2.07 2.093-2.07zm-5.674 0c1.156 0 2.093.927 2.093 2.07v11.523a.648.648 0 01-.652.645.648.648 0 01-.652-.645V4.07a.785.785 0 00-.789-.78.785.785 0 00-.789.78v14.013a2.06 2.06 0 01-2.07 2.048 2.06 2.06 0 01-2.071-2.048V9.1a.762.762 0 00-.766-.758.762.762 0 00-.766.758v3.8a2.06 2.06 0 01-2.071 2.049A2.06 2.06 0 010 12.9v-1.378c0-.357.292-.646.652-.646.36 0 .653.29.653.646V12.9c0 .418.343.757.766.757s.766-.339.766-.757V9.099a2.06 2.06 0 012.07-2.048 2.06 2.06 0 012.071 2.048v8.984c0 .419.343.758.767.758.423 0 .766-.339.766-.758V4.07c0-1.143.937-2.07 2.093-2.07z" fill="url(#lobe-icons-minimax-_R_2)" fill-rule="nonzero"></path></svg> MiniMax Config</h2>
               <div class="tts-field"><label>API Key</label><input type="password" id="tts-minimax-key" placeholder="MiniMax API Key" /></div>

@@ -6,8 +6,8 @@ import type { ToolCallResult } from "./types";
 
 function trackTool(): ToolDefinition {
   return {
-    id: "music_play_track", capability: "music.play_track", name: "播放歌曲",
-    description: "播放可信歌曲候选", enabled: true,
+    id: "music_play_track", capability: "music.play_track", name: "Play Track",
+    description: "Play trusted track candidate", enabled: true,
     inputSchema: {
       type: "object", properties: { candidateRef: { type: "string" } }, required: ["candidateRef"],
     },
@@ -18,8 +18,8 @@ function trackTool(): ToolDefinition {
 
 function trackToolLegacy(): ToolDefinition {
   return {
-    id: "music_play_track", capability: "music.play_track", name: "播放歌曲",
-    description: "播放可信歌曲候选", enabled: true,
+    id: "music_play_track", capability: "music.play_track", name: "Play Track",
+    description: "Play trusted track candidate", enabled: true,
     inputSchema: {
       type: "object", properties: { candidateRef: { type: "string" } }, required: ["candidateRef"],
     },
@@ -62,7 +62,7 @@ describe("tool argument validator", () => {
 
   it("E_TOOL_ARGUMENT_SCHEMA includes specific missing required fields", () => {
     const tool: ToolDefinition = {
-      id: "write_word", capability: "write_word", name: "写 Word", description: "生成文档", enabled: true,
+      id: "write_word", capability: "write_word", name: "Write Word", description: "Generate document", enabled: true,
       inputSchema: {
         type: "object",
         properties: { filename: { type: "string" }, title: { type: "string" }, paragraphs: { type: "array" } },

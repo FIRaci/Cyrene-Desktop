@@ -1,13 +1,13 @@
 /**
- * Task Plan -- 执行计划数据结构与逻辑。
+ * Task Plan -- Execution plan data structures and logic.
  *
- * 包含 TaskPlan / PlanStep / StepCompletionPolicy 类型定义，
- * 以及 createPlan（计划创建）、verifyStep（步骤验证）、replan（重规划）的核心逻辑。
+ * Contains TaskPlan / PlanStep / StepCompletionPolicy type definitions,
+ * and core logic for createPlan, verifyStep, and replan.
  *
- * 标识层级：
+ * Identification hierarchy:
  *   planId -> stepId -> stepExecutionId -> stepAttemptId
  *
- * 预算体系：
+ * Budget system:
  *   toolCallCount (≤ maxStepToolCalls) -> retryCount (≤ maxStepRetries) -> replanCount (≤ maxReplans) -> maxIterations
  */
 
@@ -19,7 +19,7 @@ import type { ToolDefinition } from "./tool-registry";
 import type { SoulClaimKind } from "./soul-execution-context";
 import { projectToolResult } from "./soul-execution-context";
 
-// ── 预算默认值 ────────────────────────────
+// -- Budget defaults --
 
 export const DEFAULT_MAX_STEP_TOOL_CALLS = 4;
 export const DEFAULT_MAX_STEP_RETRIES = 2;
@@ -28,16 +28,16 @@ export const HARD_MAX_ITERATIONS = 30;
 export const BASE_ITERATIONS = 12;
 export const ITERATIONS_PER_STEP = 3;
 
-// ── 数据结构 ──────────────────────────────
+// -- Data structures --
 
 export type CompletionCriterion =
   | { kind: "tool_succeeded"; capabilityId: string }
   | { kind: "projection_claim"; capabilityId?: string; claimKind: SoulClaimKind };
 
 export interface StepCompletionPolicy {
-  /** 必须全部满足 */
+  /** All must be satisfied */
   allOf?: CompletionCriterion[];
-  /** 每个分组至少满足一项 */
+  /** At least one satisfied per group */
   anyOf?: CompletionCriterion[][];
 }
 
@@ -52,15 +52,15 @@ export interface PlanStep {
   objective: string;
   status: "pending" | "running" | "completed" | "failed" | "skipped" | "superseded";
   completionPolicy: StepCompletionPolicy;
-  /** 步骤执行周期 ID（从开始到完成/失败） */
+  /** Step execution cycle ID (from start to completion/failure) */
   executionId?: string;
-  /** 实际工具调用次数 */
+  /** Actual tool call count */
   toolCallCount: number;
-  /** 失败后重试次数 */
+  /** Retry count after failure */
   retryCount: number;
-  /** 失败信息（superseded 后保留） */
+  /** Failure info (retained after being superseded) */
   failure?: StepFailure;
-  /** 被哪些替代步骤取代 */
+  /** Which replacement steps supersede this */
   supersededBy?: string[];
 }
 
@@ -82,7 +82,7 @@ export interface PendingTaskSwitch {
   createdAt: number;
 }
 
-// ── 前端进度卡快照 ────────────────────────
+// -- Frontend progress card snapshot --
 
 export interface TaskPlanSnapshot {
   planId: string;
@@ -117,7 +117,7 @@ export function buildPlanSnapshot(
   };
 }
 
-// ── 动态 maxIterations ────────────────────
+// -- Dynamic maxIterations --
 
 export function computeMaxIterations(plan: TaskPlan | undefined): number {
   if (!plan) return BASE_ITERATIONS;
@@ -127,7 +127,7 @@ export function computeMaxIterations(plan: TaskPlan | undefined): number {
   );
 }
 
-// ── 步骤 ID 生成 ──────────────────────────
+// -- Step ID generation --
 
 let stepIdCounter = 0;
 export function generateStepId(): string {
@@ -149,7 +149,7 @@ export function generatePlanId(): string {
   return `plan_${++planIdCounter}_${Date.now()}`;
 }
 
-// ── 步骤查找 ──────────────────────────────
+// -- Step lookup --
 
 export function findStep(plan: TaskPlan, stepId: string | undefined): PlanStep | undefined {
   if (!stepId) return undefined;
@@ -172,7 +172,7 @@ export function findNextPendingStep(plan: TaskPlan, afterStepId?: string): PlanS
   return undefined;
 }
 
-// ── planVerify：完成条件检查 ──────────────
+// -- planVerify: completion criteria check --
 
 export interface StepVerificationResult {
   status: "completed" | "failed" | "running";
@@ -186,7 +186,7 @@ export function verifyStep(
 ): StepVerificationResult {
   const toolMap = new Map(tools.map((t) => [t.id, t]));
 
-  // 检查是否有不可重试的失败
+  // Check for non-retryable failure
   const hasNonRetryableFailure = stepResults.some(
     (r) => r.status === "failed" && !r.retryable,
   );
@@ -198,15 +198,15 @@ export function verifyStep(
     };
   }
 
-  // 检查完成条件
+  // Check completion criteria
   const policy = step.completionPolicy;
   if (!policy.allOf && !policy.anyOf) {
-    // 没有完成条件：工具成功且终态即完成
+    // No completion criteria: tool success and terminal means complete
     const hasSuccess = stepResults.some((r) => r.status === "succeeded" && r.terminal !== false);
     return hasSuccess ? { status: "completed" } : { status: "running" };
   }
 
-  // allOf: 所有条件必须满足
+  // allOf: all criteria must be satisfied
   if (policy.allOf) {
     for (const criterion of policy.allOf) {
       if (!checkCriterion(criterion, stepResults, toolMap)) {
@@ -215,7 +215,7 @@ export function verifyStep(
     }
   }
 
-  // anyOf: 每个分组至少满足一项
+  // anyOf: at least one satisfied per group
   if (policy.anyOf) {
     for (const group of policy.anyOf) {
       const anySatisfied = group.some((c) => checkCriterion(c, stepResults, toolMap));
@@ -238,7 +238,7 @@ function checkCriterion(
       (r) => r.status === "succeeded" && (r.capabilityId === criterion.capabilityId || r.toolId === criterion.capabilityId),
     );
   }
-  // projection_claim: 用共享投影函数检查
+  // projection_claim: check using shared projection function
   for (const result of results) {
     if (result.status !== "succeeded") continue;
     const tool = toolMap.get(result.toolId);
@@ -256,7 +256,7 @@ function checkCriterion(
   return false;
 }
 
-// ── createPlan：计划创建 LLM 调用 ─────────
+// -- createPlan: plan creation LLM call --
 
 export interface RunCreatePlanInput {
   model: string;
@@ -527,7 +527,7 @@ export async function runCreatePlan(input: RunCreatePlanInput): Promise<TaskPlan
   throw new Error(`Plan creation failed: code=${failCode} disposition=${failDisp} attempts=${result.failure.attempts}`);
 }
 
-// ── replan：重规划 ────────────────────────
+// -- replan: replanning --
 
 export interface RunReplanInput {
   model: string;
@@ -641,7 +641,7 @@ export async function runReplan(input: RunReplanInput): Promise<PlanStep[]> {
   throw new Error("Replan failed");
 }
 
-// ── 计划状态更新工具 ──────────────────────
+// -- Plan state update helpers --
 
 export function markStepSuperseded(step: PlanStep, failure: StepFailure, supersededBy: string[]): void {
   step.status = "superseded";
@@ -660,14 +660,14 @@ export function applyReplan(
   const replacementIds = replacementSteps.map((s) => s.id);
   markStepSuperseded(failedStep, failedStep.failure ?? { message: "unknown", failedAt: Date.now() }, replacementIds);
 
-  // 将 failed 步骤之后的所有 pending 步骤也标记为 superseded
+  // Mark all pending steps following failed step as superseded
   for (let i = failedIndex + 1; i < plan.steps.length; i++) {
     if (plan.steps[i].status === "pending") {
       markStepSuperseded(plan.steps[i], { message: "A prerequisite step failed", failedAt: Date.now() }, replacementIds);
     }
   }
 
-  // 插入替代步骤
+  // Insert replacement steps
   plan.steps.splice(failedIndex + 1, 0, ...replacementSteps);
   plan.updatedAt = Date.now();
 }

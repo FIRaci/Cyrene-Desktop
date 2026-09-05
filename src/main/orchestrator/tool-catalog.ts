@@ -1,17 +1,17 @@
-// tool-catalog —— 运行时从 toolRegistry 自动生成工具目录。
+// tool-catalog - Auto-generates tool catalog at runtime from toolRegistry.
 //
-// 设计原则：
-// - 只输出 id + 用途 + 风险三项，不放参数（参数走 tools Schema，避免双重定义）。
-// - 目录用于 LLM 工具阶段的第一层选择："这个工具大概是做什么的"，不替代完整 description。
-// - 不依赖全局 toolRegistry；接受传入的工具列表，测试时可注入。
+// Design principles:
+// - Outputs only id + purpose + risk; omits parameters (parameters use tools Schema to avoid double definitions).
+// - Catalog serves the first layer of selection in LLM tool phase: "what roughly is this tool for", not replacing full description.
+// - Does not depend on global toolRegistry; accepts passed tool list, injectable during testing.
 
 import type { ToolDefinition } from "./tool-registry";
 
 /**
- * 提取工具的目录用途。
- * - 优先使用 catalogHint
- * - 回落 description 的首行
- * - 最后回落 description 全文
+ * Extracts catalog purpose of tool.
+ * - Prioritizes catalogHint
+ * - Falls back to first line of description
+ * - Finally falls back to full description
  */
 function extractHint(tool: ToolDefinition): string {
   if (tool.catalogHint && tool.catalogHint.trim()) return tool.catalogHint.trim();
@@ -21,8 +21,8 @@ function extractHint(tool: ToolDefinition): string {
 }
 
 /**
- * 生成工具目录文本。
- * 空工具列表返回提示占位。
+ * Generates tool catalog text.
+ * Returns placeholder notice for empty tool list.
  */
 export function buildToolCatalog(tools: ReadonlyArray<ToolDefinition>): string {
   if (tools.length === 0) return "(No tools are currently available.)";

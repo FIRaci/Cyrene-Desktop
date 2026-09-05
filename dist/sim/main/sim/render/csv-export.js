@@ -34,8 +34,7 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.exportCsv = exportCsv;
-// CSV 导出：每轮每条目一行
-// 列：round, entryId, intrinsicValue, priority, activation, userSilence, modelSilence, state, userHit, modelHit
+// CSV Export: one row per round per entry
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 function exportCsv(result, outputDir) {

@@ -26,16 +26,16 @@ function toJsonResult(r: PlayLive2DActionResult): string {
 }
 
 const LEGACY_LOCALIZED_ALIASES: Readonly<Record<string, string>> = {
-  "回正": "reset",
-  "眨眨眼": "wink",
-  "可爱一下": "act cute",
-  "笑一笑": "smile",
-  "戴墨镜": "sunglasses",
-  "问号": "question mark",
-  "闪闪发光": "sparkle",
-  "星星眼": "starry eyes",
-  "圈圈眼": "dizzy eyes",
-  "开心眼": "happy eyes",
+  "\u56de\u6b63": "reset",
+  "\u7728\u7728\u773c": "wink",
+  "\u53ef\u7231\u4e00\u4e0b": "act cute",
+  "\u7b11\u4e00\u7b11": "smile",
+  "\u6234\u58a8\u955c": "sunglasses",
+  "\u95ee\u53f7": "question mark",
+  "\u95ea\u95ea\u53d1\u5149": "sparkle",
+  "\u661f\u661f\u773c": "starry eyes",
+  "\u5708\u5708\u773c": "dizzy eyes",
+  "\u5f00\u5fc3\u773c": "happy eyes",
 };
 
 function findLocalizedAction(alias: string) {

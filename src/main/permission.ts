@@ -1,6 +1,6 @@
-// 文件/工具权限档位 — 控制 agent 能做什么
-// 四档：read-only / scoped / per-action / full
-// 未来 fetch_url、run_shell、install_mcp_server 等"危险工具"都要先过 checkPermission
+// File/tool permission tiers — controls what the agent is permitted to execute
+// Four tiers: read-only / scoped / per-action / full
+// All sensitive tools pass through checkPermission
 
 import { ipcMain, BrowserWindow } from "electron";
 import type { IpcMainInvokeEvent, WebContents } from "electron";
@@ -21,29 +21,29 @@ export const ACCESS_LEVEL_LABEL: Record<AgentFileAccessLevel, string> = {
   "full": "Full access",
 };
 
-// 工具危险等级：决定该工具在哪些档位下可用
-// input-control（键鼠/截屏控制）按 shell 同档处理：read-only/scoped 拒绝，per-action 审批，full 允许
+// Tool risk tier: determines which permission tiers permit tool execution
+// input-control (mouse/keyboard/screenshot) handled in same tier as shell: rejected in read-only/scoped, approved in per-action, allowed in full
 export type ToolRiskLevel = "safe" | "fs-read" | "fs-write" | "shell" | "network" | "input-control";
 
 /**
- * 给定档位 + 工具危险等级 → 返回授权策略：
- *   - "allow"       直接放行
- *   - "ask"         弹审批 UI，用户点同意才放行
- *   - "deny"        直接拒绝（agent 会收到拒绝原因）
+ * Given tier + tool risk tier -> returns authorization policy:
+ *   - "allow"       Execute directly
+ *   - "ask"         Prompt approval UI, executed only when user approves
+ *   - "deny"        Reject directly (agent receives rejection reason)
  */
 export function policyFor(level: AgentFileAccessLevel, risk: ToolRiskLevel): "allow" | "ask" | "deny" {
-  // safe 工具（纯计算、纯检索本地内置数据）任何档位都允许
+  // safe tools (pure calculation, local read-only retrieval) allowed in any tier
   if (risk === "safe") return "allow";
 
   switch (level) {
     case "read-only":
       return risk === "fs-read" || risk === "network" || risk === "input-control" ? "allow" : "deny";
     case "scoped":
-      // 指定目录档：fs 读写允许（具体路径校验在工具内部做），shell 拒绝
+      // scoped tier: fs operations allowed (path validation done inside tool), shell rejected
       if (risk === "fs-read" || risk === "fs-write" || risk === "network") return "allow";
       return "deny";
     case "per-action":
-      // 每次审批：除 safe 外都弹审批
+      // per-action: prompt approval for all non-safe tools
       return "ask";
     case "full":
       return "allow";
@@ -55,7 +55,7 @@ export function policyFor(level: AgentFileAccessLevel, risk: ToolRiskLevel): "al
 // launch arbitrary commands/processes.
 const COMPANION_LEVEL: AgentFileAccessLevel = "read-only";
 
-// ── 当前档位的内存缓存（main 进程持有） ───────────────────
+// ── In-memory cache for current tier (held by main process) ───────────────────
 let currentLevel: AgentFileAccessLevel = COMPANION_LEVEL;
 let allowedRoot: string | null = null;
 
@@ -73,14 +73,14 @@ export function setCurrentLevel(level: AgentFileAccessLevel): void {
     return;
   }
   if (currentLevel === level) return;
-  console.log(LOG_PREFIX, "档位切换:", currentLevel, "→", level);
+  console.log(LOG_PREFIX, "Level changed:", currentLevel, "->", level);
   currentLevel = level;
   persistLevel(level, allowedRoot);
 }
 
 export function setAllowedRoot(rootPath: string | null): void {
   allowedRoot = rootPath;
-  console.log(LOG_PREFIX, "设置授权目录:", allowedRoot);
+  console.log(LOG_PREFIX, "Set allowed directory:", allowedRoot);
   persistLevel(currentLevel, allowedRoot);
 }
 
@@ -91,7 +91,7 @@ export function isPathWithinScopedRoot(targetPath: string): boolean {
   return resolvedTarget === resolvedRoot || resolvedTarget.startsWith(resolvedRoot + path.sep);
 }
 
-// ── 持久化 ────────────────────────────────────────────────
+// ── Persistence ────────────────────────────────────────────────
 
 function getStorePath(): string {
   return path.join(app.getPath("userData"), "agent-permission.json");
@@ -103,13 +103,13 @@ function persistLevel(level: AgentFileAccessLevel, root: string | null): void {
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
     fs.writeFileSync(filePath, JSON.stringify({ level, allowedRoot: root }, null, 2), "utf8");
   } catch (err) {
-    console.error(LOG_PREFIX, "持久化档位失败:", err);
+    console.error(LOG_PREFIX, "Failed to persist permission level:", err);
   }
 }
 
 /**
- * 启动时从磁盘加载上次保存的档位；不存在则用默认 read-only。
- * 必须在 app.whenReady 之后调用（依赖 app.getPath）。
+ * Loads previously saved tier from disk at startup; defaults to read-only if absent.
+ * Must be called after app.whenReady (depends on app.getPath).
  */
 export function initPermissionFromDisk(): void {
   try {
@@ -125,16 +125,16 @@ export function initPermissionFromDisk(): void {
       if (raw.level !== COMPANION_LEVEL) persistLevel(COMPANION_LEVEL, null);
       console.log(LOG_PREFIX, "Loaded companion-safe permission profile");
     } else {
-      console.warn(LOG_PREFIX, "档位文件内容无效，回退默认");
+      console.warn(LOG_PREFIX, "Invalid permission level file, falling back to default");
     }
   } catch (err) {
-    console.error(LOG_PREFIX, "加载档位失败:", err);
+    console.error(LOG_PREFIX, "Failed to load permission level:", err);
   }
 }
 
-// ── 审批弹窗（per-action 档位下使用） ─────────────────────
-// 通过 IPC 把审批请求发到任意一个有焦点的窗口（一般是 chat 或 settings），
-// 渲染端弹一个卡片，用户点同意/拒绝后回传结果。
+// ── Approval modal (used under per-action tier) ─────────────────────
+// Sends approval request via IPC to any focused window (typically chat or settings),
+// renderer displays a card and sends back user decision.
 
 interface PendingApproval {
   resolve: (allowed: boolean) => void;
@@ -178,8 +178,8 @@ export interface ApprovalRequest {
 }
 
 /**
- * 向用户发起一次审批请求，等用户点同意/拒绝。
- * 60 秒不响应自动拒绝。
+ * Prompts user with an approval request, waiting for allow/deny decision.
+ * Automatically rejects if no response within 60 seconds.
  */
 export function requestApproval(
   request: Omit<ApprovalRequest, "id">,
@@ -192,14 +192,14 @@ export function requestApproval(
       .filter((webContents) => !webContents.isDestroyed() && isApprovalUi(webContents));
 
     if (recipients.length === 0) {
-      console.warn(LOG_PREFIX, "无可信审批窗口，自动拒绝");
+      console.warn(LOG_PREFIX, "No trusted approval window available, automatically rejecting");
       resolve(false);
       return;
     }
 
     const timer = setTimeout(() => {
       pendingApprovals.delete(id);
-      console.warn(LOG_PREFIX, "审批超时（60s 未响应），自动拒绝:", request.toolId);
+      console.warn(LOG_PREFIX, "Approval timed out (60s no response), automatically rejecting:", request.toolId);
       resolve(false);
     }, 60_000);
     pendingApprovals.set(id, {
@@ -209,7 +209,7 @@ export function requestApproval(
     });
 
     const payload: ApprovalRequest = { id, ...request };
-    console.log(LOG_PREFIX, "向渲染端发送审批请求:", id, request.toolId);
+    console.log(LOG_PREFIX, "Sending approval request to renderer:", id, request.toolId);
 
     for (const webContents of recipients) {
       webContents.send(IPC.PERMISSION_APPROVAL_REQUEST, payload);
@@ -217,7 +217,7 @@ export function requestApproval(
   });
 }
 
-// ── IPC 注册 ──────────────────────────────────────────────
+// ── IPC Registration ──────────────────────────────────────────────
 
 export function registerPermissionIpc(options: PermissionIpcOptions = {}): void {
   const canSetLevel = options.canSetLevel ?? defaultCanSetLevel;
@@ -230,7 +230,7 @@ export function registerPermissionIpc(options: PermissionIpcOptions = {}): void 
 
   ipcMain.handle(IPC.PERMISSION_SET_LEVEL, (event, level: AgentFileAccessLevel) => {
     if (!canSetLevel(event)) {
-      console.warn(LOG_PREFIX, "拒绝非可信渲染端切换权限档位:", event.sender.id);
+      console.warn(LOG_PREFIX, "Rejected untrusted renderer switching permission level:", event.sender.id);
       return { ok: false, error: "Permission level changes are only allowed from the trusted settings UI." };
     }
     if (!isValidLevel(level)) {
@@ -243,7 +243,7 @@ export function registerPermissionIpc(options: PermissionIpcOptions = {}): void 
     return { ok: true, level: currentLevel };
   });
 
-  // 渲染端审批 UI 回传结果
+  // Renderer approval UI sends back result
   ipcMain.handle(IPC.PERMISSION_APPROVAL_RESOLVE, (event, payload: { id: string; allowed: boolean }) => {
     if (!payload || typeof payload.id !== "string" || typeof payload.allowed !== "boolean") {
       return { ok: false };
@@ -272,10 +272,10 @@ function isValidLevel(value: unknown): value is AgentFileAccessLevel {
 }
 
 /**
- * 一站式权限检查：根据当前档位 + 工具危险等级，决定执行/审批/拒绝。
- * - allow → 返回 true
- * - ask   → 触发审批，等用户回应
- * - deny  → 返回 false
+ * Unified permission check: determines execute / ask / deny based on current tier + risk.
+ * - allow -> returns true
+ * - ask   -> triggers approval, awaits user response
+ * - deny  -> returns false
  */
 export async function checkPermission(input: {
   toolId: string;
@@ -289,7 +289,7 @@ export async function checkPermission(input: {
   console.log(LOG_PREFIX, "checkPermission:", input.toolId, "risk=" + input.risk, "level=" + level, "→", policy);
 
   if (policy === "allow") {
-    // 强制校验 scoped 文件路径
+    // Enforce scoped file path validation
     if (level === "scoped" && (input.risk === "fs-read" || input.risk === "fs-write")) {
       const targetPath = (input.args.path as string) || (input.args.filePath as string);
       if (!targetPath) {
@@ -307,7 +307,7 @@ export async function checkPermission(input: {
       reason: "Current level \"" + ACCESS_LEVEL_LABEL[level] + "\" does not permit this action (risk=" + input.risk + "). Please configure local file permissions in Settings.",
     };
   }
-  // ask → 弹审批
+  // ask -> prompt approval
   const approved = await requestApproval({
     toolId: input.toolId,
     toolName: input.toolName,

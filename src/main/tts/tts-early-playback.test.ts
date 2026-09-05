@@ -19,10 +19,10 @@ describe("tts early playback guards", () => {
   })
 
   it("extracts the first complete sentence only after a useful minimum length", () => {
-    expect(extractEarlyTtsSegment("好。后面还有内容。")).toBeNull()
-    expect(extractEarlyTtsSegment("今天辛苦啦，我们慢慢来。后面还有内容。")).toEqual({
-      segment: "今天辛苦啦，我们慢慢来。",
-      remainder: "后面还有内容。",
+    expect(extractEarlyTtsSegment("OK! More follows.")).toBeNull()
+    expect(extractEarlyTtsSegment("Great work today, let us take our time! More follows.")).toEqual({
+      segment: "Great work today, let us take our time!",
+      remainder: "More follows.",
     })
   })
 })

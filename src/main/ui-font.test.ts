@@ -10,10 +10,10 @@ describe("ui font settings", () => {
   });
 
   it("keeps a valid imported font selection", () => {
-    expect(normalizeUiFont({ kind: "custom", fileName: "custom-a1b2.otf", displayName: "可爱字体" })).toEqual({
+    expect(normalizeUiFont({ kind: "custom", fileName: "custom-a1b2.otf", displayName: "Cute Font" })).toEqual({
       kind: "custom",
       fileName: "custom-a1b2.otf",
-      displayName: "可爱字体",
+      displayName: "Cute Font",
     });
   });
 

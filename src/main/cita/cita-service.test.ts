@@ -7,7 +7,7 @@ import type { CitaSettings, ModelVisibleContext, TurnUnderstanding } from "./con
 const validUnderstanding: TurnUnderstanding = {
   resolvedReferences: [],
   focusedEntityRefs: [],
-  contextualizedQuery: "你好",
+  contextualizedQuery: "hello",
   rewriteStatus: "unchanged",
 };
 
@@ -25,7 +25,7 @@ function turnInput(overrides: Partial<Parameters<CitaService["prepareTurn"]>[0]>
   return {
     conversationId: "conversation-a",
     turnId: "turn-1",
-    originalQuery: "你好",
+    originalQuery: "hello",
     recentDialogue: [],
     ...overrides,
   };
@@ -97,7 +97,7 @@ describe("CitaService", () => {
         conversationId: "conversation-a",
         domain: "music",
         kind: "candidate",
-        label: "最初的记忆",
+        label: "Initial Memory",
         position: 1,
         presented: true,
         lifecycle: "active",
@@ -106,12 +106,12 @@ describe("CitaService", () => {
     });
 
     enabled = true;
-    await service.prepareTurn(turnInput({ originalQuery: "播放第一首" }));
+    await service.prepareTurn(turnInput({ originalQuery: "play the first song" }));
 
     expect(understandTurn).toHaveBeenCalledWith(
       expect.objectContaining({
         availableContexts: expect.arrayContaining([
-          expect.objectContaining({ contextRef: "ctx_song_1", label: "最初的记忆" }),
+          expect.objectContaining({ contextRef: "ctx_song_1", label: "Initial Memory" }),
         ]),
       }),
       undefined,
@@ -131,7 +131,7 @@ describe("CitaService", () => {
         conversationId: "conversation-a",
         domain: "music",
         kind: "candidate",
-        label: "最初的记忆",
+        label: "Initial Memory",
         position: 1,
         presented: true,
         lifecycle: "active",
@@ -139,11 +139,11 @@ describe("CitaService", () => {
       },
     });
 
-    const result = await service.prepareTurn(turnInput({ originalQuery: "播放第一首" }));
+    const result = await service.prepareTurn(turnInput({ originalQuery: "play the first song" }));
     const pkg = result.contextPackage as unknown as { supportingContexts?: ModelVisibleContext[] };
 
     expect(pkg.supportingContexts).toEqual([
-      expect.objectContaining({ contextRef: "ctx_song_1", label: "最初的记忆", position: 1 }),
+      expect.objectContaining({ contextRef: "ctx_song_1", label: "Initial Memory", position: 1 }),
     ]);
     expect(result.contextBlock).toContain("ctx_song_1");
   });
@@ -164,7 +164,7 @@ describe("CitaService", () => {
           conversationId: "conversation-a",
           domain: "music",
           kind: "candidate",
-          label: "最初的记忆",
+          label: "Initial Memory",
           presented: true,
           lifecycle: "active",
           source: "tool_result",
@@ -212,10 +212,10 @@ describe("CitaService", () => {
       understandTurn: vi.fn(async () => { throw new Error("timeout"); }),
     });
 
-    const result = await service.prepareTurn(turnInput({ originalQuery: "第一首吧" }));
+    const result = await service.prepareTurn(turnInput({ originalQuery: "the first one please" }));
 
-    expect(result.contextPackage?.originalQuery).toBe("第一首吧");
-    expect(result.contextPackage?.contextualizedQuery).toBe("第一首吧");
+    expect(result.contextPackage?.originalQuery).toBe("the first one please");
+    expect(result.contextPackage?.contextualizedQuery).toBe("the first one please");
     expect(result.contextPackage?.semanticStatus).toBe("unavailable");
   });
 

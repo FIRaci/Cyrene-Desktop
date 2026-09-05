@@ -25,7 +25,7 @@ async function loadRerankerPipeline(modelDir: string): Promise<any> {
 
   // Save original localModelPath (embedding may have set it)
   const originalPath = env.localModelPath;
-  // 主路径：项目根 models/。兜底：HF cache，通过 cache_dir 选项传给 pipeline。
+  // Primary path: project root models/. Fallback: HF cache passed via cache_dir option.
   env.localModelPath = getModelsDir();
   env.allowLocalModels = true;
   env.allowRemoteModels = false;
@@ -112,8 +112,8 @@ let currentReranker: RerankerProvider | null = null;
 let currentRerankerMode: "light" | "standard" | "none" = "none";
 
 /**
- * 检查某个 rerank 模型的 onnx 文件是否存在于本地 models/ 目录。
- * models/.gitignore 排除了 *.onnx，所以新 clone 的仓库默认没有这些文件。
+ * Check whether a rerank model's onnx file exists in local models/ directory.
+ * models/.gitignore excludes *.onnx, so newly cloned repositories default to not having these files.
  */
 function checkRerankerModelInstalled(mode: "light" | "standard"): boolean {
   const modelDir = mode === "light" ? "ms-marco-MiniLM-L-6-v2" : "bge-reranker-base";
@@ -127,7 +127,7 @@ function checkRerankerModelInstalled(mode: "light" | "standard"): boolean {
 }
 
 /**
- * 返回所有 rerank 模型的安装状态，供 UI 真实渲染（不再硬编码"已安装"）。
+ * Return installation status of all rerank models for UI rendering (no longer hardcoded "installed").
  */
 export function getRerankerInstallStatus(): { light: boolean; standard: boolean } {
   return {
@@ -145,10 +145,10 @@ export async function initReranker(mode: "light" | "standard" | "none"): Promise
     return;
   }
 
-  // 入口 fallback：如果 onnx 文件不存在，自动降级为 none（不抛错，不让 RAG init FAILED）
+  // Fallback: if onnx file does not exist, automatically downgrade to none
   if (!checkRerankerModelInstalled(mode)) {
     const modelDir = mode === "light" ? "ms-marco-MiniLM-L-6-v2" : "bge-reranker-base";
-    console.warn(`[Reranker] 模型未找到 (models/${modelDir}/onnx/model_quantized.onnx)，自动降级为 none。基础聊天和基础 RAG 不受影响。`);
+    console.warn(`[Reranker] Model not found (models/${modelDir}/onnx/model_quantized.onnx), falling back to none. Basic chat and basic RAG are unaffected.`);
     currentRerankerMode = "none";
     currentReranker = null;
     return;

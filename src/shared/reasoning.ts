@@ -1,21 +1,21 @@
-// 厂商无关的推理控制层 —— 类型 + 规则表 + resolver + normalize
+// Vendor-agnostic reasoning control layer -- types + rules table + resolver + normalize
 //
-// 适用范围：仅推理模式 auto/off/on + 真实存在的 effort 档位。
-// 不涉及温度 / Top-P / max_tokens / verbosity / thinking_budget / Responses API。
+// Scope: reasoning mode auto/off/on + actual existing effort levels only.
+// Does not involve temperature / Top-P / max_tokens / verbosity / thinking_budget / Responses API.
 //
-// 调用方：
-//   - renderer/settings.ts：UI 显示与状态文案（调 resolveEffectiveReasoning）
-//   - main/orchestrator/vendors/*-adapter.ts：buildRequest 内转换请求体
-//     （调 resolveReasoningCapability + applyReasoningPreference）
-//   - main/orchestrator/vendors/reasoning.ts：纯函数 applyReasoningPreference
+// Callers:
+//   - renderer/settings.ts: UI display and status labels (calls resolveEffectiveReasoning)
+//   - main/orchestrator/vendors/*-adapter.ts: transforms request body in buildRequest
+//     (calls resolveReasoningCapability + applyReasoningPreference)
+//   - main/orchestrator/vendors/reasoning.ts: pure function applyReasoningPreference
 //
-// providerId 必须与 main/orchestrator/vendors/capabilities.ts 的 ProviderCapability.id
-// 完全一致：chatgpt / claude / deepseek / glm / kimi / qwen / minimax / mimo / doubao / unknown。
+// providerId must strictly match ProviderCapability.id in main/orchestrator/vendors/capabilities.ts
+// exactly: chatgpt / claude / deepseek / glm / kimi / qwen / minimax / mimo / doubao / unknown.
 //
-// 规则优先级：第一条匹配的 capability 生效（find() + first-match-wins）。
-// 排序原则：具体型号在前，宽泛系列在后（Qwen /-thinking$/ 必须在 /^qwen3/ 之前；
-// Kimi K2.5/K2.6/K2.7-Code/K2.7-Code-HighSpeed 必须用精确正则，且 K2.7 系列
-// 必须在通用 kimi-k2-thinking 系列之前）。
+// Rule priority: first matching capability takes effect (find() + first-match-wins).
+// Ordering principle: specific models first, broad families later (Qwen /-thinking$/ before /^qwen3/;
+// Kimi K2.5/K2.6/K2.7-Code/K2.7-Code-HighSpeed must use exact regex, and K2.7 family
+// must precede generic kimi-k2-thinking family).
 
 export type ReasoningMode = "auto" | "off" | "on";
 
@@ -48,13 +48,13 @@ export interface ReasoningCapability {
   defaultEffort?: ReasoningEffort;
   requestStyle: ReasoningRequestStyle;
   /**
-   * 该 capability 是否支持显式关闭（off）。
-   * OpenAI 各型号按具体规则声明（gpt-5.6 = true，o1 = true，gpt-4o 兜底 = false）。
-   * supportsDisable=false 时 UI 不显示"关闭"按钮，请求也不发 reasoning_effort:"none"。
+   * Whether this capability supports explicit disable (off).
+   * OpenAI models declare per specific rules (gpt-5.6 = true, o1 = true, gpt-4o fallback = false).
+   * When supportsDisable=false, UI does not show "off" option, and request does not send reasoning_effort:"none".
    */
   supportsDisable: boolean;
   /**
-   * 仅 thinking-type 适用：是否在 on + hasTools 时附加 thinking.keep="all"。
+   * Only applicable to thinking-type: whether to attach thinking.keep="all" when on + hasTools.
    * Kimi K2.6 = true；K2.5 = false。
    */
   keepOnTools?: boolean;
@@ -71,7 +71,7 @@ export interface ModelReasoningRule {
   capability: ReasoningCapability;
 }
 
-/** 兜底 capability：未知 provider / 模型 */
+/** Fallback capability: unknown provider / model */
 const UNKNOWN_CAPABILITY: ReasoningCapability = {
   control: "none",
   requestStyle: "none",
@@ -79,16 +79,16 @@ const UNKNOWN_CAPABILITY: ReasoningCapability = {
 };
 
 /**
- * 9 家厂商规则表。第一条匹配的 capability 生效。
+ * 9 vendor rule tables. First matching capability takes effect.
  *
- * 修改本表前请同步更新：
- *   - src/shared/reasoning.test.ts（A. 规则匹配优先级 + B. 9 家全部存在性）
- *   - 桌面 2026-07-14-reasoning-control-layer-design.md §3.2
+ * Before updating this table please synchronize:
+ *   - src/shared/reasoning.test.ts (A. Rule match priority + B. All 9 vendors presence)
+ *   - reasoning-control-layer-design docs
  */
 export const MODEL_REASONING_RULES: readonly ModelReasoningRule[] = [
   // ── chatgpt（OpenAI）──
-  // 按具体型号拆分；GPT-5.6 当前 Chat Completions 接受 low/medium/high/xhigh/max
-  // （不含 minimal）；supportsDisable=true，off → reasoning_effort:"none"。
+  // Split by specific model; GPT-5.6 Chat Completions accepts low/medium/high/xhigh/max
+  // (excluding minimal); supportsDisable=true, off -> reasoning_effort:"none".
   { providerId: "chatgpt", modelPattern: /^gpt-5\.6/i, capability: {
     control: "effort",
     supportedEfforts: ["low", "medium", "high", "xhigh", "max"],
@@ -168,8 +168,8 @@ export const MODEL_REASONING_RULES: readonly ModelReasoningRule[] = [
   { providerId: "deepseek", modelPattern: /^deepseek-(chat|reasoner)$/i, capability: UNKNOWN_CAPABILITY },
   { providerId: "deepseek", modelPattern: /.*/, capability: UNKNOWN_CAPABILITY },
 
-  // ── glm（智谱）──
-  // 精确型号在前；glm-5 基础型号放在精确型号之后（兜底更宽的 glm-5 系列）。
+  // ── glm (Zhipu) ──
+  // Specific models first; base glm-5 placed after specific models as fallback.
   { providerId: "glm", modelPattern: /^glm-5\.2/i, capability: {
     control: "toggle-effort",
     supportedEfforts: ["high", "max"],
@@ -204,8 +204,8 @@ export const MODEL_REASONING_RULES: readonly ModelReasoningRule[] = [
   } },
   { providerId: "glm", modelPattern: /.*/, capability: UNKNOWN_CAPABILITY },
 
-  // ── qwen（通义千问）──
-  // /-thinking$/ 必须在 /^qwen3/ 之前。
+  // ── qwen (Tongyi Qianwen) ──
+  // /-thinking$/ must precede /^qwen3/.
   { providerId: "qwen", modelPattern: /-thinking$/i, capability: {
     control: "fixed-on",
     requestStyle: "none",
@@ -223,9 +223,9 @@ export const MODEL_REASONING_RULES: readonly ModelReasoningRule[] = [
   } },
   { providerId: "qwen", modelPattern: /.*/, capability: UNKNOWN_CAPABILITY },
 
-  // ── kimi（月之暗面）──
-  // K2.7-Code / K2.7-Code-HighSpeed 必须用精确正则（$-anchor），
-  // 且排在通用 kimi-k2-thinking 系列之前。
+  // ── kimi (Moonshot) ──
+  // K2.7-Code / K2.7-Code-HighSpeed must use exact regex ($-anchor),
+  // and precede generic kimi-k2-thinking family.
   { providerId: "kimi", modelPattern: /^kimi-k2\.7-code-highspeed$/i, capability: {
     control: "fixed-on",
     requestStyle: "none",
@@ -255,8 +255,8 @@ export const MODEL_REASONING_RULES: readonly ModelReasoningRule[] = [
   } },
   { providerId: "kimi", modelPattern: /.*/, capability: UNKNOWN_CAPABILITY },
 
-  // ── minimax（稀宇科技）──
-  // M3 走 anthropic-adaptive（on=adaptive / off=disabled），不用通用 thinking-type 路径。
+  // ── minimax (MiniMax) ──
+  // M3 uses anthropic-adaptive (on=adaptive / off=disabled), not generic thinking-type path.
   { providerId: "minimax", modelPattern: /^MiniMax-M3/i, capability: {
     control: "toggle",
     requestStyle: "anthropic-adaptive",
@@ -269,8 +269,8 @@ export const MODEL_REASONING_RULES: readonly ModelReasoningRule[] = [
   } },
   { providerId: "minimax", modelPattern: /.*/, capability: UNKNOWN_CAPABILITY },
 
-  // ── mimo（小米）──
-  // 跨 transport 共用：OpenAI 入口 + Anthropic 入口都生成 thinking.type。
+  // ── mimo (Xiaomi) ──
+  // Shared across transports: both OpenAI and Anthropic endpoints generate thinking.type.
   { providerId: "mimo", modelPattern: /^mimo-v2\./i, capability: {
     control: "toggle",
     requestStyle: "thinking-type",
@@ -278,7 +278,7 @@ export const MODEL_REASONING_RULES: readonly ModelReasoningRule[] = [
   } },
   { providerId: "mimo", modelPattern: /.*/, capability: UNKNOWN_CAPABILITY },
 
-  // ── doubao（火山方舟）──
+  // ── doubao (Volcengine) ──
   { providerId: "doubao", modelPattern: /^doubao-seed-/i, capability: {
     control: "toggle",
     requestStyle: "thinking-type",
@@ -288,8 +288,8 @@ export const MODEL_REASONING_RULES: readonly ModelReasoningRule[] = [
 ];
 
 /**
- * 按 (providerId, model) 解析推理 capability。
- * 未命中任何规则时返回兜底 { control: "none", requestStyle: "none", supportsDisable: false }。
+ * Resolves reasoning capability by (providerId, model).
+ * Returns fallback { control: "none", requestStyle: "none", supportsDisable: false } when no rule matches.
  */
 export function resolveReasoningCapability(
   providerId: string,
@@ -304,17 +304,17 @@ export function resolveReasoningCapability(
 }
 
 /**
- * 把用户 preference 解析为 effective preference。
+ * Resolves user preference to effective preference.
  *
- * 决策顺序（用户第三轮修订 #3）：
- * 1. control = none / dynamic → 强制 auto
- * 2. control = fixed-on → 永远返 { mode: "on" }，不读 pref.mode、不读 pref.effort
+ * Decision sequence (revision #3):
+ * 1. control = none / dynamic -> forced auto
+ * 2. control = fixed-on -> always returns { mode: "on" }, ignores pref.mode and pref.effort
  * 3. control ∈ {toggle, effort, toggle-effort}：
- *    - mode !== "on" → 直接返 { mode }，不保留 effort
- *    - mode === "on"：effort 不在 supportedEfforts → 退回 defaultEffort；
- *      effort 缺省时填 defaultEffort；defaultEffort 也不在列 → 丢弃 effort
+ *    - mode !== "on" -> returns { mode } directly without keeping effort
+ *    - mode === "on": if effort not in supportedEfforts -> fall back to defaultEffort;
+ *      if effort omitted fill defaultEffort; if defaultEffort also not supported -> drop effort
  *
- * 注意：saved 永远不动（用户修订 #5），effective 仅用于运行时请求与 UI 当前显示。
+ * Note: saved is never modified, effective is only used for runtime requests and UI display.
  */
 export function resolveEffectiveReasoning(
   preference: ReasoningPreference | undefined,
@@ -322,12 +322,12 @@ export function resolveEffectiveReasoning(
 ): ReasoningPreference {
   const pref = preference ?? { mode: "auto" };
 
-  // 1. 不支持 / 动态路由 → 强制 auto
+  // 1. Unsupported / dynamic routing -> forced auto
   if (capability.control === "none" || capability.control === "dynamic") {
     return { mode: "auto" };
   }
 
-  // 2. fixed-on：effective 永远 on
+  // 2. fixed-on: effective always on
   if (capability.control === "fixed-on") {
     return { mode: "on" };
   }
@@ -335,19 +335,19 @@ export function resolveEffectiveReasoning(
   // 3. toggle / effort / toggle-effort
   const { mode } = pref;
 
-  // mode !== "on" → 不保留 effort（第三轮修订 #3）
+  // mode !== "on" -> do not preserve effort
   if (mode !== "on") {
     return { mode };
   }
 
   let { effort } = pref;
 
-  // effort 不在 supportedEfforts → 退回 defaultEffort
+  // effort not in supportedEfforts -> fall back to defaultEffort
   if (effort !== undefined && capability.supportedEfforts && !capability.supportedEfforts.includes(effort)) {
     effort = capability.defaultEffort;
   }
 
-  // effort 缺省时填 defaultEffort
+  // if effort omitted fill defaultEffort
   if (effort === undefined && capability.defaultEffort) {
     effort = capability.defaultEffort;
   }
@@ -355,7 +355,7 @@ export function resolveEffectiveReasoning(
   return { mode, ...(effort !== undefined ? { effort } : {}) };
 }
 
-// ── normalize 白名单（用户修订 #4：白名单，不 trim）──
+// ── normalize allowlist (allowlist, no trim) ──
 
 const MODE_SET: ReadonlySet<ReasoningMode> = new Set(["auto", "off", "on"]);
 const EFFORT_SET: ReadonlySet<ReasoningEffort> = new Set([
@@ -363,11 +363,11 @@ const EFFORT_SET: ReadonlySet<ReasoningEffort> = new Set([
 ]);
 
 /**
- * 把任意 input 归一化为合法 { mode, effort? }。
- * - 完全非法对象 → undefined
- * - mode 非法 → undefined
- * - mode 合法但 effort 非法 → 返 { mode }，effort 字段丢弃
- * - 完全合法 → 原样
+ * Normalizes arbitrary input to valid { mode, effort? }.
+ * - Completely invalid object -> undefined
+ * - Invalid mode -> undefined
+ * - Valid mode but invalid effort -> return { mode }, discard effort field
+ * - Fully valid -> as-is
  */
 export function normalizeReasoningPreference(
   input: unknown,
@@ -388,16 +388,16 @@ export function normalizeReasoningPreference(
 }
 
 /**
- * 持久化折叠（用户第三轮修订 #4）：
+ * Persistence fold:
  *
- * 语义：
- * - hasIncomingKey=false（字段缺失）→ 保留旧值（不覆盖）
- * - hasIncomingKey=true 且 incomingRaw 为 undefined / null → 视作"用户主动清空" → 返 undefined
- * - hasIncomingKey=true 且 incomingRaw 为非法对象 → normalize 后 undefined → 保留旧值（防覆盖）
- * - hasIncomingKey=true 且合法对象 → 用新值
+ * Semantics:
+ * - hasIncomingKey=false (field missing) -> keep old value (no overwrite)
+ * - hasIncomingKey=true and incomingRaw is undefined / null -> user cleared -> return undefined
+ * - hasIncomingKey=true and incomingRaw is invalid -> normalize undefined -> keep old value (guard overwrite)
+ * - hasIncomingKey=true and valid object -> use new value
  *
- * 调用方负责传入正确的 hasIncomingKey（区分 "settings 里没这个字段" vs "settings 里显式 undefined"）。
- * hasOwnProperty 是判断字段缺失的标准方式。
+ * Caller is responsible for passing correct hasIncomingKey.
+ * hasOwnProperty is the standard way to check for missing fields.
  */
 export function foldReasoning(
   incomingRaw: unknown,

@@ -8,19 +8,19 @@ const input: TurnUnderstandingInput = {
   conversationId: "conversation-a",
   turnId: "turn-2",
   stateRevision: 3,
-  originalQuery: "第一首吧",
+  originalQuery: "the first one please",
   availableContexts: [{
     contextRef: "music-candidate-1",
     conversationId: "conversation-a",
     domain: "music",
     kind: "candidate",
-    label: "胆小鬼 - 梁咏琪",
+    label: "Coward - Gigi Leung",
     position: 1,
     presented: true,
     lifecycle: "active",
     source: "tool_result",
   }],
-  recentDialogue: [{ role: "assistant", text: "想听哪一首？" }],
+  recentDialogue: [{ role: "assistant", text: "Which track would you like to listen to?" }],
   recentEvents: [],
 };
 
@@ -35,10 +35,10 @@ function understanding(
   overrides: Partial<TurnUnderstanding> = {},
 ): TurnUnderstanding {
   return {
-    contextualizedQuery: "用户选择当前歌曲候选中的第一首《胆小鬼》。",
+    contextualizedQuery: "User selects the first track 'Coward' among current song candidates.",
     rewriteStatus: "rewritten",
     resolvedReferences: [{
-      surface: "第一首",
+      surface: "the first one",
       targetRef: "music-candidate-1",
       relation: "candidate_position",
     }],
@@ -88,7 +88,7 @@ describe("RemoteSemanticEngine (Structured Output)", () => {
 
   it("repairs a schema-invalid result with structured error codes only", async () => {
     const generate = vi.fn<SemanticTextGenerator>()
-      .mockResolvedValueOnce(generated({ contextualizedQuery: "缺字段" }))
+      .mockResolvedValueOnce(generated({ contextualizedQuery: "missing_field" }))
       .mockResolvedValueOnce(generated());
     const engine = new RemoteSemanticEngine(generate, { profile });
 
@@ -98,11 +98,11 @@ describe("RemoteSemanticEngine (Structured Output)", () => {
       repair: { errorCodes: string[] };
     };
     expect(repairPayload.repair.errorCodes).toEqual(["NO_SCHEMA_VALID_OBJECT"]);
-    expect(generate.mock.calls[1][0].userPrompt).not.toContain("缺字段");
+    expect(generate.mock.calls[1][0].userPrompt).not.toContain("missing_field");
   });
 
   it("rejects multiple distinct schema-valid objects and repairs", async () => {
-    const alternative = understanding({ contextualizedQuery: "另一个有效对象" });
+    const alternative = understanding({ contextualizedQuery: "another valid object" });
     const generate = vi.fn<SemanticTextGenerator>()
       .mockResolvedValueOnce({
         text: `${JSON.stringify(understanding())}\n${JSON.stringify(alternative)}`,
@@ -122,7 +122,7 @@ describe("RemoteSemanticEngine (Structured Output)", () => {
     const candidate = understanding({
       resolvedReferences: [
         ...understanding().resolvedReferences,
-        { surface: "那个", targetRef: "invented-ref", relation: "direct" },
+        { surface: "that one", targetRef: "invented-ref", relation: "direct" },
       ],
       focusedEntityRefs: ["music-candidate-1", "invented-ref"],
     });
@@ -144,7 +144,7 @@ describe("RemoteSemanticEngine (Structured Output)", () => {
         conversationId: "conversation-b",
         domain: "music",
         kind: "candidate",
-        label: "其他会话",
+        label: "other conversation",
         position: 2,
         presented: true,
         lifecycle: "active",
@@ -155,7 +155,7 @@ describe("RemoteSemanticEngine (Structured Output)", () => {
         conversationId: "conversation-a",
         domain: "music",
         kind: "candidate",
-        label: "过期候选",
+        label: "expired candidate",
         position: 3,
         presented: true,
         lifecycle: "expired",
@@ -166,7 +166,7 @@ describe("RemoteSemanticEngine (Structured Output)", () => {
         conversationId: "conversation-a",
         domain: "music",
         kind: "candidate",
-        label: "未展示候选",
+        label: "undisplayed candidate",
         position: 4,
         presented: false,
         lifecycle: "active",

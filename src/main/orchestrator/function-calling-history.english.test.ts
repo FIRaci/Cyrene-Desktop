@@ -14,9 +14,9 @@ describe("function-calling English model boundary", () => {
     expect(source).toContain("[Denied]");
     expect(source).toContain("[Tool execution failed]");
     expect(source).toContain("Provide the final response using all tool results above.");
-    expect(source).not.toContain('output = "[错误]');
-    expect(source).not.toContain('output = "[已拒绝]');
-    expect(source).not.toContain('output = "[工具执行失败]');
+    expect(source).not.toContain('output = "[\u9519\u8bef]');
+    expect(source).not.toContain('output = "[\u5df2\u62d2\u7edd]');
+    expect(source).not.toContain('output = "[\u5de5\u5177\u6267\u884c\u5931\u8d25]');
   });
 });
 
@@ -30,7 +30,7 @@ describe("recall-history English model boundary", () => {
     expect(source).toContain("No conversation history found");
     expect(source).toContain('const role = h.metadata?.role === "user" ? "User" : "Cyrene"');
     expect(source).toContain("Found ${sorted.length} relevant conversation entries");
-    expect(source).not.toContain('name: "回忆历史"');
+    expect(source).not.toContain('name: "\u56de\u5fc6\u5386\u53f2"');
     expect(source).not.toContain('toLocaleString("zh-CN"');
   });
 });

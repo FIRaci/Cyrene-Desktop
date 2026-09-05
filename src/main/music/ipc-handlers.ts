@@ -89,7 +89,7 @@ export function registerMusicIpcHandlers(service: MusicService): () => void {
   );
   channels.push(IPC.MUSIC_DETECT_PLAYER);
 
-  // ── 状态变更推送：任何 state 轴变化都广播到所有窗口 ──────────
+  // ── State change push: broadcast any state dimension change to all windows ──────────
   const unsubState = service.onStateChange((snapshot) => {
     for (const win of BrowserWindow.getAllWindows()) {
       if (!win.isDestroyed()) win.webContents.send(IPC.MUSIC_STATE_CHANGED, snapshot);

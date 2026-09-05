@@ -1,4 +1,4 @@
-// channels/history-log 单元测试
+// channels/history-log unit tests
 import { describe, it, expect, beforeEach, afterAll, vi } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
@@ -22,7 +22,7 @@ import { appendHistory, loadRecentHistory } from "./history-log";
 
 describe("channels/history-log", () => {
   beforeEach(() => {
-    // 清理测试目录
+    // Clean test directory
     const dir = path.join(HISTORY_TMP, "channels", "history");
     if (fs.existsSync(dir)) {
       for (const f of fs.readdirSync(dir)) {
@@ -31,72 +31,70 @@ describe("channels/history-log", () => {
     }
   });
 
-  it("loadRecentHistory: 不存在的 session → 空数组", () => {
+  it("loadRecentHistory: non-existent session -> empty array", () => {
     const r = loadRecentHistory("channel:feishu:notexist", 16);
     expect(r).toEqual([]);
   });
 
   it("appendHistory + loadRecentHistory round-trip", () => {
     const sid = "channel:feishu:abc123";
-    appendHistory(sid, "user", "你好");
-    appendHistory(sid, "assistant", "你好！有什么可以帮你的吗？");
+    appendHistory(sid, "user", "Hello");
+    appendHistory(sid, "assistant", "Hello! How can I help you?");
 
     const history = loadRecentHistory(sid, 16);
     expect(history).toHaveLength(2);
     expect(history[0].role).toBe("user");
-    expect(history[0].content).toBe("你好");
+    expect(history[0].content).toBe("Hello");
     expect(history[1].role).toBe("assistant");
-    expect(history[1].content).toBe("你好！有什么可以帮你的吗？");
+    expect(history[1].content).toBe("Hello! How can I help you?");
   });
 
-  it("loadRecentHistory: limit 截断 (只取最近 N 条)", () => {
+  it("loadRecentHistory: limit truncation (only retrieves recent N items)", () => {
     const sid = "channel:feishu:limit-test";
     for (let i = 0; i < 10; i++) {
-      appendHistory(sid, "user", `问题${i}`);
-      appendHistory(sid, "assistant", `回答${i}`);
+      appendHistory(sid, "user", `question_${i}`);
+      appendHistory(sid, "assistant", `answer_${i}`);
     }
-    // 20 条写入，只取最近 4 条
+    // 20 items written, only retrieve last 4
     const history = loadRecentHistory(sid, 4);
     expect(history).toHaveLength(4);
-    // 按时间顺序: 最后 2 轮 = [问9, 答9, 问10...不, 索引 0-9]
-    // 第 9 轮: user="问题9", assistant="回答9"
-    expect(history[0].content).toBe("问题8");
-    expect(history[1].content).toBe("回答8");
-    expect(history[2].content).toBe("问题9");
-    expect(history[3].content).toBe("回答9");
+    // In chronological order:
+    // Round 8: user="question_8", assistant="answer_8"
+    // Round 9: user="question_9", assistant="answer_9"
+    expect(history[0].content).toBe("question_8");
+    expect(history[1].content).toBe("answer_8");
+    expect(history[2].content).toBe("question_9");
+    expect(history[3].content).toBe("answer_9");
   });
 
-  it("appendHistory: 空 sessionId 或空 content 不落盘", () => {
+  it("appendHistory: empty sessionId or content does not persist", () => {
     appendHistory("", "user", "hello");
     appendHistory("channel:feishu:x", "user", "");
     const history = loadRecentHistory("channel:feishu:x", 16);
     expect(history).toEqual([]);
   });
 
-  it("多 session 隔离: 不同 sessionId 文件不同", () => {
-    appendHistory("channel:feishu:userA", "user", "A 说的话");
-    appendHistory("channel:feishu:userB", "user", "B 说的话");
+  it("multiple session isolation: different sessionIds produce separate files", () => {
+    appendHistory("channel:feishu:userA", "user", "User A statement");
+    appendHistory("channel:feishu:userB", "user", "User B statement");
 
     const a = loadRecentHistory("channel:feishu:userA", 16);
     const b = loadRecentHistory("channel:feishu:userB", 16);
     expect(a).toHaveLength(1);
     expect(b).toHaveLength(1);
-    expect(a[0].content).toBe("A 说的话");
-    expect(b[0].content).toBe("B 说的话");
+    expect(a[0].content).toBe("User A statement");
+    expect(b[0].content).toBe("User B statement");
   });
 
-  it("文件超过 MAX_FILE_LINES 时自动截断 (不丢失最新)", () => {
+  it("automatically truncates when exceeding MAX_FILE_LINES (retaining newest items)", () => {
     const sid = "channel:feishu:trunc";
-    // 写 250 条 (> MAX_FILE_LINES 200)
+    // Write 250 items (> MAX_FILE_LINES 200)
     for (let i = 0; i < 250; i++) {
       appendHistory(sid, "user", `msg${i}`);
     }
     const history = loadRecentHistory(sid, 250);
-    // 截断后最多 200 条
     expect(history.length).toBeLessThanOrEqual(200);
-    // 最新一条应该是 msg249
     expect(history[history.length - 1].content).toBe("msg249");
-    // 最老一条应该是 msg50 (250 - 200 = 50)
     expect(history[0].content).toBe("msg50");
   });
 });

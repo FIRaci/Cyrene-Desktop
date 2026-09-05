@@ -31,7 +31,7 @@ describe("SkillRegistry", () => {
     expect(reg.getAll().map(s => s.id).sort()).toEqual(["a", "b"]);
   });
 
-  it("setEnabled 切换", () => {
+  it("toggles setEnabled", () => {
     reg.register(entry("a", { enabled: false }));
     reg.setEnabled("a", true);
     expect(reg.getById("a")?.enabled).toBe(true);
@@ -46,34 +46,34 @@ describe("SkillRegistry", () => {
     expect(reg.getAll()[0].enabled).toBe(true);
   });
 
-  it("getBody 懒加载 + 缓存（改磁盘不刷新）", () => {
+  it("lazy loads getBody + caches (disk changes do not refresh)", () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "reg-"));
     const mdPath = path.join(tmp, "SKILL.md");
-    fs.writeFileSync(mdPath, "---\nname: a\ndescription: d\n---\n正文v1", "utf8");
+    fs.writeFileSync(mdPath, "---\nname: a\ndescription: d\n---\nBody v1", "utf8");
     reg.register(entry("a", { bodyPath: mdPath }));
-    expect(reg.getBody("a")).toBe("正文v1");
-    // 改磁盘，缓存应返回旧内容（懒加载缓存语义，见 spec 5.4）
-    fs.writeFileSync(mdPath, "---\nname: a\ndescription: d\n---\n正文v2", "utf8");
-    expect(reg.getBody("a")).toBe("正文v1");
+    expect(reg.getBody("a")).toBe("Body v1");
+    // Modify disk, cache should return previous content (lazy cache semantics, per spec 5.4)
+    fs.writeFileSync(mdPath, "---\nname: a\ndescription: d\n---\nBody v2", "utf8");
+    expect(reg.getBody("a")).toBe("Body v1");
     fs.rmSync(tmp, { recursive: true, force: true });
   });
 
-  it("getBody 不存在返回 null", () => {
+  it("returns null when getBody target does not exist", () => {
     expect(reg.getBody("nope")).toBeNull();
   });
 
-  it("getBody 去掉 frontmatter 只返回正文", () => {
+  it("getBody strips frontmatter and returns body only", () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "reg-"));
     const mdPath = path.join(tmp, "SKILL.md");
-    fs.writeFileSync(mdPath, "---\nname: a\ndescription: d\ntools: [x]\n---\n# 正文\n调用工具", "utf8");
+    fs.writeFileSync(mdPath, "---\nname: a\ndescription: d\ntools: [x]\n---\n# Body\nCall tools", "utf8");
     reg.register(entry("a", { bodyPath: mdPath }));
     const body = reg.getBody("a");
-    expect(body).toBe("# 正文\n调用工具");
+    expect(body).toBe("# Body\nCall tools");
     expect(body).not.toContain("description");
     fs.rmSync(tmp, { recursive: true, force: true });
   });
 
-  it("getReference 命中清单才读", () => {
+  it("reads getReference only when matching catalog list", () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "reg-"));
     const refDir = path.join(tmp, "references");
     fs.mkdirSync(refDir, { recursive: true });
@@ -83,7 +83,7 @@ describe("SkillRegistry", () => {
     fs.rmSync(tmp, { recursive: true, force: true });
   });
 
-  it("getReference 拒绝不在清单的 ref（路径穿越防护）", () => {
+  it("rejects getReference ref outside list (path traversal defense)", () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "reg-"));
     reg.register(entry("a", { dirPath: tmp, references: ["ok.md"] }));
     expect(reg.getReference("a", "../../../etc/passwd")).toBeNull();
@@ -92,16 +92,16 @@ describe("SkillRegistry", () => {
     fs.rmSync(tmp, { recursive: true, force: true });
   });
 
-  it("getReference skill 不存在返回 null", () => {
+  it("returns null when getReference skill does not exist", () => {
     expect(reg.getReference("nope", "x.md")).toBeNull();
   });
 
-  it("getBody bodyPath 不存在返回 null", () => {
+  it("returns null when getBody bodyPath does not exist", () => {
     reg.register(entry("a", { bodyPath: "/nonexistent/path/SKILL.md" }));
     expect(reg.getBody("a")).toBeNull();
   });
 
-  it("getReference 文件被删返回 null", () => {
+  it("returns null when getReference file was deleted", () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "reg-"));
     const refDir = path.join(tmp, "references");
     fs.mkdirSync(refDir, { recursive: true });

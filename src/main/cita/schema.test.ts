@@ -4,13 +4,13 @@ import { parseTurnUnderstanding } from "./schema";
 const valid = {
   resolvedReferences: [
     {
-      surface: "第一首",
+      surface: "the first one",
       targetRef: "music-candidate-1",
       relation: "candidate_position",
     },
   ],
   focusedEntityRefs: ["music-candidate-1"],
-  contextualizedQuery: "用户选择当前候选中的第一首《胆小鬼》。",
+  contextualizedQuery: "User selects the first track 'Coward' among current candidates.",
   rewriteStatus: "rewritten",
 };
 
@@ -46,7 +46,7 @@ describe("parseTurnUnderstanding", () => {
   it("allows reference existence to be checked by the validation layer", () => {
     const parsed = parseTurnUnderstanding({
       ...valid,
-      resolvedReferences: [{ surface: "那个", targetRef: "unknown-ref", relation: "focused" }],
+      resolvedReferences: [{ surface: "that one", targetRef: "unknown-ref", relation: "focused" }],
     });
     expect(parsed.resolvedReferences[0].targetRef).toBe("unknown-ref");
   });

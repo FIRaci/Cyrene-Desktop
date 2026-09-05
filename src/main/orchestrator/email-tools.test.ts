@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// vi.hoisted 保证 mock 变量在 vi.mock 工厂里可用（vi.mock 会被提升到文件顶部）
+// vi.hoisted ensures mock variables are available in vi.mock factory
 const { sendMailMock, createTransportMock, requestUserChoiceMock, existsSyncMock } = vi.hoisted(() => ({
   sendMailMock: vi.fn(),
   createTransportMock: vi.fn(() => ({ sendMail: sendMailMock })),
@@ -13,12 +13,12 @@ vi.mock("nodemailer", () => ({
   default: { createTransport: createTransportMock },
 }));
 
-// mock requestUserChoice —— 默认返回 "send"
+// mock requestUserChoice -- defaults to "send"
 vi.mock("../user-choice", () => ({
   requestUserChoice: (...a: unknown[]) => requestUserChoiceMock(...a),
 }));
 
-// mock fs.existsSync —— 默认 true（附件存在）
+// mock fs.existsSync -- defaults to true
 vi.mock("fs", async () => {
   const actual = await vi.importActual<typeof import("fs")>("fs");
   return { ...actual, existsSync: existsSyncMock };
@@ -27,7 +27,7 @@ vi.mock("fs", async () => {
 import { setEmailConfig, registerEmailTools } from "./email-tools";
 import { toolRegistry } from "./tool-registry";
 
-// 注入测试配置
+// Inject test config
 function injectConfig(overrides: Record<string, unknown> = {}): void {
   const cfg = {
     enabled: true,
@@ -36,7 +36,7 @@ function injectConfig(overrides: Record<string, unknown> = {}): void {
     secure: true,
     user: "sender@qq.com",
     pass: "authcode123",
-    fromName: "昔涟",
+    fromName: "Cyrene",
     ...overrides,
   };
   setEmailConfig(
@@ -50,7 +50,7 @@ function injectConfig(overrides: Record<string, unknown> = {}): void {
   );
 }
 
-// 注册工具拿到 execute
+// Register tool to obtain execute function
 registerEmailTools();
 const tool = toolRegistry.getById("send_email")!;
 const exec = tool.execute;
@@ -120,7 +120,7 @@ describe("send_email", () => {
     });
     expect(sendMailMock).toHaveBeenCalledTimes(1);
     const mailOpts = sendMailMock.mock.calls[0][0];
-    expect(mailOpts.from).toBe('"昔涟" <sender@qq.com>');
+    expect(mailOpts.from).toBe('"Cyrene" <sender@qq.com>');
     expect(mailOpts.to).toBe("a@b.com, c@d.com");
     expect(mailOpts.cc).toBeUndefined();
     expect(mailOpts.subject).toBe("Weekly Report");

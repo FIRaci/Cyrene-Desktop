@@ -46,9 +46,9 @@ describe("MemoryManager L2 sync", () => {
     const { memoryStore } = await import("./memory-store")
     const candidate: MemoryCandidate = {
       layer: "L2",
-      content: "用户喜欢香菇",
+      content: "User likes mushrooms",
       confidence: 0.91,
-      triggerText: "我喜欢香菇",
+      triggerText: "I like mushrooms",
     }
 
     await memoryManager.writeMemory([candidate])
@@ -79,9 +79,9 @@ describe("MemoryManager L2 sync", () => {
     const { memoryStore } = await import("./memory-store")
     const candidate: MemoryCandidate = {
       layer: "L2",
-      content: "用户正在重构记忆系统",
+      content: "User is refactoring the memory system",
       confidence: 0.95,
-      triggerText: "我们继续重构记忆系统",
+      triggerText: "Let's continue refactoring the memory system",
     }
 
     await memoryManager.writeMemory([candidate])
@@ -106,19 +106,19 @@ describe("MemoryManager L2 sync", () => {
     const candidate: MemoryCandidate = {
       layer: "L0",
       field: "longTermInterests",
-      summary: "用户只吃香菇和平菇",
-      content: "用户只吃香菇和平菇",
+      summary: "User only eats mushrooms",
+      content: "User only eats mushrooms",
       confidence: 0.65,
-      triggerText: "AI 推断用户偏好安全菌菇",
+      triggerText: "AI infers user preference for safe mushrooms",
       importance: "medium",
       stability: "stable",
       certainty: "inferred",
       attribution: "assistant_inferred",
-      evidenceQuotes: ["我这次还是吃安全点的吧"],
-      contextSummary: "用户讨论菌菇安全",
+      evidenceQuotes: ["I will eat something safer this time"],
+      contextSummary: "User discusses mushroom safety",
       shouldWrite: true,
-      reason: "这是推断，不应进入核心画像",
-      forbiddenOverclaims: ["只"],
+      reason: "This is inference, should not enter core persona",
+      forbiddenOverclaims: ["only"],
     }
 
     await memoryManager.writeMemory([candidate])
@@ -134,25 +134,25 @@ describe("MemoryManager L2 sync", () => {
     const candidate: MemoryCandidate = {
       layer: "L0",
       field: "preferredName",
-      summary: "用户希望被称为 P宝",
-      content: "用户希望被称为 P宝",
+      summary: "User wants to be called PBaby",
+      content: "User wants to be called PBaby",
       confidence: 0.9,
-      triggerText: "以后叫我 P宝",
+      triggerText: "Call me PBaby in the future",
       importance: "high",
       stability: "stable",
       certainty: "explicit",
       attribution: "user_explicit",
-      evidenceQuotes: ["以后叫我 P宝"],
-      contextSummary: "用户明确提出称呼偏好",
+      evidenceQuotes: ["Call me PBaby in the future"],
+      contextSummary: "User explicitly states addressing preference",
       shouldWrite: true,
-      reason: "用户明确表达称呼偏好",
+      reason: "User explicitly expresses addressing preference",
       forbiddenOverclaims: [],
     }
 
     await memoryManager.writeMemory([candidate])
 
     const l0 = await memoryStore.getL0()
-    expect(l0.preferredName).toBe("用户希望被称为 P宝")
+    expect(l0.preferredName).toBe("User wants to be called PBaby")
   })
 
   it("writes candidate conflict logs separately when local candidate detection matches", async () => {
@@ -160,24 +160,24 @@ describe("MemoryManager L2 sync", () => {
     const { memoryManager } = await import("./memory-manager")
     const { memoryStore } = await import("./memory-store")
     const existing = await memoryStore.addL2Memory({
-      content: "用户喜欢香菇",
-      triggerText: "我喜欢香菇",
+      content: "User likes mushrooms",
+      triggerText: "I like mushrooms",
       sourceConversationId: "test",
       ragId: "rag_existing",
       isPinned: false,
     })
     ragMock.searchMemoryEntries.mockResolvedValue([{
       id: "rag_existing",
-      text: "用户喜欢香菇",
+      text: "User likes mushrooms",
       createdAt: Date.now(),
       score: 0.82,
       metadata: { l2Id: existing.id },
     }])
     const candidate: MemoryCandidate = {
       layer: "L2",
-      content: "用户不喜欢香菇",
+      content: "User does not like mushrooms",
       confidence: 0.93,
-      triggerText: "我不喜欢香菇",
+      triggerText: "I do not like mushrooms",
     }
 
     await memoryManager.writeMemory([candidate])
@@ -219,7 +219,7 @@ describe("MemoryManager L2 sync", () => {
     ragMock.addL2MemoryVector.mockResolvedValue("rag_new")
     ragMock.searchMemoryEntries.mockResolvedValue([{
       id: "rag_existing",
-      text: "用户喜欢香菇",
+      text: "User likes mushrooms",
       createdAt: Date.now(),
       score: 0.9,
       metadata: {},
@@ -227,17 +227,17 @@ describe("MemoryManager L2 sync", () => {
     const { memoryManager } = await import("./memory-manager")
     const { memoryStore } = await import("./memory-store")
     await memoryStore.addL2Memory({
-      content: "用户喜欢香菇",
-      triggerText: "我喜欢香菇",
+      content: "User likes mushrooms",
+      triggerText: "I like mushrooms",
       sourceConversationId: "test",
       ragId: "rag_existing",
       isPinned: false,
     })
     const candidate: MemoryCandidate = {
       layer: "L2",
-      content: "用户不喜欢香菇",
+      content: "User does not like mushrooms",
       confidence: 0.93,
-      triggerText: "我不喜欢香菇",
+      triggerText: "I do not like mushrooms",
     }
 
     await memoryManager.writeMemory([candidate])
@@ -259,8 +259,8 @@ describe("MemoryManager L2 sync", () => {
     const { memoryStore } = await import("./memory-store")
     const { recordRecentMemoryInjection } = await import("./recent-injected-memory")
     const existing = await memoryStore.addL2Memory({
-      content: "用户喜欢跑步",
-      triggerText: "我喜欢跑步",
+      content: "User likes running",
+      triggerText: "I like running",
       sourceConversationId: "test",
       ragId: "rag_existing",
       isPinned: false,
@@ -268,16 +268,16 @@ describe("MemoryManager L2 sync", () => {
     recordRecentMemoryInjection([existing.id])
     ragMock.searchMemoryEntries.mockResolvedValue([{
       id: "rag_existing",
-      text: "用户喜欢跑步",
+      text: "User likes running",
       createdAt: Date.now(),
       score: 0.88,
       metadata: { l2Id: existing.id },
     }])
     const candidate: MemoryCandidate = {
       layer: "L2",
-      content: "用户不喜欢跑步",
+      content: "User dislikes running",
       confidence: 0.91,
-      triggerText: "我不喜欢跑步",
+      triggerText: "I dislike running",
     }
 
     await memoryManager.writeMemory([candidate])
@@ -298,7 +298,7 @@ describe("MemoryManager L2 sync", () => {
     ragMock.addL2MemoryVector.mockResolvedValue("rag_new")
     ragMock.searchMemoryEntries.mockResolvedValue([{
       id: "rag_existing",
-      text: "用户曾因食用见手青而有过不好经历",
+      text: "User had a bad experience eating wild mushrooms",
       createdAt: Date.now(),
       score: 0.81,
       metadata: {},
@@ -306,17 +306,17 @@ describe("MemoryManager L2 sync", () => {
     const { memoryManager } = await import("./memory-manager")
     const { memoryStore } = await import("./memory-store")
     await memoryStore.addL2Memory({
-      content: "用户曾因食用见手青而有过不好经历",
-      triggerText: "见手青让我不舒服",
+      content: "User had a bad experience eating wild mushrooms",
+      triggerText: "Wild mushrooms made me uncomfortable",
       sourceConversationId: "test",
       ragId: "rag_existing",
       isPinned: false,
     })
     const candidate: MemoryCandidate = {
       layer: "L2",
-      content: "用户对 AI 有强烈心意，因无法触碰而难过",
+      content: "User has strong feelings for AI and feels sad about being unable to touch",
       confidence: 0.9,
-      triggerText: "我因为无法触碰你而难过",
+      triggerText: "I feel sad because I cannot touch you",
     }
 
     await memoryManager.writeMemory([candidate])

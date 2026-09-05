@@ -1,12 +1,12 @@
-// Step 1 — 环境注入
+// Step 1 - Environment injection
 //
-// 把"今天是几号 / 系统是什么 / 桌面在哪 / 当前权限档位 / 哪些工具可用"
-// 这些模型本来要靠猜的事实，直接以 system 段落的形式喂给它。
-// 这一层不解决"模型想不想调工具"，但能消掉"模型不知道桌面真实路径"
-// 这一类低级幻觉，给后续的意图识别 + tool_choice 兜底打底。
+// Facts like "what date is today / what OS / where is Desktop / current permissions / what tools available"
+// that the model would otherwise guess are supplied directly as a system section.
+// This layer eliminates low-level hallucinations (e.g. not knowing real Desktop path),
+// laying the foundation for subsequent intent detection + tool_choice fallbacks.
 //
-// 输出格式刻意选择 Markdown 小节，方便 LLM 抓字段；同时在终端打印
-// `[Env]` 日志便于排障。
+// Output format uses Markdown sections for easy field parsing by LLM;
+// logs `[Env]` to terminal for troubleshooting.
 
 import { app } from "electron";
 import * as os from "os";
@@ -19,13 +19,13 @@ import { resolveChatContextTimezone } from "../chat-time-context";
 
 const LOG_PREFIX = "[Env]";
 
-/** 当前模型信息（用于查 capability 判断视觉等能力），可选。 */
+/** Current model info (used to check capabilities such as vision), optional. */
 export interface ModelInfo {
   provider: string;
   model: string;
 }
 
-/** 用户信息片段（由 index.ts 注入，避免循环依赖）。 */
+/** User info slice (injected by index.ts, avoiding circular dependencies). */
 export interface UserInfoContext {
   nickname?: string;
   callPreference?: string;
@@ -45,10 +45,9 @@ function safeGetPath(name: "desktop" | "documents" | "downloads" | "home"): stri
 }
 
 /**
- * 把 d 在 tz 时区下的"年月日 星期 时分"按 part 类型固定组装成 `YYYY-MM-DD 周X HH:MM`。
- * 不依赖 Intl 本地化字符串的标点/顺序（不同 Node/locale 下 `format()` 输出不稳定），
- * 因此走 `formatToParts` 拿结构化字段，再固定拼装。
- * 注：short weekday 在 zh-CN 下通常是"周一"等，否则按 JS Date.getDay() 兜底映射。
+ * Assembles date components in timezone tz into fixed `YYYY-MM-DD Day HH:MM` format.
+ * Does not rely on localized punctuation/order from Intl (unstable across Node/locales);
+ * uses formatToParts for structured fields.
  */
 function formatDate(d: Date, tz: string): string {
   let parts: Intl.DateTimeFormatPart[];
@@ -81,8 +80,7 @@ function formatDate(d: Date, tz: string): string {
   const mm = get("month");
   const dd = get("day");
   const weekdayRaw = get("weekday");
-  // zh-CN short weekday 形如"周一"；其它 locale 兜底按 d.getUTCDay() 映射
-  // （注意：getUTCDay 对 tz 不是 tz 本地日，下方回退仅在 Intl 异常路径使用）。
+  // Maps weekday; fallback uses d.getDay()
   const weekMap = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const week = weekdayRaw || weekMap[d.getDay()];
   const hh = get("hour");
@@ -99,10 +97,10 @@ function platformLabel(): string {
 }
 
 /**
- * 构造环境上下文，作为 system prompt 的尾段拼入。
+ * Constructs environment context, appended to system prompt.
  *
- * 注意：这里只读取既有运行时状态，不做任何副作用；调用方负责 try/catch
- * 拼接失败的情况，避免环境注入炸掉聊天主流程。
+ * Note: only reads existing runtime state with no side effects;
+ * callers handle try/catch to avoid disrupting main chat flow.
  */
 export function buildEnvironmentContext(modelInfo?: ModelInfo, userInfo?: UserInfoContext): string {
   const level = getCurrentLevel();
@@ -118,11 +116,11 @@ export function buildEnvironmentContext(modelInfo?: ModelInfo, userInfo?: UserIn
   } catch (err) {
     console.warn(LOG_PREFIX, "os.userInfo() lookup failed:", err);
   }
-  // 用户时区（profile.timezone 缺/非法时由 resolver 回退 Asia/Shanghai），不再读系统时区。
+  // User timezone (defaults to Asia/Shanghai when profile.timezone is missing/invalid); does not read system timezone.
   const tz = resolveChatContextTimezone(userInfo?.timezone);
   const dateStr = formatDate(new Date(), tz);
 
-  // 工具清单：按"启用 + 当前档位放行"两个维度过滤，让模型只看到当下能用的
+  // Tool catalog: filtered by enabled + current permission level, so model only sees currently usable tools
   const allEnabled = toolRegistry.getEnabledTools();
   const allowedTools: string[] = [];
   const askTools: string[] = [];
@@ -135,7 +133,7 @@ export function buildEnvironmentContext(modelInfo?: ModelInfo, userInfo?: UserIn
     else deniedTools.push(`${t.id}(${risk})`);
   }
 
-  // MCP server 状态
+  // MCP server status
   let mcpLine = "No MCP servers connected";
   try {
     const servers = listMcpServers();
@@ -170,9 +168,9 @@ export function buildEnvironmentContext(modelInfo?: ModelInfo, userInfo?: UserIn
   lines.push(`- MCP services: ${mcpLine}`);
   lines.push("");
 
-  // 模型能力边界：把"你当前这个模型能不能看图"作为事实告诉模型，
-  // 让它遇到图片问题时敢于说"我看不了"，而不是硬编。
-  // 没传 modelInfo（比如降级路径）时保守地告诉它"看不了"。
+  // Model capabilities: informs model whether it supports images,
+  // so it honestly declines when unsupported rather than hallucinating.
+  // Conservatively marks unsupported when modelInfo is absent.
   let supportsVision = false;
   if (modelInfo) {
     const cap = getCapability(modelInfo.provider);
@@ -181,8 +179,8 @@ export function buildEnvironmentContext(modelInfo?: ModelInfo, userInfo?: UserIn
   lines.push(`- Current model image support: ${supportsVision ? "supported (use read_image)" : "unsupported (state this honestly and never invent image content)"}`);
   lines.push("");
 
-  // 用户信息：昵称、称呼偏好、生日、默认城市等。让模型知道"在和谁说话、用户在哪"，
-  // 避免每次问天气/位置都要反问用户。默认城市尤其重要——天气工具会用到。
+  // User info: nickname, preferred address, birthday, default city, etc.
+  // Avoids asking the user location/weather every time. Default city is used by weather tools.
   if (userInfo) {
     lines.push("## User information");
     lines.push("");
@@ -207,7 +205,7 @@ export function buildEnvironmentContext(modelInfo?: ModelInfo, userInfo?: UserIn
       lines.push("- Gender constraint: when gender is unknown or private, use neutral address and never infer it from a nickname, avatar, or tone.");
     }
     lines.push("");
-    // 时区≠地点：明确告知模型 timezone 与 defaultCity 是两个独立维度，不得交叉推断。
+    // Timezone != location: explicitly instructs model that timezone and defaultCity are independent dimensions.
     lines.push("> The user's time zone is only for time calculations and does not reveal their location. Never infer a city from it. Use the default city only for tools that need a location, such as weather.");
     lines.push("");
   }

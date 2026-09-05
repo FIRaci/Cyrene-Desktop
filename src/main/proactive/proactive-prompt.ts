@@ -17,9 +17,9 @@ export interface BuildProactiveMessagesInput {
   idleSec: number;
   unansweredCount: 0 | 1 | 2;
   /**
-   * 已 resolver 后的用户有效时区（合法 IANA 字符串）。
-   * 所有"本地"时间解释（早晚判定、history 行、trigger 行的"电脑本地时间"）都基于该时区。
-   * 不接受未校验的 profile.timezone 字符串；调用方需先经 resolveChatContextTimezone。
+   * Resolved effective user timezone (valid IANA string).
+   * All local time interpretations (morning/evening checks, history lines, computer local time) are based on this timezone.
+   * Requires validated timezone via resolveChatContextTimezone.
    */
   timezone: string;
 }
@@ -54,9 +54,9 @@ Do not blame, pressure, seek sympathy, act neglected, or mechanically ask whethe
 Return silent unless there is a strong reason to speak.`;
 
 /**
- * 用 Intl 把日期拆成 {year, month, day, hour, minute}（按 timezone）。
- * 不依赖 toLocaleString 的本地化标点和顺序。
- * 失败回退 system-local（resolver 已保证 timezone 合法，此分支仅 debug）。
+ * Splits date into {year, month, day, hour, minute} via Intl using timezone.
+ * Independent of locale formatting punctuation and order.
+ * Falls back to system-local if resolution fails.
  */
 function getZonedDateParts(
   date: Date,
@@ -93,13 +93,13 @@ function getZonedDateParts(
   };
 }
 
-/** 早晚判定：基于用户时区的 hour。保留原 22:00-08:00 + idle<60 语义。 */
+/** Morning/evening check: based on user timezone hour. Retains 22:00-08:00 + idle<60 semantics. */
 function isActiveNight(date: Date, timezone: string, idleSec: number): boolean {
   const { hour } = getZonedDateParts(date, timezone);
   return (hour >= 22 || hour < 8) && idleSec < 60;
 }
 
-/** 用户时区下的"本地时间"格式化：`YYYY-MM-DD HH:MM`。 */
+/** Formats local time in user timezone: `YYYY-MM-DD HH:MM`. */
 function formatLocalTime(date: Date, timezone: string): string {
   const p = getZonedDateParts(date, timezone);
   const mm = String(p.month).padStart(2, "0");
