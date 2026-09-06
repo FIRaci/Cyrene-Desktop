@@ -1,6 +1,6 @@
 .pet-mini-chat {
   position: fixed;
-  top: calc(var(--cyrene-feet, 308px) + 8px);
+  top: calc(var(--cyrene-feet, 418px) + 4px);
   bottom: auto;
   left: 50%;
   right: auto;
@@ -13,8 +13,8 @@
   z-index: 50;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 10px 12px;
+  gap: 6px;
+  padding: 8px 12px;
   background: rgba(26, 18, 52, 0.92);
   border: 1px solid rgba(216, 180, 254, 0.45);
   border-radius: 18px;

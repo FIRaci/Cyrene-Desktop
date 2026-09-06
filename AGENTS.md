@@ -146,6 +146,7 @@
 - `Alt+5`: **Quick Mini-Chat** (Khung chat mini nổi cạnh Pet).
 - `Alt+6`: **Settings Center** (Trung tâm cài đặt LLM, TTS, Voice, Memory - cũng hỗ trợ `Alt+S`).
 - `Alt+C`: **Show / Hide Pet** (Ẩn/Hiện nhanh Pet trên desktop).
+- `Alt+Q`: **Quick Quit Application** (Tắt nhanh toàn bộ ứng dụng).
 
 ### 7.3. Activity & Response Log (`Alt+4`)
 - Log ghi đầy đủ: reasoning, suy nghĩ, kaomoji, user prompt, tool calls, channel, timestamps.

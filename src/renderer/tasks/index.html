@@ -43,11 +43,37 @@
           </div>
           <div class="schedule-meta-group">
             <div class="schedule-weather-chip" id="schedule-weather" title="Current weather in Hanoi (Open-Meteo)">
-              <span class="weather-loc-icon" aria-hidden="true">📍</span>
+              <span class="weather-loc-icon" id="weather-loc-icon" aria-hidden="true">
+                <svg class="weather-svg-pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <defs>
+                    <linearGradient id="cyrene-pin-grad-init" x1="4" y1="2" x2="20" y2="22" gradientUnits="userSpaceOnUse">
+                      <stop offset="0%" stop-color="#f472b6"/>
+                      <stop offset="100%" stop-color="#db2777"/>
+                    </linearGradient>
+                  </defs>
+                  <path d="M12 21.5C12 21.5 5 15.5 5 10A7 7 0 0 1 19 10C19 15.5 12 21.5 12 21.5Z" fill="url(#cyrene-pin-grad-init)" stroke="#f472b6"/>
+                  <circle cx="12" cy="10" r="2.5" fill="#ffffff" stroke="none"/>
+                </svg>
+              </span>
               <span class="weather-city">Hanoi</span>
               <span class="weather-separator" aria-hidden="true">•</span>
               <span class="weather-temp" id="weather-temp">28°C</span>
-              <span class="weather-icon" id="weather-icon" aria-hidden="true">⛅</span>
+              <span class="weather-icon" id="weather-icon" aria-hidden="true">
+                <svg class="weather-svg-icon weather-svg-partly-cloudy" viewBox="0 0 24 24" fill="none">
+                  <defs>
+                    <radialGradient id="sun-init" cx="50%" cy="50%" r="50%">
+                      <stop offset="0%" stop-color="#fde047"/>
+                      <stop offset="100%" stop-color="#f59e0b"/>
+                    </radialGradient>
+                    <linearGradient id="cloud-init" x1="0%" y1="0%" x2="0%" y2="100%">
+                      <stop offset="0%" stop-color="#ffffff"/>
+                      <stop offset="100%" stop-color="#cbd5e1"/>
+                    </linearGradient>
+                  </defs>
+                  <circle cx="8" cy="8.5" r="3.8" fill="url(#sun-init)"/>
+                  <path d="M7 19h11.5a3.5 3.5 0 0 0 .5-6.96 4.5 4.5 0 0 0-8.8-1.04A3.5 3.5 0 0 0 7 19z" fill="url(#cloud-init)"/>
+                </svg>
+              </span>
               <span class="weather-desc" id="weather-desc">Partly Cloudy</span>
             </div>
             <div class="schedule-datetime-chip" id="schedule-datetime" title="Current time and selected day">

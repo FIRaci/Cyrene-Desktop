@@ -550,6 +550,10 @@ addTrackedEventListener(window, "window:keydown", "keydown", (e) => {
     event.preventDefault();
     miniChat.toggle();
   }
+  if (event.altKey && (event.key === "q" || event.key === "Q" || event.code === "KeyQ")) {
+    event.preventDefault();
+    window.cyrene?.quit?.();
+  }
 });
 
 addTrackedEventListener(window, "window:keyup", "keyup", (e) => {

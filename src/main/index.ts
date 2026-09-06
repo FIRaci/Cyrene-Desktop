@@ -4097,7 +4097,8 @@ function createTray(): void {
       },
       { type: "separator" },
       {
-        label: "Quit",
+        label: "Quit (Alt+Q)",
+        accelerator: "Alt+Q",
         click: () => { app.quit(); },
       },
     ]);
@@ -4308,7 +4309,8 @@ ipcMain.on(IPC.PET_SHOW_CONTEXT_MENU, (event) => {
       },
     },
     {
-      label: "Quit Cyrene",
+      label: "Quit Cyrene (Alt+Q)",
+      accelerator: "Alt+Q",
       click: () => app.quit(),
     },
   ]);
@@ -5169,6 +5171,10 @@ app.whenReady().then(async () => {
   });
   globalShortcut.register("Alt+G", () => {
     getCoWatchService().toggle();
+  });
+  globalShortcut.register("Alt+Q", () => {
+    console.info("[Cyrene] Alt+Q pressed - quitting application");
+    app.quit();
   });
 
   //  local-sticker:// ： userData/stickers/ 

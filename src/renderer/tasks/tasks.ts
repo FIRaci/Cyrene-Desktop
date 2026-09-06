@@ -12,6 +12,7 @@ import {
   type TaskCategory,
   type ScheduleConfig,
 } from "./task-filter";
+import { LOCATION_PIN_SVG, getWeatherIconSvg } from "./weather-icons";
 
 // ── Preload Bridge Interfaces ───────────────────────────────
 interface SchedulerResult<T = unknown> {
@@ -126,14 +127,21 @@ function updateLiveClock(): void {
 async function loadHanoiWeather(): Promise<void> {
   const tempEl = $("weather-temp");
   const iconEl = $("weather-icon");
+  const locEl = $("weather-loc-icon");
   const descEl = $("weather-desc");
   const chipEl = $("schedule-weather");
+
+  if (locEl && !locEl.querySelector("svg")) {
+    locEl.innerHTML = LOCATION_PIN_SVG;
+  }
 
   try {
     const data = await window.tasks?.getWeather?.("Hanoi");
     if (data) {
       if (tempEl) tempEl.textContent = `${data.temperature}°C`;
-      if (iconEl) iconEl.textContent = data.weatherIcon || "⛅";
+      if (iconEl) {
+        iconEl.innerHTML = getWeatherIconSvg(data.weatherCode, data.weatherText);
+      }
       if (descEl) descEl.textContent = data.weatherText || "Clear";
       if (chipEl) {
         const hum = typeof data.humidity === "number" ? `, Humidity ${data.humidity}%` : "";

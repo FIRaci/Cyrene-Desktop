@@ -260,9 +260,19 @@ body {
 }
 
 .weather-loc-icon {
-  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
   line-height: 1;
-  filter: drop-shadow(0 0 4px rgba(244, 114, 182, 0.6));
+  filter: drop-shadow(0 0 5px rgba(244, 114, 182, 0.65));
+}
+
+.weather-svg-pin {
+  width: 14px;
+  height: 14px;
+  display: block;
 }
 
 .weather-city {
@@ -284,9 +294,25 @@ body {
 }
 
 .weather-icon {
-  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
   line-height: 1;
   margin: 0 1px;
+  filter: drop-shadow(0 0 6px rgba(253, 224, 71, 0.35));
+}
+
+.weather-svg-icon {
+  width: 18px;
+  height: 18px;
+  display: block;
+  transition: transform 180ms ease;
+}
+
+.schedule-weather-chip:hover .weather-svg-icon {
+  transform: scale(1.12);
 }
 
 .weather-desc {
