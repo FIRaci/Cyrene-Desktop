@@ -2,6 +2,7 @@
 // Interface: official api_v2 (POST /api/tts), returns wav bytes
 // Reference: https://github.com/RVC-Boss/GPT-SoVITS
 import * as fs from "fs";
+import * as path from "path";
 
 export interface GptsovitsSynthesizeOptions {
   baseUrl: string;          // e.g. "http://localhost:9880", without path
@@ -45,8 +46,28 @@ export async function synthesize(opts: GptsovitsSynthesizeOptions): Promise<Gpts
   if (!opts.refAudioPath) throw new Error("Reference audio path is required");
   if (!opts.promptText) throw new Error("Reference audio transcript is required");
   if (!opts.text) throw new Error("Synthesis text is required");
-  if (!fs.existsSync(opts.refAudioPath)) {
-    throw new Error(`Reference audio file does not exist: ${opts.refAudioPath}`);
+
+  let resolvedRefAudio = opts.refAudioPath;
+  if (!fs.existsSync(resolvedRefAudio)) {
+    const candidates = [
+      "D:\\Cyrene-Desktop\\resources\\voice\\cyrene\\ref_audio.wav",
+      path.resolve(process.cwd(), resolvedRefAudio),
+      path.resolve(process.cwd(), "resources", "voice", "cyrene", "ref_audio.wav"),
+      path.resolve(process.cwd(), "resources", "resources", "voice", "cyrene", "ref_audio.wav"),
+      typeof (process as any).resourcesPath === "string" ? path.join((process as any).resourcesPath, "resources", "voice", "cyrene", "ref_audio.wav") : "",
+      typeof (process as any).resourcesPath === "string" ? path.join((process as any).resourcesPath, "voice", "cyrene", "ref_audio.wav") : "",
+    ].filter(Boolean);
+    for (const cand of candidates) {
+      if (fs.existsSync(cand)) {
+        resolvedRefAudio = cand;
+        break;
+      }
+    }
+  }
+  resolvedRefAudio = path.resolve(resolvedRefAudio);
+
+  if (!fs.existsSync(resolvedRefAudio)) {
+    throw new Error(`Reference audio file does not exist: ${opts.refAudioPath} (resolved: ${resolvedRefAudio})`);
   }
 
   // 2) Build JSON body (raw object, not wrapped in data)
@@ -60,7 +81,7 @@ export async function synthesize(opts: GptsovitsSynthesizeOptions): Promise<Gpts
   const body = JSON.stringify({
     text: opts.text,
     text_lang,
-    ref_audio_path: opts.refAudioPath,
+    ref_audio_path: resolvedRefAudio,
     prompt_text: opts.promptText,
     prompt_lang,
     speed_factor: opts.speed ?? 1,
@@ -73,7 +94,7 @@ export async function synthesize(opts: GptsovitsSynthesizeOptions): Promise<Gpts
   log({ stage: "request_start", endpoint, format, textLen: opts.text.length });
 
   // 3) Send request + full timeout control and buffer protection with transient retry
-  const maxAttempts = opts.timeoutMs && opts.timeoutMs < 5000 ? 1 : 3;
+  const maxAttempts = opts.timeoutMs && opts.timeoutMs < 5000 ? 1 : 12;
   let audio!: Buffer;
   let lastErr: Error | null = null;
 
@@ -109,7 +130,7 @@ export async function synthesize(opts: GptsovitsSynthesizeOptions): Promise<Gpts
       const isTransient = String(lastErr).includes("ECONNREFUSED") || String(lastErr).includes("fetch failed");
       if (attempt < maxAttempts && isTransient) {
         log({ stage: "retry_waiting", attempt, error: String(lastErr) });
-        await new Promise((resolve) => setTimeout(resolve, 1500));
+        await new Promise((resolve) => setTimeout(resolve, 2000));
         continue;
       }
       throw lastErr;

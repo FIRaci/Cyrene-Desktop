@@ -213,6 +213,11 @@ import { normalizeCitaSettings } from "./cita/settings";
 import { CitaService, ContextStore, RemoteSemanticEngine } from "./cita";
 import { contextRefRegistry } from "./orchestrator/tool-context";
 
+// Ensure autoplay policy allows programmatic audio playback in transparent desktop windows
+try {
+  app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
+} catch {}
+
 // Ensure data directory is bound to Drive D if available on Windows, before any subsystem calls app.getPath("userData")
 try {
   if (!app.commandLine.hasSwitch("user-data-dir") && process.platform === "win32") {
@@ -805,8 +810,11 @@ function buildGptsovitsCacheKey(payload: {
 function getDefaultCyreneRefAudioPath(): string {
   const base = app?.isPackaged ? process.resourcesPath : (app?.getAppPath ? app.getAppPath() : process.cwd());
   const candidates = [
+    "D:\\Cyrene-Desktop\\resources\\voice\\cyrene\\ref_audio.wav",
     path.join(base, "resources", "voice", "cyrene", "ref_audio.wav"),
+    path.join(base, "resources", "resources", "voice", "cyrene", "ref_audio.wav"),
     path.join(base, "voice", "cyrene", "ref_audio.wav"),
+    path.resolve(base, "..", "..", "resources", "voice", "cyrene", "ref_audio.wav"),
     path.join(process.cwd(), "resources", "voice", "cyrene", "ref_audio.wav"),
   ];
   for (const c of candidates) {
@@ -821,13 +829,24 @@ let gptsovitsAutoSpawnAttempted = false;
 export async function isGptsovitsServerOnline(baseUrl = "http://127.0.0.1:9880"): Promise<boolean> {
   try {
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 1200);
+    const timer = setTimeout(() => ctrl.abort(), 1500);
     const res = await fetch(`${baseUrl.replace(/\/+$/, "")}/docs`, { method: "GET", signal: ctrl.signal });
     clearTimeout(timer);
     return res.status < 500;
   } catch {
     return false;
   }
+}
+
+export async function waitForGptsovitsServerOnline(baseUrl = "http://127.0.0.1:9880", maxWaitMs = 30000): Promise<boolean> {
+  const start = Date.now();
+  while (Date.now() - start < maxWaitMs) {
+    if (await isGptsovitsServerOnline(baseUrl)) {
+      return true;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+  return false;
 }
 
 export async function ensureGptsovitsServerRunning(): Promise<void> {
@@ -845,7 +864,12 @@ export async function ensureGptsovitsServerRunning(): Promise<void> {
   }
   gptsovitsAutoSpawnAttempted = true;
 
+  const base = app?.isPackaged ? process.resourcesPath : (app?.getAppPath ? app.getAppPath() : process.cwd());
   const candidateScripts = [
+    "D:\\Cyrene-Desktop\\scripts\\cyrene_tts.py",
+    path.resolve(base, "..", "..", "scripts", "cyrene_tts.py"),
+    path.join(base, "scripts", "cyrene_tts.py"),
+    path.join(base, "resources", "scripts", "cyrene_tts.py"),
     path.join(process.cwd(), "scripts", "cyrene_tts.py"),
     path.join(__dirname, "..", "..", "..", "scripts", "cyrene_tts.py"),
     path.join(app?.getAppPath ? app.getAppPath() : process.cwd(), "scripts", "cyrene_tts.py"),
@@ -863,17 +887,41 @@ export async function ensureGptsovitsServerRunning(): Promise<void> {
     return;
   }
 
-  console.info("[GPT-SoVITS] Server at", baseUrl, "is offline. Auto-spawning Cyrene voice server in background...");
+  const candidatePythons = [
+    "C:\\Users\\TSC\\AppData\\Local\\Programs\\Python\\Python311\\python.exe",
+    process.platform === "win32" ? "python" : "python3",
+  ];
+  let pythonExe = candidatePythons[0];
+  for (const p of candidatePythons) {
+    if (p.includes("\\") ? fs.existsSync(p) : true) {
+      pythonExe = p;
+      break;
+    }
+  }
+
+  const logDir = "D:\\CyreneData\\logs";
+  try { fs.mkdirSync(logDir, { recursive: true }); } catch {}
+  const logFilePath = path.join(logDir, "gptsovits-server.log");
+  let outFd: number | "ignore" = "ignore";
   try {
-    const pythonExe = process.platform === "win32" ? "python" : "python3";
+    outFd = fs.openSync(logFilePath, "a");
+  } catch {}
+
+  const serverCwd = fs.existsSync("D:\\Cyrene-Desktop\\vendor\\gpt-sovits")
+    ? "D:\\Cyrene-Desktop"
+    : path.dirname(path.dirname(scriptPath));
+
+  console.info("[GPT-SoVITS] Server at", baseUrl, "is offline. Auto-spawning Cyrene voice server in background via", pythonExe, "from", serverCwd);
+  try {
     const child = spawn(pythonExe, [scriptPath, "--port", "9880"], {
-      cwd: path.dirname(path.dirname(scriptPath)),
+      cwd: serverCwd,
       detached: false,
-      stdio: "ignore",
+      stdio: outFd !== "ignore" ? ["ignore", outFd, outFd] : "ignore",
       env: {
         ...process.env,
         PYTHONIOENCODING: "utf-8",
         PYTHONUTF8: "1",
+        PYTHONUNBUFFERED: "1",
       },
     });
     gptsovitsChildProcess = child;
@@ -911,15 +959,52 @@ async function prepareGptsovitsVoicePayload(payload: {
   const settings = loadGeneralSettings();
   const defaultRefAudio = getDefaultCyreneRefAudioPath();
   const baseUrl = (payload.baseUrl && payload.baseUrl.trim()) || settings.ttsGptsovitsBaseUrl || "http://127.0.0.1:9880";
-  const refAudioPath = (payload.refAudioPath && payload.refAudioPath.trim())
+  let refAudioPath = (payload.refAudioPath && payload.refAudioPath.trim())
     || (settings.ttsGptsovitsRefAudioPath && settings.ttsGptsovitsRefAudioPath.trim())
     || defaultRefAudio;
+
+  if (!fs.existsSync(refAudioPath)) {
+    const candidates = [
+      defaultRefAudio,
+      "D:\\Cyrene-Desktop\\resources\\voice\\cyrene\\ref_audio.wav",
+      path.resolve(process.cwd(), refAudioPath),
+      path.join(process.resourcesPath || "", "resources", "voice", "cyrene", "ref_audio.wav"),
+      path.join(process.resourcesPath || "", "voice", "cyrene", "ref_audio.wav"),
+    ].filter(Boolean);
+    for (const c of candidates) {
+      if (fs.existsSync(c)) {
+        refAudioPath = c;
+        break;
+      }
+    }
+  }
+  refAudioPath = path.resolve(refAudioPath);
+
   const promptText = (payload.promptText && payload.promptText.trim())
     || (settings.ttsGptsovitsPromptText && settings.ttsGptsovitsPromptText.trim())
     || "开拓者，希琳一直都在这里陪着你哦。";
-  const languageMode = "original-mandarin";
+
+  // Pre-flight check: wake up local server if offline
+  if (!(await isGptsovitsServerOnline(baseUrl))) {
+    void ensureGptsovitsServerRunning();
+    await waitForGptsovitsServerOnline(baseUrl, 25000);
+  }
+
   let text = await translateEnglishToMandarinSpeech(payload.text, loadModelSettings());
-  // If text still does not contain Chinese characters, translate via Google GTX bridge
+  // If text still does not contain Chinese characters, translate via MyMemory or Google GTX bridge
+  if (!/[\u3400-\u9fff]/u.test(text)) {
+    try {
+      const myMemoryUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(payload.text)}&langpair=en|zh-CN`;
+      const res = await fetch(myMemoryUrl);
+      if (res.ok) {
+        const json = (await res.json()) as any;
+        const mmTrans = json?.responseData?.translatedText;
+        if (mmTrans && /[\u3400-\u9fff]/u.test(mmTrans)) {
+          text = mmTrans;
+        }
+      }
+    } catch {}
+  }
   if (!/[\u3400-\u9fff]/u.test(text)) {
     try {
       const gtxUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=zh-CN&dt=t&q=${encodeURIComponent(payload.text)}`;

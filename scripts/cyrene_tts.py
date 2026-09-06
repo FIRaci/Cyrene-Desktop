@@ -28,9 +28,21 @@ except Exception:
     pass
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
+if not (ROOT_DIR / "vendor" / "gpt-sovits").exists():
+    if (ROOT_DIR.parent.parent / "vendor" / "gpt-sovits").exists():
+        ROOT_DIR = ROOT_DIR.parent.parent
+    elif Path("D:/Cyrene-Desktop/vendor/gpt-sovits").exists():
+        ROOT_DIR = Path("D:/Cyrene-Desktop")
+
 VENDOR_DIR = ROOT_DIR / "vendor" / "gpt-sovits"
 MODELS_DIR = ROOT_DIR / "resources" / "models" / "gptsovits"
+if not MODELS_DIR.exists() and Path("D:/Cyrene-Desktop/resources/models/gptsovits").exists():
+    MODELS_DIR = Path("D:/Cyrene-Desktop/resources/models/gptsovits")
+
 VOICE_DIR = ROOT_DIR / "resources" / "voice" / "cyrene"
+if not VOICE_DIR.exists() and Path("D:/Cyrene-Desktop/resources/voice/cyrene").exists():
+    VOICE_DIR = Path("D:/Cyrene-Desktop/resources/voice/cyrene")
+
 DEFAULT_PORT = 9880
 
 GPT_CKPT = MODELS_DIR / "Cyrene-e15.ckpt"
@@ -41,6 +53,25 @@ PROMPT_TXT = VOICE_DIR / "prompt_text.txt"
 def ensure_utf8_env():
     os.environ["PYTHONIOENCODING"] = "utf-8"
     os.environ["PYTHONUTF8"] = "1"
+
+def ensure_nltk_resources():
+    try:
+        import nltk
+        needed = [
+            ("taggers/averaged_perceptron_tagger_eng", "averaged_perceptron_tagger_eng"),
+            ("taggers/averaged_perceptron_tagger", "averaged_perceptron_tagger"),
+            ("corpora/cmudict", "cmudict"),
+            ("tokenizers/punkt", "punkt"),
+            ("tokenizers/punkt_tab", "punkt_tab"),
+        ]
+        for path_id, pkg in needed:
+            try:
+                nltk.data.find(path_id)
+            except LookupError:
+                print(f"[NLTK] Downloading {pkg}...")
+                nltk.download(pkg, quiet=True)
+    except Exception as e:
+        print(f"[NLTK] Warning: {e}")
 
 def ensure_vendor_exists():
     if not VENDOR_DIR.exists() or not (VENDOR_DIR / "api_v2.py").exists():
@@ -132,6 +163,7 @@ def start_server(port: int, host: str = "127.0.0.1"):
     ensure_vendor_exists()
     ensure_cyrene_model_files()
     ensure_pretrained_base_models()
+    ensure_nltk_resources()
     update_tts_infer_config()
     
     print("\n" + "=" * 65)

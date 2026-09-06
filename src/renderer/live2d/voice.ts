@@ -417,7 +417,8 @@ export class CompanionVoiceService {
       });
 
       if (res && res.base64) {
-        return this.playBase64Audio(res.base64, res.format || "wav");
+        const volume = typeof settings.ttsVolume === "number" ? settings.ttsVolume : 1.0;
+        return this.playBase64Audio(res.base64, res.format || "wav", volume);
       }
     } catch (err) {
       console.warn("[CompanionVoice] GPT-SoVITS synthesis failed:", err);
@@ -434,12 +435,13 @@ export class CompanionVoiceService {
     return false;
   }
 
-  private playBase64Audio(base64: string, format: string): boolean {
+  private playBase64Audio(base64: string, format: string, volume = 1.0): boolean {
     if (typeof Audio === "undefined") return false;
 
     try {
       const mime = format === "wav" ? "audio/wav" : "audio/mpeg";
       const audio = new Audio(`data:${mime};base64,${base64}`);
+      audio.volume = Math.max(0, Math.min(1, Number(volume ?? 1.0)));
       this.currentAudio = audio;
       this.isSpeaking = true;
 
@@ -456,15 +458,25 @@ export class CompanionVoiceService {
         this.onStopSpeaking?.();
       };
 
-      audio.onerror = () => {
+      audio.onerror = (e) => {
+        console.warn("[CompanionVoice] Audio element error event:", e);
         this.isSpeaking = false;
         this.currentAudio = null;
         this.onStopSpeaking?.();
       };
 
-      void audio.play();
+      const playPromise = audio.play();
+      if (playPromise && typeof playPromise.catch === "function") {
+        playPromise.catch((err) => {
+          console.warn("[CompanionVoice] audio.play() promise rejected:", err);
+          this.isSpeaking = false;
+          this.currentAudio = null;
+          this.onStopSpeaking?.();
+        });
+      }
       return true;
-    } catch {
+    } catch (err) {
+      console.warn("[CompanionVoice] playBase64Audio instantiation error:", err);
       this.isSpeaking = false;
       this.currentAudio = null;
       this.onStopSpeaking?.();

@@ -13,7 +13,6 @@ files:
   - assets/**/*
   - skills/**/*
   - game-recipes/**/*
-  - vendor/**/*
   - models/**/*
 extraResources:
   - from: resources/bin/cyrene-screenshot.exe
@@ -22,6 +21,8 @@ extraResources:
     to: resources/voice
   - from: resources/models
     to: resources/models
+  - from: scripts
+    to: scripts
 win:
   icon: assets/icon.ico
   target:
