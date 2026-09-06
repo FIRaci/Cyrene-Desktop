@@ -186,17 +186,21 @@ describe("GestureInteractionController", () => {
     // Finish run
     aguiCallback!({ type: "RUN_FINISHED" });
 
-    // Verify clean speech bubble with action, voice speak with spoken words only, kaomoji, and assistant message in chatStore
+    // Verify bubbles, voice, and kaomoji — model turn persistence is now agui-bridge's responsibility
     expect(bubbles.say).toHaveBeenCalledWith("*gently blinks* /so sweet.../ Ehehe~ I love you Master! (⁄ ⁄>⁄ ▽ ⁄<⁄ ⁄)", 5000);
     expect(kaomoji.spawn).toHaveBeenCalledTimes(1);
     expect(voice.speak).toHaveBeenCalledWith("Ehehe~ I love you Master!");
+    // User turn is pre-appended by the gesture controller (clean display, not verbose prompt)
     expect(append).toHaveBeenCalledWith(
       "active-session-abc",
       expect.objectContaining({
-        role: "model",
-        content: "*gently blinks* /so sweet.../ Ehehe~ I love you Master! (⁄ ⁄>⁄ ▽ ⁄<⁄ ⁄)",
+        role: "user",
+        content: "*Gently pats Cyrene's head*",
       }),
     );
+    // Model turn is NOT appended from the renderer — agui-bridge backend persistence handles it
+    // to avoid the race condition that caused duplicate messages.
+    expect(append).toHaveBeenCalledTimes(1);
 
     controller.dispose();
   });
@@ -273,9 +277,13 @@ describe("GestureInteractionController", () => {
   it("falls back cleanly when agui is offline or returns an error", async () => {
     const run = vi.fn().mockResolvedValue({ success: false, error: "Model offline" });
     const onEvent = vi.fn().mockReturnValue(() => {});
+    const append = vi.fn().mockResolvedValue(true);
+    const getActiveSession = vi.fn().mockResolvedValue("fallback-session");
 
     vi.stubGlobal("window", {
       agui: { run, onEvent },
+      // chatStore must be present so finishFallback can persist the fallback message
+      chatStore: { append, getActiveSession },
     });
 
     const controller = new GestureInteractionController({
@@ -292,6 +300,11 @@ describe("GestureInteractionController", () => {
     );
     expect(voice.speak).toHaveBeenCalledWith(
       expect.stringContaining("希琳最喜欢你了"),
+    );
+    // Fallback message is persisted by finishFallback (agui-bridge won't save since run failed)
+    expect(append).toHaveBeenCalledWith(
+      "fallback-session",
+      expect.objectContaining({ role: "model", content: expect.stringContaining("希琳最喜欢你了") }),
     );
 
     controller.dispose();
@@ -358,12 +371,16 @@ describe("GestureInteractionController", () => {
     aguiCallback!({ type: "TEXT_MESSAGE_CONTENT", delta: "Hello Master" });
     aguiCallback!({ type: "RUN_FINISHED" });
 
+    // User turn is pre-appended by gesture controller (clean display message)
     expect(append).toHaveBeenCalledWith(
       "session-from-list-xyz",
       expect.objectContaining({
-        role: "model",
+        role: "user",
       }),
     );
+    // Model turn persistence is agui-bridge's responsibility — NOT the renderer's
+    // This ensures no duplicate messages in the chat window.
+    expect(append).toHaveBeenCalledTimes(1);
 
     controller.dispose();
   });

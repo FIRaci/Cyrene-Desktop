@@ -181,7 +181,10 @@ export class GestureInteractionController {
     const userTurnId = `user-gesture-${Date.now()}`;
     const assistantTurnId = `asst-gesture-${Date.now()}`;
 
-    // Append clean, immersive user action into chatStore (not verbose prompt text)
+    // Append clean immersive user action (e.g. "*Gently pats Cyrene's head*") into chatStore
+    // BEFORE agui.run() so the chat window shows it immediately.
+    // agui-bridge also tries to save the user turn via latestUserText, but its hasUser check
+    // (m.id === input.userTurnId) will detect our pre-append and skip the verbose prompt version.
     await this.appendToStore(store, sessionId, {
       id: userTurnId,
       role: "user",
@@ -190,7 +193,8 @@ export class GestureInteractionController {
     });
 
     if (!agui) {
-      this.finishFallback(fallbackText);
+      // No agui available: show fallback immediately and persist it manually (agui-bridge won't run)
+      this.finishFallback(store, sessionId, fallbackText);
       return;
     }
 
@@ -203,9 +207,13 @@ export class GestureInteractionController {
           this.bubbles.say(cleaned, 60000);
         }
       } else if (event.type === "RUN_FINISHED") {
-        void this.finishRun(store, sessionId, assistantTurnId, fallbackText);
+        // Guard: agui-bridge may fire RUN_FINISHED while complete() also triggers finishRun;
+        // ensure we only execute once per run to prevent duplicate chatStore writes.
+        if (this.isGenerating) {
+          void this.finishRun(store, sessionId, assistantTurnId, fallbackText);
+        }
       } else if (event.type === "RUN_ERROR") {
-        this.finishFallback(fallbackText);
+        this.finishFallback(store, sessionId, fallbackText);
       }
     });
 
@@ -242,11 +250,12 @@ export class GestureInteractionController {
       });
 
       if (!ack?.success) {
-        this.finishFallback(fallbackText);
+        this.finishFallback(store, sessionId, fallbackText);
       }
     } catch {
-      this.finishFallback(fallbackText);
+      this.finishFallback(store, sessionId, fallbackText);
     }
+
   }
 
   private async finishRun(
@@ -255,6 +264,8 @@ export class GestureInteractionController {
     assistantTurnId: string,
     fallbackText: string,
   ): Promise<void> {
+    // Guard against double invocation (isGenerating is set false here as a lock)
+    if (!this.isGenerating) return;
     const rawReply = this.currentReply.trim();
     const cleanFullReply = cleanGestureReply(rawReply) || fallbackText;
     this.cleanupAgui();
@@ -272,16 +283,14 @@ export class GestureInteractionController {
       void this.voice?.speak(spoken);
     }
 
-    // Chat store receives the complete, untruncated model message for Alt+1 chat window
-    await this.appendToStore(store, sessionId, {
-      id: assistantTurnId,
-      role: "model",
-      content: cleanFullReply,
-      at: Date.now(),
-    });
+    // NOTE: chatStore persistence is intentionally omitted here.
+    // agui-bridge.ts backend persistence guarantee (complete() handler) already saves
+    // both the user turn (via userTurnId) and model turn (via assistantTurnId) with
+    // deduplication checks. A second append here races with those checks and produces duplicates.
+    void store; void sessionId; void assistantTurnId;
   }
 
-  private finishFallback(fallbackText: string): void {
+  private finishFallback(store: { append: (arg1: unknown, arg2?: unknown) => Promise<unknown> } | undefined, sessionId: string, fallbackText: string): void {
     this.cleanupAgui();
     this.isGenerating = false;
     this.lastInteractionTime = Date.now();
@@ -291,6 +300,15 @@ export class GestureInteractionController {
     if (spoken) {
       void this.voice?.speak(spoken);
     }
+    // Fallback path: agui.run() never completed, so agui-bridge won't save anything.
+    // We must persist the fallback message ourselves.
+    const fallbackId = `asst-gesture-fallback-${Date.now()}`;
+    void this.appendToStore(store, sessionId, {
+      id: fallbackId,
+      role: "model",
+      content: fallbackText,
+      at: Date.now(),
+    });
   }
 
   private scheduleAutonomousResume(): void {
