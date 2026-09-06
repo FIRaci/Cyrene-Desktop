@@ -3469,6 +3469,206 @@ select option:hover,
   background: rgba(255, 255, 255, 0.08);
 }
 
+.birthday-picker-wrap {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+.birthday-picker-wrap input {
+  flex: 1;
+  padding-right: 38px;
+  cursor: pointer;
+}
+
+.birthday-calendar-btn {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: rgba(255, 182, 220, 0.7);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.birthday-calendar-btn:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.birthday-calendar-popup {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 1000;
+  width: 290px;
+  padding: 14px;
+  background: rgba(26, 17, 36, 0.97);
+  border: 1px solid rgba(255, 182, 220, 0.28);
+  border-radius: 14px;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.6), 0 0 24px rgba(255, 120, 190, 0.12);
+  backdrop-filter: blur(20px);
+  user-select: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.birthday-calendar-popup[hidden] {
+  display: none !important;
+}
+
+.birthday-cal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.birthday-cal-nav-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.birthday-cal-nav-btn:hover {
+  background: rgba(255, 182, 220, 0.2);
+  border-color: rgba(255, 182, 220, 0.4);
+  color: #fff;
+}
+
+.birthday-cal-selectors {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  justify-content: center;
+}
+
+.birthday-cal-select {
+  padding: 4px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(40, 24, 52, 0.95);
+  color: rgba(254, 247, 255, 0.95);
+  cursor: pointer;
+  outline: none;
+}
+
+.birthday-cal-select:focus {
+  border-color: rgba(255, 182, 220, 0.6);
+}
+
+.birthday-cal-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  text-align: center;
+}
+
+.birthday-cal-weekday {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255, 182, 220, 0.65);
+  padding: 4px 0;
+}
+
+.birthday-cal-days {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 3px;
+}
+
+.birthday-cal-day {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: rgba(254, 247, 255, 0.9);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.birthday-cal-day.is-other-month {
+  color: rgba(255, 255, 255, 0.22);
+}
+
+.birthday-cal-day:hover:not(.is-selected) {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+.birthday-cal-day.is-today {
+  border: 1px solid rgba(255, 182, 220, 0.55);
+}
+
+.birthday-cal-day.is-selected {
+  background: linear-gradient(135deg, #ff7bb0, #c45eff);
+  color: #fff;
+  font-weight: 700;
+  box-shadow: 0 2px 10px rgba(255, 123, 176, 0.45);
+}
+
+.birthday-cal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.birthday-cal-action-btn {
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.birthday-cal-action-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+}
+
+.birthday-cal-action-btn--close {
+  background: rgba(255, 182, 220, 0.15);
+  border-color: rgba(255, 182, 220, 0.35);
+  color: #ffb6dc;
+}
+
+.birthday-cal-action-btn--close:hover {
+  background: rgba(255, 182, 220, 0.28);
+  color: #fff;
+}
+
 /* ： tts-field input */
 .tts-field select {
   flex: 1;

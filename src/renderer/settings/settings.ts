@@ -22,6 +22,7 @@ import {
 } from "../../shared/preferences";
 import { isProactiveDeliveryTargetSelectable } from "../../shared/proactive-delivery";
 import { TIMEZONE_OPTIONS, FALLBACK_TIMEZONE, normalizeTimezoneOptionValue } from "./timezone-options";
+import { setupBirthdayPicker } from "./birthday-picker";
 import { normalizeUiTheme, type UiTheme } from "../../shared/ui-theme";
 import { DEFAULT_UI_FONT, normalizeUiFont, type UiFont } from "../../shared/ui-font";
 import { normalizeUiIcon, type UiIcon } from "../../shared/ui-icon";
@@ -4247,6 +4248,8 @@ const userDefaultCityInput = document.getElementById("user-default-city") as HTM
 const userNicknameInput = document.getElementById("user-nickname") as HTMLInputElement | null;
 const userCallPrefInput = document.getElementById("user-call-pref") as HTMLInputElement | null;
 const userBirthdayInput = document.getElementById("user-birthday") as HTMLInputElement | null;
+const userBirthdayBtn = document.getElementById("user-birthday-btn") as HTMLButtonElement | null;
+const userBirthdayPopup = document.getElementById("user-birthday-popup") as HTMLElement | null;
 const userTimezoneSelect = document.getElementById("user-timezone") as HTMLSelectElement | null;
 const userGenderGroup = document.getElementById("user-gender") as HTMLElement | null;
 const memoryL0NameInput = document.getElementById("memory-l0-name") as HTMLInputElement | null;
@@ -4442,6 +4445,13 @@ function bindUserProfileSave(input: HTMLInputElement | null, field: string): voi
 bindUserProfileSave(userNicknameInput, "nickname");
 bindUserProfileSave(userCallPrefInput, "callPreference");
 bindUserProfileSave(userBirthdayInput, "birthday");
+if (userBirthdayInput && userBirthdayPopup) {
+  setupBirthdayPicker({
+    input: userBirthdayInput,
+    button: userBirthdayBtn,
+    popup: userBirthdayPopup,
+  });
+}
 
 if (userDefaultCityInput) {
   const saveCity = (): void => {
