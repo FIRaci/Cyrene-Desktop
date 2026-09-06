@@ -1456,7 +1456,7 @@ const DEFAULT_USER_PROFILE: UserProfile = {
   nickname: "",
   callPreference: "",
   birthday: "",
-  timezone: "Asia/Shanghai",
+  timezone: "Asia/Ho_Chi_Minh",
   avatarPath: "",
   defaultCity: "Hanoi",
   gender: "secret",
@@ -1469,6 +1469,9 @@ function loadUserProfile(): UserProfile {
     const loaded = { ...DEFAULT_USER_PROFILE, ...JSON.parse(fs.readFileSync(filePath, "utf8")) as Partial<UserProfile> };
     if (!loaded.defaultCity || !loaded.defaultCity.trim()) {
       loaded.defaultCity = "Hanoi";
+    }
+    if (!loaded.timezone || !loaded.timezone.trim() || (loaded.timezone === "Asia/Shanghai" && loaded.defaultCity.toLowerCase().includes("hanoi"))) {
+      loaded.timezone = "Asia/Ho_Chi_Minh";
     }
     return loaded;
   } catch {
