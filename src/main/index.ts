@@ -791,9 +791,9 @@ function buildGptsovitsCacheKey(payload: {
     baseUrl: payload.baseUrl,
     refAudioPath: payload.refAudioPath,
     promptText: payload.promptText,
-    languageMode: payload.languageMode ?? "english",
-    textLang: payload.textLang ?? "en",
-    promptLang: payload.promptLang ?? "en",
+    languageMode: payload.languageMode ?? "original-mandarin",
+    textLang: payload.textLang === "en" ? "zh" : (payload.textLang ?? "zh"),
+    promptLang: payload.promptLang === "en" ? "zh" : (payload.promptLang ?? "zh"),
     speed: payload.speed ?? 1,
     format: payload.format ?? "wav",
     rvcApplied: payload.rvcApplied === true,
@@ -833,7 +833,29 @@ async function prepareGptsovitsVoicePayload(payload: {
     || (settings.ttsGptsovitsPromptText && settings.ttsGptsovitsPromptText.trim())
     || "开拓者，希琳一直都在这里陪着你哦。";
   const languageMode = "original-mandarin";
-  const text = await translateEnglishToMandarinSpeech(payload.text, loadModelSettings());
+  let text = await translateEnglishToMandarinSpeech(payload.text, loadModelSettings());
+  // If text still does not contain Chinese characters, translate via Google GTX bridge
+  if (!/[\u3400-\u9fff]/u.test(text)) {
+    try {
+      const gtxUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=zh-CN&dt=t&q=${encodeURIComponent(payload.text)}`;
+      const res = await fetch(gtxUrl, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        },
+      });
+      if (res.ok) {
+        const json = await res.json() as any;
+        if (Array.isArray(json?.[0])) {
+          const gtxTrans = json[0].map((item: any) => item?.[0] || "").join("").trim();
+          if (gtxTrans && /[\u3400-\u9fff]/u.test(gtxTrans)) {
+            text = gtxTrans;
+          }
+        }
+      }
+    } catch (gtxErr) {
+      console.warn("[TTS] GTX translation fallback failed:", gtxErr);
+    }
+  }
   const translatedToMandarin = /[\u3400-\u9fff]/u.test(text);
   return {
     ...payload,
@@ -5808,15 +5830,44 @@ app.whenReady().then(async () => {
     return { voices: result.voices };
   });
 
-  // Online Neural voice synthesis (Microsoft Edge Neural TTS — zh-CN-XiaoyiNeural anime girl)
+  // Online Neural voice synthesis (Microsoft Edge Neural TTS — strictly zh-CN-XiaoyiNeural anime girl)
   ipcMain.handle(IPC.TTS_SYNTHESIZE_ONLINE, async (_event, payload: { text: string; lang?: string }) => {
     if (!payload?.text) return null;
-    const text = String(payload.text).trim();
+    let text = String(payload.text).trim();
     if (!text) return null;
+
+    // Ensure non-Chinese text is translated to Chinese first so Cyrene ALWAYS speaks in Chinese
+    if (!/[\u4e00-\u9fff]/.test(text)) {
+      try {
+        const gtxUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=zh-CN&dt=t&q=${encodeURIComponent(text)}`;
+        const res = await fetch(gtxUrl, {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          },
+        });
+        if (res.ok) {
+          const json = await res.json() as any;
+          if (Array.isArray(json?.[0])) {
+            const translated = json[0].map((item: any) => item?.[0] || "").join("").trim();
+            if (translated && /[\u4e00-\u9fff]/.test(translated)) {
+              text = translated;
+            }
+          }
+        }
+      } catch {
+        try {
+          const fallback = await translateEnglishToMandarinSpeech(text, loadModelSettings());
+          if (fallback && /[\u4e00-\u9fff]/.test(fallback)) {
+            text = fallback;
+          }
+        } catch {}
+      }
+    }
 
     try {
       const result = await synthesizeEdgeTts({
         text,
+        voice: "zh-CN-XiaoyiNeural",
         pitch: "+10Hz",
         rate: "+3%",
       });
@@ -5826,7 +5877,7 @@ app.whenReady().then(async () => {
     }
 
     try {
-      const lang = payload.lang || "zh-CN";
+      const lang = "zh-CN";
       const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=${encodeURIComponent(lang)}&client=tw-ob`;
       const res = await fetch(url, {
         headers: {

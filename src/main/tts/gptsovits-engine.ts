@@ -52,10 +52,10 @@ export async function synthesize(opts: GptsovitsSynthesizeOptions): Promise<Gpts
   // 2) Build JSON body (raw object, not wrapped in data)
   // Contract ref GPT-SoVITS api_v2.py: POST /tts, body is TTS_Request model
   // Required fields: text / text_lang / ref_audio_path / prompt_lang
-  const isZh = /[\u4e00-\u9fff]/.test(opts.text);
-  const text_lang = opts.textLang ?? (isZh ? "zh" : "en");
-  const isPromptZh = /[\u4e00-\u9fff]/.test(opts.promptText);
-  const prompt_lang = opts.promptLang ?? (isPromptZh ? "zh" : "en");
+  // Cyrene's Hugging Face GPT-SoVITS model is strictly Mandarin Chinese (HSR-Cyrene-GPT-SoVITS).
+  // Strictly default to "zh" and never fallback to "en".
+  const text_lang = opts.textLang === "en" ? "zh" : (opts.textLang ?? "zh");
+  const prompt_lang = opts.promptLang === "en" ? "zh" : (opts.promptLang ?? "zh");
 
   const body = JSON.stringify({
     text: opts.text,

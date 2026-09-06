@@ -42,10 +42,16 @@ function generateSecMsGec(): string {
 
 /**
  * Infers appropriate expressive neural voice based on language and text content.
- * Defaults to en-US-AnaNeural (Cyrene's sweet, cheerful English companion voice).
+ * Defaults to zh-CN-XiaoyiNeural (Cyrene's sweet, cheerful Chinese companion voice).
  */
 export function resolveBestNeuralVoice(text: string, preferredVoice?: string): string {
-  if (preferredVoice) return preferredVoice;
+  if (preferredVoice) {
+    const lower = preferredVoice.toLowerCase();
+    // Reject any English voices (en-US-AnaNeural, en-US-JennyNeural, etc.) to keep spoken voice 100% Chinese/CJK
+    if (!lower.startsWith("en-") && !lower.includes("english") && !lower.includes("ana") && !lower.includes("zira") && !lower.includes("david")) {
+      return preferredVoice;
+    }
+  }
 
   // Japanese characters
   if (/[\u3040-\u30ff\u31f0-\u31ff]/.test(text)) {

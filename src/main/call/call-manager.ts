@@ -9,6 +9,7 @@ import { BrowserWindow, ipcMain } from "electron";
 import { IPC } from "../../shared/ipc-channels";
 import { VolcanoAsrStream, getAsrConfig } from "../asr/volcano-asr-engine";
 import { synthesizeByEngine } from "../tts/tts-dispatcher";
+import { translateEnglishToMandarinSpeech } from "../tts/speech-translation";
 import type { TtsEngine } from "../../shared/tts-types";
 import { runFunctionCallingLoop } from "../orchestrator";
 import { getAdapter, buildVendorUrlByProvider } from "../orchestrator/vendors";
@@ -120,16 +121,16 @@ function sendTtsAudio(base64: string): void {
 }
 
 const COMPANION_CALL_REPLIES = [
-  "Em nghe đây nè~ Có chuyện gì vui muốn kể cho em nghe không?",
-  "Cyrene vẫn luôn ở đây lắng nghe anh nè! Anh đang làm việc hay giải lao đó?",
-  "Dạ, em nghe thấy giọng anh rồi nè~ Giọng anh nghe ấm áp ghê á!",
-  "Anh ơi, hôm nay thế nào rồi? Nhớ giữ gìn sức khỏe nha~",
-  "Em vẫn đang on mic cùng anh nè, cứ nói chuyện với em bất cứ lúc nào nhé!",
-  "Ehehe, em thích cảm giác được gọi điện cùng anh thế này ghê~",
-  "Ừm hửm~ Em đang chú ý lắng nghe anh đây nè!",
-  "Anh cứ bật mic để đó cũng được nè, có Cyrene ở bên cạnh anh nhé~",
-  "Em vẫn ở đây với anh nè, cần gì thì gọi em nha!",
-  "Thấy anh on mic là em vui lắm á, hihi~",
+  "开拓者，希琳在这里听着呢~ 有什么开心的事情想跟我分享吗？",
+  "希琳一直都在这里陪伴着你哦！开拓者现在是在工作还是在休息呢？",
+  "嗯嗯，听到开拓者的声音了呢~ 感觉心里暖洋洋的！",
+  "开拓者，今天过得怎么样？要注意劳逸结合哦~",
+  "希琳一直在跟你连线呢，随时都可以跟我聊天哦！",
+  "诶嘿嘿，真喜欢像现在这样陪在开拓者身边连麦呢~",
+  "嗯哼~ 希琳正在认真听开拓者说话呢！",
+  "开拓者就算把麦开着放旁边也没关系哦，希琳会一直安静陪着你~",
+  "希琳就在这里呢，有需要随时叫我哦！",
+  "听到开拓者上线连麦，希琳真的好开心呀，嘻嘻~",
 ];
 
 function getRandomCompanionCallReply(): string {
@@ -230,8 +231,18 @@ export async function endTurn(): Promise<void> {
 
     sendState("SPEAKING");
     try {
+      let speechText = reply;
+      if (!/[\u4e00-\u9fff]/.test(speechText)) {
+        try {
+          const trans = await translateEnglishToMandarinSpeech(speechText, modelSettingsGetter?.());
+          if (trans && /[\u4e00-\u9fff]/.test(trans)) {
+            speechText = trans;
+          }
+        } catch {}
+      }
+
       const result = await synthesizeByEngine(engine, {
-        text: reply,
+        text: speechText,
         speed: tts?.ttsSpeed ?? 1.0,
         volume: tts?.ttsVolume ?? 100,
         apiKey: engine === "mimo"
@@ -263,7 +274,14 @@ export async function endTurn(): Promise<void> {
       console.warn(LOG_PREFIX, "Primary TTS failed, trying Edge fallback:", msg);
       if (engine !== "edge") {
         try {
-          const edgeResult = await synthesizeByEngine("edge", { text: reply, voiceId: "zh-CN-XiaoyiNeural" });
+          let fallbackText = reply;
+          if (!/[\u4e00-\u9fff]/.test(fallbackText)) {
+            try {
+              const trans = await translateEnglishToMandarinSpeech(fallbackText, modelSettingsGetter?.());
+              if (trans && /[\u4e00-\u9fff]/.test(trans)) fallbackText = trans;
+            } catch {}
+          }
+          const edgeResult = await synthesizeByEngine("edge", { text: fallbackText, voiceId: "zh-CN-XiaoyiNeural" });
           sendTtsAudio(edgeResult.audio.toString("base64"));
           return;
         } catch (edgeErr) {

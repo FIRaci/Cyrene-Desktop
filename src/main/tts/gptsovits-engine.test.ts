@@ -45,7 +45,7 @@ describe("gptsovits-engine synthesize input validation", () => {
     })).rejects.toThrow(/Synthesis text|text/);
   });
 
-  it("defaults both synthesis and reference languages to English", async () => {
+  it("defaults both synthesis and reference languages to Chinese (zh)", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       arrayBuffer: async () => new TextEncoder().encode("RIFFaudio").buffer,
@@ -54,15 +54,15 @@ describe("gptsovits-engine synthesize input validation", () => {
 
     await synthesize({
       baseUrl: "http://localhost:9880",
-      refAudioPath: "D:/voices/cyrene-en.wav",
+      refAudioPath: "D:/voices/cyrene-zh.wav",
       promptText: "Hello, I am Cyrene.",
       text: "Welcome back.",
     });
 
     const request = fetchMock.mock.calls[0]?.[1] as RequestInit;
     const body = JSON.parse(String(request.body));
-    expect(body.text_lang).toBe("en");
-    expect(body.prompt_lang).toBe("en");
+    expect(body.text_lang).toBe("zh");
+    expect(body.prompt_lang).toBe("zh");
   });
 
   it("allows an explicit Mandarin reference language without changing the app locale", async () => {

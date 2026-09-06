@@ -21,7 +21,14 @@ describe("edge-tts-engine", () => {
     expect(resolveBestNeuralVoice("Ehehe~ 🌸")).toBe("zh-CN-XiaoyiNeural");
   });
 
-  it("respects explicitly requested voice override", () => {
+  it("respects explicitly requested valid non-English voice override", () => {
     expect(resolveBestNeuralVoice("Hello", "zh-CN-XiaoxiaoNeural")).toBe("zh-CN-XiaoxiaoNeural");
+  });
+
+  it("rejects English voice overrides and falls back to zh-CN-XiaoyiNeural", () => {
+    expect(resolveBestNeuralVoice("Hello", "en-US-AnaNeural")).toBe("zh-CN-XiaoyiNeural");
+    expect(resolveBestNeuralVoice("Hello", "en-US-JennyNeural")).toBe("zh-CN-XiaoyiNeural");
+    expect(resolveBestNeuralVoice("Hello", "Microsoft Zira")).toBe("zh-CN-XiaoyiNeural");
+    expect(resolveBestNeuralVoice("Hello", "Microsoft David")).toBe("zh-CN-XiaoyiNeural");
   });
 });
