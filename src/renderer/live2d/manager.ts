@@ -104,6 +104,7 @@ export class Live2DManager {
     if (typeof document !== "undefined" && document.documentElement) {
       const initialH = options.height || PET_WINDOW_BASE_HEIGHT;
       document.documentElement.style.setProperty("--cyrene-top", `${Math.round(initialH * 0.417)}px`);
+      document.documentElement.style.setProperty("--cyrene-feet", `${Math.round(initialH * 0.616)}px`);
       document.documentElement.style.setProperty("--cyrene-bottom", `${Math.round(initialH * 0.94)}px`);
       document.documentElement.style.setProperty("--pet-zoom", String(this.zoom));
     }
@@ -435,8 +436,11 @@ export class Live2DManager {
     // model.height is the scaled height of the Live2D model
     // Cyrene sits on a swing; bottom of swing is roughly model.y + (model.height * 0.44)
     const cyreneBottom = model.y + (model.height * 0.44);
+    // Cyrene's visible feet and shoes are located at roughly model.y + (model.height * 0.12)
+    const cyreneFeet = model.y + (model.height * 0.12);
     const cyreneTop = this.resolveCyreneHeadTop();
     document.documentElement.style.setProperty("--cyrene-bottom", `${Math.round(cyreneBottom)}px`);
+    document.documentElement.style.setProperty("--cyrene-feet", `${Math.round(cyreneFeet)}px`);
     document.documentElement.style.setProperty("--cyrene-top", `${Math.round(cyreneTop)}px`);
     document.documentElement.style.setProperty("--pet-zoom", String(this.zoom));
   }

@@ -1,11 +1,11 @@
 .pet-mini-chat {
   position: fixed;
-  bottom: 12px;
-  top: auto;
+  top: calc(var(--cyrene-feet, 308px) + 8px);
+  bottom: auto;
   left: 50%;
   right: auto;
-  transform-origin: bottom center;
-  transform: translateX(-50%) translateY(10px) scale(calc(var(--pet-zoom, 1) * 0.96));
+  transform-origin: top center;
+  transform: translateX(-50%) translateY(-6px) scale(calc(var(--pet-zoom, 1) * 0.96));
   width: 272px;
   max-width: calc(100vw - 20px);
   min-width: 0;

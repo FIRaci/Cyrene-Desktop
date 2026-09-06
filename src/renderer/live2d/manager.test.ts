@@ -219,6 +219,7 @@ describe("Live2DManager.playAction", () => {
     vi.stubGlobal("window", { innerWidth: 400, innerHeight: 500 });
     mgr.resize(400, 500);
     expect(cssVars.get("--cyrene-top")).toBe("209px");
+    expect(cssVars.get("--cyrene-feet")).toBe("308px");
     expect(cssVars.get("--cyrene-bottom")).toBe("461px");
     expect(cssVars.get("--pet-zoom")).toBe("1");
 
@@ -228,6 +229,7 @@ describe("Live2DManager.playAction", () => {
     model.y = 375;
     mgr.applyZoom(1.5);
     expect(cssVars.get("--cyrene-top")).toBe("314px");
+    expect(cssVars.get("--cyrene-feet")).toBe("461px");
     expect(cssVars.get("--pet-zoom")).toBe("1.5");
 
     // Zoomed out 0.6x (window 240x300, model.y = 150, model.height = 288)
@@ -236,6 +238,7 @@ describe("Live2DManager.playAction", () => {
     model.y = 150;
     mgr.applyZoom(0.6);
     expect(cssVars.get("--cyrene-top")).toBe("126px");
+    expect(cssVars.get("--cyrene-feet")).toBe("185px");
     expect(cssVars.get("--pet-zoom")).toBe("0.6");
 
     vi.unstubAllGlobals();

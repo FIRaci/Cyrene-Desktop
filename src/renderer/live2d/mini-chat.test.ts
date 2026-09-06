@@ -254,4 +254,55 @@ describe("MiniChatWidget", () => {
 
     widget.dispose();
   });
+
+  it("dynamically resolves session from store.list() or store.create() without default fallback", async () => {
+    const bubbles = {
+      say: vi.fn(),
+      think: vi.fn(),
+      hide: vi.fn(),
+      handle: vi.fn(),
+      dispose: vi.fn(),
+    } as unknown as CompanionBubbleController;
+
+    const list = vi.fn().mockResolvedValue([{ id: "session-from-list" }]);
+    const setActiveSession = vi.fn();
+    const append = vi.fn().mockResolvedValue(true);
+
+    (globalThis as any).window = {
+      chatStore: {
+        getActiveSession: vi.fn().mockResolvedValue(null),
+        list,
+        setActiveSession,
+        append,
+      },
+    };
+
+    const widget = new MiniChatWidget({ bubbles });
+    const sessionId = await (widget as any).getOrCreateActiveSessionId();
+    expect(sessionId).toBe("session-from-list");
+    expect(setActiveSession).toHaveBeenCalledWith("session-from-list");
+
+    // When list is empty, creates a new session
+    list.mockResolvedValue([]);
+    const create = vi.fn().mockResolvedValue({ id: "newly-created-session" });
+    (globalThis as any).window.chatStore.create = create;
+
+    const createdId = await (widget as any).getOrCreateActiveSessionId();
+    expect(createdId).toBe("newly-created-session");
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ title: "Cyrene & Master" }));
+
+    // Test finishRun fallback to eventReply
+    await (widget as any).finishRun("newly-created-session", "asst-1", "Reply from event payload");
+    expect(append).toHaveBeenCalledWith(
+      "newly-created-session",
+      expect.objectContaining({
+        id: "asst-1",
+        role: "model",
+        content: "Reply from event payload",
+      }),
+    );
+    expect(bubbles.say).toHaveBeenCalledWith("Reply from event payload", 6000);
+
+    widget.dispose();
+  });
 });

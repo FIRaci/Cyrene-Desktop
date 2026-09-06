@@ -5024,9 +5024,21 @@ window.chatStore?.onChanged(async () => {
 
 window.addEventListener("focus", async () => {
   if (!window.chatStore || !currentSessionId || sending) return;
-  const current = await window.chatStore.get(currentSessionId);
-  if (current && current.updatedAt > (seenSessionUpdatedAt.get(current.id) ?? 0)) {
-    await loadSessionTailIntoUI(current.id);
+  try {
+    const activeId = await window.chatStore.getActiveSession?.();
+    if (activeId && activeId !== currentSessionId) {
+      const session = await window.chatStore.get(activeId);
+      if (session) {
+        loadSessionIntoUI(session);
+        return;
+      }
+    }
+    const current = await window.chatStore.get(currentSessionId);
+    if (current && current.updatedAt > (seenSessionUpdatedAt.get(current.id) ?? 0)) {
+      await loadSessionTailIntoUI(current.id);
+    }
+  } catch (err) {
+    console.warn("[Cyrene Chat] Failed to sync session on focus:", err);
   }
 });
 

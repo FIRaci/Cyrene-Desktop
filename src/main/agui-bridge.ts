@@ -15,6 +15,7 @@ import { createThinkFilter, type ThinkStreamFilter, type ThinkFilterMode } from 
 import { perf } from "./perf-trace";
 import type { StyleId } from "../shared/style-sampling";
 import * as chatsStore from "./chats/chats-store";
+import { broadcastChatsChanged } from "./chats/chats-ipc";
 
 /** Input supplied by the renderer when starting a run. */
 export interface AguiRunInput {
@@ -96,6 +97,7 @@ type PetAgentEventDto = {
   type: "RUN_STARTED" | "TOOL_CALL_START" | "TOOL_CALL_END" | "TEXT_MESSAGE_START" |
     "TEXT_MESSAGE_CONTENT" | "TEXT_MESSAGE_END" | "RUN_FINISHED" | "RUN_ERROR";
   delta?: string;
+  reply?: string;
   toolCallName?: string;
 };
 
@@ -108,6 +110,7 @@ type ChatAgentEventDto = {
   toolCallId?: string;
   toolCallName?: string;
   delta?: string;
+  reply?: string;
   message?: string;
   code?: string;
   name?: string;
@@ -192,7 +195,11 @@ export function toChatAgentEvent(value: unknown): ChatAgentEventDto | null {
     const plan = projectTaskPlan(event.value);
     return plan ? { type, ...common, name, value: plan } : null;
   }
-  if (type === "RUN_STARTED" || type === "RUN_FINISHED") return { type, ...common };
+  if (type === "RUN_STARTED") return { type, ...common };
+  if (type === "RUN_FINISHED") {
+    const reply = typeof event.reply === "string" ? event.reply.slice(0, 16_384) : undefined;
+    return { type, ...common, ...(reply ? { reply } : {}) };
+  }
   // Tool arguments/results, step events, arbitrary metadata, and unknown event families are private.
   return null;
 }
@@ -211,9 +218,13 @@ export function toPetAgentEvent(value: unknown): PetAgentEventDto | null {
     return toolCallName ? { type, toolCallName } : { type };
   }
   if (type === "RUN_ERROR") return { type };
+  if (type === "RUN_FINISHED") {
+    const reply = typeof event.reply === "string" ? event.reply.slice(0, 4_096) : undefined;
+    return { type, ...(reply ? { reply } : {}) };
+  }
   if (
     type === "RUN_STARTED" || type === "TOOL_CALL_END" || type === "TEXT_MESSAGE_START" ||
-    type === "TEXT_MESSAGE_END" || type === "RUN_FINISHED"
+    type === "TEXT_MESSAGE_END"
   ) return { type };
   return null;
 }
@@ -266,6 +277,20 @@ export function diagnosticError(err: unknown): string {
     .replace(/\{[\s\S]{20,}\}/g, "<response body redacted>")
     .replace(/[\r\n]+/g, " ")
     .slice(0, 600);
+}
+
+export function resolveTargetSessionId(sessionId?: string): string | null {
+  if (!chatsStore.isInitialized()) return null;
+  if (sessionId && chatsStore.isValidSessionId(sessionId) && sessionId !== "default") {
+    const existing = chatsStore.getSession(sessionId);
+    if (existing) return sessionId;
+  }
+  const sessions = chatsStore.listSessions();
+  if (sessions.length > 0 && sessions[0]?.id) {
+    return sessions[0].id;
+  }
+  const newSession = chatsStore.createSession({ title: "Cyrene & Master" });
+  return newSession.id;
 }
 
 /**
@@ -471,6 +496,36 @@ export function registerAgUiIpc(
             }
             if (lastResult.reply) {
               onActivityLog?.("response", lastResult.reply, undefined, channel);
+              // Backend persistence guarantee: ensure conversation turn is safely stored in chatsStore and broadcasted
+              try {
+                const targetSessionId = resolveTargetSessionId(input.sessionId);
+                if (targetSessionId) {
+                  const session = chatsStore.getSession(targetSessionId);
+                  if (session) {
+                  const hasUser = session.messages.some(m => m.id === input.userTurnId || (m.role === "user" && m.content === latestUserText));
+                  if (!hasUser && latestUserText) {
+                    chatsStore.appendMessage(targetSessionId, {
+                      id: input.userTurnId || `user-${Date.now()}`,
+                      role: "user",
+                      content: latestUserText,
+                      at: Date.now(),
+                    });
+                  }
+                  const hasAsst = session.messages.some(m => m.id === input.assistantTurnId || (m.role === "model" && m.content === lastResult.reply));
+                  if (!hasAsst) {
+                    chatsStore.appendMessage(targetSessionId, {
+                      id: input.assistantTurnId || `asst-${Date.now()}`,
+                      role: "model",
+                      content: lastResult.reply,
+                      at: Date.now(),
+                    });
+                    broadcastChatsChanged();
+                  }
+                }
+              }
+            } catch (persistErr) {
+                console.warn("[AgUiBridge] Backend persistence check failed:", persistErr);
+              }
             }
             await perf.track("on_run_finished", async () => { await onFinished(lastResult, latestUserText); });
             // Index history asynchronously after visible post-run work.
@@ -484,7 +539,10 @@ export function registerAgUiIpc(
           console.warn("[AgUiBridge] Post-run work failed:", diagnosticError(err));
         }
         if (pendingRunFinishedEvent) {
-          send(pendingRunFinishedEvent);
+          send({
+            ...(pendingRunFinishedEvent as Record<string, unknown>),
+            reply: agent.lastResult?.reply,
+          });
         }
         endLifecycle();
         perf.dump();

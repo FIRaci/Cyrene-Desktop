@@ -159,6 +159,10 @@ export function getRootDir(): string {
   return rootDir;
 }
 
+export function isInitialized(): boolean {
+  return initialized;
+}
+
 export function listSessions(): ChatSessionMeta[] {
   // Return deep copy to avoid external mutations
   return indexCache.map((m) => ({ ...m }));

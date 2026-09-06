@@ -179,53 +179,54 @@ export class MiniChatWidget {
     }
   }
 
-  private quickChatSessionId: string | null = null;
-
   private async getOrCreateActiveSessionId(): Promise<string> {
     const win = typeof window !== "undefined" ? window : (globalThis as unknown as Window);
     const store = (win as unknown as { chatStore?: {
       getActiveSession?: () => Promise<string | { id: string } | null>;
       setActiveSession?: (id: string | null) => Promise<boolean>;
-      create?: (opts: { title?: string; identityId: null }) => Promise<{ id: string }>;
+      create?: (opts: { title?: string; identityId?: string | null }) => Promise<{ id: string }>;
       list?: () => Promise<Array<{ id: string }>>;
     } }).chatStore;
 
     if (!store) {
-      return "default";
+      return "fallback-session-" + Date.now();
     }
 
     try {
-      if (this.quickChatSessionId) {
-        return this.quickChatSessionId;
+      // 1. Dynamic query: check active session from Alt+1 or main process
+      if (store.getActiveSession) {
+        const active = await store.getActiveSession();
+        const activeId = typeof active === "string" ? active : active?.id;
+        if (activeId && activeId !== "default") {
+          return activeId;
+        }
       }
 
-      // Check if there is already an active session from Alt+1
-      const active = await store.getActiveSession?.();
-      const activeId = typeof active === "string" ? active : active?.id;
-      if (activeId) {
-        this.quickChatSessionId = activeId;
-        return activeId;
+      // 2. Query most recent existing session from store.list()
+      if (store.list) {
+        const list = await store.list();
+        if (Array.isArray(list) && list.length > 0 && list[0]?.id && list[0].id !== "default") {
+          await store.setActiveSession?.(list[0].id);
+          return list[0].id;
+        }
       }
 
-      // Otherwise create a dedicated Quick Chat session so it shows up in Alt+1
+      // 3. Otherwise create a dedicated session so it shows up in Alt+1
       if (store.create) {
-        const now = new Date();
-        const timeStr = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
         const created = await store.create({
-          title: `Quick Chat · ${timeStr}`,
+          title: "Cyrene & Master",
           identityId: null,
         });
-        if (created?.id) {
-          this.quickChatSessionId = created.id;
+        if (created?.id && created.id !== "default") {
           await store.setActiveSession?.(created.id);
           return created.id;
         }
       }
-
-      return "default";
-    } catch {
-      return "default";
+    } catch (err) {
+      console.warn("[MiniChat] Failed to resolve active session ID:", err);
     }
+
+    return "fallback-session-" + Date.now();
   }
 
   private async appendToStore(sessionId: string, message: unknown): Promise<void> {
@@ -301,7 +302,8 @@ export class MiniChatWidget {
           this.currentReply += event.delta;
           this.bubbles.say(this.currentReply, 60000);
         } else if (event.type === "RUN_FINISHED" || event.type === "RUN_ERROR") {
-          this.finishRun(sessionId, assistantTurnId);
+          const eventReply = (event as { reply?: string })?.reply;
+          this.finishRun(sessionId, assistantTurnId, eventReply);
         }
       });
 
@@ -355,8 +357,8 @@ export class MiniChatWidget {
     }
   }
 
-  private async finishRun(sessionId: string, assistantTurnId: string): Promise<void> {
-    const finalReply = this.currentReply.trim();
+  private async finishRun(sessionId: string, assistantTurnId: string, eventReply?: string): Promise<void> {
+    const finalReply = (this.currentReply || eventReply || "").trim();
     this.cleanupAgui();
     this.setBusy(false);
 

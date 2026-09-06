@@ -105,7 +105,7 @@ export class AutonomousThoughtController {
               id: `thought-${Date.now()}`,
               role: "model",
               content: `*💭 (${thought.text})*`,
-              timestamp: Date.now(),
+              at: Date.now(),
               thinking: false,
             });
           }
