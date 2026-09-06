@@ -299,8 +299,6 @@ describe("CompanionVoiceService", () => {
 
 
   it("does not fall back to robot WebSpeech when GPT-SoVITS is missing ref audio config", async () => {
-    // No refAudioPath = playGptsovits returns false → falls back to speakWebSpeech
-    // speakWebSpeech should succeed because we have a Chinese voice in the mock
     (window as any).settings = {
       getGeneral: vi.fn().mockResolvedValue({
         ttsEngine: "gptsovits",
@@ -317,16 +315,16 @@ describe("CompanionVoiceService", () => {
     const voice = new CompanionVoiceService({ initialMuted: false });
     const success = await voice.speak("Hello there");
 
-    // Falls through to Chinese WebSpeech since mock has Huihui (zh-CN) voice
-    expect(success).toBe(true);
-    expect(mockSpeechSynthesis.speak).toHaveBeenCalled();
+    // Strictly stays silent rather than leaking robot WebSpeech
+    expect(success).toBe(false);
+    expect(mockSpeechSynthesis.speak).not.toHaveBeenCalled();
 
     delete (window as any).settings;
     delete (window as any).tts;
     voice.dispose();
   });
 
-  it("falls back to Chinese Web Speech when GPT-SoVITS server is offline (returns false)", async () => {
+  it("stays silent (returns false) and does not call Web Speech when GPT-SoVITS server is offline", async () => {
     (window as any).settings = {
       getGeneral: vi.fn().mockResolvedValue({
         ttsEngine: "gptsovits",
@@ -344,11 +342,9 @@ describe("CompanionVoiceService", () => {
     const voice = new CompanionVoiceService({ initialMuted: false });
     const success = await voice.speak("希琳最喜欢你了！");
 
-    // Should fall back to Chinese Web Speech (Huihui zh-CN available in mock)
-    expect(success).toBe(true);
-    expect(mockSpeechSynthesis.speak).toHaveBeenCalled();
-    const utteranceArg = mockSpeechSynthesis.speak.mock.calls[0][0];
-    expect(utteranceArg.lang).toBe("zh-CN");
+    // Must stay silent to prevent generic robot voice
+    expect(success).toBe(false);
+    expect(mockSpeechSynthesis.speak).not.toHaveBeenCalled();
 
     delete (window as any).settings;
     delete (window as any).tts;
