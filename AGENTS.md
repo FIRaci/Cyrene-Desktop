@@ -87,8 +87,12 @@
    - Hàm `say(text, durationMs, voiceService)` trong `companion-bubbles.ts` được kết nối trực tiếp với `voiceService`.
    - Khi bộ hẹn giờ đếm ngược hết thời gian cơ bản, nó bắt buộc phải kiểm tra `voiceService.getIsSpeaking()`. Nếu âm thanh vẫn đang phát, bong bóng tiếp tục trì hoãn việc đóng cho đến khi Cyrene nói xong hoàn toàn mới biến mất một cách duyên dáng.
 5. **Vị trí Bong bóng thoại (Speech Bubble Positioning)**:
-   - Vị trí bong bóng thoại phải cố định ngay phía trên đỉnh đầu Live2D một khoảng cách vừa vặn, tinh tế.
+   - Vị trí bong bóng thoại phải cố định ngay phía trên đỉnh đầu Live2D một khoảng cách vừa vặn, tinh tế (`bottom: calc(100% - var(--cyrene-top, 208px) + 8px)`).
    - Không được đặt quá thấp che mặt Pet và không được nhảy xa tít tắp khi người dùng zoom Pet.
+6. **Tính Co giãn & Linh hoạt của Bong bóng thoại (Flexible Speech Bubble Contract)**:
+   - Bong bóng thoại phải có kích thước co giãn linh hoạt (`width: max-content; min-width: 80px; max-width: min(380px, calc(100vw - 16px))`) để vừa vặn tự nhiên với cả câu nói ngắn lẫn câu nói dài.
+   - CẤM gán `max-height` quá chật hẹp hoặc để `overflow-y: auto; scrollbar-width: none; pointer-events: none` làm cắt ngang (truncate) các dòng chữ ở cuối câu nói của Cyrene.
+   - Các hành động `*...*` và suy nghĩ `/.../` bên trong bong bóng phải sử dụng `display: inline` (không dùng `display: inline-block`) để dòng chữ ngắt dòng mềm mại tự nhiên, không đẩy chữ xuống làm đội chiều cao bong bóng.
 
 ---
 
@@ -208,6 +212,7 @@
 | **14** | **Phím tắt `Alt+Q` bấm không có tác dụng** | Ứng dụng đã đóng gói ở `release\win-unpacked` là bản build cũ (10:54 AM), chưa tích hợp shortcut mới. | Tăng cường `app.quit()` + `app.exit(0)`, đồng thời luôn chạy `npm run package:win:dir` để cập nhật file thực thi sau khi hoàn thành code. |
 | **15** | **Càng di chuyển Pet bằng Alt+Drag thì % Zoom càng đi xa và tự hiện** | Di chuyển cửa sổ kích hoạt `moved` event -> lưu tọa độ -> gọi `applyGeneralSettings` -> gọi `applyPetZoom` -> renderer nhận IPC `onPetZoom` gọi `zoomHud.show()`. Kết hợp với `right: 14px` làm thanh % hiện lên liên tục ở mép cửa sổ cách xa Pet. | Cắt đứt luồng kích hoạt thừa: main process chỉ gửi `PET_ZOOM` khi zoom thực sự đổi; renderer bỏ `zoomHud.show` khỏi `onPetZoom`. Đổi CSS HUD neo động theo tâm Pet `left: 50%` + offset tỷ lệ `--pet-zoom`. |
 | **16** | **Nghe thấy giọng robot máy tính đọc tiếng Trung thay vì giọng Hugging Face** | Khi GPT-SoVITS local server chưa chạy (`ECONNREFUSED` tại port 9880), code cũ trong `voice.ts` âm thầm fallback sang `speakWebSpeech()`, gọi giọng Microsoft Huihui Desktop của Windows. | Xóa bỏ hoàn toàn fallback sang Web Speech/robot trong `voice.ts`. Khi `engine === 'gptsovits'` mà server offline, hệ thống im lặng (`return false`) và log cảnh báo, tuyệt đối không xả giọng robot. Bật server GPT-SoVITS để nghe giọng Hugging Face. |
+| **17** | **Bong bóng thoại bị cắt cụt chữ ở cuối câu (thiếu chữ), không co giãn linh hoạt** | `.pet-bubbles` và `.pet-bubble` đặt `max-height` quá thấp (`calc(var(--cyrene-top) - 38px)`) cộng với khoảng cách neo quá xa (`+ 30px`), kết hợp `display: inline-block` trên action/thought khiến text bị ngắt dòng gượng gạo và bị `overflow-y: auto` cắt cụt mất các dòng chữ cuối. | Giảm khoảng cách neo xuống `+ 8px` sát đỉnh đầu, mở rộng `max-height: calc(var(--cyrene-top) - 14px)`, chuyển sang `width: max-content; max-width: min(380px, calc(100vw - 16px))` linh hoạt, đổi action/thought sang `display: inline` và bật `pointer-events: auto` với thanh cuộn mỏng tinh tế nếu văn bản dài. |
 
 ---
 

@@ -421,6 +421,15 @@ export class CompanionVoiceService {
       }
     } catch (err) {
       console.warn("[CompanionVoice] GPT-SoVITS synthesis failed:", err);
+      try {
+        const win = typeof window !== "undefined" ? window : (globalThis as unknown as Window);
+        const log = (win as unknown as { log?: { pushEntry: (e: unknown) => Promise<unknown> } }).log;
+        void log?.pushEntry({
+          type: "system",
+          text: "GPT-SoVITS local server (127.0.0.1:9880) is offline. To hear Cyrene's Hugging Face voice, launch api_v2 server or switch engine in Settings (Alt+6).",
+          channel: "tts",
+        });
+      } catch {}
     }
     return false;
   }
