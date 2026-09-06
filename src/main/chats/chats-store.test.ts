@@ -88,4 +88,28 @@ describe("chats store", () => {
     expect(second.id).not.toBe(first.id);
     expect(store.getSessionByPurpose("proactive-chat")?.id).toBe(second.id);
   });
+
+  it("strictly deduplicates messages with the same ID or identical content in quick succession", async () => {
+    const store = await import("./chats-store");
+    store.initialize();
+
+    const session = store.createSession({ title: "Deduplication Test" });
+
+    // 1. Same ID deduplication
+    store.appendMessage(session.id, { id: "turn-1", role: "user", content: "Hello", at: 1000 });
+    store.appendMessage(session.id, { id: "turn-1", role: "user", content: "Hello updated", at: 1001 });
+
+    let current = store.getSession(session.id);
+    expect(current?.messages).toHaveLength(1);
+    expect(current?.messages[0].content).toBe("Hello updated");
+
+    // 2. Race condition content deduplication
+    store.appendMessage(session.id, { id: "asst-1", role: "model", content: "Ehehe~ I am Cyrene!", at: 2000 });
+    // Accidental second append with different ID but same role & content within 5 seconds
+    store.appendMessage(session.id, { id: "asst-duplicate", role: "model", content: "Ehehe~ I am Cyrene!", at: 2500 });
+
+    current = store.getSession(session.id);
+    expect(current?.messages).toHaveLength(2);
+    expect(current?.messages.filter((m) => m.role === "model")).toHaveLength(1);
+  });
 });

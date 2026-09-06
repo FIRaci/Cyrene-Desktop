@@ -301,7 +301,7 @@ describe("MiniChatWidget", () => {
         content: "Reply from event payload",
       }),
     );
-    expect(bubbles.say).toHaveBeenCalledWith("Reply from event payload", 6000);
+    expect(bubbles.say).toHaveBeenCalledWith("Reply from event payload", 6000, undefined);
 
     widget.dispose();
   });

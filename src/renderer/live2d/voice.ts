@@ -128,6 +128,29 @@ export class CompanionVoiceService {
 
     this.stop();
 
+    // =========================================================================
+    // [ARCHITECTURAL CONTRACT - GOLDEN IN-MEMORY TRANSLATION BRIDGE - DO NOT REMOVE]
+    // Documented in AGENTS.md Section 1.2 & 9.1.
+    // UI surface is 100% English. Spoken voice dialogue is 100% Chinese (昔涟 / Cyrene original voice).
+    // If the spoken text is in English, automatically translate it into natural, sweet spoken Mandarin Chinese!
+    // This translation is strictly ephemeral in memory for TTS synthesis, keeping UI surface 100% English.
+    // =========================================================================
+    let speechDialogue = cleaned;
+    if (!/[\u4e00-\u9fa5]/.test(speechDialogue)) {
+      try {
+        const win = typeof window !== "undefined" ? window : (globalThis as unknown as Window);
+        const tts = (win as unknown as { tts?: { translateToChinese?: (t: string) => Promise<string> } }).tts;
+        if (tts?.translateToChinese) {
+          const translated = await tts.translateToChinese(speechDialogue);
+          if (translated && /[\u4e00-\u9fa5]/.test(translated)) {
+            speechDialogue = translated;
+          }
+        }
+      } catch (trErr) {
+        console.warn("[CompanionVoice] Pre-synthesis translation to Chinese failed:", trErr);
+      }
+    }
+
     // Check if cloud/local TTS engine is configured
     try {
       const win = typeof window !== "undefined" ? window : (globalThis as unknown as Window);
@@ -141,36 +164,36 @@ export class CompanionVoiceService {
       }
 
       if (engine === "gptsovits") {
-        const played = await this.playGptsovits(cleaned, settings);
+        const played = await this.playGptsovits(speechDialogue, settings);
         // GPT-SoVITS offline → graceful fallback to Web Speech with strict Chinese-only enforcement
         // (speakWebSpeech refuses to use English voices; it returns false silently if none available)
         if (!played) {
           console.warn("[CompanionVoice] GPT-SoVITS server unavailable. Falling back to Web Speech with Chinese voice.");
-          return this.speakWebSpeech(cleaned);
+          return this.speakWebSpeech(speechDialogue);
         }
         return true;
       } else if (engine === "edge") {
-        const played = await this.playOnlineNeural(cleaned);
-        if (!played) return this.speakWebSpeech(cleaned);
+        const played = await this.playOnlineNeural(speechDialogue);
+        if (!played) return this.speakWebSpeech(speechDialogue);
         return true;
       } else if (engine === "minimax" && settings?.ttsMinimaxKey && settings?.ttsMinimaxVoiceId) {
-        const played = await this.playCloudMinimax(cleaned, settings);
-        if (!played) return this.speakWebSpeech(cleaned);
+        const played = await this.playCloudMinimax(speechDialogue, settings);
+        if (!played) return this.speakWebSpeech(speechDialogue);
         return true;
       } else if (engine === "mossland" && settings?.ttsMosslandKey && settings?.ttsMosslandVoiceId) {
-        const played = await this.playCloudMossland(cleaned, settings);
-        if (!played) return this.speakWebSpeech(cleaned);
+        const played = await this.playCloudMossland(speechDialogue, settings);
+        if (!played) return this.speakWebSpeech(speechDialogue);
         return true;
       } else if (engine === "web-speech") {
-        return this.speakWebSpeech(cleaned);
+        return this.speakWebSpeech(speechDialogue);
       }
     } catch {
       // Settings fetch failed — attempt Web Speech as last resort (Chinese-only enforcement applies)
-      return this.speakWebSpeech(cleaned);
+      return this.speakWebSpeech(speechDialogue);
     }
 
     // Fallback for unconfigured or unknown engine: try Web Speech (Chinese-only)
-    return this.speakWebSpeech(cleaned);
+    return this.speakWebSpeech(speechDialogue);
   }
 
   private async playOnlineNeural(text: string): Promise<boolean> {

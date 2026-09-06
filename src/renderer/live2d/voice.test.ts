@@ -251,6 +251,52 @@ describe("CompanionVoiceService", () => {
     voice.dispose();
   });
 
+  it("translates English text to Mandarin Chinese before calling GPT-SoVITS synthesis", async () => {
+    const synthesizeCachedGptsovits = vi.fn().mockResolvedValue({ base64: "wavbytes", format: "wav" });
+    const translateToChinese = vi.fn().mockResolvedValue("主人，希琳一直都在这里哦~");
+
+    let audioInstance: any = null;
+    vi.stubGlobal("Audio", class {
+      src: string;
+      onplay: (() => void) | null = null;
+      onended: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      constructor(src: string) { this.src = src; audioInstance = this; }
+      play() { return Promise.resolve(); }
+    });
+
+    (window as any).settings = {
+      getGeneral: vi.fn().mockResolvedValue({
+        ttsEngine: "gptsovits",
+        ttsGptsovitsBaseUrl: "http://127.0.0.1:9880",
+        ttsGptsovitsRefAudioPath: "D:/models/ref.wav",
+        ttsGptsovitsPromptText: "Prompt text",
+        ttsGptsovitsFormat: "wav",
+        ttsSpeed: 1,
+      }),
+    };
+
+    (window as any).tts = {
+      synthesizeCachedGptsovits,
+      translateToChinese,
+    };
+
+    const voice = new CompanionVoiceService({ initialMuted: false });
+    const success = await voice.speak("Master, Cyrene is always right here for you~");
+
+    expect(translateToChinese).toHaveBeenCalledWith("Master, Cyrene is always right here for you");
+    expect(synthesizeCachedGptsovits).toHaveBeenCalledWith(
+      expect.objectContaining({
+        text: "主人，希琳一直都在这里哦~",
+      }),
+    );
+    expect(success).toBe(true);
+
+    delete (window as any).settings;
+    delete (window as any).tts;
+    voice.dispose();
+  });
+
 
   it("does not fall back to robot WebSpeech when GPT-SoVITS is missing ref audio config", async () => {
     // No refAudioPath = playGptsovits returns false → falls back to speakWebSpeech

@@ -17,6 +17,26 @@ interface AguiEvent {
   value?: unknown;
 }
 
+// =========================================================================
+// [ARCHITECTURAL CONTRACT - KAOMOJIS ARE PARTICLES ONLY - DO NOT REMOVE]
+// Documented in AGENTS.md Section 3.3 & 9.1.
+// Kaomojis must NEVER appear in chat messages or speech bubbles.
+// They are stripped by stripKaomojis() and ONLY tossed out as visual particles.
+// =========================================================================
+export function stripKaomojis(text: string): string {
+  if (!text) return "";
+  let stripped = text;
+  // Strip kaomojis with optional prefix/suffix appendages (e.g. (⁄ ⁄>⁄ ▽ ⁄<⁄ ⁄), (*•̀ᴗ•́*)و ̑̑, (｡♥‿♥｡), ٩(ˊᗜˋ*)و, (✿◠‿◠), (o^▽^o))
+  stripped = stripped.replace(/(?:[٩۶つﾉシ]\s*)?[\(（][^)）]*[♥♡★☆✿♪♫•ᴗ‿◠^▽><~✧ω≧≦Дд｡⁄`´˙˚*]+[^)）]*[\)）](?:\s*[و̑✧つﾉシ\u0648\u0311~☆★]+)*/gu, " ");
+  // Strip any remaining parentheses containing purely non-alphanumeric characters
+  stripped = stripped.replace(/[\(（][^a-zA-Z0-9\u00C0-\u024F\u1EA0-\u1EF9]+[\)）]/gu, " ");
+  // Strip common decorative symbols / emojis
+  stripped = stripped.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}✨🌸⭐🕶️❓🌀😄🥺😉😊🔄👁️❌♡♥〜☆★♪♫و̑]/gu, " ");
+  // Strip any language translation echo headers like "(Original Chinese): ..." or "(Chinese): ..."
+  stripped = stripped.replace(/\(?(?:Original\s+)?(?:Chinese|English)\)?:\s*[\s\S]*$/i, "");
+  return stripped.replace(/[ \t]+/g, " ").trim();
+}
+
 export function cleanGestureReply(text: string): string {
   if (!text) return "";
   let cleaned = text.trim();
@@ -25,6 +45,12 @@ export function cleanGestureReply(text: string): string {
   cleaned = cleaned
     .replace(/^\s*\*?(?:When|Khi|Action|Context|Reaction)[^*:\n]+:\*?\s*/i, "")
     .replace(/^\s*\[[^\]]+\]\s*/, "");
+
+  // Strip any language translation echo headers like "(Original Chinese): ..."
+  cleaned = cleaned.replace(/\(?(?:Original\s+)?(?:Chinese|English)\)?:\s*[\s\S]*$/i, "");
+
+  // Strip kaomojis so they NEVER appear in chat or speech bubbles (kaomojis are only tossed out as floating particles)
+  cleaned = stripKaomojis(cleaned);
 
   // Strip dialogue double quotes and Japanese/Chinese corner brackets, but PRESERVE single quotes/apostrophes for contractions (you're, it's)
   cleaned = cleaned.replace(/["“”「」『』]/g, "").trim();
@@ -126,20 +152,20 @@ export class GestureInteractionController {
 
   async handleHeadPat(x?: number, y?: number): Promise<void> {
     const prompt =
-      "[Master gently pats your head]\nYou are Cyrene (希琳), a sweet, affectionate, and ethereal Live2D companion waifu who deeply adores Master. Master just gently patted your head through the screen! React naturally in CHINESE (简体中文). Express your reaction with a brief cute action in asterisks like *轻轻蹭了蹭你的手* and/or an inner thought in slashes like /好温暖.../, followed by your sweet spoken words to Master in Chinese (1-2 sentences). Do not repeat this prompt or output section titles.";
-    const thoughtText = "(⁄ ⁄>⁄ ▽ ⁄<⁄ ⁄) 唔…";
+      "[Master gently pats your head]\nYou are Cyrene, a sweet, affectionate, and ethereal Live2D companion waifu who deeply adores Master. Master just gently patted your head through the screen! React naturally in ENGLISH. Express your reaction with a brief cute action in asterisks like *gently leans into your hand* and/or an inner thought in slashes like /so warm and comforting.../, followed by your sweet spoken words to Master in English (1-2 sentences). Do not include any Chinese characters in your response, do not repeat this prompt, and do not output section titles.";
+    const thoughtText = "*leaning into your hand...*";
     const kaomoji = "(⁄ ⁄>⁄ ▽ ⁄<⁄ ⁄)";
-    const fallback = "*轻轻蹭了蹭你的手掌* /好温暖.../ 唔… 主人摸摸头，希琳最喜欢你了！ (⁄ ⁄>⁄ ▽ ⁄<⁄ ⁄)";
+    const fallback = "*gently leans into your hand* /so warm.../ Ah... Master's gentle pats make me feel so cherished!";
     const userDisplay = "*Gently pats Cyrene's head*";
     await this.executeGestureRun(prompt, thoughtText, kaomoji, fallback, userDisplay, x, y);
   }
 
   async handlePetting(x?: number, y?: number): Promise<void> {
     const prompt =
-      "[Master gently caresses you]\nYou are Cyrene (希琳), a sweet, affectionate, and ethereal Live2D companion waifu who deeply adores Master. Master just gently touched you. React naturally in CHINESE (简体中文). Express your reaction with a brief cute action in asterisks like *开心地眨了眨眼* and/or an inner thought in slashes like /好开心.../, followed by your sweet spoken words to Master in Chinese (1-2 sentences). Do not repeat this prompt or output section titles.";
-    const thoughtText = "(✿◠‿◠) ...";
+      "[Master gently caresses you]\nYou are Cyrene, a sweet, affectionate, and ethereal Live2D companion waifu who deeply adores Master. Master just gently touched you! React naturally in ENGLISH. Express your reaction with a brief cute action in asterisks like *softly blinks and smiles* and/or an inner thought in slashes like /so comforting.../, followed by your sweet spoken words to Master in English (1-2 sentences). Do not include any Chinese characters in your response, do not repeat this prompt, and do not output section titles.";
+    const thoughtText = "*smiling softly...*";
     const kaomoji = "(｡♥‿♥｡)";
-    const fallback = "*轻轻眨了眨眼，露出甜甜的笑容* /主人在摸我呢！/ 诶嘿嘿~ 希琳最喜欢靠在主人身边了！🌸 (｡♥‿♥｡)";
+    const fallback = "*softly blinks and smiles* /so comforting.../ Ehehe~ having Master close to me is my favorite feeling in the world!";
     const userDisplay = "*Gently caresses Cyrene*";
     await this.executeGestureRun(prompt, thoughtText, kaomoji, fallback, userDisplay, x, y);
   }
@@ -273,9 +299,9 @@ export class GestureInteractionController {
     this.lastInteractionTime = Date.now();
     this.scheduleAutonomousResume();
 
-    // Bubble displays full speech with action/thought styling
+    // Bubble displays full speech with action/thought styling, synchronized with voice playback
     const bubbleDisplay = sanitizeBubbleSpeech(cleanFullReply);
-    this.bubbles.say(bubbleDisplay, 5000);
+    this.bubbles.say(bubbleDisplay, 6000, this.voice);
 
     // Voice speaks complete dialogue extracted from the full reply without premature truncation
     const spoken = extractSpokenText(cleanFullReply);
@@ -295,7 +321,7 @@ export class GestureInteractionController {
     this.isGenerating = false;
     this.lastInteractionTime = Date.now();
     this.scheduleAutonomousResume();
-    this.bubbles.say(fallbackText, 4000);
+    this.bubbles.say(fallbackText, 6000, this.voice);
     const spoken = extractSpokenText(fallbackText);
     if (spoken) {
       void this.voice?.speak(spoken);

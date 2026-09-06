@@ -2,6 +2,7 @@ import "./mini-chat.css";
 import type { CompanionBubbleController } from "./companion-bubbles";
 import type { FloatingKaomojiController } from "./floating-kaomoji";
 import type { CompanionVoiceService } from "./voice";
+import { stripKaomojis } from "./gesture-interaction-controller";
 
 export interface MiniChatOptions {
   bubbles: CompanionBubbleController;
@@ -300,7 +301,7 @@ export class MiniChatWidget {
 
         if (event.type === "TEXT_MESSAGE_CONTENT" && event.delta) {
           this.currentReply += event.delta;
-          this.bubbles.say(this.currentReply, 60000);
+          this.bubbles.say(stripKaomojis(this.currentReply), 60000);
         } else if (event.type === "RUN_FINISHED" || event.type === "RUN_ERROR") {
           const eventReply = (event as { reply?: string })?.reply;
           this.finishRun(sessionId, assistantTurnId, eventReply);
@@ -358,15 +359,17 @@ export class MiniChatWidget {
   }
 
   private async finishRun(sessionId: string, assistantTurnId: string, eventReply?: string): Promise<void> {
-    const finalReply = (this.currentReply || eventReply || "").trim();
+    const rawReply = (this.currentReply || eventReply || "").trim();
+    const finalReply = stripKaomojis(rawReply);
     this.cleanupAgui();
     this.setBusy(false);
 
     if (finalReply) {
-      this.bubbles.say(finalReply, 6000);
+      this.bubbles.say(finalReply, 6000, this.voice);
       this.kaomoji?.spawnBurst(2);
       void this.voice?.speak(finalReply);
 
+      // Model turn persistence is handled with deduplication
       await this.appendToStore(sessionId, {
         id: assistantTurnId,
         role: "model",

@@ -148,7 +148,7 @@ describe("GestureInteractionController", () => {
 
     // Immediate visual feedback & idle thoughts paused
     expect(kaomoji.spawn).toHaveBeenCalledWith("(⁄ ⁄>⁄ ▽ ⁄<⁄ ⁄)", 150, 200);
-    expect(bubbles.think).toHaveBeenCalledWith("(⁄ ⁄>⁄ ▽ ⁄<⁄ ⁄) 唔…", 30000);
+    expect(bubbles.think).toHaveBeenCalledWith("*leaning into your hand...*", 30000);
     expect(onExpressionReset).toHaveBeenCalled();
     expect(autonomousThoughts.pause).toHaveBeenCalled();
 
@@ -181,13 +181,14 @@ describe("GestureInteractionController", () => {
       type: "TEXT_MESSAGE_CONTENT",
       delta: 'I love you Master! (⁄ ⁄>⁄ ▽ ⁄<⁄ ⁄)"',
     });
-    expect(bubbles.say).toHaveBeenCalledWith("*gently blinks* /so sweet.../ Ehehe~ I love you Master! (⁄ ⁄>⁄ ▽ ⁄<⁄ ⁄)", 60000);
+    // Kaomojis are stripped from the bubble text so they are never printed in chat
+    expect(bubbles.say).toHaveBeenCalledWith("*gently blinks* /so sweet.../ Ehehe~ I love you Master!", 60000);
 
     // Finish run
     aguiCallback!({ type: "RUN_FINISHED" });
 
-    // Verify bubbles, voice, and kaomoji — model turn persistence is now agui-bridge's responsibility
-    expect(bubbles.say).toHaveBeenCalledWith("*gently blinks* /so sweet.../ Ehehe~ I love you Master! (⁄ ⁄>⁄ ▽ ⁄<⁄ ⁄)", 5000);
+    // Verify bubbles, voice, and kaomoji — bubble is synchronized with voice playback
+    expect(bubbles.say).toHaveBeenCalledWith("*gently blinks* /so sweet.../ Ehehe~ I love you Master!", 6000, voice);
     expect(kaomoji.spawn).toHaveBeenCalledTimes(1);
     expect(voice.speak).toHaveBeenCalledWith("Ehehe~ I love you Master!");
     // User turn is pre-appended by the gesture controller (clean display, not verbose prompt)
@@ -225,7 +226,7 @@ describe("GestureInteractionController", () => {
     await controller.handlePetting(100, 100);
 
     expect(kaomoji.spawn).toHaveBeenCalledWith("(｡♥‿♥｡)", 100, 100);
-    expect(bubbles.think).toHaveBeenCalledWith("(✿◠‿◠) ...", 30000);
+    expect(bubbles.think).toHaveBeenCalledWith("*smiling softly...*", 30000);
     expect(run).toHaveBeenCalledWith(
       expect.objectContaining({
         messages: expect.arrayContaining([
@@ -295,16 +296,17 @@ describe("GestureInteractionController", () => {
     await controller.handleHeadPat();
 
     expect(bubbles.say).toHaveBeenCalledWith(
-      expect.stringContaining("希琳最喜欢你了"),
-      4000,
+      expect.stringContaining("Master's gentle pats"),
+      6000,
+      voice,
     );
     expect(voice.speak).toHaveBeenCalledWith(
-      expect.stringContaining("希琳最喜欢你了"),
+      expect.stringContaining("Master's gentle pats"),
     );
     // Fallback message is persisted by finishFallback (agui-bridge won't save since run failed)
     expect(append).toHaveBeenCalledWith(
       "fallback-session",
-      expect.objectContaining({ role: "model", content: expect.stringContaining("希琳最喜欢你了") }),
+      expect.objectContaining({ role: "model", content: expect.stringContaining("Master's gentle pats") }),
     );
 
     controller.dispose();
@@ -322,11 +324,12 @@ describe("GestureInteractionController", () => {
     await controller.handleHeadPat();
 
     expect(bubbles.say).toHaveBeenCalledWith(
-      expect.stringContaining("希琳最喜欢你了"),
-      4000,
+      expect.stringContaining("Master's gentle pats"),
+      6000,
+      voice,
     );
     expect(voice.speak).toHaveBeenCalledWith(
-      expect.stringContaining("希琳最喜欢你了"),
+      expect.stringContaining("Master's gentle pats"),
     );
 
     controller.dispose();

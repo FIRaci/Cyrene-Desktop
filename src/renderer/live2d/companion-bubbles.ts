@@ -136,7 +136,7 @@ export class CompanionBubbleController {
     }
   }
 
-  say(text: string, durationMs = 4_000): void {
+  say(text: string, durationMs = 4_000, voiceService?: { getIsSpeaking: () => boolean }): void {
     if (this.isBusy) return;
     this.clearHideTimer();
     this.state = {
@@ -148,7 +148,26 @@ export class CompanionBubbleController {
       terminal: true,
     };
     this.render();
-    this.hideTimer = globalThis.setTimeout(() => this.hide(), durationMs);
+
+    // =========================================================================
+    // [ARCHITECTURAL CONTRACT - SPEECH BUBBLE VOICING LIFETIME - DO NOT REMOVE]
+    // Documented in AGENTS.md Section 3.4 & 9.1.
+    // Ensure bubble stays visible for the entire duration of spoken audio.
+    // If voice is still speaking when timer expires, defer hiding until speaking finishes.
+    // =========================================================================
+    const scheduleDismissal = () => {
+      this.clearHideTimer();
+      this.hideTimer = globalThis.setTimeout(() => {
+        if (voiceService && voiceService.getIsSpeaking()) {
+          // Voice is still actively speaking: defer dismissal until playback completes
+          scheduleDismissal();
+        } else {
+          this.hide();
+        }
+      }, Math.max(durationMs, 2000));
+    };
+
+    scheduleDismissal();
   }
 
   think(text: string, durationMs = 4_500): void {

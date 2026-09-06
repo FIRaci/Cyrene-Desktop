@@ -5172,9 +5172,21 @@ app.whenReady().then(async () => {
   globalShortcut.register("Alt+G", () => {
     getCoWatchService().toggle();
   });
+  // =========================================================================
+  // [ARCHITECTURAL CONTRACT - ALT+Q QUICK QUIT APPLICATION - DO NOT REMOVE]
+  // Documented in AGENTS.md Section 7.2, 8 (Item 14) & 9.1.
+  // Instant clean application shutdown with app.quit() and 400ms app.exit(0) fallback.
+  // =========================================================================
   globalShortcut.register("Alt+Q", () => {
     console.info("[Cyrene] Alt+Q pressed - quitting application");
-    app.quit();
+    try {
+      app.quit();
+    } catch {
+      app.exit(0);
+    }
+    setTimeout(() => {
+      app.exit(0);
+    }, 400);
   });
 
   //  local-sticker:// ： userData/stickers/ 

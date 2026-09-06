@@ -239,6 +239,32 @@ export function getOrCreateSessionByPurpose(
 export function appendMessage(id: string, message: ChatMessage): ChatSession | null {
   const session = readSessionFile(id);
   if (!session) return null;
+
+  // =========================================================================
+  // [ARCHITECTURAL CONTRACT - STRICT MESSAGE DEDUPLICATION - DO NOT REMOVE]
+  // Documented in AGENTS.md Section 4.1 & 9.1.
+  // 1. If a message with the exact same ID already exists, update in-place rather than pushing a duplicate.
+  // 2. Race condition guard: If the last message has the identical role and trimmed content within 10 seconds, do not duplicate.
+  // =========================================================================
+  const existingIdx = session.messages.findIndex((m) => m.id === message.id);
+  if (existingIdx !== -1) {
+    session.messages[existingIdx] = { ...session.messages[existingIdx], ...message };
+    session.updatedAt = Date.now();
+    writeSessionFile(session);
+    upsertMeta(metaFromSession(session));
+    return session;
+  }
+
+  const lastMsg = session.messages[session.messages.length - 1];
+  if (
+    lastMsg &&
+    lastMsg.role === message.role &&
+    lastMsg.content.trim() === message.content.trim() &&
+    Math.abs((message.at || Date.now()) - (lastMsg.at || 0)) < 10_000
+  ) {
+    return session;
+  }
+
   session.messages.push(message);
   session.updatedAt = Date.now();
   // When user has not manually renamed, re-derive title from latest content (returns to "New Chat" if cleared)
