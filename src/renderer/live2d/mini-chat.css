@@ -1,6 +1,6 @@
 .pet-mini-chat {
   position: fixed;
-  top: calc(var(--cyrene-feet, 418px) + 4px);
+  top: calc(var(--cyrene-feet, 418px) + 18px);
   bottom: auto;
   left: 50%;
   right: auto;

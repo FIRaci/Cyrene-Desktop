@@ -161,6 +161,9 @@
   - **TUYỆT ĐỐI CẤM ĐẶT Ở GIỮA MÀN HÌNH** che khuất mặt Live2D Pet.
   - **TUYỆT ĐỐI CẤM CỐ ĐỊNH THEO MÉP CỬA SỔ** (`right: 14px`) vì khi Pet zoom nhỏ lại (ví dụ 70%), thanh % sẽ bị dạt ra xa tít mù khơi so với thân Pet.
   - **CHỈ HIỆN KHI CHỦ ĐỘNG ZOOM**: Chỉ kích hoạt hiển thị khi lăn chuột (`Alt+Wheel`) hoặc kéo chuột giữa (`Alt+Middle Drag`). Khi người dùng di chuyển Pet bằng `Alt + Left Click Drag`, thanh % HUD TUYỆT ĐỐI KHÔNG ĐƯỢC TỰ ĐỘNG BẬT LÊN.
+- **Khung Quick Mini-Chat (`Alt+5` / `.pet-mini-chat`)**:
+  - Vị trí neo chuẩn: `top: calc(var(--cyrene-feet, 418px) + 18px); left: 50%; transform: translateX(-50%) translateY(0) scale(var(--pet-zoom, 1));`.
+  - Giữ khoảng cách thoáng mắt ngay bên dưới đôi giày của Cyrene (~8-10px), tuyệt đối không để mép khung chat đè lên chân hoặc giày của Pet.
 
 ### 7.2. Bản đồ Phím tắt Toàn cục (Global Shortcuts):
 - `Alt+1`: **Cyrene Chat Window** (Cửa sổ trò chuyện đầy đủ).
