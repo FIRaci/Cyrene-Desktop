@@ -812,6 +812,30 @@ body {
   color: #6ee7b7;
 }
 
+.category-badge--health {
+  background: rgba(20, 184, 166, 0.15);
+  border: 1px solid rgba(45, 212, 191, 0.4);
+  color: #5eead4;
+}
+
+.category-badge--personal {
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  color: #fcd34d;
+}
+
+.category-badge--creative {
+  background: rgba(244, 63, 94, 0.15);
+  border: 1px solid rgba(251, 113, 133, 0.4);
+  color: #fda4af;
+}
+
+.category-badge--finance {
+  background: rgba(101, 163, 13, 0.15);
+  border: 1px solid rgba(132, 204, 22, 0.4);
+  color: #bef264;
+}
+
 .task-card__actions {
   display: flex;
   align-items: center;

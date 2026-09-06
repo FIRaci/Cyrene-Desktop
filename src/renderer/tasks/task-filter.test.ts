@@ -12,7 +12,7 @@ function task(
   nextFireAt: string | null,
   enabled = true,
   schedule: ScheduledTask["schedule"] = { kind: "daily", timeOfDay: "08:00" },
-  prompt = "Run",
+  prompt = "",
 ): ScheduledTask {
   return {
     id,
@@ -67,15 +67,29 @@ describe("inferTaskCategory", () => {
     expect(inferTaskCategory(task("Math Lecture", null, true, { kind: "daily" }, "Attend online class"))).toBe("study");
     expect(inferTaskCategory(task("Team Standup", null, true, { kind: "daily" }, "Daily sync meeting with team"))).toBe("meeting");
     expect(inferTaskCategory(task("Backend Refactor", null, true, { kind: "daily" }, "Write code and tests"))).toBe("work");
-    expect(inferTaskCategory(task("Drink Water", null, true, { kind: "daily" }, "Health routine habit"))).toBe("reminder");
+    expect(inferTaskCategory(task("Morning Jog", null, true, { kind: "daily" }, "Go for a run at the park"))).toBe("health");
+    expect(inferTaskCategory(task("Grocery Shopping", null, true, { kind: "daily" }, "Buy groceries at the supermarket"))).toBe("personal");
+    expect(inferTaskCategory(task("Draw Character Sketch", null, true, { kind: "daily" }, "Sketch new art design"))).toBe("creative");
+    expect(inferTaskCategory(task("Pay Bills", null, true, { kind: "daily" }, "Monthly budget and expense review"))).toBe("finance");
+    expect(inferTaskCategory(task("Take Medicine", null, true, { kind: "daily" }, "Health routine reminder"))).toBe("health");
   });
 
   it("categorizes tasks with emoji or tag prefixes", () => {
     expect(inferTaskCategory(task("📚 Calculus 101", null, true))).toBe("study");
     expect(inferTaskCategory(task("💼 Sprint Planning", null, true))).toBe("work");
     expect(inferTaskCategory(task("👥 Client 1-on-1", null, true))).toBe("meeting");
-    expect(inferTaskCategory(task("⏰ Meditate", null, true))).toBe("reminder");
+    expect(inferTaskCategory(task("⏰ Follow up email", null, true))).toBe("reminder");
+    expect(inferTaskCategory(task("🏃 Morning Workout", null, true))).toBe("health");
     expect(inferTaskCategory(task("[Study] History assignment", null, true))).toBe("study");
+    expect(inferTaskCategory(task("[Creative] Write blog post", null, true))).toBe("creative");
+    expect(inferTaskCategory(task("[Finance] Tax preparation", null, true))).toBe("finance");
+    expect(inferTaskCategory(task("[Personal] Family dinner", null, true))).toBe("personal");
+  });
+
+  it("health category takes priority over reminder for fitness tasks", () => {
+    // workout/exercise/sleep should resolve to health, not reminder
+    expect(inferTaskCategory(task("Yoga Session", null, true, { kind: "daily" }, "Morning yoga routine"))).toBe("health");
+    expect(inferTaskCategory(task("Gym Time", null, true, { kind: "daily" }, "Cardio and lift weights"))).toBe("health");
   });
 });
 
