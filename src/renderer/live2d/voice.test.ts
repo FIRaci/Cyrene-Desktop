@@ -199,9 +199,21 @@ describe("CompanionVoiceService", () => {
   });
 
   it("routes speech to GPT-SoVITS when ttsEngine is gptsovits", async () => {
+    // Provide a valid base64 WAV response so playBase64Audio returns true
     const synthesizeCachedGptsovits = vi.fn().mockResolvedValue({
       base64: "UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=",
       format: "wav",
+    });
+
+    // Stub Audio so playBase64Audio succeeds (no DOM needed)
+    let audioInstance: any;
+    vi.stubGlobal("Audio", class {
+      src: string;
+      onplay: (() => void) | null = null;
+      onended: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      constructor(src: string) { this.src = src; audioInstance = this; }
+      play() { return Promise.resolve(); }
     });
 
     (window as any).settings = {
@@ -230,15 +242,19 @@ describe("CompanionVoiceService", () => {
         format: "wav",
       }),
     );
-    // Should NOT have called WebSpeech
+    // GPT-SoVITS succeeded → should NOT have fallen back to WebSpeech
     expect(mockSpeechSynthesis.speak).not.toHaveBeenCalled();
+    expect(success).toBe(true);
 
     delete (window as any).settings;
     delete (window as any).tts;
     voice.dispose();
   });
 
-  it("does not fall back to robot WebSpeech when GPT-SoVITS is missing config", async () => {
+
+  it("does not fall back to robot WebSpeech when GPT-SoVITS is missing ref audio config", async () => {
+    // No refAudioPath = playGptsovits returns false → falls back to speakWebSpeech
+    // speakWebSpeech should succeed because we have a Chinese voice in the mock
     (window as any).settings = {
       getGeneral: vi.fn().mockResolvedValue({
         ttsEngine: "gptsovits",
@@ -255,6 +271,66 @@ describe("CompanionVoiceService", () => {
     const voice = new CompanionVoiceService({ initialMuted: false });
     const success = await voice.speak("Hello there");
 
+    // Falls through to Chinese WebSpeech since mock has Huihui (zh-CN) voice
+    expect(success).toBe(true);
+    expect(mockSpeechSynthesis.speak).toHaveBeenCalled();
+
+    delete (window as any).settings;
+    delete (window as any).tts;
+    voice.dispose();
+  });
+
+  it("falls back to Chinese Web Speech when GPT-SoVITS server is offline (returns false)", async () => {
+    (window as any).settings = {
+      getGeneral: vi.fn().mockResolvedValue({
+        ttsEngine: "gptsovits",
+        ttsGptsovitsBaseUrl: "http://127.0.0.1:9880",
+        ttsGptsovitsRefAudioPath: "resources/voice/cyrene/ref_audio.wav",
+        ttsGptsovitsPromptText: "开拓者，希琳一直都在这里陪着你哦。",
+      }),
+    };
+
+    (window as any).tts = {
+      // Server is offline: synthesizeCachedGptsovits throws connection error
+      synthesizeCachedGptsovits: vi.fn().mockRejectedValue(new Error("ECONNREFUSED")),
+    };
+
+    const voice = new CompanionVoiceService({ initialMuted: false });
+    const success = await voice.speak("希琳最喜欢你了！");
+
+    // Should fall back to Chinese Web Speech (Huihui zh-CN available in mock)
+    expect(success).toBe(true);
+    expect(mockSpeechSynthesis.speak).toHaveBeenCalled();
+    const utteranceArg = mockSpeechSynthesis.speak.mock.calls[0][0];
+    expect(utteranceArg.lang).toBe("zh-CN");
+
+    delete (window as any).settings;
+    delete (window as any).tts;
+    voice.dispose();
+  });
+
+  it("stays silent (returns false) when GPT-SoVITS offline AND no Chinese/Japanese voice available in WebSpeech", async () => {
+    mockSpeechSynthesis.getVoices = vi.fn(() => [
+      { name: "Microsoft David - English", lang: "en-US" },
+      { name: "Microsoft Zira - English", lang: "en-US" },
+    ]);
+
+    (window as any).settings = {
+      getGeneral: vi.fn().mockResolvedValue({
+        ttsEngine: "gptsovits",
+        ttsGptsovitsBaseUrl: "http://127.0.0.1:9880",
+        ttsGptsovitsRefAudioPath: "resources/voice/cyrene/ref_audio.wav",
+        ttsGptsovitsPromptText: "开拓者，希琳一直都在这里陪着你哦。",
+      }),
+    };
+    (window as any).tts = {
+      synthesizeCachedGptsovits: vi.fn().mockRejectedValue(new Error("ECONNREFUSED")),
+    };
+
+    const voice = new CompanionVoiceService({ initialMuted: false });
+    const success = await voice.speak("希琳最喜欢你了！");
+
+    // No Chinese voice → stays silent (no English fallback)
     expect(success).toBe(false);
     expect(mockSpeechSynthesis.speak).not.toHaveBeenCalled();
 

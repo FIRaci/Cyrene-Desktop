@@ -142,25 +142,35 @@ export class CompanionVoiceService {
 
       if (engine === "gptsovits") {
         const played = await this.playGptsovits(cleaned, settings);
-        return played;
+        // GPT-SoVITS offline → graceful fallback to Web Speech with strict Chinese-only enforcement
+        // (speakWebSpeech refuses to use English voices; it returns false silently if none available)
+        if (!played) {
+          console.warn("[CompanionVoice] GPT-SoVITS server unavailable. Falling back to Web Speech with Chinese voice.");
+          return this.speakWebSpeech(cleaned);
+        }
+        return true;
       } else if (engine === "edge") {
         const played = await this.playOnlineNeural(cleaned);
-        return played;
+        if (!played) return this.speakWebSpeech(cleaned);
+        return true;
       } else if (engine === "minimax" && settings?.ttsMinimaxKey && settings?.ttsMinimaxVoiceId) {
         const played = await this.playCloudMinimax(cleaned, settings);
-        return played;
+        if (!played) return this.speakWebSpeech(cleaned);
+        return true;
       } else if (engine === "mossland" && settings?.ttsMosslandKey && settings?.ttsMosslandVoiceId) {
         const played = await this.playCloudMossland(cleaned, settings);
-        return played;
+        if (!played) return this.speakWebSpeech(cleaned);
+        return true;
       } else if (engine === "web-speech") {
         return this.speakWebSpeech(cleaned);
       }
     } catch {
-      // Ignore settings fetch errors and proceed
+      // Settings fetch failed — attempt Web Speech as last resort (Chinese-only enforcement applies)
+      return this.speakWebSpeech(cleaned);
     }
 
-    // Default: try GPT-SoVITS local server. If offline, return false silently rather than leaking English robot voice.
-    return false;
+    // Fallback for unconfigured or unknown engine: try Web Speech (Chinese-only)
+    return this.speakWebSpeech(cleaned);
   }
 
   private async playOnlineNeural(text: string): Promise<boolean> {
