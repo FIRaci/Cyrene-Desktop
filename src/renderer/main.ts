@@ -282,7 +282,6 @@ const manager = new Live2DManager({
       const actualZoom = petZoomState.receiveAuthoritativeZoom(zoom);
       document.documentElement.style.setProperty("--pet-zoom", String(actualZoom));
       manager.applyZoom(actualZoom);
-      zoomHud.show(actualZoom);
     }));
     petVisibilityOff = trackSubscription("cyrene:onPetVisibilityChanged", window.cyrene.onPetVisibilityChanged((visible) => {
       petVisible = visible;

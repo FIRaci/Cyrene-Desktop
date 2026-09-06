@@ -7,9 +7,18 @@ function createFakeElement(tag: string): any {
   const attributes = new Map<string, string>();
   const queriedMap = new Map<string, any>();
 
+  let classNameVal = "";
   const el: any = {
     tagName: tag,
     id: "",
+    get className() {
+      return classNameVal;
+    },
+    set className(val: string) {
+      classNameVal = val;
+      classList.clear();
+      val.split(/\s+/).filter(Boolean).forEach((c) => classList.add(c));
+    },
     textContent: "",
     children,
     classList: {
@@ -37,6 +46,7 @@ function createFakeElement(tag: string): any {
       return child;
     },
     parentNode: null,
+    style: {} as Record<string, string>,
   };
   return el;
 }
@@ -111,6 +121,15 @@ describe("PetZoomHudController", () => {
     hud.show(2.0);
     expect((hud as any).textElement.textContent).toBe("200%");
 
+    hud.dispose();
+  });
+
+  it("does not set hardcoded inline right/left styles so CSS anchors to pet center", () => {
+    const hud = new PetZoomHudController(body);
+    const element = (hud as any).element;
+    expect(element.style.right).toBeUndefined();
+    expect(element.style.left).toBeUndefined();
+    expect(element.classList.contains("pet-zoom-hud")).toBe(true);
     hud.dispose();
   });
 });

@@ -157,8 +157,10 @@
 - `Alt + Drag`: Kéo di chuyển Pet đến bất kỳ vị trí nào trên màn hình.
 - `Alt + Wheel`: Phóng to / Thu nhỏ Pet mượt mà.
 - **Thanh hiển thị % Zoom (`.pet-zoom-hud`)**:
-  - Vị trí cố định: **Lệch hẳn sang mép phải** (`right: 14px; top: 50%; transform: translateY(-50%)`).
+  - Vị trí neo chuẩn: Neo theo tâm cơ thể Pet (`left: 50%; top: 50%`) kèm độ dời tỷ lệ sang bên phải vai/cánh (`transform: translateX(calc(55px * var(--pet-zoom, 1))) translateY(-50%) scale(var(--pet-zoom, 1))`).
   - **TUYỆT ĐỐI CẤM ĐẶT Ở GIỮA MÀN HÌNH** che khuất mặt Live2D Pet.
+  - **TUYỆT ĐỐI CẤM CỐ ĐỊNH THEO MÉP CỬA SỔ** (`right: 14px`) vì khi Pet zoom nhỏ lại (ví dụ 70%), thanh % sẽ bị dạt ra xa tít mù khơi so với thân Pet.
+  - **CHỈ HIỆN KHI CHỦ ĐỘNG ZOOM**: Chỉ kích hoạt hiển thị khi lăn chuột (`Alt+Wheel`) hoặc kéo chuột giữa (`Alt+Middle Drag`). Khi người dùng di chuyển Pet bằng `Alt + Left Click Drag`, thanh % HUD TUYỆT ĐỐI KHÔNG ĐƯỢC TỰ ĐỘNG BẬT LÊN.
 
 ### 7.2. Bản đồ Phím tắt Toàn cục (Global Shortcuts):
 - `Alt+1`: **Cyrene Chat Window** (Cửa sổ trò chuyện đầy đủ).
@@ -191,7 +193,7 @@
 | **2** | **Em nó trả lời chỉ hiện trong Log `Alt+4`, mất tích trong Chat `Alt+1`** | Co-Watch chỉ gọi `pushActivityLog` và `PET_AGENT_EVENT` mà không gọi `chatsStore.appendMessage`. `onSwitchSession` ở Chat window bỏ qua không reload khi mở lại. | Ghi `chatsStore.appendMessage` trong `deliverReaction`. Cập nhật Chat window reload message tail ngay lập tức khi unhide hoặc focus. |
 | **3** | **Gesture xoa đầu/vuốt ve mất tin nhắn âm thầm** | `getOrCreateActiveSessionId` trả về chuỗi `"default"` khi chưa mở Alt+1. `chatsStore` từ chối `"default"` khiến tin nhắn bị drop. | Triển khai `ensureActiveChatSessionId()` ở main process. Dynamic query session hợp lệ từ `listSessions()` hoặc tạo mới, tuyệt đối không dùng `"default"`. |
 | **4** | **Co-Watch yapping nói dai dẳng** | Prompt Co-Watch không giới hạn độ dài, khiến LLM sinh văn bản dài dòng rồi tốn thời gian đọc. | Siết prompt Co-Watch: Chỉ phản hồi 1-2 câu tiếng Anh ngắn gọn, tinh tế, giữ cooldown hợp lý. |
-| **5** | **Thanh % zoom chắn giữa mặt Pet** | CSS `.pet-zoom-hud` trước đây để `left: 50%` canh giữa màn hình. | Đã chỉnh dời sang mép phải `right: 14px; top: 50%`. Cấm sửa lại vào giữa màn hình. |
+| **5** | **Thanh % zoom chắn giữa mặt Pet hoặc bị dạt xa tít mù khơi** | Trước đây đặt `left: 50%` che mặt, sau đó sửa thành `right: 14px` khiến khi zoom 70% thì thanh % dạt ra mép phải xa tít. Khi di chuyển Pet bằng Alt+Drag thì thanh % lại tự hiện lên do `applyPetZoom` gửi IPC thừa. | Neo theo tâm Pet: `left: 50%; top: 50%` lệch phải `translateX(calc(55px * var(--pet-zoom, 1))) scale(var(--pet-zoom, 1))`. Bỏ `zoomHud.show` khỏi listener thụ động `onPetZoom`, chỉ hiện khi chủ động zoom. Thêm cache `lastAppliedPetZoom` trong main process. |
 | **6** | **Giao diện bị lẫn lộn tiếng Việt / tiếng Trung** | Một số thông báo, nhãn cài đặt bị viết tiếng Việt hoặc tiếng Trung không đồng bộ. | Khóa nguyên tắc: 100% English UI bề mặt cho toàn bộ ứng dụng. Chỉ lời nói phát ra của Cyrene là tiếng Trung. |
 | **7** | **Xoa đầu bị hardcode phản hồi** | Code gán các câu phản hồi cố định lặp đi lặp lại gây nhàm chán. | Chuyển sang AI sinh động qua `agui.run()` với prompt vai diễn phong phú, hỗ trợ `*hành động*` và `/suy nghĩ/`. |
 | **8** | **Tin nhắn trả lời bị lặp đúp (Duplicate Message)** | Sự kiện nhận tin nhắn từ agent hoặc gesture bị bắn đúp từ nhiều nguồn (agent event + chatsStore write). | Thiết lập cơ chế Idempotency trong `chatsStore.appendMessage`: cập nhật theo id trùng hoặc bỏ qua nếu nội dung trùng trong 10 giây. |
@@ -201,6 +203,7 @@
 | **12** | **Bong bóng chat vừa hiện lên đã tắt, nói chưa hết câu** | Bong bóng thoại sử dụng thời gian biến mất cứng (hardcoded 5000ms), trong khi audio nói dài 7-10 giây. | Liên kết thời lượng bong bóng với `voiceService.getIsSpeaking()`. Khi đếm hết giờ, nếu âm thanh vẫn phát, trì hoãn đóng bong bóng cho đến khi dứt lời. |
 | **13** | **Kaomoji in chình ình trong bong bóng chat và lịch sử chat** | AI hoặc fallback gán chuỗi kaomoji như `(⁄ ⁄>⁄ ▽ ⁄<⁄ ⁄)` vào text phản hồi thay vì chỉ render particle. | Tẩy sạch mọi biểu tượng kaomoji bằng hàm `stripKaomojis()` trước khi render text hay lưu database. Kaomoji chỉ được ném ra màn hình bằng `tossKaomoji()`. |
 | **14** | **Phím tắt `Alt+Q` bấm không có tác dụng** | Ứng dụng đã đóng gói ở `release\win-unpacked` là bản build cũ (10:54 AM), chưa tích hợp shortcut mới. | Tăng cường `app.quit()` + `app.exit(0)`, đồng thời luôn chạy `npm run package:win:dir` để cập nhật file thực thi sau khi hoàn thành code. |
+| **15** | **Càng di chuyển Pet bằng Alt+Drag thì % Zoom càng đi xa và tự hiện** | Di chuyển cửa sổ kích hoạt `moved` event -> lưu tọa độ -> gọi `applyGeneralSettings` -> gọi `applyPetZoom` -> renderer nhận IPC `onPetZoom` gọi `zoomHud.show()`. Kết hợp với `right: 14px` làm thanh % hiện lên liên tục ở mép cửa sổ cách xa Pet. | Cắt đứt luồng kích hoạt thừa: main process chỉ gửi `PET_ZOOM` khi zoom thực sự đổi; renderer bỏ `zoomHud.show` khỏi `onPetZoom`. Đổi CSS HUD neo động theo tâm Pet `left: 50%` + offset tỷ lệ `--pet-zoom`. |
 
 ---
 

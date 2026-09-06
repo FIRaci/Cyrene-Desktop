@@ -1993,17 +1993,20 @@ function applyGeneralSettings(settings: GeneralSettings): void {
   applyPetZoom(settings.petZoom);
 }
 
-/**
- * ， scale。
- * ，，、。
- */
-function applyPetZoom(zoom: number): void {
+let lastAppliedPetZoom: number | null = null;
+
+function applyPetZoom(zoom: number, force = false): void {
   if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (!force && lastAppliedPetZoom === zoom) return;
+  lastAppliedPetZoom = zoom;
   const width = Math.round(PET_WINDOW_BASE_WIDTH * zoom);
   const height = Math.round(PET_WINDOW_BASE_HEIGHT * zoom);
   const currentSize = mainWindow.getSize();
   if (currentSize[0] !== width || currentSize[1] !== height) {
+    const wasResizable = mainWindow.isResizable();
+    if (!wasResizable) mainWindow.setResizable(true);
     mainWindow.setSize(width, height);
+    if (!wasResizable) mainWindow.setResizable(false);
   }
   sendToLive2DWindow(IPC.PET_ZOOM, zoom);
 }

@@ -1,10 +1,9 @@
 .pet-zoom-hud {
   position: fixed;
-  left: auto !important;
-  right: 14px !important;
+  left: 50%;
   top: 50%;
-  transform: translateY(-50%) translateX(6px) scale(0.92);
-  transform-origin: center right;
+  transform: translateX(calc(55px * var(--pet-zoom, 1))) translateY(-50%) scale(calc(var(--pet-zoom, 1) * 0.92));
+  transform-origin: center left;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -35,7 +34,7 @@
 .pet-zoom-hud.is-visible {
   opacity: 1;
   visibility: visible;
-  transform: translateY(-50%) translateX(0) scale(1);
+  transform: translateX(calc(55px * var(--pet-zoom, 1))) translateY(-50%) scale(var(--pet-zoom, 1));
 }
 
 .pet-zoom-hud__icon {
