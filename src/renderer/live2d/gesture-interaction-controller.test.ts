@@ -50,9 +50,25 @@ describe("sanitizeBubbleSpeech & extractSpokenText", () => {
   it("clamps oversized paragraphs cleanly", () => {
     const longText =
       "Today is such a beautiful day. Cyrene loves having you by my side. Let's do our best together! And now let's get back to work. Continuing with lots of long sentences to ensure it exceeds the maximum allowed character threshold.";
-    const cleaned = sanitizeBubbleSpeech(longText);
+    const cleaned = sanitizeBubbleSpeech(longText, 160);
     expect(cleaned.length).toBeLessThanOrEqual(160);
     expect(cleaned).toContain("Today is such a beautiful day");
+    expect(cleaned).toMatch(/[.!?…]$/);
+  });
+
+  it("preserves English contractions (you're, it's, don't) and handles parentheses in spoken text cleanly", () => {
+    const raw = "*tilts head* /oh, so warm.../ Aww, you're being so sweet to me, Master! (Next time, pat me even longer!)";
+    const cleaned = sanitizeBubbleSpeech(raw);
+    expect(cleaned).toContain("you're being so sweet to me");
+    expect(cleaned).toContain("Next time, pat me even longer!");
+
+    const spoken = extractSpokenText(raw);
+    expect(spoken).toContain("you're being so sweet to me");
+    expect(spoken).toContain("Next time, pat me even longer!");
+    expect(spoken).not.toContain("(");
+    expect(spoken).not.toContain(")");
+    expect(spoken).not.toContain("*");
+    expect(spoken).not.toContain("/");
   });
 });
 

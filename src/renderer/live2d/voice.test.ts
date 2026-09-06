@@ -58,6 +58,15 @@ describe("cleanTextForSpeech", () => {
     expect(cleanTextForSpeech("✨ (｡♥‿♥｡) 🌸")).toBe("");
     expect(cleanTextForSpeech("*nuzzles* /thinking/")).toBe("");
   });
+
+  it("strips brackets and parentheses while preserving inner words and contractions", () => {
+    const raw = "Aww, you're being so sweet to me! (Next time, pat me even longer!)";
+    const cleaned = cleanTextForSpeech(raw);
+    expect(cleaned).toContain("you're being so sweet to me");
+    expect(cleaned).toContain("Next time, pat me even longer!");
+    expect(cleaned).not.toContain("(");
+    expect(cleaned).not.toContain(")");
+  });
 });
 
 describe("CompanionVoiceService", () => {

@@ -51,6 +51,9 @@ export function cleanTextForSpeech(text: string): string {
   // Strip decorative standalone symbols, kaomoji fragments, and common emojis
   cleaned = cleaned.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}✨🌸⭐🕶️❓🌀😄🥺😉😊🔄👁️❌♡♥~〜☆★♪♫و̑]/gu, " ");
 
+  // Strip any remaining brackets and parentheses, leaving inner dialogue intact
+  cleaned = cleaned.replace(/[\(\)（）\[\]]/g, " ");
+
   // Normalize whitespace and trim
   cleaned = cleaned.replace(/\s+/g, " ").trim();
 
@@ -66,6 +69,7 @@ export class CompanionVoiceService {
   private muted = false;
   private isSpeaking = false;
   private currentAudio: HTMLAudioElement | null = null;
+  private currentUtterance: SpeechSynthesisUtterance | null = null;
   private onStartSpeaking?: (durationMs: number) => void;
   private onStopSpeaking?: () => void;
   private disposed = false;
@@ -204,6 +208,7 @@ export class CompanionVoiceService {
       window.speechSynthesis.cancel();
 
       const utterance = new SpeechSynthesisUtterance(text);
+      this.currentUtterance = utterance;
       utterance.lang = "zh-CN";
 
       const voices = window.speechSynthesis.getVoices();
@@ -256,6 +261,7 @@ export class CompanionVoiceService {
         // STRICT: If no Chinese or Japanese female voice exists, DO NOT SPEAK!
         // Never allow English voices (Microsoft Zira, etc.) to speak Cyrene's dialogue.
         if (!preferredVoice) {
+          this.currentUtterance = null;
           console.warn("[CompanionVoice] No Chinese or Japanese voice found in WebSpeech. Suppressing speech to prevent English voice leaks.");
           return false;
         }
@@ -274,11 +280,13 @@ export class CompanionVoiceService {
 
       utterance.onend = () => {
         this.isSpeaking = false;
+        this.currentUtterance = null;
         this.onStopSpeaking?.();
       };
 
       utterance.onerror = () => {
         this.isSpeaking = false;
+        this.currentUtterance = null;
         this.onStopSpeaking?.();
       };
 
@@ -287,6 +295,7 @@ export class CompanionVoiceService {
     } catch (err) {
       console.warn("[CompanionVoice] Web Speech API failed:", err);
       this.isSpeaking = false;
+      this.currentUtterance = null;
       return false;
     }
   }
@@ -435,6 +444,7 @@ export class CompanionVoiceService {
         window.speechSynthesis.cancel();
       } catch {}
     }
+    this.currentUtterance = null;
 
     if (this.currentAudio) {
       try {

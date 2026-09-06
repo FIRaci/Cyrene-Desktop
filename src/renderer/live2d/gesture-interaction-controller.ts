@@ -17,7 +17,7 @@ interface AguiEvent {
   value?: unknown;
 }
 
-export function sanitizeBubbleSpeech(text: string): string {
+export function cleanGestureReply(text: string): string {
   if (!text) return "";
   let cleaned = text.trim();
 
@@ -26,18 +26,41 @@ export function sanitizeBubbleSpeech(text: string): string {
     .replace(/^\s*\*?(?:When|Khi|Action|Context|Reaction)[^*:\n]+:\*?\s*/i, "")
     .replace(/^\s*\[[^\]]+\]\s*/, "");
 
-  // Strip quotes
-  cleaned = cleaned.replace(/["'“‘”’]/g, "").trim();
-  // Normalize internal whitespace
-  cleaned = cleaned.replace(/[ \t]+/g, " ");
-  // If model produced multiple paragraphs, keep the first 2 lines
-  const lines = cleaned.split(/[\r\n]+/).map((l) => l.trim()).filter(Boolean);
-  cleaned = lines.slice(0, 2).join(" ");
-  // Clamp length to 160 chars so it fits nicely inside the bubble without overflow
-  if (cleaned.length > 160) {
-    cleaned = cleaned.slice(0, 158).trim() + "…";
+  // Strip dialogue double quotes and Japanese/Chinese corner brackets, but PRESERVE single quotes/apostrophes for contractions (you're, it's)
+  cleaned = cleaned.replace(/["“”「」『』]/g, "").trim();
+
+  // Normalize internal whitespace on each line, but preserve newlines
+  const lines = cleaned.split(/[\r\n]+/).map((l) => l.trim().replace(/[ \t]+/g, " ")).filter(Boolean);
+  return lines.join("\n");
+}
+
+export function sanitizeBubbleSpeech(text: string, limit = 320): string {
+  if (!text) return "";
+  const cleaned = cleanGestureReply(text);
+
+  // If model produced multiple paragraphs, join with spaces for bubble display
+  let bubbleText = cleaned.split(/[\r\n]+/).map((l) => l.trim()).filter(Boolean).join(" ");
+
+  // Clamp bubble length if it exceeds limit without cutting words or punctuation mid-token
+  if (bubbleText.length > limit) {
+    const candidate = bubbleText.slice(0, limit - 2);
+    const lastBoundary = Math.max(
+      candidate.lastIndexOf(" "),
+      candidate.lastIndexOf("，"),
+      candidate.lastIndexOf("。"),
+      candidate.lastIndexOf("！"),
+      candidate.lastIndexOf("？"),
+      candidate.lastIndexOf("!"),
+      candidate.lastIndexOf("?"),
+      candidate.lastIndexOf("~"),
+      candidate.lastIndexOf("…"),
+    );
+    bubbleText = (lastBoundary > Math.floor(limit * 0.5) ? candidate.slice(0, lastBoundary) : candidate).trim();
+    // Clean any trailing open bracket, asterisk, or slash caused by truncation
+    bubbleText = bubbleText.replace(/[\(\[（\/\*]+$/g, "").trim() + "…";
   }
-  return cleaned;
+
+  return bubbleText;
 }
 
 export function extractSpokenText(text: string): string {
@@ -56,10 +79,13 @@ export function extractSpokenText(text: string): string {
   // 4. Strip emojis and decorative symbols (leaving ~ for natural sentence cadence)
   spoken = spoken.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}✨🌸⭐🕶️❓🌀😄🥺😉😊🔄👁️❌♡♥〜☆★♪♫و̑]/gu, " ");
 
-  // 5. Strip quotes and remaining asterisks / slashes
-  spoken = spoken.replace(/[*_/"'“‘”’]/g, "");
+  // 5. Strip any remaining brackets and parentheses, leaving inner words intact for speech
+  spoken = spoken.replace(/[\(\)（）\[\]]/g, " ");
 
-  // 6. Normalize whitespace
+  // 6. Strip quotes and remaining asterisks / slashes (keeping apostrophes ' intact for contractions like you're)
+  spoken = spoken.replace(/[*_/"“”]/g, "");
+
+  // 7. Normalize whitespace
   spoken = spoken.replace(/\s+/g, " ").trim();
 
   // If only punctuation or no spoken dialogue remains, return empty string (TTS stays silent)
@@ -104,7 +130,8 @@ export class GestureInteractionController {
     const thoughtText = "(⁄ ⁄>⁄ ▽ ⁄<⁄ ⁄) 唔…";
     const kaomoji = "(⁄ ⁄>⁄ ▽ ⁄<⁄ ⁄)";
     const fallback = "*轻轻蹭了蹭你的手掌* /好温暖.../ 唔… 主人摸摸头，希琳最喜欢你了！ (⁄ ⁄>⁄ ▽ ⁄<⁄ ⁄)";
-    await this.executeGestureRun(prompt, thoughtText, kaomoji, fallback, x, y);
+    const userDisplay = "*Gently pats Cyrene's head*";
+    await this.executeGestureRun(prompt, thoughtText, kaomoji, fallback, userDisplay, x, y);
   }
 
   async handlePetting(x?: number, y?: number): Promise<void> {
@@ -113,7 +140,8 @@ export class GestureInteractionController {
     const thoughtText = "(✿◠‿◠) ...";
     const kaomoji = "(｡♥‿♥｡)";
     const fallback = "*轻轻眨了眨眼，露出甜甜的笑容* /主人在摸我呢！/ 诶嘿嘿~ 希琳最喜欢靠在主人身边了！🌸 (｡♥‿♥｡)";
-    await this.executeGestureRun(prompt, thoughtText, kaomoji, fallback, x, y);
+    const userDisplay = "*Gently caresses Cyrene*";
+    await this.executeGestureRun(prompt, thoughtText, kaomoji, fallback, userDisplay, x, y);
   }
 
   private async executeGestureRun(
@@ -121,6 +149,7 @@ export class GestureInteractionController {
     thoughtText: string,
     kaomojiText: string,
     fallbackText: string,
+    userDisplay: string,
     x?: number,
     y?: number,
   ): Promise<void> {
@@ -152,10 +181,11 @@ export class GestureInteractionController {
     const userTurnId = `user-gesture-${Date.now()}`;
     const assistantTurnId = `asst-gesture-${Date.now()}`;
 
+    // Append clean, immersive user action into chatStore (not verbose prompt text)
     await this.appendToStore(store, sessionId, {
       id: userTurnId,
       role: "user",
-      content: prompt,
+      content: userDisplay,
       at: Date.now(),
     });
 
@@ -187,7 +217,16 @@ export class GestureInteractionController {
           historyMessages = sessionData.messages
             .filter((m) => m && (m.role === "user" || m.role === "model") && typeof m.content === "string" && m.content.trim().length > 0)
             .slice(-10)
-            .map((m) => ({ role: m.role === "model" ? "model" : "user", content: m.content.trim() }));
+            .map((m) => {
+              let content = m.content.trim();
+              // Sanitize any legacy verbose prompt echoes that were previously saved into chatStore
+              if (m.role === "user" && content.includes("[Master gently")) {
+                content = content.includes("caresses")
+                  ? "*Gently caresses Cyrene*"
+                  : "*Gently pats Cyrene's head*";
+              }
+              return { role: m.role === "model" ? "model" : "user", content };
+            });
         }
       }
       if (historyMessages.length === 0 || historyMessages[historyMessages.length - 1].content !== prompt) {
@@ -217,21 +256,27 @@ export class GestureInteractionController {
     fallbackText: string,
   ): Promise<void> {
     const rawReply = this.currentReply.trim();
-    const finalReply = sanitizeBubbleSpeech(rawReply) || fallbackText;
+    const cleanFullReply = cleanGestureReply(rawReply) || fallbackText;
     this.cleanupAgui();
     this.isGenerating = false;
     this.lastInteractionTime = Date.now();
     this.scheduleAutonomousResume();
 
-    this.bubbles.say(finalReply, 5000);
-    const spoken = extractSpokenText(finalReply);
+    // Bubble displays full speech with action/thought styling
+    const bubbleDisplay = sanitizeBubbleSpeech(cleanFullReply);
+    this.bubbles.say(bubbleDisplay, 5000);
+
+    // Voice speaks complete dialogue extracted from the full reply without premature truncation
+    const spoken = extractSpokenText(cleanFullReply);
     if (spoken) {
       void this.voice?.speak(spoken);
     }
+
+    // Chat store receives the complete, untruncated model message for Alt+1 chat window
     await this.appendToStore(store, sessionId, {
       id: assistantTurnId,
       role: "model",
-      content: finalReply,
+      content: cleanFullReply,
       at: Date.now(),
     });
   }
