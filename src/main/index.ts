@@ -4062,7 +4062,7 @@ function createTray(): void {
         click: () => { toggleLogWindow(); },
       },
       {
-        label: "Settings (Alt+S)",
+        label: "Settings (Alt+6)",
         click: () => { toggleSettingsWindow(); },
       },
       {
@@ -4226,7 +4226,7 @@ ipcMain.on(IPC.PET_SHOW_CONTEXT_MENU, (event) => {
       click: () => sendToLive2DWindow(IPC.PET_TOGGLE_VOICE),
     },
     {
-      label: "Settings (Alt+S)",
+      label: "Settings (Alt+6)",
       click: () => toggleSettingsWindow(),
     },
     { type: "separator" },
@@ -5128,6 +5128,9 @@ app.whenReady().then(async () => {
   });
   globalShortcut.register("Alt+5", () => {
     sendToLive2DWindow(IPC.PET_TOGGLE_MINI_CHAT);
+  });
+  globalShortcut.register("Alt+6", () => {
+    toggleSettingsWindow();
   });
   globalShortcut.register("Alt+S", () => {
     toggleSettingsWindow();

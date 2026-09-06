@@ -529,7 +529,7 @@ addTrackedEventListener(canvas, "canvas:pointerleave", "pointerleave", () => {
   void window.cyrene.setInteractive(false);
 });
 
-// Right-click context menu on Live2D model (Alt+1, Alt+2, Alt+3, Alt+4, Alt+5, Alt+S, expressions, quit)
+// Right-click context menu on Live2D model (Alt+1, Alt+2, Alt+3, Alt+4, Alt+5, Alt+6, expressions, quit)
 addTrackedEventListener(canvas, "canvas:contextmenu", "contextmenu", (e) => {
   const event = e as MouseEvent;
   event.preventDefault();

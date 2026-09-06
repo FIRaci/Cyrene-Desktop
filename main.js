@@ -243,6 +243,13 @@ app.whenReady().then(() => {
     sendToRenderer('trigger-ns-panel');
   });
 
+  // Alt+6: Toggle Settings
+  globalShortcut.register('Alt+6', () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    if (!mainWindow.isVisible()) bringToFront();
+    sendToRenderer('trigger-settings-panel');
+  });
+
   ipcMain.on('window-minimize', () => {
     if (mainWindow) mainWindow.hide();
   });

@@ -222,7 +222,7 @@ function classifyAgentError(code: string | undefined, message: string): string {
     cleanMessage.includes("not configured") ||
     cleanMessage.includes("apiKey")
   ) {
-    return "🌸 **Cyrene is waiting for your API Key!**\n\nPlease open **Settings** (shortcut: `Alt+S`) to configure your model provider and API key to start chatting.";
+    return "🌸 **Cyrene is waiting for your API Key!**\n\nPlease open **Settings** (shortcut: `Alt+6`) to configure your model provider and API key to start chatting.";
   }
 
   if (
@@ -230,7 +230,7 @@ function classifyAgentError(code: string | undefined, message: string): string {
     cleanMessage.includes("No model endpoint") ||
     cleanMessage.includes("Not configured")
   ) {
-    return "🌸 **Model not configured yet!**\n\nPlease open **Settings** (shortcut: `Alt+S`) to select a model provider and enter the endpoint.";
+    return "🌸 **Model not configured yet!**\n\nPlease open **Settings** (shortcut: `Alt+6`) to select a model provider and enter the endpoint.";
   }
 
   if (code === "E_AGENT_NO_PROGRESS") return "Task execution could not proceed. Please try again.";

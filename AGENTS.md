@@ -24,7 +24,7 @@
      * **Today's Schedule & Tasks (`Alt+3`)**: 100% English.
      * **Response & Activity Log (`Alt+4`)**: 100% English headers, types, channels.
      * **Quick Mini-Chat (`Alt+5`)**: 100% English placeholder, indicators, buttons.
-     * **Settings Center (`Alt+S`)**: 100% English labels, tabs, descriptions.
+     * **Settings Center (`Alt+6` / `Alt+S`)**: 100% English labels, tabs, descriptions.
      * **Call Window (Voice Call Mode)**: 100% English controls.
      * **System Tray & Right-Click Context Menus**: 100% English menu items.
    - Code comments, log diagnostics, tools definitions (`built-in-tools`, `fs-tools`, `document-tools`, v.v.): 100% English.
@@ -144,7 +144,7 @@
 - `Alt+3`: **Today's Schedule & Tasks** (Quản lý lịch biểu, thời tiết).
 - `Alt+4`: **Response & Activity Log** (Nhật ký kỹ thuật, telemetry).
 - `Alt+5`: **Quick Mini-Chat** (Khung chat mini nổi cạnh Pet).
-- `Alt+S`: **Settings Center** (Trung tâm cài đặt LLM, TTS, Voice, Memory).
+- `Alt+6`: **Settings Center** (Trung tâm cài đặt LLM, TTS, Voice, Memory - cũng hỗ trợ `Alt+S`).
 - `Alt+C`: **Show / Hide Pet** (Ẩn/Hiện nhanh Pet trên desktop).
 
 ### 7.3. Activity & Response Log (`Alt+4`)
