@@ -1,6 +1,7 @@
 .pet-zoom-hud {
   position: fixed;
-  right: 14px;
+  left: auto !important;
+  right: 14px !important;
   top: 50%;
   transform: translateY(-50%) translateX(6px) scale(0.92);
   transform-origin: center right;

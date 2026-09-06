@@ -11,6 +11,12 @@ export class PetZoomHudController {
     el.id = "pet-zoom-hud";
     el.className = "pet-zoom-hud";
     el.setAttribute("aria-hidden", "true");
+    if (el.style) {
+      el.style.position = "fixed";
+      el.style.left = "auto";
+      el.style.right = "14px";
+      el.style.top = "50%";
+    }
 
     el.innerHTML = `
       <svg class="pet-zoom-hud__icon" viewBox="0 0 24 24">
