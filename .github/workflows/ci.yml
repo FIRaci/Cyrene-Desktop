@@ -28,6 +28,17 @@ jobs:
       - name: Set up Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Cache Cargo registry & build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
       - name: Install dependencies
         run: npm ci
 
@@ -37,12 +48,18 @@ jobs:
       - name: Compile production bundles
         run: npm run build
 
-      - name: Build and verify screenshot helper
-        run: |
-          npm run build:screenshot-helper
-          npm run verify:screenshot-helper resources/bin/cyrene-screenshot.exe
+      - name: Build screenshot helper (Rust)
+        run: npm run build:screenshot-helper
+
+      - name: Verify screenshot helper binary
+        run: node scripts/verify-screenshot-helper.mjs resources/bin/cyrene-screenshot.exe
 
       - name: Package Windows application
+        # CSC_IDENTITY_AUTO_DISCOVERY=false skips code-signing on CI runners
+        # (no certificate is installed — signing happens locally or via a release workflow with a secret)
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+          WIN_CSC_LINK: ""
         run: npx electron-builder --win --dir
 
       - name: Upload Windows Build Artifact
