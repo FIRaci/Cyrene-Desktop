@@ -3071,13 +3071,12 @@ async function synthesizeAndPlayCached(
                 n.includes("ayumi") ||
                 n.includes("sayaka")
               );
-            }) ||
-            pool.find((v) => {
-              const n = (v.name + " " + v.lang).toLowerCase();
-              return n.includes("zira") || n.includes("female") || n.includes("vi-vn");
-            }) ||
-            (femaleVoices.length > 0 ? femaleVoices[0] : pool[0]);
-          if (preferredVoice) utterance.voice = preferredVoice;
+            });
+          if (!preferredVoice) {
+            console.warn("[TTS] No Chinese or Japanese voice found in WebSpeech. Suppressing speech to prevent English voice leaks.");
+            return null;
+          }
+          utterance.voice = preferredVoice;
         }
         utterance.pitch = 1.15;
         utterance.rate = Number(settings.ttsSpeed ?? 1.05);

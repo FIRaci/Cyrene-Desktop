@@ -5675,7 +5675,7 @@ async function loadTtsConfig(): Promise<void> {
   }
 
   // 
-  const engine = String(ttsConfig.ttsEngine || "off");
+  const engine = String(ttsConfig.ttsEngine || "gptsovits");
   document.querySelectorAll<HTMLButtonElement>(".tts-engine").forEach((btn) => {
     const isActive = btn.dataset.engine === engine;
     btn.classList.toggle("is-active", isActive);
@@ -5702,15 +5702,13 @@ async function loadTtsConfig(): Promise<void> {
 
   // GPT-SoVITS
   ttsEl("tts-gptsovits-url").value = String(ttsConfig.ttsGptsovitsBaseUrl ?? "http://127.0.0.1:9880");
-  ttsEl("tts-gptsovits-ref-audio").value = String(ttsConfig.ttsGptsovitsRefAudioPath ?? "");
+  ttsEl("tts-gptsovits-ref-audio").value = String(ttsConfig.ttsGptsovitsRefAudioPath || "resources/voice/cyrene/ref_audio.wav");
   ttsEl("tts-gptsovits-prompt-text").value = String(ttsConfig.ttsGptsovitsPromptText || "开拓者，希琳一直都在这里陪着你哦。");
   (ttsEl("tts-gptsovits-format") as HTMLSelectElement).value =
     ttsConfig.ttsGptsovitsFormat === "mp3" ? "mp3" : "wav";
   const languageMode = document.getElementById("tts-gptsovits-lang-mode") as HTMLSelectElement | null;
   if (languageMode) {
-    languageMode.value = ttsConfig.ttsGptsovitsLanguageMode === "original-mandarin"
-      ? "original-mandarin"
-      : "english";
+    languageMode.value = "original-mandarin";
   }
   const rvcEnabled = document.getElementById("tts-rvc-enabled") as HTMLInputElement | null;
   if (rvcEnabled) rvcEnabled.checked = ttsConfig.ttsRvcEnabled === true;

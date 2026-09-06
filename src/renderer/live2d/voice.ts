@@ -113,8 +113,8 @@ export class CompanionVoiceService {
   }
 
   /**
-   * Speak the given text out loud in sweet English anime voice and coordinate Live2D mouth movements.
-   * Cleans kaomoji/emojis, strips actions/thoughts, and speaks in English without Chinese translation.
+   * Speak the given text out loud in sweet Chinese anime voice (Cyrene) and coordinate Live2D mouth movements.
+   * Cleans kaomoji/emojis, strips actions/thoughts, and speaks in Chinese dialogue.
    */
   async speak(text: string): Promise<boolean> {
     if (this.disposed || this.muted || !text) return false;
@@ -132,30 +132,31 @@ export class CompanionVoiceService {
 
       const engine = String(settings?.ttsEngine || (settings ? "gptsovits" : "web-speech"));
 
+      if (engine === "off") {
+        return false;
+      }
+
       if (engine === "gptsovits") {
         const played = await this.playGptsovits(cleaned, settings);
-        if (played) return true;
-        return false;
+        return played;
       } else if (engine === "edge") {
         const played = await this.playOnlineNeural(cleaned);
-        if (played) return true;
+        return played;
       } else if (engine === "minimax" && settings?.ttsMinimaxKey && settings?.ttsMinimaxVoiceId) {
         const played = await this.playCloudMinimax(cleaned, settings);
-        if (played) return true;
+        return played;
       } else if (engine === "mossland" && settings?.ttsMosslandKey && settings?.ttsMosslandVoiceId) {
         const played = await this.playCloudMossland(cleaned, settings);
-        if (played) return true;
+        return played;
+      } else if (engine === "web-speech") {
+        return this.speakWebSpeech(cleaned);
       }
     } catch {
       // Ignore settings fetch errors and proceed
     }
 
-    // Default & Expressive: Online Neural Voice (Microsoft Edge Neural — sweet Chinese anime girl zh-CN-XiaoyiNeural)
-    const played = await this.playOnlineNeural(cleaned);
-    if (played) return true;
-
-    // Fallback: Web Speech API (Chinese anime female voice, NO male voices)
-    return this.speakWebSpeech(cleaned);
+    // Default: try GPT-SoVITS local server. If offline, return false silently rather than leaking English robot voice.
+    return false;
   }
 
   private async playOnlineNeural(text: string): Promise<boolean> {
@@ -243,24 +244,23 @@ export class CompanionVoiceService {
           preferredVoice = pool.find((v) => {
             const name = (v.name + " " + v.lang).toLowerCase();
             return (
-              name.includes("ja") ||
-              name.includes("japanese") ||
-              name.includes("haruka") ||
-              name.includes("ayumi") ||
-              name.includes("sayaka") ||
-              name.includes("nanami")
+              (name.includes("ja") || name.includes("japanese")) &&
+              (name.includes("haruka") ||
+                name.includes("ayumi") ||
+                name.includes("sayaka") ||
+                name.includes("nanami"))
             );
           });
         }
 
-        // 3rd Priority: Any female voice
+        // STRICT: If no Chinese or Japanese female voice exists, DO NOT SPEAK!
+        // Never allow English voices (Microsoft Zira, etc.) to speak Cyrene's dialogue.
         if (!preferredVoice) {
-          preferredVoice = pool.find((v) => !isMaleVoice(v));
+          console.warn("[CompanionVoice] No Chinese or Japanese voice found in WebSpeech. Suppressing speech to prevent English voice leaks.");
+          return false;
         }
 
-        if (preferredVoice) {
-          utterance.voice = preferredVoice;
-        }
+        utterance.voice = preferredVoice;
       }
 
       utterance.pitch = 1.15; // Slightly higher pitch for sweet waifu tone
@@ -362,8 +362,8 @@ export class CompanionVoiceService {
     if (!tts?.synthesizeCachedGptsovits) return false;
 
     const baseUrl = String(settings.ttsGptsovitsBaseUrl || "http://127.0.0.1:9880");
-    const refAudioPath = String(settings.ttsGptsovitsRefAudioPath ?? "resources/voice/cyrene/ref_audio.wav");
-    const promptText = String(settings.ttsGptsovitsPromptText ?? "开拓者，希琳一直都在这里陪着你哦。");
+    const refAudioPath = String(settings.ttsGptsovitsRefAudioPath || "resources/voice/cyrene/ref_audio.wav");
+    const promptText = String(settings.ttsGptsovitsPromptText || "开拓者，希琳一直都在这里陪着你哦。");
 
     if (!baseUrl || !refAudioPath || !promptText) {
       console.warn("[CompanionVoice] GPT-SoVITS missing configuration (baseUrl, refAudioPath, or promptText)");

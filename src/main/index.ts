@@ -828,36 +828,30 @@ async function prepareGptsovitsVoicePayload(payload: {
   const baseUrl = (payload.baseUrl && payload.baseUrl.trim()) || settings.ttsGptsovitsBaseUrl || "http://127.0.0.1:9880";
   const refAudioPath = (payload.refAudioPath && payload.refAudioPath.trim())
     || (settings.ttsGptsovitsRefAudioPath && settings.ttsGptsovitsRefAudioPath.trim())
-    || (fs.existsSync(defaultRefAudio) ? defaultRefAudio : "");
+    || defaultRefAudio;
   const promptText = (payload.promptText && payload.promptText.trim())
     || (settings.ttsGptsovitsPromptText && settings.ttsGptsovitsPromptText.trim())
     || "开拓者，希琳一直都在这里陪着你哦。";
-  const languageMode = settings.ttsGptsovitsLanguageMode;
-  const rvcRequested = languageMode === "english" && settings.ttsRvcEnabled;
-  const text = languageMode === "original-mandarin"
-    ? await translateEnglishToMandarinSpeech(payload.text, loadModelSettings())
-    : payload.text;
-  const translatedToMandarin = languageMode === "original-mandarin"
-    && /[\u3400-\u9fff]/u.test(text);
+  const languageMode = "original-mandarin";
+  const text = await translateEnglishToMandarinSpeech(payload.text, loadModelSettings());
+  const translatedToMandarin = /[\u3400-\u9fff]/u.test(text);
   return {
     ...payload,
     baseUrl,
     refAudioPath,
     promptText,
-    format: rvcRequested ? "wav" as const : payload.format,
+    format: payload.format ?? "wav",
     text,
-    languageMode,
-    textLang: translatedToMandarin || /[\u3400-\u9fff]/u.test(text) ? "zh" as const : "en" as const,
-    promptLang: languageMode === "original-mandarin" ? "zh" as const : "en" as const,
-    rvcApplied: rvcRequested,
-    rvc: rvcRequested
-      ? {
-          baseUrl: settings.ttsRvcBaseUrl,
-          modelName: settings.ttsRvcModel,
-          pitch: settings.ttsRvcPitch,
-          indexRate: settings.ttsRvcIndexRate,
-        }
-      : null,
+    languageMode: "original-mandarin" as const,
+    textLang: "zh" as const,
+    promptLang: "zh" as const,
+    rvcApplied: false,
+    rvc: null as {
+      baseUrl: string;
+      modelName: string;
+      pitch: number;
+      indexRate: number;
+    } | null,
   };
 }
 
@@ -1387,7 +1381,7 @@ const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   ttsMinimaxModel: "speech-2.8-turbo",
   ttsStreaming: true,
   ttsGptsovitsBaseUrl: "http://127.0.0.1:9880",
-  ttsGptsovitsRefAudioPath: "",
+  ttsGptsovitsRefAudioPath: getDefaultCyreneRefAudioPath(),
   ttsGptsovitsPromptText: "开拓者，希琳一直都在这里陪着你哦。",
   ttsGptsovitsFormat: "wav",
   ttsGptsovitsLanguageMode: "original-mandarin",
@@ -1914,10 +1908,10 @@ function normalizeGeneralSettings(input: Partial<GeneralSettings> | null | undef
       ? input.systemAudioAwarenessEnabled
       : DEFAULT_GENERAL_SETTINGS.systemAudioAwarenessEnabled,
     ttsGptsovitsBaseUrl: typeof input?.ttsGptsovitsBaseUrl === "string" ? input.ttsGptsovitsBaseUrl : DEFAULT_GENERAL_SETTINGS.ttsGptsovitsBaseUrl,
-    ttsGptsovitsRefAudioPath: typeof input?.ttsGptsovitsRefAudioPath === "string" ? input.ttsGptsovitsRefAudioPath : "",
-    ttsGptsovitsPromptText: typeof input?.ttsGptsovitsPromptText === "string" ? input.ttsGptsovitsPromptText : "",
+    ttsGptsovitsRefAudioPath: typeof input?.ttsGptsovitsRefAudioPath === "string" && input.ttsGptsovitsRefAudioPath.trim() ? input.ttsGptsovitsRefAudioPath.trim() : getDefaultCyreneRefAudioPath(),
+    ttsGptsovitsPromptText: typeof input?.ttsGptsovitsPromptText === "string" && input.ttsGptsovitsPromptText.trim() ? input.ttsGptsovitsPromptText.trim() : "开拓者，希琳一直都在这里陪着你哦。",
     ttsGptsovitsFormat: input?.ttsGptsovitsFormat === "mp3" ? "mp3" : "wav",
-    ttsGptsovitsLanguageMode: input?.ttsGptsovitsLanguageMode === "original-mandarin" ? "original-mandarin" : "english",
+    ttsGptsovitsLanguageMode: "original-mandarin",
     ttsRvcEnabled: input?.ttsRvcEnabled === true,
     ttsRvcBaseUrl: typeof input?.ttsRvcBaseUrl === "string" && input.ttsRvcBaseUrl.trim() ? input.ttsRvcBaseUrl.trim() : DEFAULT_GENERAL_SETTINGS.ttsRvcBaseUrl,
     ttsRvcModel: typeof input?.ttsRvcModel === "string" && input.ttsRvcModel.trim() ? input.ttsRvcModel.trim() : DEFAULT_GENERAL_SETTINGS.ttsRvcModel,
@@ -1943,7 +1937,23 @@ function loadGeneralSettings(): GeneralSettings {
   try {
     const filePath = getGeneralSettingsPath();
     if (!fs.existsSync(filePath)) return DEFAULT_GENERAL_SETTINGS;
-    return normalizeGeneralSettings(JSON.parse(fs.readFileSync(filePath, "utf8")) as Partial<GeneralSettings>);
+    const raw = JSON.parse(fs.readFileSync(filePath, "utf8")) as Partial<GeneralSettings>;
+    const normalized = normalizeGeneralSettings(raw);
+    // Auto-heal legacy empty paths, English voice mode, or disabled TTS engine on disk
+    if (
+      raw.ttsGptsovitsLanguageMode !== "original-mandarin" ||
+      !raw.ttsGptsovitsRefAudioPath ||
+      !raw.ttsGptsovitsPromptText ||
+      raw.ttsEngine === "off"
+    ) {
+      try {
+        if (raw.ttsEngine === "off") {
+          normalized.ttsEngine = "gptsovits";
+        }
+        fs.writeFileSync(filePath, JSON.stringify(normalized, null, 2), "utf8");
+      } catch { /* non-fatal disk write */ }
+    }
+    return normalized;
   } catch (err) {
     console.error("[Cyrene] load general settings failed:", err);
     return DEFAULT_GENERAL_SETTINGS;

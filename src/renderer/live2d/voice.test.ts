@@ -253,5 +253,38 @@ describe("CompanionVoiceService", () => {
     delete (window as any).tts;
     voice.dispose();
   });
+
+  it("does not speak and returns false when ttsEngine is off", async () => {
+    (window as any).settings = {
+      getGeneral: vi.fn().mockResolvedValue({
+        ttsEngine: "off",
+      }),
+    };
+
+    const voice = new CompanionVoiceService({ initialMuted: false });
+    const success = await voice.speak("Hello there");
+
+    expect(success).toBe(false);
+    expect(mockSpeechSynthesis.speak).not.toHaveBeenCalled();
+
+    delete (window as any).settings;
+    voice.dispose();
+  });
+
+  it("refuses to fall back to English voices like Microsoft Zira when no Chinese/Japanese voices exist in WebSpeech", async () => {
+    mockSpeechSynthesis.getVoices = vi.fn(() => [
+      { name: "Microsoft David - English", lang: "en-US" },
+      { name: "Microsoft Zira - English", lang: "en-US" },
+    ]);
+
+    const voice = new CompanionVoiceService({ initialMuted: false });
+    const success = await voice.speak("Cyrene dialogue test");
+
+    expect(success).toBe(false);
+    expect(mockSpeechSynthesis.speak).not.toHaveBeenCalled();
+
+    voice.dispose();
+  });
 });
+
 

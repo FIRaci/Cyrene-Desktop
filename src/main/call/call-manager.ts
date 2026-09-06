@@ -240,7 +240,7 @@ export async function endTurn(): Promise<void> {
             ? tts?.ttsCustomCloudApiKey
             : tts?.ttsMinimaxKey,
         voiceId: engine === "edge"
-          ? "en-US-AnaNeural"
+          ? "zh-CN-XiaoyiNeural"
           : engine === "mimo"
             ? ""
             : engine === "custom-cloud"
@@ -263,7 +263,7 @@ export async function endTurn(): Promise<void> {
       console.warn(LOG_PREFIX, "Primary TTS failed, trying Edge fallback:", msg);
       if (engine !== "edge") {
         try {
-          const edgeResult = await synthesizeByEngine("edge", { text: reply, voiceId: "en-US-AnaNeural" });
+          const edgeResult = await synthesizeByEngine("edge", { text: reply, voiceId: "zh-CN-XiaoyiNeural" });
           sendTtsAudio(edgeResult.audio.toString("base64"));
           return;
         } catch (edgeErr) {
