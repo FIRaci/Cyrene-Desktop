@@ -135,3 +135,5 @@ dist/.smoke-user-data/
 task.md
 walkthrough.md
 
+# External runtime repos & vendors
+vendor/gpt-sovits/

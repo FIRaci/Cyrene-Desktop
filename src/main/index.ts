@@ -815,6 +815,91 @@ function getDefaultCyreneRefAudioPath(): string {
   return candidates[0];
 }
 
+let gptsovitsChildProcess: import("child_process").ChildProcess | null = null;
+let gptsovitsAutoSpawnAttempted = false;
+
+export async function isGptsovitsServerOnline(baseUrl = "http://127.0.0.1:9880"): Promise<boolean> {
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 1200);
+    const res = await fetch(`${baseUrl.replace(/\/+$/, "")}/docs`, { method: "GET", signal: ctrl.signal });
+    clearTimeout(timer);
+    return res.status < 500;
+  } catch {
+    return false;
+  }
+}
+
+export async function ensureGptsovitsServerRunning(): Promise<void> {
+  const generalSettings = loadGeneralSettings();
+  if (generalSettings.ttsEngine === "off") return;
+  const baseUrl = generalSettings.ttsGptsovitsBaseUrl || "http://127.0.0.1:9880";
+
+  const online = await isGptsovitsServerOnline(baseUrl);
+  if (online) {
+    return;
+  }
+
+  if (gptsovitsAutoSpawnAttempted && gptsovitsChildProcess) {
+    return;
+  }
+  gptsovitsAutoSpawnAttempted = true;
+
+  const candidateScripts = [
+    path.join(process.cwd(), "scripts", "cyrene_tts.py"),
+    path.join(__dirname, "..", "..", "..", "scripts", "cyrene_tts.py"),
+    path.join(app?.getAppPath ? app.getAppPath() : process.cwd(), "scripts", "cyrene_tts.py"),
+  ];
+  let scriptPath: string | null = null;
+  for (const c of candidateScripts) {
+    if (fs.existsSync(c)) {
+      scriptPath = c;
+      break;
+    }
+  }
+
+  if (!scriptPath) {
+    console.info("[GPT-SoVITS] scripts/cyrene_tts.py not found on disk; skipping auto-launch.");
+    return;
+  }
+
+  console.info("[GPT-SoVITS] Server at", baseUrl, "is offline. Auto-spawning Cyrene voice server in background...");
+  try {
+    const pythonExe = process.platform === "win32" ? "python" : "python3";
+    const child = spawn(pythonExe, [scriptPath, "--port", "9880"], {
+      cwd: path.dirname(path.dirname(scriptPath)),
+      detached: false,
+      stdio: "ignore",
+      env: {
+        ...process.env,
+        PYTHONIOENCODING: "utf-8",
+        PYTHONUTF8: "1",
+      },
+    });
+    gptsovitsChildProcess = child;
+    child.on("error", (err) => {
+      console.warn("[GPT-SoVITS] Voice server process error:", err);
+      gptsovitsChildProcess = null;
+    });
+    child.on("exit", (code) => {
+      console.info("[GPT-SoVITS] Voice server process exited with code:", code);
+      gptsovitsChildProcess = null;
+    });
+  } catch (err) {
+    console.warn("[GPT-SoVITS] Failed to spawn voice server process:", err);
+  }
+}
+
+export function stopGptsovitsServer(): void {
+  if (gptsovitsChildProcess && !gptsovitsChildProcess.killed) {
+    try {
+      console.info("[GPT-SoVITS] Stopping auto-spawned voice server...");
+      gptsovitsChildProcess.kill();
+    } catch {}
+    gptsovitsChildProcess = null;
+  }
+}
+
 async function prepareGptsovitsVoicePayload(payload: {
   baseUrl?: string;
   refAudioPath?: string;
@@ -6533,6 +6618,7 @@ app.whenReady().then(async () => {
 
   const generalSettings = loadGeneralSettings();
   createWindow();
+  void ensureGptsovitsServerRunning();
 
   // Create Live2D pet on startup; auxiliary windows (chat, sidebar, tasks, settings)
   // remain lazy and are summoned on demand via shortcuts, mini-chat or the tray.
@@ -6767,6 +6853,7 @@ app.on("before-quit", () => {
   schedulerEngine?.stop();
   stopProactiveTrigger();
   flushTokenUsage();
+  stopGptsovitsServer();
   void shutdownChannels();
   void screenshotService?.shutdown();
 });

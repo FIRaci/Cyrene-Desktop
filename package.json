@@ -25,6 +25,7 @@
     "test:watch": "vitest",
     "smoke:music": "npm run build:main && node scripts/run-music-smoke.mjs",
     "setup:cyrene-voice": "node scripts/setup-cyrene-gptsovits.mjs",
+    "voice:server": "python scripts/cyrene_tts.py",
     "build:sim": "tsc -p tsconfig.sim.json",
     "sim": "tsc -p tsconfig.sim.json && node dist/sim/main/sim/dmae-sim.js",
     "sim:coffee": "tsc -p tsconfig.sim.json && node dist/sim/main/sim/dmae-sim.js --scenario=coffee",

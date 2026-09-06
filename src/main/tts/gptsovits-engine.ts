@@ -72,37 +72,50 @@ export async function synthesize(opts: GptsovitsSynthesizeOptions): Promise<Gpts
   const endpoint = `${opts.baseUrl.replace(/\/+$/, "")}${TTS_PATH}`;
   log({ stage: "request_start", endpoint, format, textLen: opts.text.length });
 
-  // 3) Send request + full timeout control and buffer protection
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  // 3) Send request + full timeout control and buffer protection with transient retry
+  const maxAttempts = opts.timeoutMs && opts.timeoutMs < 5000 ? 1 : 3;
+  let audio!: Buffer;
+  let lastErr: Error | null = null;
 
-  let audio: Buffer;
-  try {
-    const res = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body,
-      signal: ctrl.signal,
-    });
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+        signal: ctrl.signal,
+      });
 
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      const message = `GPT-SoVITS returned HTTP ${res.status}: ${text.slice(0, 300)}`;
-      log({ stage: "http_error", status: res.status, body: text.slice(0, 300) });
-      throw new Error(message);
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        const message = `GPT-SoVITS returned HTTP ${res.status}: ${text.slice(0, 300)}`;
+        log({ stage: "http_error", status: res.status, body: text.slice(0, 300) });
+        throw new Error(message);
+      }
+
+      const arrayBuf = await res.arrayBuffer();
+      audio = Buffer.from(arrayBuf);
+      log({ stage: "audio_received", bytes: audio.length, costMs: Date.now() - startedAt });
+
+      if (audio.length === 0) {
+        throw new Error("GPT-SoVITS returned empty audio buffer");
+      }
+      lastErr = null;
+      break;
+    } catch (err) {
+      lastErr = err instanceof Error ? err : new Error(String(err));
+      const isTransient = String(lastErr).includes("ECONNREFUSED") || String(lastErr).includes("fetch failed");
+      if (attempt < maxAttempts && isTransient) {
+        log({ stage: "retry_waiting", attempt, error: String(lastErr) });
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        continue;
+      }
+      throw lastErr;
+    } finally {
+      clearTimeout(timer);
     }
-
-    const arrayBuf = await res.arrayBuffer();
-    audio = Buffer.from(arrayBuf);
-    log({ stage: "audio_received", bytes: audio.length, costMs: Date.now() - startedAt });
-
-    if (audio.length === 0) {
-      throw new Error("GPT-SoVITS returned empty audio buffer");
-    }
-  } catch (err) {
-    throw err instanceof Error ? err : new Error(String(err));
-  } finally {
-    clearTimeout(timer);
   }
 
   // Validate magic bytes: wav starts with "RIFF", mp3 starts with ID3 or 0xFF 0xFB
