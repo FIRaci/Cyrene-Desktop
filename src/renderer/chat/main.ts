@@ -1813,6 +1813,31 @@ function createMessageBubble(text?: string): HTMLElement {
   return item;
 }
 
+function renderFormattedUserMessage(el: HTMLElement, text: string): void {
+  if (!text.includes("*") && !text.includes("/")) {
+    el.textContent = text;
+    return;
+  }
+  el.replaceChildren();
+  const parts = text.split(/(\*[^*]+\*|\/[^/]+\/)/g);
+  for (const part of parts) {
+    if (!part) continue;
+    if (part.startsWith("*") && part.endsWith("*") && part.length > 2) {
+      const span = document.createElement("span");
+      span.className = "pet-bubble__action chat-action";
+      span.textContent = part;
+      el.appendChild(span);
+    } else if (part.startsWith("/") && part.endsWith("/") && part.length > 2) {
+      const span = document.createElement("span");
+      span.className = "pet-bubble__thought-inline chat-thought";
+      span.textContent = part;
+      el.appendChild(span);
+    } else {
+      el.appendChild(document.createTextNode(part));
+    }
+  }
+}
+
 function getLastBubbleForMessage(messageId: string): HTMLElement | null {
   const row = messagesEl.querySelector(`[data-msg-id="${messageId}"]`);
   if (!row) return null;
@@ -2049,12 +2074,15 @@ function render(preserveScroll = false): void {
     } else if (m.role === "user") {
       // ： [sticker:xxx] 
       const cleanText = m.content.replace(/\[sticker:[^\]]+\]/g, "").trim();
-      if (cleanText) bubble.textContent = cleanText;
+      if (cleanText) renderFormattedUserMessage(bubble, cleanText);
       else bubble.hidden = true; // Sticker-only messages hide bubbles
       if (!bubble.hidden) bubbles.push(bubble);
     } else {
       const currentMode = isChatMode() ? "chat" : "work";
-      const segments = getAssistantReplyBubbleTexts(m.content, currentMode, segmentedOutputMode, {
+      const cleanContent = m.role === "model"
+        ? m.content.trimStart().replace(/^\s*(?:\[\d{4}[-/.]\d{2}[-/.]\d{2}[ T]\d{2}:\d{2}(?::\d{2})?(?:,\s*[^\]]+)?\]\s*)+/, "").trimStart()
+        : m.content;
+      const segments = getAssistantReplyBubbleTexts(cleanContent, currentMode, segmentedOutputMode, {
         preserveEmpty: !!m.transient,
       });
       for (const segment of segments) {
@@ -2145,7 +2173,9 @@ function render(preserveScroll = false): void {
       copyBtn.addEventListener("click", () => {
         const text = m.role === "user"
           ? m.content.replace(/\[sticker:[^\]]+\]/g, "").trim()
-          : m.content;
+          : (m.role === "model"
+              ? m.content.trimStart().replace(/^\s*(?:\[\d{4}[-/.]\d{2}[-/.]\d{2}[ T]\d{2}:\d{2}(?::\d{2})?(?:,\s*[^\]]+)?\]\s*)+/, "").trimStart()
+              : m.content);
         if (!text) return;
         void copyTextToClipboard(text).then((ok) => {
           if (!ok) return;
@@ -2790,16 +2820,17 @@ async function streamAndPlayCached(
 }
 
 async function synthesizeAndPlayCached(
-  text: string,
+  rawText: string,
   existing?: { ttsCacheKey?: string },
   msgId?: string,
 ): Promise<{ cacheKey: string } | null> {
   if (!window.tts) return null;
 
-  // ： ttsCacheKey，，。
-  // 、。
   const settings = await loadTtsSettings();
   if (!settings || settings.ttsEngine === "off") return null;
+
+  const text = cleanTextForSpeech(rawText);
+  if (!text) return null;
 
   // ： cacheKey  _CACHED IPC
   // （minimax  TTS_SYNTHESIZE_CACHED，gptsovits  TTS_SYNTHESIZE_CACHED_GPTSOVITS）
@@ -3133,12 +3164,10 @@ async function speakMessage(message: Message): Promise<void> {
   }
 }
 
-// Auto read: check if engine is enabled + autoRead switch; synthesize only when conditions met
-async function autoSpeakIfEnabled(text: string): Promise<{ cacheKey: string } | null> {
-  const settings = await loadTtsSettings();
-  if (!settings || settings.ttsEngine === "off" || !settings.ttsAutoRead) return null;
-  ttsPlaybackSequence += 1;
-  return await synthesizeAndPlayCached(text);
+// Auto read: Delegated entirely to Live2D Pet Companion (src/renderer/live2d/voice.ts)
+// to prevent duplicate simultaneous audio playback between Chat and Pet windows.
+async function autoSpeakIfEnabled(_text: string): Promise<{ cacheKey: string } | null> {
+  return null;
 }
 
 interface EarlyMinimaxPlayback {
@@ -3147,68 +3176,10 @@ interface EarlyMinimaxPlayback {
 }
 
 function createEarlyMinimaxPlayback(): EarlyMinimaxPlayback {
-  let settingsPromise: Promise<TtsSettings | null> | null = null;
-  let settings: TtsSettings | null = null;
-  let checked = false;
-  let eligible = false;
-  let triggered = false;
-  let segment = "";
-  let playbackPromise: Promise<{ ok: boolean; sequence: number }> | null = null;
-  let sequence = 0;
-
-  const ensureSettings = async (): Promise<TtsSettings | null> => {
-    if (!settingsPromise) {
-      settingsPromise = loadTtsSettings();
-    }
-    settings = await settingsPromise;
-    if (!checked) {
-      checked = true;
-      eligible = canUseMinimaxStreamingEarly(settings);
-    }
-    return settings;
-  };
-
-  const tryStart = async (text: string): Promise<void> => {
-    if (triggered) return;
-    const cfg = await ensureSettings();
-    if (!cfg || !eligible || triggered) return;
-    const early = extractEarlyTtsSegment(text);
-    if (!early) return;
-
-    triggered = true;
-    segment = early.segment;
-    ttsPlaybackSequence += 1;
-    sequence = ttsPlaybackSequence;
-    playbackPromise = streamAndPlayCached(cfg, segment, undefined, { waitForPlaybackEnd: true })
-      .then((result) => ({ ok: Boolean(result), sequence }))
-      .catch(() => ({ ok: false, sequence }));
-  };
-
   return {
-    append(delta: string): void {
-      if (triggered) return;
-      void tryStart(delta);
-    },
-    async finish(fullText: string): Promise<{ cacheKey: string } | null> {
-      const cfg = await ensureSettings();
-      if (!cfg || !eligible) return autoSpeakIfEnabled(fullText);
-
-      if (!triggered) {
-        return autoSpeakIfEnabled(fullText);
-      }
-
-      const result = await playbackPromise;
-      if (!result?.ok) {
-        return autoSpeakIfEnabled(fullText);
-      }
-      if (result.sequence !== ttsPlaybackSequence) {
-        return null;
-      }
-
-      const remainder = fullText.slice(segment.length).trim();
-      if (!remainder) return null;
-      const rest = await streamAndPlayCached(cfg, remainder, undefined, { waitForPlaybackEnd: true });
-      return rest ? null : autoSpeakIfEnabled(fullText);
+    append(_delta: string): void {},
+    async finish(_fullText: string): Promise<{ cacheKey: string } | null> {
+      return null;
     },
   };
 }
@@ -3305,9 +3276,18 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && !stickerPicker.hidden) hideStickerPicker();
 });
 
+function isThoughtOrSystemNoise(content: string): boolean {
+  const trimmed = content.trim();
+  if (trimmed.startsWith("*💭") || trimmed.startsWith("💭")) return true;
+  if (trimmed.startsWith("Cyrene could not complete that request")) return true;
+  if (trimmed.startsWith("The model service is temporarily unavailable")) return true;
+  if (trimmed.startsWith("Scheduled task execution failed")) return true;
+  return false;
+}
+
 function buildModelMessages(): Array<{ role: "user" | "model"; content: string; at?: number }> {
   return messages
-    .filter((message) => !message.transient && (message.content.trim() || message.modelContext?.trim() || message.sticker))
+    .filter((message) => !message.transient && !isThoughtOrSystemNoise(message.content) && (message.content.trim() || message.modelContext?.trim() || message.sticker))
     .slice(-16)
     .map((message) => ({
       role: message.role,
@@ -4632,13 +4612,18 @@ document.addEventListener("drop", async (e) => {
     "reasoning-dropdown": document.getElementById("reasoning-val")
   };
 
-  function selectModeOption(value) {
+  function selectModeOption(value: unknown, persist = true) {
     const normalized = normalizeDefaultChatMode(value);
     modeOptions.forEach(function(option) {
       const active = (option as HTMLElement).dataset.modeValue === normalized;
       option.classList.toggle("is-active", active);
       option.setAttribute("aria-pressed", active ? "true" : "false");
     });
+    if (persist) {
+      try {
+        localStorage.setItem("cyrene_chat_mode", normalized);
+      } catch {}
+    }
   }
 
   modeOptions.forEach(function(option) {
@@ -4646,6 +4631,13 @@ document.addEventListener("drop", async (e) => {
       selectModeOption((option as HTMLElement).dataset.modeValue);
     });
   });
+
+  try {
+    const savedMode = localStorage.getItem("cyrene_chat_mode");
+    if (savedMode) {
+      selectModeOption(savedMode, false);
+    }
+  } catch {}
 
   // Close all dropdowns
   function closeAll() {

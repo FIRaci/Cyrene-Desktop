@@ -50,6 +50,8 @@ export const IPC = {
   // Reasoning dropdown (chat window: atomic read + providerKey write)
   CHAT_GET_REASONING_STATE: "chat:get-reasoning-state",
   CHAT_SET_REASONING: "chat:set-reasoning",
+  CHAT_VISIBILITY_CHANGED: "chat:visibility-changed",
+  CHAT_IS_VISIBLE: "chat:is-visible",
 
   // AG-UI event stream
   AGUI_RUN: "agui:run",

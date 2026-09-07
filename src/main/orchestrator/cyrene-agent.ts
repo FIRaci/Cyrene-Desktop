@@ -291,7 +291,7 @@ export class CyreneAgent extends AbstractAgent {
             result = await perf.track("chat_loop", () => runChatLoop({
               settings: options.settings,
               adapter,
-              messages: options.messages,
+              messages: options.cleanMessages ?? options.messages,
               soulSystemBaseContent: options.soulSystemBaseContent,
               soulSampling: options.soulSampling,
               timeoutMs: options.timeoutMs,

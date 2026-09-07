@@ -177,6 +177,12 @@ const schedulerEventsApi = {
 contextBridge.exposeInMainWorld("schedulerEvents", schedulerEventsApi);
 
 const petCompanionApi = {
+  isChatVisible: () => ipcRenderer.invoke(IPC.CHAT_IS_VISIBLE) as Promise<boolean>,
+  onChatVisibilityChanged: (callback: (visible: boolean) => void) => {
+    const listener = (_e: unknown, visible: boolean) => callback(visible);
+    ipcRenderer.on(IPC.CHAT_VISIBILITY_CHANGED, listener);
+    return () => ipcRenderer.off(IPC.CHAT_VISIBILITY_CHANGED, listener);
+  },
   onAgentEvent: (callback: (event: unknown) => void) => {
     const listener = (_e: unknown, event: unknown) => {
       try {
@@ -244,8 +250,8 @@ const callApi = {
     ipcRenderer.on(IPC.CALL_ASR_RESULT, handler);
     return () => ipcRenderer.removeListener(IPC.CALL_ASR_RESULT, handler);
   },
-  onTtsAudio: (callback: (data: { base64: string }) => void) => {
-    const handler = (_event: unknown, data: { base64: string }) => callback(data);
+  onTtsAudio: (callback: (data: { base64: string; format?: "wav" | "mp3" | "pcm" }) => void) => {
+    const handler = (_event: unknown, data: { base64: string; format?: "wav" | "mp3" | "pcm" }) => callback(data);
     ipcRenderer.on(IPC.CALL_TTS_AUDIO, handler);
     return () => ipcRenderer.removeListener(IPC.CALL_TTS_AUDIO, handler);
   },

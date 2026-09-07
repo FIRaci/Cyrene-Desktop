@@ -112,4 +112,23 @@ describe("chats store", () => {
     expect(current?.messages).toHaveLength(2);
     expect(current?.messages.filter((m) => m.role === "model")).toHaveLength(1);
   });
+
+  it("automatically strips leaked timestamp prefixes from model messages when appended or read", async () => {
+    const store = await import("./chats-store");
+    store.initialize();
+
+    const session = store.createSession({ title: "Timestamp Strip Test" });
+
+    store.appendMessage(session.id, {
+      id: "model-1",
+      role: "model",
+      content: "[2026-09-07 10:04, UTC-5] Hello Master! Cyrene is right here.",
+      at: 1000,
+    });
+
+    const current = store.getSession(session.id);
+    expect(current?.messages[0].content).toBe("Hello Master! Cyrene is right here.");
+    expect(current?.messages[0].content).not.toContain("2026");
+    expect(current?.messages[0].content).not.toContain("UTC-5");
+  });
 });

@@ -1,6 +1,6 @@
 export const LOCAL_MODEL_PROVIDER = "Custom Endpoint (Local)";
 export const DEFAULT_OLLAMA_BASE_URL = "http://127.0.0.1:11434/v1";
-export const DEFAULT_OLLAMA_MODEL = "llama3.1:latest";
+export const DEFAULT_OLLAMA_MODEL = "stheno:latest";
 export const DEFAULT_OLLAMA_VISION_MODEL = "qwen2.5vl:7b";
 
 export function isLocalModelProvider(provider: string): boolean {

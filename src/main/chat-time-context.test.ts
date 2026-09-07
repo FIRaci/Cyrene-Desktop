@@ -110,6 +110,19 @@ describe("chat time context", () => {
       "What is wrong, you look a bit unhappy...",
     ].join("\n"))).toBe("What is wrong, you look a bit unhappy...");
 
+    // Non-slash timezones (e.g. UTC-5, UTC+7, UTC, GMT)
+    expect(stripLeakedChatTimeContext([
+      "[2026-09-07 10:04, UTC-5]",
+      "Cyrene's lips softly melt against yours as she returns the tender kiss.",
+    ].join("\n"))).toBe("Cyrene's lips softly melt against yours as she returns the tender kiss.");
+
+    expect(stripLeakedChatTimeContext("[2026-09-07 10:04, UTC+7] Hello Master!")).toBe("Hello Master!");
+    expect(stripLeakedChatTimeContext("[2026-09-07 10:04, UTC] Hello Master!")).toBe("Hello Master!");
+    expect(stripLeakedChatTimeContext("[2026-09-07 10:04] Hello Master!")).toBe("Hello Master!");
+    expect(stripLeakedChatTimeContext("[2026-09-07 10:04:25, UTC-5] Hello Master!")).toBe("Hello Master!");
+    expect(stripLeakedChatTimeContext("\n  [2026-09-07 10:04, UTC-5]\nHello Master!")).toBe("Hello Master!");
+    expect(stripLeakedChatTimeContext("[2026-09-07 10:04, UTC-5] [2026-09-07 10:05, UTC-5] Hello Master!")).toBe("Hello Master!");
+
     expect(stripLeakedChatTimeContext("Normally mentioning [2026-07-13 13:36, Asia/Shanghai] is not stripped")).toBe(
       "Normally mentioning [2026-07-13 13:36, Asia/Shanghai] is not stripped",
     );

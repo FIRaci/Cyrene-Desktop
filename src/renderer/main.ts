@@ -36,12 +36,13 @@ const kaomojiController = new FloatingKaomojiController(kaomojiContainer);
 const autonomousThoughts = new AutonomousThoughtController({
   bubbles: companionBubbles,
   kaomoji: kaomojiController,
-  minIntervalMs: 120_000,
-  maxIntervalMs: 240_000,
-  kaomojiProbability: 0.35,
+  minIntervalMs: 50_000,
+  maxIntervalMs: 110_000,
+  kaomojiProbability: 0.85,
 });
 
 const companionVoice = new CompanionVoiceService({
+  initialMuted: false,
   onStartSpeaking: (durationMs) => {
     mouthSync?.start(durationMs);
     speakingMotion?.start();
@@ -69,39 +70,167 @@ const gestureController = new GestureInteractionController({
   autonomousThoughts,
 });
 
-let accumulatedAgentSpeech = "";
-let lastAgentSpeechKaomojiTime = 0;
+(window as unknown as { companionVoice?: unknown; gestureController?: unknown }).companionVoice = companionVoice;
+(window as unknown as { companionVoice?: unknown; gestureController?: unknown }).gestureController = gestureController;
 
-const petAgentEventOff = window.petCompanion?.onAgentEvent((event) => {
-  if (gestureController.isBusy() || miniChat.isOpen()) return;
-  companionBubbles.handle(event);
+let accumulatedAgentSpeech = "";
+let earlySentenceDelivered = false;
+let earlySentenceText = "";
+let lastAgentSpeechKaomojiTime = 0;
+let isChatOpen = false;
+
+window.petCompanion?.isChatVisible?.().then((visible) => {
+  isChatOpen = Boolean(visible);
+  if (isChatOpen) {
+    autonomousThoughts.pause();
+    companionBubbles.clearThought();
+  }
+}).catch(() => {});
+
+const chatVisibilityOff = window.petCompanion?.onChatVisibilityChanged?.((visible) => {
+  isChatOpen = Boolean(visible);
+  if (isChatOpen) {
+    autonomousThoughts.pause();
+    companionBubbles.clearThought();
+  } else {
+    autonomousThoughts.resume();
+  }
+}) ?? (() => {});
+
+function triggerRoleplayReactions(text: string): void {
+  const lower = text.toLowerCase();
+
+  const isAffectionate = /(kiss|embrace|hug|hold|caress|touch|blush|shy|flutter|tender|sweet|warm|heart|love|darling|master|passionate|lips|gently|lean)/i.test(lower);
+  const isPlayful = /(cute|teas|wink|playful|hehe|giggle|naughty|silly|pout)/i.test(lower);
+  const isHappy = /(happy|smile|glad|joy|delight|wonderful|yay|hooray)/i.test(lower);
+  const isCurious = /(\?|curious|wonder|confus|puzzl|what|why|how)/i.test(lower);
+  const isAdmiring = /(amazing|sparkle|dazzl|shining|brilliant|incredible|wow)/i.test(lower);
+
+  try {
+    if (isAffectionate) {
+      void manager?.playAction({ kind: "expression", name: "开心眼" });
+      if (Math.random() < 0.6) {
+        void manager?.playAction({ kind: "motion", group: "动作#6", motionName: "我可爱吧~" });
+      } else {
+        void manager?.playAction({ kind: "motion", group: "动作#6", motionName: "Wink~" });
+      }
+      const affectionKaomojis = ["(⁄ ⁄>⁄ ▽ ⁄<⁄ ⁄)", "(｡♥‿♥｡)", "(⸝⸝ᵕᴗᵕ⸝⸝)", "(੭ु´͈ ᐜ `͈)੭ु⁾⁾", "🌸 (✿◡‿◡) 🌸"];
+      kaomojiController.spawn(affectionKaomojis[Math.floor(Math.random() * affectionKaomojis.length)]);
+    } else if (isPlayful) {
+      void manager?.playAction({ kind: "expression", name: "开心眼" });
+      void manager?.playAction({ kind: "motion", group: "动作#6", motionName: "Wink~" });
+      const playfulKaomojis = ["(^_<)〜☆", "(>ω<)", "(*^▽^*)", "(o^▽^o)"];
+      kaomojiController.spawn(playfulKaomojis[Math.floor(Math.random() * playfulKaomojis.length)]);
+    } else if (isAdmiring) {
+      void manager?.playAction({ kind: "expression", name: "闪耀" });
+      void manager?.playAction({ kind: "motion", group: "动作#6", motionName: "笑一笑吧~" });
+      const sparkleKaomojis = ["✨ (*´˘`*) ✨", "(★ω★)", "(✿◠‿◠)"];
+      kaomojiController.spawn(sparkleKaomojis[Math.floor(Math.random() * sparkleKaomojis.length)]);
+    } else if (isCurious) {
+      void manager?.playAction({ kind: "expression", name: "问号" });
+      const curiousKaomojis = ["(・ω・)?", "(o_O)?", "(*•̀ᴗ•́*)و"];
+      kaomojiController.spawn(curiousKaomojis[Math.floor(Math.random() * curiousKaomojis.length)]);
+    } else if (isHappy) {
+      void manager?.playAction({ kind: "expression", name: "开心眼" });
+      void manager?.playAction({ kind: "motion", group: "动作#6", motionName: "笑一笑吧~" });
+      const happyKaomojis = ["(✿◠‿◠)", "(o^▽^o)", "(*^▽^*)"];
+      kaomojiController.spawn(happyKaomojis[Math.floor(Math.random() * happyKaomojis.length)]);
+    } else {
+      void manager?.playAction({ kind: "expression", name: "开心眼" });
+      kaomojiController.spawn();
+    }
+  } catch (err) {
+    console.warn("[Cyrene] triggerRoleplayReactions error:", err);
+  }
+
+  expressionReset?.restart();
+}
+
+const petAgentEventOff = window.petCompanion?.onAgentEvent((rawEvent) => {
+  const event = rawEvent as {
+    type?: string;
+    delta?: string;
+    text?: string;
+    toolCallName?: string;
+    fromChatWindow?: boolean;
+  };
+  if (gestureController.isGeneratingGesture || miniChat.isBusy) return;
+
+  const suppressBubbles = isChatOpen || Boolean(event.fromChatWindow);
+
+  if (!suppressBubbles) {
+    companionBubbles.handle(event, companionVoice);
+  } else {
+    if (event.type === "RUN_FINISHED" || event.type === "RUN_ERROR") {
+      companionBubbles.clearThought();
+    }
+  }
+
   if (event.type === "RUN_STARTED") {
     accumulatedAgentSpeech = "";
+    earlySentenceDelivered = false;
+    earlySentenceText = "";
   } else if (event.type === "TEXT_MESSAGE_CONTENT") {
     if (event.delta) {
       accumulatedAgentSpeech += event.delta;
+      // Early voice playback: When first sentence completes, speak immediately so voice starts before typewriter finishes!
+      if (!earlySentenceDelivered && accumulatedAgentSpeech.length >= 15) {
+        const sentenceMatch = /^([^。！？!?;\n]+[。！？!?;\n])(?:\s+.*)?$/s.exec(accumulatedAgentSpeech);
+        if (sentenceMatch && sentenceMatch[1].trim().length >= 8) {
+          earlySentenceDelivered = true;
+          earlySentenceText = sentenceMatch[1].trim();
+          triggerRoleplayReactions(earlySentenceText);
+          if (!suppressBubbles) {
+            companionBubbles.say(earlySentenceText, 4000, companionVoice);
+          }
+          void companionVoice.speak(earlySentenceText);
+        }
+      }
     }
   } else if (event.type === "TEXT_MESSAGE_END" || event.type === "RUN_FINISHED") {
     if (accumulatedAgentSpeech.trim()) {
       const speechToDeliver = accumulatedAgentSpeech.trim();
       accumulatedAgentSpeech = "";
-      const now = Date.now();
-      if (now - lastAgentSpeechKaomojiTime > 30_000) {
-        lastAgentSpeechKaomojiTime = now;
-        kaomojiController.spawn();
+
+      triggerRoleplayReactions(speechToDeliver);
+
+      if (!suppressBubbles) {
+        const now = Date.now();
+        if (now - lastAgentSpeechKaomojiTime > 15_000) {
+          lastAgentSpeechKaomojiTime = now;
+          kaomojiController.spawn();
+        }
+        companionBubbles.say(speechToDeliver, 4000, companionVoice);
       }
-      void companionVoice.speak(speechToDeliver);
+
+      if (!earlySentenceDelivered) {
+        void companionVoice.speak(speechToDeliver);
+      } else {
+        const remainder = speechToDeliver.startsWith(earlySentenceText)
+          ? speechToDeliver.slice(earlySentenceText.length).trim()
+          : speechToDeliver;
+        if (remainder) {
+          void companionVoice.speak(remainder, { queue: true });
+        }
+      }
+      earlySentenceDelivered = false;
+      earlySentenceText = "";
+    } else if (event.type === "RUN_FINISHED") {
+      companionBubbles.clearThought();
+      earlySentenceDelivered = false;
+      earlySentenceText = "";
     }
+  } else if (event.type === "RUN_ERROR") {
+    accumulatedAgentSpeech = "";
+    earlySentenceDelivered = false;
+    earlySentenceText = "";
+    companionBubbles.clearThought();
   } else if (event.type === "say") {
     if (event.text) {
-      companionBubbles.say(event.text);
-    }
-    const now = Date.now();
-    if (now - lastAgentSpeechKaomojiTime > 30_000) {
-      lastAgentSpeechKaomojiTime = now;
-      kaomojiController.spawn();
-    }
-    if (event.text) {
+      triggerRoleplayReactions(event.text);
+      if (!suppressBubbles || event.isReminder) {
+        companionBubbles.say(event.text, 6000, companionVoice);
+      }
       void companionVoice.speak(event.text);
     }
   }
@@ -136,6 +265,11 @@ declare global {
     };
     live2dAction?: {
       onPlayAction: (callback: (target: import("../shared/live2d-actions").Live2DTarget) => void) => () => void;
+    };
+    petCompanion?: {
+      onAgentEvent: (callback: (event: unknown) => void) => () => void;
+      isChatVisible: () => Promise<boolean>;
+      onChatVisibilityChanged: (callback: (visible: boolean) => void) => () => void;
     };
   }
 }
@@ -408,6 +542,7 @@ window.addEventListener("beforeunload", () => {
   kaomojiController.dispose();
   flushPendingDrag();
   petAgentEventOff();
+  chatVisibilityOff();
   autonomousThoughts.dispose();
   companionBubbles.dispose();
   expressionReset?.dispose();

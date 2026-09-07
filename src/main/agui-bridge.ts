@@ -247,7 +247,13 @@ function safeRunError(err: unknown): { message: string; code?: string } {
       E_AGENT_GRAPH_ITERATION_LIMIT: "The request took too many steps. Please simplify it and try again.",
       E_MODEL_REQUEST_FAILED: "The local model request failed. Check Ollama and try again.",
     };
-    return { message: messages[err.code] ?? "Cyrene could not complete that request.", code: err.code };
+    return { message: messages[err.code] ?? (err.message || "Cyrene could not complete that request."), code: err.code };
+  }
+  if (err instanceof Error && err.message?.trim()) {
+    const msg = err.message.trim();
+    if (!/Bearer\s+[a-zA-Z0-9_-]+/i.test(msg) && msg.length < 300) {
+      return { message: msg };
+    }
   }
   return { message: "Cyrene could not complete that request. Please try again." };
 }
@@ -474,8 +480,9 @@ export function registerAgUiIpc(
         thinkFilter = null;
         onStatusChange?.("Accompanying");
         const safe = safeRunError(err);
+        const diagnosticMsg = err instanceof Error && err.message ? err.message : String(err);
         console.error("[AgUiBridge] Run failed:", diagnosticError(err));
-        onActivityLog?.("error", safe.message || "Agent execution failed", undefined, channel);
+        onActivityLog?.("error", `Agent failed: ${diagnosticMsg}`, undefined, channel);
         perf.dump();
         send({ type: "RUN_ERROR", message: safe.message, code: safe.code, threadId, runId });
         activeRuns.delete(runId);
@@ -484,6 +491,7 @@ export function registerAgUiIpc(
       complete: async () => {
         perf.mark("agent_run_complete");
         activeRuns.delete(runId);
+        onStatusChange?.("Accompanying");
         if (accumulatedThinking.trim()) {
           onActivityLog?.("reasoning", accumulatedThinking.trim(), undefined, channel);
           accumulatedThinking = "";

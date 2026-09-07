@@ -22,6 +22,7 @@ import {
   type ChatSessionMeta,
   type ChatSessionPurpose,
 } from "../../shared/chat-types";
+import { stripLeakedChatTimeContext } from "../chat-time-context";
 
 const ROOT_DIR_NAME = "cyrene-chats";
 const SESSIONS_SUBDIR = "sessions";
@@ -99,6 +100,21 @@ function readSessionFile(id: string): ChatSession | null {
     const parsed = JSON.parse(raw) as ChatSession;
     if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.messages)) {
       return null;
+    }
+    let modified = false;
+    for (const m of parsed.messages) {
+      if ((m.role === "model" || (m.role as string) === "assistant") && m.content) {
+        const cleaned = stripLeakedChatTimeContext(m.content);
+        if (cleaned !== m.content) {
+          m.content = cleaned;
+          modified = true;
+        }
+      }
+    }
+    if (modified) {
+      try {
+        atomicWriteJson(filePath, parsed);
+      } catch {}
     }
     return parsed;
   } catch (err) {
@@ -240,6 +256,13 @@ export function appendMessage(id: string, message: ChatMessage): ChatSession | n
   const session = readSessionFile(id);
   if (!session) return null;
 
+  if ((message.role === "model" || (message.role as string) === "assistant") && message.content) {
+    const cleaned = stripLeakedChatTimeContext(message.content);
+    if (cleaned !== message.content) {
+      message = { ...message, content: cleaned };
+    }
+  }
+
   // =========================================================================
   // [ARCHITECTURAL CONTRACT - STRICT MESSAGE DEDUPLICATION - DO NOT REMOVE]
   // Documented in AGENTS.md Section 4.1 & 9.1.
@@ -281,7 +304,12 @@ export function appendMessage(id: string, message: ChatMessage): ChatSession | n
 export function replaceMessages(id: string, messages: ChatMessage[]): ChatSession | null {
   const session = readSessionFile(id);
   if (!session) return null;
-  session.messages = messages;
+  session.messages = messages.map((m) => {
+    if ((m.role === "model" || (m.role as string) === "assistant") && m.content) {
+      return { ...m, content: stripLeakedChatTimeContext(m.content) };
+    }
+    return m;
+  });
   session.updatedAt = Date.now();
   if (!session.titleIsCustom) {
     session.title = deriveTitle(session.messages);
@@ -294,7 +322,13 @@ export function replaceMessages(id: string, messages: ChatMessage[]): ChatSessio
 export function replaceMessagesTail(id: string, startIndex: number, messages: ChatMessage[]): ChatSession | null {
   const session = readSessionFile(id);
   if (!session || !Number.isInteger(startIndex) || startIndex < 0 || startIndex > session.messages.length) return null;
-  session.messages = session.messages.slice(0, startIndex).concat(messages);
+  const sanitized = messages.map((m) => {
+    if ((m.role === "model" || (m.role as string) === "assistant") && m.content) {
+      return { ...m, content: stripLeakedChatTimeContext(m.content) };
+    }
+    return m;
+  });
+  session.messages = session.messages.slice(0, startIndex).concat(sanitized);
   session.updatedAt = Date.now();
   if (!session.titleIsCustom) session.title = deriveTitle(session.messages);
   writeSessionFile(session);

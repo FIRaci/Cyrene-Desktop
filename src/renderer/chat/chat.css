@@ -710,6 +710,51 @@ body {
   border-top-right-radius: 6px;
 }
 
+/* ── Live2D Synchronized Action & Thought Styling in Chat ── */
+.msg--model .msg__bubble em,
+.msg__bubble .pet-bubble__action,
+.msg__bubble .chat-action {
+  color: #e9d5ff;
+  font-style: italic;
+  font-weight: 500;
+  opacity: 0.95;
+  display: inline;
+  margin: 0 2px;
+}
+
+.msg--model .msg__bubble .pet-bubble__thought-inline,
+.msg--model .msg__bubble .chat-thought,
+.msg__bubble .pet-bubble__thought-inline,
+.msg__bubble .chat-thought {
+  color: #bae6fd;
+  font-style: italic;
+  font-weight: 500;
+  opacity: 0.95;
+  display: inline;
+  margin: 0 2px;
+}
+
+.msg--user .msg__bubble em,
+.msg--user .msg__bubble .pet-bubble__action,
+.msg--user .msg__bubble .chat-action {
+  color: #fdf2f8;
+  font-style: italic;
+  font-weight: 500;
+  opacity: 0.95;
+  display: inline;
+  margin: 0 2px;
+}
+
+.msg--user .msg__bubble .pet-bubble__thought-inline,
+.msg--user .msg__bubble .chat-thought {
+  color: #e0f2fe;
+  font-style: italic;
+  font-weight: 500;
+  opacity: 0.95;
+  display: inline;
+  margin: 0 2px;
+}
+
 :root {
   --sticker-width: 140px;
   --sticker-max-height: 180px;

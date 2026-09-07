@@ -44,6 +44,126 @@ const md: MarkdownIt = new MarkdownIt({
 // throwOnError:false -> Invalid LaTeX displays raw text without crashing
 md.use(katexPlugin, { throwOnError: false });
 
+// ── Inline Thought Renderer: /thought/ ───────────────────────
+// Matches /thought text/ that is not part of a URL, path, or math formula.
+// Wrapped into <span class="pet-bubble__thought-inline chat-thought">/thought/</span>
+// Synchronized with Live2D companion bubble styling (#bae6fd).
+
+function isTerminatorWithSlash(ch: number): boolean {
+  switch (ch) {
+    case 0x0A: /* \n */
+    case 0x21: /* ! */
+    case 0x23: /* # */
+    case 0x24: /* $ */
+    case 0x25: /* % */
+    case 0x26: /* & */
+    case 0x2A: /* * */
+    case 0x2B: /* + */
+    case 0x2D: /* - */
+    case 0x2F: /* / */
+    case 0x3A: /* : */
+    case 0x3C: /* < */
+    case 0x3D: /* = */
+    case 0x3E: /* > */
+    case 0x40: /* @ */
+    case 0x5B: /* [ */
+    case 0x5C: /* \ */
+    case 0x5D: /* ] */
+    case 0x5E: /* ^ */
+    case 0x5F: /* _ */
+    case 0x60: /* ` */
+    case 0x7B: /* { */
+    case 0x7D: /* } */
+    case 0x7E: /* ~ */
+      return true;
+    default:
+      return false;
+  }
+}
+
+md.inline.ruler.at("text", (state, silent) => {
+  let pos = state.pos;
+  while (pos < state.posMax && !isTerminatorWithSlash(state.src.charCodeAt(pos))) {
+    pos++;
+  }
+  if (pos === state.pos) return false;
+  if (!silent) {
+    state.pending += state.src.slice(state.pos, pos);
+  }
+  state.pos = pos;
+  return true;
+});
+
+md.inline.ruler.before("text", "thought", (state, silent) => {
+  const start = state.pos;
+  const src = state.src;
+  if (src.charCodeAt(start) !== 0x2f /* / */) return false;
+
+  // Preceding char check: must not be alphanumeric, :, or /
+  if (start > 0) {
+    const prev = src.charCodeAt(start - 1);
+    if (
+      (prev >= 0x30 && prev <= 0x39) || // 0-9
+      (prev >= 0x41 && prev <= 0x5a) || // A-Z
+      (prev >= 0x61 && prev <= 0x7a) || // a-z
+      prev === 0x3a || // :
+      prev === 0x2f    // /
+    ) {
+      return false;
+    }
+  }
+
+  // Next char check: cannot be whitespace, newline, or slash
+  if (start + 1 >= state.posMax) return false;
+  const next = src.charCodeAt(start + 1);
+  if (next === 0x20 || next === 0x09 || next === 0x0a || next === 0x0d || next === 0x2f) {
+    return false;
+  }
+
+  // Find closing / on the same line
+  let end = -1;
+  for (let i = start + 2; i < state.posMax; i++) {
+    const code = src.charCodeAt(i);
+    if (code === 0x0a || code === 0x0d) break;
+    if (code === 0x2f /* / */) {
+      const prevCode = src.charCodeAt(i - 1);
+      if (prevCode !== 0x20 && prevCode !== 0x09 && prevCode !== 0x2f) {
+        // If followed by alphanumeric or slash, likely a path like /foo/bar/
+        if (i + 1 < state.posMax) {
+          const afterCode = src.charCodeAt(i + 1);
+          if (
+            (afterCode >= 0x30 && afterCode <= 0x39) ||
+            (afterCode >= 0x41 && afterCode <= 0x5a) ||
+            (afterCode >= 0x61 && afterCode <= 0x7a) ||
+            afterCode === 0x2f
+          ) {
+            continue;
+          }
+        }
+        end = i;
+        break;
+      }
+    }
+  }
+
+  if (end === -1) return false;
+
+  if (!silent) {
+    const token = state.push("thought", "span", 0);
+    token.attrs = [["class", "pet-bubble__thought-inline chat-thought"]];
+    token.content = src.slice(start, end + 1);
+  }
+
+  state.pos = end + 1;
+  return true;
+});
+
+md.renderer.rules.thought = (tokens, idx) => {
+  const token = tokens[idx];
+  const escaped = escapeHtml(token.content);
+  return `<span class="pet-bubble__thought-inline chat-thought">${escaped}</span>`;
+};
+
 // ── Link Security: Custom link_open renderer ────────────────
 
 /**
@@ -154,7 +274,7 @@ const MARKDOWN_PARSE_LIMIT = 40_000;
 /** Message total character limit (truncated when exceeded) */
 const MESSAGE_CHAR_LIMIT = 140_000;
 /** Render version number (incremented when Shiki/KaTeX/renderer rules change to invalidate cache) */
-const RENDER_VERSION = 1;
+const RENDER_VERSION = 2;
 /** LRU cache capacity */
 const CACHE_LIMIT = 200;
 

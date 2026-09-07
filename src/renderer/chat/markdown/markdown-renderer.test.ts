@@ -289,3 +289,29 @@ describe("renderMarkdown - KaTeX Math Formulas", () => {
     expect(result.content).toContain("After text");
   });
 });
+
+describe("renderMarkdown - Companion Thoughts & Actions", () => {
+  test("renders companion inner thoughts in slashes as styled span", () => {
+    const result = renderMarkdown("/so warm and comforting.../");
+    expect(result.mode).toBe("html");
+    expect(result.content).toContain('class="pet-bubble__thought-inline chat-thought"');
+    expect(result.content).toContain("/so warm and comforting.../");
+  });
+
+  test("renders mixed action, thought, and dialogue matching Live2D style", () => {
+    const text = '*gently tilts head* /so sweet.../ "Thank you, Master ♪"';
+    const result = renderMarkdown(text);
+    expect(result.mode).toBe("html");
+    expect(result.content).toContain("<em>gently tilts head</em>");
+    expect(result.content).toContain('class="pet-bubble__thought-inline chat-thought"');
+    expect(result.content).toContain("/so sweet.../");
+    expect(result.content).toContain("Thank you, Master ♪");
+  });
+
+  test("does not treat URLs with slashes as thoughts", () => {
+    const result = renderMarkdown("Check https://example.com/test/path for details");
+    expect(result.mode).toBe("html");
+    expect(result.content).not.toContain("chat-thought");
+  });
+});
+

@@ -1,5 +1,5 @@
 import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, screen, shell, dialog, protocol, net, powerMonitor, globalShortcut } from "electron";
-import { spawn } from "node:child_process";
+import { spawn, execSync } from "node:child_process";
 import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
@@ -141,6 +141,7 @@ import { backupMemoryRagFiles, reconcileMemoryRag } from "./memory/memory-rag-re
 import type { L0Profile, L1Profile } from "./memory/memory-types";
 import { broadcastChatsChanged, registerChatsIpc } from "./chats/chats-ipc";
 import * as chatsStore from "./chats/chats-store";
+import { stripLeakedChatTimeContext } from "./chat-time-context";
 import { recordUsage, getUsage, flush as flushTokenUsage } from "./token-usage-store";
 import { uploadFile as ttsUploadFile, cloneVoice as ttsCloneVoice, synthesize as ttsSynthesize } from "./tts/minimax-engine";
 import { synthesize as gptsovitsSynthesize } from "./tts/gptsovits-engine";
@@ -192,6 +193,7 @@ import { getSchedulerStore } from "./scheduler/scheduler-store";
 import { SchedulerEngine } from "./scheduler/scheduler-engine";
 import { createSchedulerRunner } from "./scheduler/scheduler-runner";
 import { registerSchedulerIpc } from "./scheduler/scheduler-ipc";
+import { registerSchedulerTools } from "./orchestrator/scheduler-tools";
 import type { ScheduledTask } from "./scheduler/types";
 import {
   createProactiveChatService,
@@ -274,6 +276,15 @@ function logFatalProcessError(type: string, error: unknown): void {
 
 process.on("uncaughtException", (error) => {
   logFatalProcessError("uncaughtException", error);
+  // Ignore harmless stream/pipe closure errors (e.g. write EPIPE or ERR_STREAM_DESTROYED when child processes exit)
+  const isPipeError =
+    (error as { code?: string })?.code === "EPIPE" ||
+    (error as { code?: string })?.code === "ERR_STREAM_DESTROYED" ||
+    (error instanceof Error && (error.message?.includes("EPIPE") || error.message?.includes("ERR_STREAM_DESTROYED")));
+  if (isPipeError) {
+    console.warn("[Process] Ignored non-fatal stream/pipe error:", error instanceof Error ? error.message : String(error));
+    return;
+  }
   if (app.isPackaged) {
     try {
       dialog.showErrorBox(
@@ -826,6 +837,12 @@ function getDefaultCyreneRefAudioPath(): string {
 let gptsovitsChildProcess: import("child_process").ChildProcess | null = null;
 let gptsovitsAutoSpawnAttempted = false;
 
+// --- Fix 2: Server health check TTL cache ---
+// Avoids 1.5 s probe on every single TTS request.
+let _gptsovitsCachedOnline = false;
+let _gptsovitsLastCheckedAt = 0;
+const _GPTSOVITS_SERVER_CACHE_TTL_MS = 8000;
+
 export async function isGptsovitsServerOnline(baseUrl = "http://127.0.0.1:9880"): Promise<boolean> {
   try {
     const ctrl = new AbortController();
@@ -836,6 +853,20 @@ export async function isGptsovitsServerOnline(baseUrl = "http://127.0.0.1:9880")
   } catch {
     return false;
   }
+}
+
+/** Cached variant: re-probes at most once every 8 seconds to avoid per-request latency. */
+async function isGptsovitsServerOnlineCached(baseUrl: string): Promise<boolean> {
+  const now = Date.now();
+  if (_gptsovitsCachedOnline && (now - _gptsovitsLastCheckedAt) < _GPTSOVITS_SERVER_CACHE_TTL_MS) {
+    return true;
+  }
+  const result = await isGptsovitsServerOnline(baseUrl);
+  _gptsovitsCachedOnline = result;
+  _gptsovitsLastCheckedAt = now;
+  // If server went offline, reset cache immediately so next call re-probes
+  if (!result) _gptsovitsCachedOnline = false;
+  return result;
 }
 
 export async function waitForGptsovitsServerOnline(baseUrl = "http://127.0.0.1:9880", maxWaitMs = 30000): Promise<boolean> {
@@ -889,7 +920,9 @@ export async function ensureGptsovitsServerRunning(): Promise<void> {
 
   const candidatePythons = [
     "C:\\Users\\TSC\\AppData\\Local\\Programs\\Python\\Python311\\python.exe",
+    "C:\\Users\\TSC\\AppData\\Local\\Programs\\Python\\Python311\\pythonw.exe",
     process.platform === "win32" ? "python" : "python3",
+    process.platform === "win32" ? "pythonw" : "python3",
   ];
   let pythonExe = candidatePythons[0];
   for (const p of candidatePythons) {
@@ -916,6 +949,7 @@ export async function ensureGptsovitsServerRunning(): Promise<void> {
     const child = spawn(pythonExe, [scriptPath, "--port", "9880"], {
       cwd: serverCwd,
       detached: false,
+      windowsHide: true,
       stdio: outFd !== "ignore" ? ["ignore", outFd, outFd] : "ignore",
       env: {
         ...process.env,
@@ -942,10 +976,134 @@ export function stopGptsovitsServer(): void {
   if (gptsovitsChildProcess && !gptsovitsChildProcess.killed) {
     try {
       console.info("[GPT-SoVITS] Stopping auto-spawned voice server...");
-      gptsovitsChildProcess.kill();
+      if (process.platform === "win32" && gptsovitsChildProcess.pid) {
+        try {
+          execSync(`taskkill /pid ${gptsovitsChildProcess.pid} /T /F`);
+        } catch {
+          gptsovitsChildProcess.kill();
+        }
+      } else {
+        gptsovitsChildProcess.kill();
+      }
     } catch {}
     gptsovitsChildProcess = null;
   }
+}
+
+export async function warmUpLocalModelEndpoint(): Promise<void> {
+  try {
+    const settings = loadModelSettings();
+    if (settings.baseUrl && settings.baseUrl.includes(":11434")) {
+      const ollamaBase = settings.baseUrl.replace(/\/v1\/?$/, "");
+      await fetch(`${ollamaBase}/api/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: settings.model || "stheno:latest",
+          messages: [],
+          keep_alive: "24h",
+        }),
+      }).catch(() => {});
+      console.info("[Ollama] Warmed up and pinned model in VRAM (keep_alive: 24h):", settings.model);
+    }
+  } catch (err) {
+    console.warn("[Ollama] Startup warm-up notice:", err);
+  }
+}
+
+// --- Fix 3: Translation LRU Cache ---
+// Avoids redundant API round-trips for repeated phrases (gestures, greetings, autonomous thoughts).
+const _translationCache = new Map<string, { zh: string; at: number }>();
+const _TRANSLATION_CACHE_MAX = 200;
+const _TRANSLATION_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
+
+function _translationCacheGet(en: string): string | null {
+  const entry = _translationCache.get(en);
+  if (!entry) return null;
+  if (Date.now() - entry.at > _TRANSLATION_CACHE_TTL_MS) {
+    _translationCache.delete(en);
+    return null;
+  }
+  return entry.zh;
+}
+
+function _translationCacheSet(en: string, zh: string): void {
+  // Evict oldest entry when over capacity
+  if (_translationCache.size >= _TRANSLATION_CACHE_MAX) {
+    const oldestKey = _translationCache.keys().next().value;
+    if (oldestKey !== undefined) _translationCache.delete(oldestKey);
+  }
+  _translationCache.set(en, { zh, at: Date.now() });
+}
+
+// --- Fix 4: Parallel Translation Race ---
+// All three translation sources run concurrently; first valid Chinese result wins.
+async function translateToMandarinCached(text: string): Promise<string> {
+  // Check cache first
+  const cached = _translationCacheGet(text);
+  if (cached) {
+    console.info("[TTS] Translation cache hit:", cached.slice(0, 40));
+    return cached;
+  }
+
+  const isChinese = (s: string) => /[\u3400-\u9fff]/u.test(s);
+  const result = await new Promise<string>((resolve) => {
+    let resolved = false;
+    const settle = (zh: string) => {
+      if (!resolved && isChinese(zh)) {
+        resolved = true;
+        resolve(zh);
+      }
+    };
+
+    // Source 1: Google Translate GTX (fast, no auth required)
+    const gtxCtrl = new AbortController();
+    const gtxUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=zh-CN&dt=t&q=${encodeURIComponent(text)}`;
+    fetch(gtxUrl, {
+      signal: gtxCtrl.signal,
+      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" },
+    })
+      .then(async (r) => {
+        if (!r.ok) return;
+        const json = await r.json() as any;
+        if (Array.isArray(json?.[0])) {
+          const t = json[0].map((item: any) => item?.[0] || "").join("").trim();
+          settle(t);
+        }
+      })
+      .catch(() => {});
+
+    // Source 2: MyMemory (free tier, slightly slower)
+    const mmCtrl = new AbortController();
+    const mmUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|zh-CN`;
+    fetch(mmUrl, { signal: mmCtrl.signal })
+      .then(async (r) => {
+        if (!r.ok) return;
+        const json = (await r.json()) as any;
+        const t = json?.responseData?.translatedText;
+        if (t) settle(t);
+      })
+      .catch(() => {});
+
+    // Source 3: Configured LLM endpoint (most natural, may be slowest)
+    translateEnglishToMandarinSpeech(text, loadModelSettings())
+      .then((t) => settle(t))
+      .catch(() => {});
+
+    // Fallback: if none resolve with Chinese within 6s, use original text
+    setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        resolve(text);
+      }
+    }, 6000);
+  });
+
+  // Cache the result if it contains Chinese
+  if (isChinese(result)) {
+    _translationCacheSet(text, result);
+  }
+  return result;
 }
 
 async function prepareGptsovitsVoicePayload(payload: {
@@ -984,47 +1142,31 @@ async function prepareGptsovitsVoicePayload(payload: {
     || (settings.ttsGptsovitsPromptText && settings.ttsGptsovitsPromptText.trim())
     || "开拓者，希琳一直都在这里陪着你哦。";
 
-  // Pre-flight check: wake up local server if offline
-  if (!(await isGptsovitsServerOnline(baseUrl))) {
+  // --- Fix 2: Use TTL-cached server health check ---
+  if (!(await isGptsovitsServerOnlineCached(baseUrl))) {
     void ensureGptsovitsServerRunning();
-    await waitForGptsovitsServerOnline(baseUrl, 25000);
+    const isOnline = await waitForGptsovitsServerOnline(baseUrl, 35000);
+    if (isOnline) {
+      _gptsovitsCachedOnline = true;
+      _gptsovitsLastCheckedAt = Date.now();
+    } else {
+      _gptsovitsCachedOnline = false;
+      _gptsovitsLastCheckedAt = 0;
+    }
   }
 
-  let text = await translateEnglishToMandarinSpeech(payload.text, loadModelSettings());
-  // If text still does not contain Chinese characters, translate via MyMemory or Google GTX bridge
-  if (!/[\u3400-\u9fff]/u.test(text)) {
-    try {
-      const myMemoryUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(payload.text)}&langpair=en|zh-CN`;
-      const res = await fetch(myMemoryUrl);
-      if (res.ok) {
-        const json = (await res.json()) as any;
-        const mmTrans = json?.responseData?.translatedText;
-        if (mmTrans && /[\u3400-\u9fff]/u.test(mmTrans)) {
-          text = mmTrans;
-        }
-      }
-    } catch {}
-  }
-  if (!/[\u3400-\u9fff]/u.test(text)) {
-    try {
-      const gtxUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=zh-CN&dt=t&q=${encodeURIComponent(payload.text)}`;
-      const res = await fetch(gtxUrl, {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        },
-      });
-      if (res.ok) {
-        const json = await res.json() as any;
-        if (Array.isArray(json?.[0])) {
-          const gtxTrans = json[0].map((item: any) => item?.[0] || "").join("").trim();
-          if (gtxTrans && /[\u3400-\u9fff]/u.test(gtxTrans)) {
-            text = gtxTrans;
-          }
-        }
-      }
-    } catch (gtxErr) {
-      console.warn("[TTS] GTX translation fallback failed:", gtxErr);
-    }
+  // --- Fix 3 & 4: Translation LRU cache + parallel race ---
+  // Clean leaked timestamps, actions (*...*), thoughts (/.../), markdown symbols and kaomojis
+  let text = stripLeakedChatTimeContext(payload.text || "");
+  text = text.replace(/\*[^*]*\*/g, " ").replace(/\/[^/]+\//g, " ");
+  text = text.replace(/[*_~#>]+/g, " ");
+  text = text.replace(/(?:[٩۶つﾉシ]\s*)?[\(（][^)）]*[♥♡★☆✿♪♫•ᴗ‿◠^▽><~✧ω≧≦Дд｡⁄`´˙˚*]+[^)）]*[\)）](?:\s*[و̑✧つﾉシ\u0648\u0311~☆★]+)*/gu, " ");
+  text = text.replace(/\s+/g, " ").trim();
+
+  if (!text) {
+    text = "开拓者，希琳在这里哦。";
+  } else if (!/[\u3400-\u9fff]/u.test(text)) {
+    text = await translateToMandarinCached(text);
   }
   const translatedToMandarin = /[\u3400-\u9fff]/u.test(text);
   return {
@@ -2555,22 +2697,14 @@ const feelingToExpression: Record<string, number> = {
 };
 
 function inferRuntimeState(
-  userInput: string,
-  llmReply: string,
+  _userInput: string,
+  _llmReply: string,
   toolCalled: boolean
 ): Pick<RuntimeState, "status"> {
   if (toolCalled) return { status: "Working" };
 
-  const text = userInput + llmReply;
-
-  if (STATUS_KEYWORDS["Listening"]?.test(text)) {
-    return { status: "Listening" };
-  }
-
-  if (STATUS_KEYWORDS["Thinking"]?.test(text)) {
-    return { status: "Thinking" };
-  }
-
+  // Once a turn is complete and reply has been delivered, Cyrene is accompanying the Master.
+  // Thinking status is strictly an ephemeral state during active agent processing/reasoning.
   return { status: "Accompanying" };
 }
 
@@ -3529,6 +3663,12 @@ function createWindow(): void {
   attachExternalLinkHandler(mainWindow);
   live2dWindowLifecycle.attach(mainWindow);
 
+  mainWindow.webContents.on("console-message", (_event, level, message) => {
+    if (message.includes("[CompanionVoice]") || message.includes("[Cyrene]") || message.includes("[TTS]") || level >= 2) {
+      console.info(`[Renderer Live2D] ${message}`);
+    }
+  });
+
   if (isDev) {
     mainWindow.loadURL("http://localhost:5173");
   } else {
@@ -3639,7 +3779,7 @@ function createWindow(): void {
   //  ASR （， GeneralSettings）
   setAsrConfig(() => {
     const s = loadGeneralSettings();
-    if (s.asrEngine !== "aliyun") return null;
+    if (s.asrEngine === "off") return null;
     return { appKey: s.asrAliyunAppKey, accessKeyId: s.asrAliyunAccessKeyId, accessKeySecret: s.asrAliyunAccessKeySecret, language: s.asrLanguage, engine: s.asrEngine };
   });
 
@@ -3734,6 +3874,7 @@ function createWindow(): void {
         return null;
       }
     },
+    (type, text, meta, channel) => pushActivityLog(type, text, meta, channel ?? "Voice Call"),
   );
 
   //  LLM （delegate_task ，）
@@ -3816,15 +3957,34 @@ function createChatWindow(sessionId?: string): void {
     }
   }, 1500);
 
+  chatWindow.on("show", () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send(IPC.CHAT_VISIBILITY_CHANGED, true);
+    }
+  });
+
+  chatWindow.on("hide", () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send(IPC.CHAT_VISIBILITY_CHANGED, false);
+    }
+  });
+
   chatWindow.on("closed", () => {
     chatWindow = null;
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send(IPC.CHAT_VISIBILITY_CHANGED, false);
+    }
   });
 }
 
 function createSidebarWindow(): void {
   if (sidebarWindow && !sidebarWindow.isDestroyed()) {
+    if (sidebarWindow.isMinimized()) {
+      sidebarWindow.restore();
+    }
     sidebarWindow.show();
     sidebarWindow.focus();
+    sidebarWindow.moveTop();
     return;
   }
 
@@ -3865,7 +4025,18 @@ function createSidebarWindow(): void {
 
   sidebarWindow.once("ready-to-show", () => {
     sidebarWindow?.show();
+    sidebarWindow?.focus();
+    sidebarWindow?.moveTop();
   });
+
+  // Fallback: Ensure sidebar window shows even if ready-to-show is delayed
+  setTimeout(() => {
+    if (sidebarWindow && !sidebarWindow.isDestroyed() && !sidebarWindow.isVisible()) {
+      sidebarWindow.show();
+      sidebarWindow.focus();
+      sidebarWindow.moveTop();
+    }
+  }, 1500);
 
   sidebarWindow.on("closed", () => {
     sidebarWindow = null;
@@ -3874,8 +4045,12 @@ function createSidebarWindow(): void {
 
 function createTasksWindow(): void {
   if (tasksWindow && !tasksWindow.isDestroyed()) {
+    if (tasksWindow.isMinimized()) {
+      tasksWindow.restore();
+    }
     tasksWindow.show();
     tasksWindow.focus();
+    tasksWindow.moveTop();
     return;
   }
 
@@ -3916,7 +4091,18 @@ function createTasksWindow(): void {
 
   tasksWindow.once("ready-to-show", () => {
     tasksWindow?.show();
+    tasksWindow?.focus();
+    tasksWindow?.moveTop();
   });
+
+  // Fallback: Ensure tasks window shows even if ready-to-show is delayed
+  setTimeout(() => {
+    if (tasksWindow && !tasksWindow.isDestroyed() && !tasksWindow.isVisible()) {
+      tasksWindow.show();
+      tasksWindow.focus();
+      tasksWindow.moveTop();
+    }
+  }, 1500);
 
   tasksWindow.on("closed", () => {
     tasksWindow = null;
@@ -4038,40 +4224,75 @@ function createLogWindow(): void {
 }
 
 function toggleChatWindow(): void {
-  if (chatWindow && !chatWindow.isDestroyed() && (chatWindow.isVisible() || chatWindow.isMinimized())) {
-    chatWindow.hide();
+  if (chatWindow && !chatWindow.isDestroyed()) {
+    if (chatWindow.isVisible() && !chatWindow.isMinimized() && chatWindow.isFocused()) {
+      chatWindow.hide();
+    } else {
+      if (chatWindow.isMinimized()) chatWindow.restore();
+      chatWindow.show();
+      chatWindow.focus();
+      chatWindow.moveTop();
+    }
   } else {
     createChatWindow();
   }
 }
 
 function toggleSidebarWindow(): void {
-  if (sidebarWindow && !sidebarWindow.isDestroyed() && (sidebarWindow.isVisible() || sidebarWindow.isMinimized())) {
-    sidebarWindow.hide();
+  if (sidebarWindow && !sidebarWindow.isDestroyed()) {
+    if (sidebarWindow.isVisible() && !sidebarWindow.isMinimized() && sidebarWindow.isFocused()) {
+      sidebarWindow.hide();
+    } else {
+      if (sidebarWindow.isMinimized()) sidebarWindow.restore();
+      sidebarWindow.show();
+      sidebarWindow.focus();
+      sidebarWindow.moveTop();
+    }
   } else {
     createSidebarWindow();
   }
 }
 
 function toggleTasksWindow(): void {
-  if (tasksWindow && !tasksWindow.isDestroyed() && (tasksWindow.isVisible() || tasksWindow.isMinimized())) {
-    tasksWindow.hide();
+  if (tasksWindow && !tasksWindow.isDestroyed()) {
+    if (tasksWindow.isVisible() && !tasksWindow.isMinimized() && tasksWindow.isFocused()) {
+      tasksWindow.hide();
+    } else {
+      if (tasksWindow.isMinimized()) tasksWindow.restore();
+      tasksWindow.show();
+      tasksWindow.focus();
+      tasksWindow.moveTop();
+    }
   } else {
     createTasksWindow();
   }
 }
 
 function toggleSettingsWindow(): void {
-  if (settingsWindow && !settingsWindow.isDestroyed() && (settingsWindow.isVisible() || settingsWindow.isMinimized())) {
-    settingsWindow.hide();
+  if (settingsWindow && !settingsWindow.isDestroyed()) {
+    if (settingsWindow.isVisible() && !settingsWindow.isMinimized() && settingsWindow.isFocused()) {
+      settingsWindow.hide();
+    } else {
+      if (settingsWindow.isMinimized()) settingsWindow.restore();
+      settingsWindow.show();
+      settingsWindow.focus();
+      settingsWindow.moveTop();
+    }
   } else {
     createSettingsWindow();
   }
 }
 
 function toggleLogWindow(): void {
-  if (logWindow && !logWindow.isDestroyed() && (logWindow.isVisible() || logWindow.isMinimized())) {
-    logWindow.hide();
+  if (logWindow && !logWindow.isDestroyed()) {
+    if (logWindow.isVisible() && !logWindow.isMinimized() && logWindow.isFocused()) {
+      logWindow.hide();
+    } else {
+      if (logWindow.isMinimized()) logWindow.restore();
+      logWindow.show();
+      logWindow.focus();
+      logWindow.moveTop();
+    }
   } else {
     createLogWindow();
   }
@@ -4151,8 +4372,12 @@ async function createStickerManagerWindow(): Promise<{ ok: boolean; error?: stri
 /** （450×800 ，）。 */
 function createCallWindow(): void {
   if (callWindow && !callWindow.isDestroyed()) {
+    if (callWindow.isMinimized()) {
+      callWindow.restore();
+    }
     callWindow.show();
     callWindow.focus();
+    callWindow.moveTop();
     return;
   }
 
@@ -4183,7 +4408,21 @@ function createCallWindow(): void {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
+      autoplayPolicy: "no-user-gesture-required",
     },
+  });
+
+  // Explicitly grant media (microphone) permission for Voice Call window
+  callWindow.webContents.session.setPermissionRequestHandler((_wc, permission, callback) => {
+    if (permission === "media") {
+      callback(true);
+      return;
+    }
+    callback(true);
+  });
+  callWindow.webContents.session.setPermissionCheckHandler((_wc, permission) => {
+    if (permission === "media") return true;
+    return true;
   });
 
   attachExternalLinkHandler(callWindow);
@@ -4196,7 +4435,18 @@ function createCallWindow(): void {
 
   callWindow.once("ready-to-show", () => {
     callWindow?.show();
+    callWindow?.focus();
+    callWindow?.moveTop();
   });
+
+  // Fallback: Ensure call window shows even if ready-to-show is delayed
+  setTimeout(() => {
+    if (callWindow && !callWindow.isDestroyed() && !callWindow.isVisible()) {
+      callWindow.show();
+      callWindow.focus();
+      callWindow.moveTop();
+    }
+  }, 1500);
 
   callWindow.on("closed", () => {
     callWindow = null;
@@ -4592,7 +4842,8 @@ ipcMain.handle(IPC.WEATHER_GET_CURRENT, async (_event, requestedCity?: string) =
   try {
     const lat = 21.0285;
     const lon = 105.8542;
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code&timezone=auto`;
+    // Include hourly forecast for today (forecast_days=1 → 24 hourly slots)
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code&daily=temperature_2m_max,temperature_2m_min,weather_code&hourly=temperature_2m,weather_code&forecast_days=1&timezone=auto`;
     const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
     if (res.ok) {
       const data = (await res.json()) as {
@@ -4602,17 +4853,46 @@ ipcMain.handle(IPC.WEATHER_GET_CURRENT, async (_event, requestedCity?: string) =
           apparent_temperature: number;
           weather_code: number;
         };
+        daily?: {
+          temperature_2m_max?: number[];
+          temperature_2m_min?: number[];
+          weather_code?: number[];
+        };
+        hourly?: {
+          time?: string[];
+          temperature_2m?: number[];
+          weather_code?: number[];
+        };
       };
       if (data?.current) {
         const c = data.current;
+        const maxTemp = Array.isArray(data.daily?.temperature_2m_max) && data.daily.temperature_2m_max.length > 0
+          ? Math.round(data.daily.temperature_2m_max[0])
+          : undefined;
+        const minTemp = Array.isArray(data.daily?.temperature_2m_min) && data.daily.temperature_2m_min.length > 0
+          ? Math.round(data.daily.temperature_2m_min[0])
+          : undefined;
+
+        // Parse hourly slots for today (24 entries)
+        const hourlyTemps = data.hourly?.temperature_2m ?? [];
+        const hourlyCodes = data.hourly?.weather_code ?? [];
+        const hourly = Array.from({ length: Math.min(24, hourlyTemps.length) }, (_, i) => ({
+          hour: i,
+          temp: Math.round(hourlyTemps[i] ?? 0),
+          code: hourlyCodes[i] ?? 0,
+        }));
+
         const result = {
           city: "Hanoi",
           temperature: Math.round(c.temperature_2m),
           apparentTemperature: Math.round(c.apparent_temperature),
           humidity: Math.round(c.relative_humidity_2m),
+          tempMin: minTemp,
+          tempMax: maxTemp,
           weatherCode: c.weather_code,
           weatherText: resolveWeatherText(c.weather_code),
           weatherIcon: resolveWeatherIcon(c.weather_code),
+          hourly,
         };
         hanoiWeatherCache = { timestamp: now, data: result };
         return result;
@@ -4627,13 +4907,17 @@ ipcMain.handle(IPC.WEATHER_GET_CURRENT, async (_event, requestedCity?: string) =
     temperature: 28,
     apparentTemperature: 31,
     humidity: 75,
+    tempMin: 24,
+    tempMax: 32,
     weatherCode: 2,
     weatherText: "Partly Cloudy",
     weatherIcon: "⛅",
+    hourly: [] as Array<{ hour: number; temp: number; code: number }>,
   };
 });
 
 ipcMain.handle(IPC.LIVE2D_GET_MAIN_DIAGNOSTICS, () => ({
+
   window: live2dWindowLifecycle.getDiagnostics(),
 }));
 
@@ -4679,6 +4963,10 @@ ipcMain.on(IPC.CHAT_TOGGLE_MAXIMIZE, () => {
 
 ipcMain.handle(IPC.CHAT_IS_MAXIMIZED, () => {
   return chatWindow?.isMaximized() ?? false;
+});
+
+ipcMain.handle(IPC.CHAT_IS_VISIBLE, () => {
+  return Boolean(chatWindow && !chatWindow.isDestroyed() && chatWindow.isVisible());
 });
 
 // ：{ providerKey, providerId, model, preference }
@@ -6469,6 +6757,9 @@ app.whenReady().then(async () => {
       };
     },
     getChatWebContents: () => (chatWindow && !chatWindow.isDestroyed() ? chatWindow.webContents : null),
+    notifyLive2D: (text: string) => {
+      sendToLive2DWindow(IPC.PET_AGENT_EVENT, { type: "say", text, isReminder: true });
+    },
     recordHistory: (entry) => schedulerStore.recordHistory(entry),
     id: () => `hist-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     now: () => new Date(),
@@ -6478,6 +6769,8 @@ app.whenReady().then(async () => {
     runTask: schedulerRunner.runScheduledTask,
   });
   registerSchedulerIpc(schedulerStore, schedulerEngine, () => toolRegistry.getAllTools());
+  registerSchedulerTools();
+  schedulerEngine.start();
 
   // AG-UI ： invoke(AGUI_RUN) → CyreneAgent  FC  → 
   // buildOptions ；onRunFinished 
@@ -6704,6 +6997,7 @@ app.whenReady().then(async () => {
   const generalSettings = loadGeneralSettings();
   createWindow();
   void ensureGptsovitsServerRunning();
+  void warmUpLocalModelEndpoint();
 
   // Create Live2D pet on startup; auxiliary windows (chat, sidebar, tasks, settings)
   // remain lazy and are summoned on demand via shortcuts, mini-chat or the tray.

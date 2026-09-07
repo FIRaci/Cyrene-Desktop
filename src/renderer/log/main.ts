@@ -175,6 +175,15 @@ function updateCounts(): void {
   if (countEls.error) countEls.error.textContent = String(counts.error);
 }
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 function createLogCard(entry: LogEntry): HTMLElement {
   const card = document.createElement("div");
   card.className = "log-item";
@@ -203,7 +212,25 @@ function createLogCard(entry: LogEntry): HTMLElement {
 
   const content = document.createElement("div");
   content.className = "log-item__content";
-  content.textContent = entry.text;
+
+  const transMarker = "\n(English Translation): ";
+  if (entry.text && entry.text.includes(transMarker)) {
+    const parts = entry.text.split(transMarker);
+    const spokenText = parts[0].trim();
+    const transText = parts.slice(1).join(transMarker).trim();
+
+    const spokenEl = document.createElement("div");
+    spokenEl.className = "log-item__spoken";
+    spokenEl.textContent = spokenText;
+    content.appendChild(spokenEl);
+
+    const transEl = document.createElement("div");
+    transEl.className = "log-item__translation";
+    transEl.innerHTML = `<span class="log-item__translation-tag">EN</span><span class="log-item__translation-text">${escapeHtml(transText)}</span>`;
+    content.appendChild(transEl);
+  } else {
+    content.textContent = entry.text;
+  }
 
   card.appendChild(header);
   card.appendChild(content);

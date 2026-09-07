@@ -115,6 +115,11 @@ export class ElectronScreenshotHelperClient implements ScreenshotHelperClient {
         "--parent-pid", String(this.options.parentProcessId ?? process.pid),
       ]);
       this.child = child;
+      (child.stdin as unknown as { on?: (event: string, cb: (err: unknown) => void) => void })?.on?.("error", (err: unknown) => {
+        const code = (err as { code?: string })?.code;
+        if (code === "EPIPE" || code === "ERR_STREAM_DESTROYED") return;
+        this.options.logger?.debug?.("[ScreenshotHelper stdin error]", String(err));
+      });
       child.stdout.on("data", (chunk) => this.handleStdout(chunk.toString()));
       child.stderr?.on("data", (chunk) => this.options.logger?.debug("[ScreenshotHelper stderr]", chunk.toString()));
       child.on("error", (error) => this.handleExit(error instanceof Error ? error : new Error("HELPER_PROCESS_ERROR")));
@@ -167,7 +172,12 @@ export class ElectronScreenshotHelperClient implements ScreenshotHelperClient {
   }
 
   private writeCommand(command: Record<string, unknown>): void {
-    this.child?.stdin.write(`${JSON.stringify(command)}\n`);
+    try {
+      const stdin = this.child?.stdin as unknown as { destroyed?: boolean; writable?: boolean; write?: (data: string, cb?: (err?: unknown) => void) => void };
+      if (stdin && !stdin.destroyed && stdin.writable !== false) {
+        stdin.write?.(`${JSON.stringify(command)}\n`, () => {});
+      }
+    } catch {}
   }
 
   private handleStdout(chunk: string): void {

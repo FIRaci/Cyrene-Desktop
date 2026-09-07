@@ -16,7 +16,7 @@ export interface ConversationTimeContext {
 
 const ONE_HOUR_MS = 60 * 60 * 1000;
 const ONE_MINUTE_MS = 60 * 1000;
-const LEADING_TIME_METADATA_RE = /^(?:\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}, [A-Za-z_]+(?:\/[A-Za-z_+-]+)+\]\s*)+/;
+const LEADING_TIME_METADATA_RE = /^\s*(?:\[\d{4}[-/.]\d{2}[-/.]\d{2}[ T]\d{2}:\d{2}(?::\d{2})?(?:,\s*[^\]]+)?\]\s*)+/;
 
 function stripThinkBlocks(text: string): string {
   return text
@@ -63,6 +63,12 @@ export function normalizeChatMessagesWithTime(input: unknown): ChatContextMessag
       if (!item || typeof item !== "object") return null;
       const record = item as { role?: unknown; content?: unknown; at?: unknown };
       if (typeof record.content !== "string" || !record.content.trim()) return null;
+
+      const rawContent = record.content.trim();
+      if (rawContent.startsWith("*💭") || rawContent.startsWith("💭")) return null;
+      if (rawContent.startsWith("Cyrene could not complete that request")) return null;
+      if (rawContent.startsWith("The model service is temporarily unavailable")) return null;
+      if (rawContent.startsWith("Scheduled task execution failed")) return null;
 
       const role = record.role === "user" || record.role === "system" ? record.role : "assistant";
       const message: ChatContextMessage = {
@@ -154,7 +160,7 @@ function buildGapNotice(messages: ChatContextMessage[], timezone: string): strin
 }
 
 export function stripLeakedChatTimeContext(text: string): string {
-  return text.replace(LEADING_TIME_METADATA_RE, "").trimStart();
+  return text.trimStart().replace(LEADING_TIME_METADATA_RE, "").trimStart();
 }
 
 export function buildConversationTimeContext(messages: ChatContextMessage[], timezone: string): ConversationTimeContext {

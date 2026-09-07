@@ -436,6 +436,44 @@ body {
   white-space: pre-wrap;
 }
 
+.log-item__spoken {
+  font-size: 13px;
+  font-weight: 500;
+  color: #fdf2f8;
+  line-height: 1.5;
+}
+
+.log-item__translation {
+  margin-top: 6px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: rgba(236, 72, 153, 0.08);
+  border: 1px solid rgba(255, 182, 220, 0.18);
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.log-item__translation-tag {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(236, 72, 153, 0.25);
+  color: #fbcfe8;
+  border: 1px solid rgba(255, 182, 220, 0.3);
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
+}
+
+.log-item__translation-text {
+  color: rgba(243, 232, 255, 0.9);
+  font-style: italic;
+}
+
 /* Footer */
 .log__footer {
   display: flex;
