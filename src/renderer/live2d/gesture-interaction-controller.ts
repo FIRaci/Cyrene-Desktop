@@ -1,6 +1,7 @@
 import type { CompanionBubbleController } from "./companion-bubbles";
 import type { FloatingKaomojiController } from "./floating-kaomoji";
 import type { CompanionVoiceService } from "./voice";
+import { analyzeConversationContext } from "./chat-context-analyzer";
 
 export interface GestureInteractionOptions {
   bubbles: CompanionBubbleController;
@@ -129,7 +130,7 @@ export class GestureInteractionController {
   private readonly onExpressionReset?: () => void;
   private readonly autonomousThoughts?: { pause: () => void; resume: () => void };
 
-  private static readonly COOLDOWN_MS = 7000;
+  private static readonly COOLDOWN_MS = 3000;
   private isGenerating = false;
   private lastInteractionTime = 0;
   private currentReply = "";
@@ -145,6 +146,10 @@ export class GestureInteractionController {
     this.autonomousThoughts = options.autonomousThoughts;
   }
 
+  get isGeneratingGesture(): boolean {
+    return this.isGenerating;
+  }
+
   isBusy(): boolean {
     const inCooldown = Date.now() - this.lastInteractionTime < GestureInteractionController.COOLDOWN_MS;
     return this.isGenerating || this.bubbles.isBusy || inCooldown;
@@ -152,25 +157,26 @@ export class GestureInteractionController {
 
   async handleHeadPat(x?: number, y?: number): Promise<void> {
     const prompt =
-      "[Master gently pats your head]\nYou are Cyrene, a sweet, affectionate, and ethereal Live2D companion waifu who deeply adores Master. Master just gently patted your head through the screen! React naturally in ENGLISH. Express your reaction with a brief cute action in asterisks like *gently leans into your hand* and/or an inner thought in slashes like /so warm and comforting.../, followed by your sweet spoken words to Master in English (1-2 sentences). Do not include any Chinese characters in your response, do not repeat this prompt, and do not output section titles.";
+      "[Master gently pats your head]\nYou are Cyrene, a sweet, affectionate, and ethereal Live2D companion waifu who deeply adores Master. Master just gently patted your head through the screen! React naturally in ENGLISH. Express your reaction with a brief cute action in asterisks like *gently leans into your hand* and/or an inner thought in slashes like /so warm.../, followed by your sweet spoken words to Master in English (1 short sentence, under 10 words, e.g. \"Ah, Master, your gentle touch feels wonderful!\"). Keep spoken dialogue very brief so voice can synthesize quickly. Do not include any Chinese characters in your response, do not repeat this prompt, and do not output section titles.";
     const thoughtText = "*leaning into your hand...*";
     const kaomoji = "(⁄ ⁄>⁄ ▽ ⁄<⁄ ⁄)";
     const fallback = "*gently leans into your hand* /so warm.../ Ah... Master's gentle pats make me feel so cherished!";
     const userDisplay = "*Gently pats Cyrene's head*";
-    await this.executeGestureRun(prompt, thoughtText, kaomoji, fallback, userDisplay, x, y);
+    await this.executeGestureRun("headPat", prompt, thoughtText, kaomoji, fallback, userDisplay, x, y);
   }
 
   async handlePetting(x?: number, y?: number): Promise<void> {
     const prompt =
-      "[Master gently caresses you]\nYou are Cyrene, a sweet, affectionate, and ethereal Live2D companion waifu who deeply adores Master. Master just gently touched you! React naturally in ENGLISH. Express your reaction with a brief cute action in asterisks like *softly blinks and smiles* and/or an inner thought in slashes like /so comforting.../, followed by your sweet spoken words to Master in English (1-2 sentences). Do not include any Chinese characters in your response, do not repeat this prompt, and do not output section titles.";
+      "[Master gently caresses you]\nYou are Cyrene, a sweet, affectionate, and ethereal Live2D companion waifu who deeply adores Master. Master just gently touched you! React naturally in ENGLISH. Express your reaction with a brief cute action in asterisks like *softly blinks and smiles* and/or an inner thought in slashes like /so comforting.../, followed by your sweet spoken words to Master in English (1 short sentence, under 10 words, e.g. \"Ehehe, Master is always so gentle with me!\"). Keep spoken dialogue very brief so voice can synthesize quickly. Do not include any Chinese characters in your response, do not repeat this prompt, and do not output section titles.";
     const thoughtText = "*smiling softly...*";
     const kaomoji = "(｡♥‿♥｡)";
     const fallback = "*softly blinks and smiles* /so comforting.../ Ehehe~ having Master close to me is my favorite feeling in the world!";
     const userDisplay = "*Gently caresses Cyrene*";
-    await this.executeGestureRun(prompt, thoughtText, kaomoji, fallback, userDisplay, x, y);
+    await this.executeGestureRun("petting", prompt, thoughtText, kaomoji, fallback, userDisplay, x, y);
   }
 
   private async executeGestureRun(
+    gestureKind: "headPat" | "petting",
     prompt: string,
     thoughtText: string,
     kaomojiText: string,
@@ -207,10 +213,36 @@ export class GestureInteractionController {
     const userTurnId = `user-gesture-${Date.now()}`;
     const assistantTurnId = `asst-gesture-${Date.now()}`;
 
+    // Read active session history to detect ongoing emotional climate (pouting, study, comfort, affectionate)
+    let rawHistory: Array<{ role: string; content: string }> = [];
+    if (store?.get) {
+      try {
+        const sessionData = await store.get(sessionId);
+        if (sessionData && Array.isArray(sessionData.messages)) {
+          rawHistory = sessionData.messages;
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    const context = analyzeConversationContext(rawHistory);
+    let effectiveFallback = fallbackText;
+    let effectivePrompt = prompt;
+
+    if (context.mood !== "default") {
+      effectiveFallback = gestureKind === "headPat"
+        ? context.gestureFallback.headPat
+        : context.gestureFallback.petting;
+      if (context.gestureEmotionPromptSnippet) {
+        effectivePrompt = prompt + "\n" + context.gestureEmotionPromptSnippet;
+      }
+      this.bubbles.think(context.gestureFallback.thought, 30000);
+      this.kaomoji?.spawn(context.gestureFallback.kaomoji, x, y);
+    }
+
     // Append clean immersive user action (e.g. "*Gently pats Cyrene's head*") into chatStore
     // BEFORE agui.run() so the chat window shows it immediately.
-    // agui-bridge also tries to save the user turn via latestUserText, but its hasUser check
-    // (m.id === input.userTurnId) will detect our pre-append and skip the verbose prompt version.
     await this.appendToStore(store, sessionId, {
       id: userTurnId,
       role: "user",
@@ -219,8 +251,8 @@ export class GestureInteractionController {
     });
 
     if (!agui) {
-      // No agui available: show fallback immediately and persist it manually (agui-bridge won't run)
-      this.finishFallback(store, sessionId, fallbackText);
+      // No agui available: show fallback immediately and persist it manually
+      this.finishFallback(store, sessionId, effectiveFallback);
       return;
     }
 
@@ -233,41 +265,36 @@ export class GestureInteractionController {
           this.bubbles.say(cleaned, 60000);
         }
       } else if (event.type === "RUN_FINISHED") {
-        // Guard: agui-bridge may fire RUN_FINISHED while complete() also triggers finishRun;
-        // ensure we only execute once per run to prevent duplicate chatStore writes.
         if (this.isGenerating) {
-          void this.finishRun(store, sessionId, assistantTurnId, fallbackText);
+          void this.finishRun(store, sessionId, assistantTurnId, effectiveFallback);
         }
       } else if (event.type === "RUN_ERROR") {
-        this.finishFallback(store, sessionId, fallbackText);
+        this.finishFallback(store, sessionId, effectiveFallback);
       }
     });
 
     try {
       let historyMessages: Array<{ role: string; content: string }> = [];
-      if (store?.get) {
-        const sessionData = await store.get(sessionId);
-        if (sessionData && Array.isArray(sessionData.messages)) {
-          historyMessages = sessionData.messages
-            .filter((m) => m && (m.role === "user" || m.role === "model") && typeof m.content === "string" && m.content.trim().length > 0)
-            .slice(-10)
-            .map((m) => {
-              let content = m.content.trim();
-              // Sanitize any legacy verbose prompt echoes that were previously saved into chatStore
-              if (m.role === "user" && content.includes("[Master gently")) {
-                content = content.includes("caresses")
-                  ? "*Gently caresses Cyrene*"
-                  : "*Gently pats Cyrene's head*";
-              }
-              return { role: m.role === "model" ? "model" : "user", content };
-            });
-        }
+      if (rawHistory.length > 0) {
+        historyMessages = rawHistory
+          .filter((m) => m && (m.role === "user" || m.role === "model") && typeof m.content === "string" && m.content.trim().length > 0)
+          .slice(-10)
+          .map((m) => {
+            let content = m.content.trim();
+            // Sanitize any legacy verbose prompt echoes that were previously saved into chatStore
+            if (m.role === "user" && content.includes("[Master gently")) {
+              content = content.includes("caresses")
+                ? "*Gently caresses Cyrene*"
+                : "*Gently pats Cyrene's head*";
+            }
+            return { role: m.role === "model" ? "model" : "user", content };
+          });
       }
-      if (historyMessages.length === 0 || historyMessages[historyMessages.length - 1].content !== prompt) {
-        historyMessages.push({ role: "user", content: prompt });
+      if (historyMessages.length === 0 || historyMessages[historyMessages.length - 1].content !== effectivePrompt) {
+        historyMessages.push({ role: "user", content: effectivePrompt });
       }
 
-      const ack = await agui.run({
+      const runPromise = agui.run({
         messages: historyMessages,
         sessionId,
         userTurnId,
@@ -275,11 +302,17 @@ export class GestureInteractionController {
         executionMode: "chat",
       });
 
-      if (!ack?.success) {
-        this.finishFallback(store, sessionId, fallbackText);
+      const timeoutPromise = new Promise<{ success: boolean; error?: string }>((resolve) => {
+        setTimeout(() => resolve({ success: false, error: "timeout" }), 7000);
+      });
+
+      const ack = await Promise.race([runPromise, timeoutPromise]);
+
+      if (!ack?.success && this.isGenerating && !this.currentReply.trim()) {
+        this.finishFallback(store, sessionId, effectiveFallback);
       }
     } catch {
-      this.finishFallback(store, sessionId, fallbackText);
+      this.finishFallback(store, sessionId, effectiveFallback);
     }
 
   }

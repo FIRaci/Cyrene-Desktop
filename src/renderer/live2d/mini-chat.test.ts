@@ -305,4 +305,28 @@ describe("MiniChatWidget", () => {
 
     widget.dispose();
   });
+
+  it("clears thought bubble when finishRun receives empty reply on error", async () => {
+    const bubbles = {
+      say: vi.fn(),
+      think: vi.fn(),
+      clearThought: vi.fn(),
+      hide: vi.fn(),
+      handle: vi.fn(),
+      dispose: vi.fn(),
+    } as unknown as CompanionBubbleController;
+
+    const widget = new MiniChatWidget({ bubbles });
+    expect(widget.isBusy).toBe(false);
+
+    (widget as any).setBusy(true);
+    expect(widget.isBusy).toBe(true);
+
+    // Call finishRun with empty reply (e.g. on RUN_ERROR)
+    await (widget as any).finishRun("test-session", "asst-err", undefined);
+    expect(bubbles.clearThought).toHaveBeenCalled();
+    expect(widget.isBusy).toBe(false);
+
+    widget.dispose();
+  });
 });

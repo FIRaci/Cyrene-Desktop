@@ -166,10 +166,22 @@ export class InteractionController {
     this.downHits = [];
     if (dist > this.clickThreshold) return;
 
+    const canvasH = this.canvas.clientHeight || (typeof window !== "undefined" ? window.innerHeight : 500) || 500;
+    const isInHeadZone = e.clientY <= canvasH * 0.55;
+
     if (hits.length > 0) {
       void this.fire(hits);
+      if (isInHeadZone && this.options.onHeadPat) {
+        this.options.onHeadPat(e.clientX, e.clientY);
+      } else {
+        this.options.onPetting?.(e.clientX, e.clientY);
+      }
     } else {
-      void this.playPettingAction(e.clientX, e.clientY);
+      if (isInHeadZone && this.options.onHeadPat) {
+        void this.triggerHeadPat(e.clientX, e.clientY);
+      } else {
+        void this.playPettingAction(e.clientX, e.clientY);
+      }
     }
   };
 
@@ -224,7 +236,11 @@ export class InteractionController {
   }
 
   private async triggerHeadPat(x?: number, y?: number): Promise<void> {
-    this.options.onHeadPat?.(x, y);
+    if (this.options.onHeadPat) {
+      this.options.onHeadPat(x, y);
+    } else {
+      this.options.onPetting?.(x, y);
+    }
     await this.playMotionOrExpression();
   }
 

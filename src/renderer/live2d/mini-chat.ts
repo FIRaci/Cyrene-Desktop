@@ -136,6 +136,10 @@ export class MiniChatWidget {
     return this.isVisible;
   }
 
+  get isBusy(): boolean {
+    return this.isGenerating;
+  }
+
   toggle(): void {
     if (this.isVisible) {
       this.hide();
@@ -289,7 +293,7 @@ export class MiniChatWidget {
     await this.appendToStore(sessionId, userMessage);
 
     // Live2D reactions
-    this.bubbles.think("Thinking...", 60000);
+    this.bubbles.think("Thinking...", 12000);
     this.kaomoji?.spawn("✨", undefined, undefined);
 
     this.currentReply = "";
@@ -336,11 +340,13 @@ export class MiniChatWidget {
         });
 
         if (!ack.success) {
+          this.bubbles.clearThought();
           this.bubbles.say(`I couldn't respond: ${ack.error || "Unknown error"}`, 4000);
           this.cleanupAgui();
           this.setBusy(false);
         }
       } catch (err) {
+        this.bubbles.clearThought();
         this.bubbles.say("Request failed. Please try again!", 3500);
         this.cleanupAgui();
         this.setBusy(false);
@@ -350,7 +356,7 @@ export class MiniChatWidget {
       if (typeof globalThis.setTimeout === "function") {
         globalThis.setTimeout(() => {
           const fallback = "Cyrene is right here with you! ✨";
-          this.bubbles.say(fallback, 4000);
+          this.bubbles.say(fallback, 4000, this.voice);
           void this.voice?.speak(fallback);
           this.setBusy(false);
         }, 800);
@@ -376,6 +382,8 @@ export class MiniChatWidget {
         content: finalReply,
         at: Date.now(),
       });
+    } else {
+      this.bubbles.clearThought();
     }
   }
 

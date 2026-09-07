@@ -387,5 +387,61 @@ describe("GestureInteractionController", () => {
 
     controller.dispose();
   });
+
+  it("adapts head-pat prompt and fallback to pouting tsundere reaction when recent chat is pouting", async () => {
+    let aguiCallback: ((event: any) => void) | null = null;
+    const run = vi.fn().mockResolvedValue({ success: true });
+    const onEvent = vi.fn().mockImplementation((cb: (event: any) => void) => {
+      aguiCallback = cb;
+      return () => {
+        aguiCallback = null;
+      };
+    });
+
+    const append = vi.fn().mockResolvedValue(true);
+    const getActiveSession = vi.fn().mockResolvedValue("active-session-pouting");
+    const get = vi.fn().mockResolvedValue({
+      id: "active-session-pouting",
+      messages: [
+        { role: "user", content: "Sao em lại dỗi anh thế?" },
+        { role: "model", content: "Hmph, ai bảo Master trêu em chứ!" },
+      ],
+    });
+
+    vi.stubGlobal("window", {
+      agui: { run, onEvent },
+      chatStore: { append, getActiveSession, get },
+    });
+
+    const controller = new GestureInteractionController({
+      bubbles,
+      kaomoji,
+      voice,
+    });
+
+    await controller.handleHeadPat(100, 100);
+
+    expect(run).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: "active-session-pouting",
+        messages: expect.arrayContaining([
+          expect.objectContaining({
+            role: "user",
+            content: expect.stringContaining("CRITICAL EMOTION AWARENESS"),
+          }),
+        ]),
+      }),
+    );
+
+    // If timeout or fallback occurs, tsundere fallback is used
+    aguiCallback!({ type: "RUN_ERROR" });
+    expect(bubbles.say).toHaveBeenCalledWith(
+      expect.stringContaining("H-Hmph... Master is unfair"),
+      expect.any(Number),
+      expect.anything(),
+    );
+
+    controller.dispose();
+  });
 });
 

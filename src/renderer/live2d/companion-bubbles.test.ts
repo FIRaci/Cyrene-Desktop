@@ -81,6 +81,68 @@ describe("pet companion bubble lifecycle", () => {
     controller.dispose();
   });
 
+  it("allows say() to override an active thinking state and immediately dismiss thought", () => {
+    const speechEl = { textContent: "", hidden: true } as HTMLElement;
+    const thoughtEl = { textContent: "", hidden: true } as HTMLElement;
+    const controller = new CompanionBubbleController(speechEl, thoughtEl);
+
+    // Agent starts running -> enters thinking state
+    controller.handle({ type: "RUN_STARTED" });
+    expect(thoughtEl.textContent).toBe("Thinking…");
+    expect(thoughtEl.hidden).toBe(false);
+    expect(speechEl.hidden).toBe(true);
+
+    // When agent reply is delivered, say() must NOT be blocked by isBusy thought
+    controller.say("Hello Master! Cyrene is back~", 4000);
+    expect(thoughtEl.hidden).toBe(true);
+    expect(speechEl.hidden).toBe(false);
+    expect(speechEl.textContent).toBe("Hello Master! Cyrene is back~");
+    controller.dispose();
+  });
+
+  it("immediately clears thinking bubble when clearThought() is called", () => {
+    const speechEl = { textContent: "", hidden: true } as HTMLElement;
+    const thoughtEl = { textContent: "", hidden: true } as HTMLElement;
+    const controller = new CompanionBubbleController(speechEl, thoughtEl);
+
+    controller.think("Thinking...", 5000);
+    expect(thoughtEl.hidden).toBe(false);
+
+    controller.clearThought();
+    expect(thoughtEl.hidden).toBe(true);
+    expect(thoughtEl.textContent).toBe("");
+    controller.dispose();
+  });
+
+  it("hides immediately on RUN_FINISHED when no speech is present", () => {
+    const speechEl = { textContent: "", hidden: true } as HTMLElement;
+    const thoughtEl = { textContent: "", hidden: true } as HTMLElement;
+    const controller = new CompanionBubbleController(speechEl, thoughtEl);
+
+    controller.handle({ type: "RUN_STARTED" });
+    expect(thoughtEl.hidden).toBe(false);
+
+    controller.handle({ type: "RUN_FINISHED" });
+    expect(thoughtEl.hidden).toBe(true);
+    expect(speechEl.hidden).toBe(true);
+    controller.dispose();
+  });
+
+  it("auto-dismisses non-terminal thought after 15s safety watchdog", () => {
+    vi.useFakeTimers();
+    const speechEl = { textContent: "", hidden: true } as HTMLElement;
+    const thoughtEl = { textContent: "", hidden: true } as HTMLElement;
+    const controller = new CompanionBubbleController(speechEl, thoughtEl);
+
+    controller.handle({ type: "RUN_STARTED" });
+    expect(thoughtEl.hidden).toBe(false);
+
+    vi.advanceTimersByTime(15000);
+    expect(thoughtEl.hidden).toBe(true);
+    controller.dispose();
+    vi.useRealTimers();
+  });
+
   it("formats asterisk actions cleanly with renderFormattedSpeech", () => {
     vi.stubGlobal("document", {
       createElement: (tag: string) => ({ tagName: tag, className: "", textContent: "" }),

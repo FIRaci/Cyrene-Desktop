@@ -126,18 +126,43 @@ export class CompanionBubbleController {
     return !this.state.terminal && (this.state.speechVisible || this.state.thoughtVisible);
   }
 
-  handle(event: PetAgentEvent): void {
+  handle(event: PetAgentEvent, voiceService?: { getIsSpeaking: () => boolean }): void {
     this.clearHideTimer();
     this.state = reducePetBubbleState(this.state, event);
     this.render();
     if (this.state.terminal) {
-      const delay = event.type === "RUN_ERROR" ? 6_000 : 12_000;
-      this.hideTimer = globalThis.setTimeout(() => this.hide(), delay);
+      if (event.type === "RUN_FINISHED" && !this.state.speechVisible) {
+        // Run concluded with no spoken speech: hide immediately, clearing any leftover thought
+        this.hide();
+      } else {
+        const delay = event.type === "RUN_ERROR" ? 3_000 : 4_000;
+        const scheduleDismissal = () => {
+          this.clearHideTimer();
+          this.hideTimer = globalThis.setTimeout(() => {
+            if (voiceService && voiceService.getIsSpeaking()) {
+              scheduleDismissal();
+            } else {
+              this.hide();
+            }
+          }, delay);
+        };
+        scheduleDismissal();
+      }
+    } else if (this.state.thoughtVisible) {
+      // Safety watchdog: non-terminal thought (e.g. RUN_STARTED) auto-dismisses after 15s
+      // if no terminal event or content arrives, preventing stuck thinking state.
+      this.clearHideTimer();
+      this.hideTimer = globalThis.setTimeout(() => {
+        if (!this.state.terminal && this.state.thoughtVisible && !this.state.speechVisible) {
+          this.hide();
+        }
+      }, 15_000);
     }
   }
 
   say(text: string, durationMs = 4_000, voiceService?: { getIsSpeaking: () => boolean }): void {
-    if (this.isBusy) return;
+    // If busy with another speech, return; but if currently in thinking state, allow say() to transition thinking → speech
+    if (this.isBusy && !this.state.thoughtVisible) return;
     this.clearHideTimer();
     this.state = {
       ...this.state,
@@ -168,6 +193,20 @@ export class CompanionBubbleController {
     };
 
     scheduleDismissal();
+  }
+
+  clearThought(): void {
+    if (this.state.thoughtVisible) {
+      this.state = {
+        ...this.state,
+        thought: "",
+        thoughtVisible: false,
+      };
+      this.render();
+      if (!this.state.speechVisible) {
+        this.hide();
+      }
+    }
   }
 
   think(text: string, durationMs = 4_500): void {

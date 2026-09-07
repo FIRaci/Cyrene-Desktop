@@ -1,24 +1,16 @@
 import type { CompanionBubbleController } from "./companion-bubbles";
 import type { FloatingKaomojiController } from "./floating-kaomoji";
+import {
+  analyzeConversationContext,
+  type ContextAnalysisResult,
+  type ContextualThought,
+  type ConversationMood,
+  DEFAULT_IDLE_THOUGHTS,
+} from "./chat-context-analyzer";
 
-export interface IdleThought {
-  text: string;
-  kaomoji?: string;
-}
+export type IdleThought = ContextualThought;
 
-export const DEFAULT_IDLE_THOUGHTS: IdleThought[] = [
-  { text: "The weather is so lovely today~ 🌸", kaomoji: "(✿◡‿◡)" },
-  { text: "Checking the sky... Hope you're staying comfortable~ ⛅", kaomoji: "(o^▽^o)" },
-  { text: "Cyrene is missing you right now... ✨", kaomoji: "(*´˘`*)♡" },
-  { text: "Remember to stay hydrated and rest a bit~", kaomoji: "(*•̀ᴗ•́*)و" },
-  { text: "Quietly watching you work... Hehe~", kaomoji: "(⁄ ⁄>⁄ ▽ ⁄<⁄ ⁄)" },
-  { text: "Blink blink~ Cyrene is always by your side~", kaomoji: "(^_<)〜☆" },
-  { text: "If it gets rainy or chilly outside, stay cozy inside! ☕", kaomoji: "(੭ु´͈ ᐜ `͈)੭ु⁾⁾" },
-  { text: "I wonder what delicious treats we should eat today~ 🍰", kaomoji: "(｡♥‿♥｡)" },
-  { text: "Umm~ Just spacing out for a second...", kaomoji: "(⸝⸝ᵕᴗᵕ⸝⸝)" },
-  { text: "Having you by my side makes Cyrene feel so safe~", kaomoji: "(੭ु´͈ ᐜ `͈)੭ु⁾⁾" },
-  { text: "You've worked so hard today, let's keep it up! ✨", kaomoji: "(*^▽^*)" },
-];
+export { DEFAULT_IDLE_THOUGHTS };
 
 export interface AutonomousThoughtOptions {
   bubbles: CompanionBubbleController;
@@ -32,7 +24,7 @@ export interface AutonomousThoughtOptions {
 
 /**
  * Periodically triggers cute, silent autonomous thoughts with floating kaomoji
- * when Cyrene is idle, making the companion feel alive and attentive.
+ * when Cyrene is idle, synchronized with the active Alt+1 chat context and emotional climate.
  */
 export class AutonomousThoughtController {
   private readonly bubbles: CompanionBubbleController;
@@ -47,18 +39,80 @@ export class AutonomousThoughtController {
   private isPaused = false;
   private disposed = false;
 
+  private currentContext: ContextAnalysisResult = analyzeConversationContext([]);
+  private unsubscribeOnChanged: (() => void) | null = null;
+  private unsubscribeOnActiveChanged: (() => void) | null = null;
+
   constructor(options: AutonomousThoughtOptions) {
     this.bubbles = options.bubbles;
     this.kaomoji = options.kaomoji;
     this.thoughts = options.thoughts && options.thoughts.length > 0
       ? options.thoughts
       : DEFAULT_IDLE_THOUGHTS;
-    this.minIntervalMs = options.minIntervalMs ?? 120_000;
-    this.maxIntervalMs = options.maxIntervalMs ?? 240_000;
+    this.minIntervalMs = options.minIntervalMs ?? 50_000;
+    this.maxIntervalMs = options.maxIntervalMs ?? 110_000;
     this.thoughtDurationMs = options.thoughtDurationMs ?? 4_500;
-    this.kaomojiProbability = options.kaomojiProbability ?? 1.0;
+    this.kaomojiProbability = options.kaomojiProbability ?? 0.85;
 
+    this.initContextListeners();
     this.scheduleNext();
+  }
+
+  private initContextListeners(): void {
+    if (typeof window === "undefined") return;
+    try {
+      const store = (window as unknown as { chatStore?: {
+        onChanged?: (cb: () => void) => () => void;
+        onActiveSessionChanged?: (cb: (id: string | null) => void) => () => void;
+      } }).chatStore;
+
+      if (store?.onChanged) {
+        this.unsubscribeOnChanged = store.onChanged(() => {
+          void this.refreshContext();
+        });
+      }
+      if (store?.onActiveSessionChanged) {
+        this.unsubscribeOnActiveChanged = store.onActiveSessionChanged(() => {
+          void this.refreshContext();
+        });
+      }
+      void this.refreshContext();
+    } catch {
+      // Ignore if chatStore is unavailable
+    }
+  }
+
+  /**
+   * Refreshes the active session context from chatStore to update Cyrene's mood.
+   */
+  async refreshContext(): Promise<void> {
+    if (typeof window === "undefined") return;
+    try {
+      const store = (window as unknown as { chatStore?: {
+        getActiveSession?: () => Promise<string | { id: string } | null>;
+        get?: (id: string) => Promise<{ messages: Array<{ role: string; content: string }> } | null>;
+      } }).chatStore;
+
+      if (!store?.getActiveSession || !store?.get) return;
+      const sessionRef = await store.getActiveSession();
+      const sessionId = typeof sessionRef === "object" && sessionRef !== null ? sessionRef.id : sessionRef;
+      if (!sessionId || typeof sessionId !== "string") return;
+
+      const sessionData = await store.get(sessionId);
+      if (sessionData && Array.isArray(sessionData.messages)) {
+        this.currentContext = analyzeConversationContext(sessionData.messages);
+      }
+    } catch {
+      // Fail silently and keep current context
+    }
+  }
+
+  getCurrentMood(): ConversationMood {
+    return this.currentContext.mood;
+  }
+
+  setExplicitContext(result: ContextAnalysisResult): void {
+    this.currentContext = result;
   }
 
   pause(): void {
@@ -76,7 +130,17 @@ export class AutonomousThoughtController {
     if (this.disposed || this.isPaused) return false;
     if (this.bubbles.isBusy) return false;
 
-    const thought = this.thoughts[Math.floor(Math.random() * this.thoughts.length)];
+    // Refresh context in background for subsequent turns
+    void this.refreshContext();
+
+    // Select thought: if current mood is specialized, pick the recommended contextual thought
+    let thought: IdleThought;
+    if (this.currentContext.mood !== "default") {
+      thought = this.currentContext.recommendedThought;
+    } else {
+      thought = this.thoughts[Math.floor(Math.random() * this.thoughts.length)];
+    }
+
     if (!thought) return false;
 
     this.bubbles.think(thought.text, this.thoughtDurationMs);
@@ -85,30 +149,8 @@ export class AutonomousThoughtController {
       if (win?.activityLog?.pushEntry) {
         win.activityLog.pushEntry({
           type: "reasoning",
-          text: `[Idle Thought] ${thought.text}`,
+          text: `[Idle Thought - Mood: ${this.currentContext.mood}] ${thought.text}`,
           channel: "Companion Pet",
-        }).catch(() => {});
-      }
-    } catch {
-      // Ignore in non-electron environments
-    }
-    try {
-      const win = typeof window !== "undefined" ? (window as unknown as { chatStore?: {
-        getActiveSession: () => Promise<string | { id: string } | null>;
-        append: (sessionId: string, msg: unknown) => Promise<void>;
-      } }) : null;
-      if (win?.chatStore) {
-        win.chatStore.getActiveSession().then((session) => {
-          const sessionId = typeof session === "string" ? session : session?.id;
-          if (sessionId) {
-            void win.chatStore!.append(sessionId, {
-              id: `thought-${Date.now()}`,
-              role: "model",
-              content: `*💭 (${thought.text})*`,
-              at: Date.now(),
-              thinking: false,
-            });
-          }
         }).catch(() => {});
       }
     } catch {
@@ -123,6 +165,14 @@ export class AutonomousThoughtController {
   dispose(): void {
     this.disposed = true;
     this.clearTimer();
+    if (this.unsubscribeOnChanged) {
+      try { this.unsubscribeOnChanged(); } catch { /* ignore */ }
+      this.unsubscribeOnChanged = null;
+    }
+    if (this.unsubscribeOnActiveChanged) {
+      try { this.unsubscribeOnActiveChanged(); } catch { /* ignore */ }
+      this.unsubscribeOnActiveChanged = null;
+    }
   }
 
   private scheduleNext(): void {
