@@ -235,6 +235,155 @@ body {
   flex-shrink: 0;
 }
 
+/* Weather Pill Wrapper – contains chip + hourly panel */
+.weather-pill-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Hourly Panel – slides in from the right, attached to the pill */
+.weather-hourly-panel {
+  position: absolute;
+  /* Align panel's top edge with pill's top edge */
+  top: 0;
+  /* Place panel immediately to the LEFT of the pill
+     (panel appears expanding leftward from the pill) */
+  right: calc(100% + 8px);
+  z-index: 120;
+  min-width: 140px;
+  max-height: 240px;
+  border-radius: 14px;
+  background: rgba(14, 10, 28, 0.88);
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  border: 1px solid rgba(244, 114, 182, 0.22);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.45),
+    0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  /* Slide-in animation */
+  transform-origin: right center;
+  animation: weatherPanelIn 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.weather-hourly-panel[hidden] {
+  display: none;
+}
+
+@keyframes weatherPanelIn {
+  from { opacity: 0; transform: scaleX(0.7) translateX(12px); }
+  to   { opacity: 1; transform: scaleX(1) translateX(0); }
+}
+
+.weather-hourly-header {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 12px 5px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: rgba(244, 114, 182, 0.9);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  flex-shrink: 0;
+}
+
+.weather-hourly-header svg {
+  stroke: rgba(244, 114, 182, 0.85);
+  flex-shrink: 0;
+}
+
+.weather-hourly-list {
+  overflow-y: auto;
+  flex: 1;
+  padding: 4px 0;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(244, 114, 182, 0.3) transparent;
+}
+
+.weather-hourly-list::-webkit-scrollbar {
+  width: 3px;
+}
+.weather-hourly-list::-webkit-scrollbar-thumb {
+  background: rgba(244, 114, 182, 0.35);
+  border-radius: 2px;
+}
+
+.weather-hourly-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 12px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.75);
+  transition: background 100ms ease;
+  border-radius: 0;
+}
+
+.weather-hourly-row:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.weather-hourly-row--current {
+  background: rgba(244, 114, 182, 0.12);
+  color: #ffffff;
+}
+
+.weather-hourly-row--current .weather-hourly-time {
+  color: #f472b6;
+  font-weight: 800;
+}
+
+.weather-hourly-row--current .weather-hourly-temp {
+  color: #ffffff;
+  text-shadow: 0 0 8px rgba(255, 255, 255, 0.45);
+}
+
+.weather-hourly-time {
+  font-family: var(--font-mono, monospace);
+  font-size: 10.5px;
+  font-weight: 600;
+  min-width: 32px;
+  letter-spacing: 0.3px;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.weather-hourly-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.weather-hourly-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.weather-hourly-temp {
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.2px;
+  margin-left: auto;
+  white-space: nowrap;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* Make weather chip interactive */
+.schedule-weather-chip[role="button"] {
+  cursor: pointer;
+}
+.schedule-weather-chip[aria-expanded="true"] {
+  background: rgba(244, 114, 182, 0.12);
+  border-color: rgba(244, 114, 182, 0.45);
+}
+
 /* Weather Chip */
 .schedule-weather-chip {
   display: inline-flex;
@@ -290,6 +439,8 @@ body {
 .weather-temp {
   font-weight: 800;
   color: #ffffff;
+  white-space: nowrap;
+  letter-spacing: 0.2px;
   text-shadow: 0 0 8px rgba(255, 255, 255, 0.35);
 }
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { LOCATION_PIN_SVG, getWeatherIconSvg } from "./weather-icons";
+import { LOCATION_PIN_SVG, getWeatherIconSvg, formatWeatherTemperature } from "./weather-icons";
 
 describe("weather-icons", () => {
   it("exports a valid SVG string for LOCATION_PIN_SVG", () => {
@@ -43,5 +43,16 @@ describe("weather-icons", () => {
     const fallback = getWeatherIconSvg(999);
     expect(fallback).toContain("weather-svg-icon");
     expect(fallback).toContain("weather-svg-partly-cloudy");
+  });
+
+  it("formats whole-day forecast temperature range when min and max are provided", () => {
+    expect(formatWeatherTemperature(30, 25.3, 31.6)).toBe("25° - 32°C");
+    expect(formatWeatherTemperature(28, 20, 29)).toBe("20° - 29°C");
+  });
+
+  it("falls back to single instantaneous temperature when min or max is missing", () => {
+    expect(formatWeatherTemperature(28.4)).toBe("28°C");
+    expect(formatWeatherTemperature(30, undefined, 32)).toBe("30°C");
+    expect(formatWeatherTemperature(30, 24, undefined)).toBe("30°C");
   });
 });

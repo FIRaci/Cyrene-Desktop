@@ -19,6 +19,7 @@ type LegacyRunOptions = Omit<CyreneRunOptions, "toolSystemContent" | "soulSystem
 interface RunnerDeps {
   buildOptions: (task: ScheduledTask) => Promise<LegacyRunOptions>;
   getChatWebContents: () => WebContents | null;
+  notifyLive2D?: (text: string) => void;
   recordHistory: (entry: ScheduledTaskHistoryEntry) => void;
   id: () => string;
   now: () => Date;
@@ -100,6 +101,8 @@ export function createSchedulerRunner(deps: RunnerDeps) {
 
       const finishedAt = deps.now();
       const reply = agent.lastResult?.reply ?? "";
+      const reminderSpeech = reply.trim() || `Master, it's time for: ${task.title}!`;
+      deps.notifyLive2D?.(reminderSpeech);
       deps.recordHistory({
         id: historyId,
         taskId: task.id,

@@ -42,7 +42,8 @@
             <span class="schedule-count__unit" id="schedule-count-label">task</span>
           </div>
           <div class="schedule-meta-group">
-            <div class="schedule-weather-chip" id="schedule-weather" title="Current weather in Hanoi (Open-Meteo)">
+          <div class="weather-pill-wrapper">
+            <div class="schedule-weather-chip" id="schedule-weather" title="Today's weather forecast for Hanoi (Open-Meteo)" role="button" tabindex="0" aria-expanded="false" aria-controls="weather-hourly-panel">
               <span class="weather-loc-icon" id="weather-loc-icon" aria-hidden="true">
                 <svg class="weather-svg-pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                   <defs>
@@ -57,7 +58,7 @@
               </span>
               <span class="weather-city">Hanoi</span>
               <span class="weather-separator" aria-hidden="true">•</span>
-              <span class="weather-temp" id="weather-temp">28°C</span>
+              <span class="weather-temp" id="weather-temp">24° - 32°C</span>
               <span class="weather-icon" id="weather-icon" aria-hidden="true">
                 <svg class="weather-svg-icon weather-svg-partly-cloudy" viewBox="0 0 24 24" fill="none">
                   <defs>
@@ -76,6 +77,18 @@
               </span>
               <span class="weather-desc" id="weather-desc">Partly Cloudy</span>
             </div>
+            <!-- Hourly temperature panel — slides in from right on pill click -->
+            <div class="weather-hourly-panel" id="weather-hourly-panel" hidden aria-label="Hourly forecast">
+              <div class="weather-hourly-header">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="12" height="12"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 14.5"/></svg>
+                Hourly
+              </div>
+              <div class="weather-hourly-list" id="weather-hourly-list" role="list">
+                <!-- Rows injected by tasks.ts -->
+              </div>
+            </div>
+          </div>
+
             <div class="schedule-datetime-chip" id="schedule-datetime" title="Current time and selected day">
               <span class="schedule-weekday" id="schedule-weekday">Saturday</span>
               <span class="schedule-clock-divider" aria-hidden="true">•</span>

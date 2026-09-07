@@ -12,7 +12,7 @@ import {
   type TaskCategory,
   type ScheduleConfig,
 } from "./task-filter";
-import { LOCATION_PIN_SVG, getWeatherIconSvg } from "./weather-icons";
+import { LOCATION_PIN_SVG, getWeatherIconSvg, formatWeatherTemperature } from "./weather-icons";
 
 // ── Preload Bridge Interfaces ───────────────────────────────
 interface SchedulerResult<T = unknown> {
@@ -29,7 +29,12 @@ interface WeatherResponse {
   weatherCode: number;
   weatherText: string;
   weatherIcon: string;
+  tempMin?: number;
+  tempMax?: number;
+  /** 24-slot hourly forecast for today */
+  hourly?: Array<{ hour: number; temp: number; code: number }>;
 }
+
 
 declare global {
   interface Window {
@@ -82,6 +87,8 @@ let selectedDate: Date = new Date();
 let weekAnchor: Date = new Date();
 let selectedCategory: TaskCategory | "all" = "all";
 let allTasks: ScheduledTask[] = [];
+let hourlyWeatherData: Array<{ hour: number; temp: number; code: number }> = [];
+
 
 // ── Date Formatting Helpers ──────────────────────────────────
 function pad2(n: number): string {
@@ -138,7 +145,10 @@ async function loadHanoiWeather(): Promise<void> {
   try {
     const data = await window.tasks?.getWeather?.("Hanoi");
     if (data) {
-      if (tempEl) tempEl.textContent = `${data.temperature}°C`;
+      const forecastText = formatWeatherTemperature(data.temperature, data.tempMin, data.tempMax);
+      if (tempEl) {
+        tempEl.textContent = forecastText;
+      }
       if (iconEl) {
         iconEl.innerHTML = getWeatherIconSvg(data.weatherCode, data.weatherText);
       }
@@ -146,13 +156,75 @@ async function loadHanoiWeather(): Promise<void> {
       if (chipEl) {
         const hum = typeof data.humidity === "number" ? `, Humidity ${data.humidity}%` : "";
         const feels = typeof data.apparentTemperature === "number" ? `, Feels like ${data.apparentTemperature}°C` : "";
-        chipEl.title = `Hanoi: ${data.temperature}°C (${data.weatherText})${hum}${feels}`;
+        const cur = typeof data.temperature === "number" ? ` • Now: ${data.temperature}°C` : "";
+        chipEl.title = `Hanoi Today Forecast: ${forecastText} (${data.weatherText})${cur}${hum}${feels}`;
+      }
+      // Store hourly data and pre-build panel rows
+      if (Array.isArray(data.hourly) && data.hourly.length > 0) {
+        hourlyWeatherData = data.hourly;
+        buildHourlyPanel(data.hourly);
       }
     }
   } catch (err) {
     console.warn("[Tasks] Failed to load Hanoi weather:", err);
   }
 }
+
+/** Build or rebuild rows inside the hourly forecast panel */
+function buildHourlyPanel(slots: Array<{ hour: number; temp: number; code: number }>): void {
+  const listEl = $("weather-hourly-list");
+  if (!listEl) return;
+  const currentHour = new Date().getHours();
+  listEl.innerHTML = "";
+
+  for (const slot of slots) {
+    const row = document.createElement("div");
+    row.className = "weather-hourly-row" + (slot.hour === currentHour ? " weather-hourly-row--current" : "");
+    row.setAttribute("role", "listitem");
+    if (slot.hour === currentHour) row.id = "weather-hourly-current";
+
+    // Time label
+    const timeSpan = document.createElement("span");
+    timeSpan.className = "weather-hourly-time";
+    timeSpan.textContent = `${String(slot.hour).padStart(2, "0")}h`;
+
+    // Mini weather icon (inline SVG, 14px)
+    const iconSpan = document.createElement("span");
+    iconSpan.className = "weather-hourly-icon";
+    iconSpan.innerHTML = getWeatherIconSvg(slot.code, "");
+    // Rescale any SVG inside to 14px
+    const svgEl = iconSpan.querySelector("svg");
+    if (svgEl) { svgEl.setAttribute("width", "14"); svgEl.setAttribute("height", "14"); }
+
+    // Temperature
+    const tempSpan = document.createElement("span");
+    tempSpan.className = "weather-hourly-temp";
+    tempSpan.textContent = `${slot.temp}°`;
+
+    row.appendChild(timeSpan);
+    row.appendChild(iconSpan);
+    row.appendChild(tempSpan);
+    listEl.appendChild(row);
+  }
+}
+
+/** Toggle the hourly forecast panel open/closed */
+function toggleHourlyPanel(): void {
+  const panel = $("weather-hourly-panel");
+  const chip = $("schedule-weather");
+  if (!panel || !chip) return;
+  const isOpen = !panel.hidden;
+  panel.hidden = isOpen;
+  chip.setAttribute("aria-expanded", String(!isOpen));
+  if (!isOpen) {
+    // Scroll current hour into view
+    const currentRow = document.getElementById("weather-hourly-current");
+    if (currentRow) {
+      currentRow.scrollIntoView({ block: "center", behavior: "smooth" });
+    }
+  }
+}
+
 
 function formatTimeOfDay(date: Date): string {
   const hh = String(date.getHours()).padStart(2, "0");
@@ -530,6 +602,31 @@ function setupEventHandlers(): void {
   // Minimize & Close
   $("min-btn")?.addEventListener("click", () => window.tasks?.minimize());
   $("close-btn")?.addEventListener("click", () => window.tasks?.close());
+
+  // Weather pill → toggle hourly panel
+  const weatherChip = $("schedule-weather");
+  if (weatherChip) {
+    weatherChip.addEventListener("click", (e) => {
+      e.stopPropagation();
+      toggleHourlyPanel();
+    });
+    weatherChip.addEventListener("keydown", (e) => {
+      if ((e as KeyboardEvent).key === "Enter" || (e as KeyboardEvent).key === " ") {
+        e.preventDefault();
+        toggleHourlyPanel();
+      }
+    });
+  }
+  // Close hourly panel when clicking outside the pill wrapper
+  document.addEventListener("click", (e) => {
+    const panel = $("weather-hourly-panel");
+    if (!panel || panel.hidden) return;
+    const wrapper = weatherChip?.closest(".weather-pill-wrapper");
+    if (wrapper && !wrapper.contains(e.target as Node)) {
+      panel.hidden = true;
+      weatherChip?.setAttribute("aria-expanded", "false");
+    }
+  });
 
   // Task Settings
   $("settings-btn")?.addEventListener("click", () => window.sidebar?.openSettings("tasks"));

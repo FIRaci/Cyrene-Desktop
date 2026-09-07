@@ -228,3 +228,20 @@ export function getWeatherIconSvg(code: number, _text?: string): string {
     <path d="M7 19h11.5a3.5 3.5 0 0 0 .5-6.96 4.5 4.5 0 0 0-8.8-1.04A3.5 3.5 0 0 0 7 19z" fill="url(#cloud-def)" />
   </svg>`;
 }
+
+/**
+ * Formats daily forecast temperature for the weather pill.
+ * If min and max are provided, returns "min° - max°C" (e.g. "25° - 32°C").
+ * Otherwise falls back to instantaneous temperature "temp°C" (e.g. "28°C").
+ */
+export function formatWeatherTemperature(temperature: number, tempMin?: number, tempMax?: number): string {
+  if (
+    typeof tempMin === "number" &&
+    typeof tempMax === "number" &&
+    !Number.isNaN(tempMin) &&
+    !Number.isNaN(tempMax)
+  ) {
+    return `${Math.round(tempMin)}° - ${Math.round(tempMax)}°C`;
+  }
+  return `${Math.round(temperature)}°C`;
+}
