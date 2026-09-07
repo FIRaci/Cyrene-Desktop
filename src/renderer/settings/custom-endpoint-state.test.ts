@@ -12,7 +12,7 @@ describe("local model defaults", () => {
   it("targets the installed Ollama OpenAI-compatible endpoint without authentication", () => {
     expect(DEFAULT_LOCAL_ENDPOINT).toEqual({
       baseUrl: "http://127.0.0.1:11434/v1",
-      model: "llama3.1:latest",
+      model: "stheno:latest",
     });
     expect(validateCustomEndpointConfig("local", {
       ...DEFAULT_LOCAL_ENDPOINT,

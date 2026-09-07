@@ -3162,7 +3162,34 @@ select option:hover,
   color: rgba(254, 247, 255, 0.92);
 }
 
-/* Title */
+/* Title and section header */
+.token-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 16px 0 10px;
+}
+
+.token-section-header .token-section-title {
+  margin: 0;
+}
+
+.token-avg-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: var(--rb-radius-full, 9999px);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  color: var(--rb-text-on-pink, #ffffff);
+  background: linear-gradient(135deg, #ff6ec7, #ec4899);
+  box-shadow: 0 2px 8px rgba(236, 72, 153, 0.28);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 .token-section-title {
   font-size: 13px;
   font-weight: 600;

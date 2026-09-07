@@ -2187,7 +2187,7 @@ async function loadAsrConfig(): Promise<void> {
   try {
     const cfg = await window.tts?.loadSettings();
     if (cfg) {
-      if (asrEngineSelect) asrEngineSelect.value = String(cfg.asrEngine ?? "off");
+      if (asrEngineSelect) asrEngineSelect.value = String(cfg.asrEngine ?? "local");
       if (asrAliyunAppKeyInput) asrAliyunAppKeyInput.value = String(cfg.asrAliyunAppKey ?? "");
       if (asrAliyunAccessKeyIdInput) asrAliyunAccessKeyIdInput.value = String(cfg.asrAliyunAccessKeyId ?? "");
       if (asrAliyunAccessKeySecretInput) asrAliyunAccessKeySecretInput.value = String(cfg.asrAliyunAccessKeySecret ?? "");
@@ -5359,11 +5359,20 @@ function renderTokenBarChart(data: TokenDayData[]): void {
     container.appendChild(bar);
   }
 
-  // 
+  // Update daily average label & reference line
+  const avg = Math.round(data.reduce((s, d) => s + d.input + d.output, 0) / data.length);
+  const avgFormatted = formatTokenShort(avg);
+
   const avgEl = document.getElementById("token-avg-label");
   if (avgEl) {
-    const avg = Math.round(data.reduce((s, d) => s + d.input + d.output, 0) / data.length);
-    avgEl.textContent = `Daily avg: ${formatTokenShort(avg)}`;
+    avgEl.textContent = `Daily avg: ${avgFormatted}`;
+  }
+
+  const avgLine = document.getElementById("token-avg-line") || document.querySelector(".mini-chart__avg") as HTMLElement | null;
+  if (avgLine) {
+    const avgH = Math.max(2, Math.round((avg / maxVal) * chartHeight));
+    avgLine.style.top = `${Math.max(18, 94 - avgH)}px`;
+    avgLine.title = `Daily Average: ${avgFormatted}`;
   }
 }
 

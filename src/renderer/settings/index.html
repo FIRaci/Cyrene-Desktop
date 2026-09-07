@@ -1618,9 +1618,12 @@
             <!-- Charts shown when usage data is available -->
             <div id="token-charts">
               <!-- CSS bar chart generated for the selected time range -->
-              <div class="token-section-title"><svg width="16" height="16" viewBox="0 0 48 48" fill="none" aria-hidden="true" style="vertical-align:-2px"><title>Daily Consumption Bar Chart</title><path d="M6 6V42H42" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 34L22 18L32 27L42 6" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg> Daily Consumption Bar Chart</div>
+              <div class="token-section-header">
+                <div class="token-section-title"><svg width="16" height="16" viewBox="0 0 48 48" fill="none" aria-hidden="true" style="vertical-align:-2px"><title>Daily Consumption Bar Chart</title><path d="M6 6V42H42" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 34L22 18L32 27L42 6" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg> Daily Consumption Bar Chart</div>
+                <span class="token-avg-badge" id="token-avg-label">Daily avg: 0</span>
+              </div>
               <div class="mini-chart" aria-hidden="true">
-                <div class="mini-chart__avg"><span id="token-avg-label">Daily Avg 0</span></div>
+                <div class="mini-chart__avg" id="token-avg-line" title="Daily Average"></div>
                 <div class="mini-chart__bars" id="token-bar-chart"></div>
               </div>
 
@@ -2014,12 +2017,12 @@
               <div class="tts-field">
                 <label for="asr-engine">ASR Provider</label>
                 <select id="asr-engine">
-                  <option value="off">Off</option>
+                  <option value="local">Local (Faster-Whisper Built-in)</option>
                   <option value="aliyun">Alibaba Cloud (Real-time ASR)</option>
-                  <option value="local">Local (Coming soon)</option>
+                  <option value="off">Off</option>
                 </select>
               </div>
-              <p class="tts-hint">Select 'Alibaba Cloud' and fill out config below.</p>
+              <p class="tts-hint">Local Faster-Whisper provides fast offline speech recognition; or select 'Alibaba Cloud' with credentials below.</p>
             </div>
 
             <div class="tts-section" id="asr-aliyun-config">

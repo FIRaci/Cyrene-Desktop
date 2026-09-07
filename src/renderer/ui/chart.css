@@ -70,22 +70,13 @@
   height: 2px;
   border-radius: 2px;
   background: var(--rb-pink-200);
+  opacity: 0.65;
   z-index: 1;
+  pointer-events: none;
 }
 
 .mini-chart__avg span {
-  position: absolute;
-  right: 0;
-  top: -23px;
-  padding: 4px 9px;
-  border-radius: var(--rb-radius-full);
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: 0.2px;
-  color: var(--rb-text-on-pink);
-  background: linear-gradient(135deg, #ff6ec7, #ec4899);
-  box-shadow: 0 4px 10px rgba(236, 72, 153, 0.22);
-  white-space: nowrap;
+  display: none;
 }
 
 .mini-chart__bars {
