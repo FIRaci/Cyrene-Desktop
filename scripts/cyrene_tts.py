@@ -18,8 +18,14 @@ import subprocess
 import shutil
 from pathlib import Path
 
-# Ensure UTF-8 console output on Windows
+# Ensure UTF-8 console output on Windows and guarantee valid stdout/stderr under pythonw
 try:
+    log_path = Path("D:/CyreneData/logs/gptsovits-server.log")
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    if sys.stdout is None or getattr(sys.stdout, "closed", True):
+        sys.stdout = open(log_path, "a", encoding="utf-8", buffering=1)
+    if sys.stderr is None or getattr(sys.stderr, "closed", True):
+        sys.stderr = open(log_path, "a", encoding="utf-8", buffering=1)
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
     if hasattr(sys.stderr, "reconfigure"):
@@ -175,8 +181,23 @@ def start_server(port: int, host: str = "127.0.0.1"):
     print(f"  Reference Audio: {REF_AUDIO.name}")
     print("=" * 65 + "\n")
     
+    # Optimize PyTorch CPU inference threads
+    try:
+        import torch
+        num_threads = min(os.cpu_count() or 8, 8)
+        torch.set_num_threads(num_threads)
+        print(f"[Torch] PyTorch inference threads configured: {num_threads}")
+    except Exception:
+        pass
+
+    python_exe = sys.executable
+    if python_exe.lower().endswith("pythonw.exe"):
+        candidate_python = python_exe[:-5] + ".exe"
+        if os.path.exists(candidate_python):
+            python_exe = candidate_python
+
     cmd = [
-        sys.executable,
+        python_exe,
         str(VENDOR_DIR / "api_v2.py"),
         "-a", host,
         "-p", str(port),
@@ -186,11 +207,45 @@ def start_server(port: int, host: str = "127.0.0.1"):
     env = os.environ.copy()
     env["PYTHONIOENCODING"] = "utf-8"
     env["PYTHONUTF8"] = "1"
+    env["PYTHONUNBUFFERED"] = "1"
     
+    creation_flags = 0
+    if sys.platform == "win32":
+        creation_flags = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
+
+    log_file = None
     try:
-        subprocess.run(cmd, cwd=str(VENDOR_DIR), env=env)
+        log_dir = Path("D:/CyreneData/logs")
+        log_dir.mkdir(parents=True, exist_ok=True)
+        log_file = open(log_dir / "gptsovits-server.log", "a", encoding="utf-8")
+    except Exception:
+        pass
+
+    out_target = sys.stdout if (sys.stdout and not getattr(sys.stdout, "closed", True)) else log_file
+    err_target = sys.stderr if (sys.stderr and not getattr(sys.stderr, "closed", True)) else log_file
+
+    print(f"[Launcher] Launching api_v2: {cmd}", flush=True)
+    try:
+        res = subprocess.run(
+            cmd,
+            cwd=str(VENDOR_DIR),
+            env=env,
+            creationflags=creation_flags,
+            stdin=subprocess.DEVNULL,
+            stdout=out_target,
+            stderr=err_target,
+        )
+        print(f"[Launcher] api_v2 exited with code: {res.returncode}", flush=True)
     except KeyboardInterrupt:
-        print("\n[TTS] Server stopped by user.")
+        print("\n[TTS] Server stopped by user.", flush=True)
+    except Exception as e:
+        print(f"[Launcher] subprocess exception: {e}", flush=True)
+    finally:
+        if log_file and not getattr(log_file, "closed", True):
+            try:
+                log_file.close()
+            except Exception:
+                pass
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Cyrene Voice Synthesis Server Launcher")

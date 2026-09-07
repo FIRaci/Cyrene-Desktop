@@ -8,7 +8,7 @@ import { synthesize as mosslandSynthesize } from "./mossland-engine";
 import { synthesizeEdgeTts } from "./edge-tts-engine";
 import type { TtsEngine } from "../../shared/tts-types";
 
-function getDefaultCyreneRefAudioPath(): string {
+export function getDefaultCyreneRefAudioPath(): string {
   const candidates: string[] = [];
   if (typeof process !== "undefined" && (process as unknown as { resourcesPath?: string }).resourcesPath) {
     candidates.push(path.join((process as unknown as { resourcesPath: string }).resourcesPath, "resources", "voice", "cyrene", "ref_audio.wav"));
@@ -20,7 +20,7 @@ function getDefaultCyreneRefAudioPath(): string {
   return candidates[0];
 }
 
-function getDefaultCyrenePromptText(): string {
+export function getDefaultCyrenePromptText(): string {
   const candidates: string[] = [];
   if (typeof process !== "undefined" && (process as unknown as { resourcesPath?: string }).resourcesPath) {
     candidates.push(path.join((process as unknown as { resourcesPath: string }).resourcesPath, "resources", "voice", "cyrene", "prompt_text.txt"));

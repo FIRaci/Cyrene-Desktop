@@ -67,6 +67,14 @@ describe("cleanTextForSpeech", () => {
     expect(cleaned).not.toContain("(");
     expect(cleaned).not.toContain(")");
   });
+
+  it("strips leading timestamp prefixes so speech engines never read dates/times", () => {
+    const raw = "[2026-09-07 10:04, UTC-5] *gently smiles* Hello Master, I am right here!";
+    const cleaned = cleanTextForSpeech(raw);
+    expect(cleaned).toBe("Hello Master, I am right here!");
+    expect(cleaned).not.toContain("2026");
+    expect(cleaned).not.toContain("UTC-5");
+  });
 });
 
 describe("CompanionVoiceService", () => {
@@ -251,8 +259,14 @@ describe("CompanionVoiceService", () => {
     voice.dispose();
   });
 
-  it("translates English text to Mandarin Chinese before calling GPT-SoVITS synthesis", async () => {
-    const synthesizeCachedGptsovits = vi.fn().mockResolvedValue({ base64: "wavbytes", format: "wav" });
+  it("passes English text directly to GPT-SoVITS (translation now handled in main process)", async () => {
+    // [ARCHITECTURE CHANGE]
+    // Translation is now performed ONCE in the main process inside
+    // prepareGptsovitsVoicePayload (index.ts) to eliminate double round-trips.
+    // voice.ts passes cleaned English text directly to synthesizeCachedGptsovits;
+    // the main process bridge translates to Mandarin before feeding GPT-SoVITS.
+    // translateToChinese is NO LONGER called from the renderer for GPT-SoVITS path.
+    const synthesizeCachedGptsovits = vi.fn().mockResolvedValue({ base64: "UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=", format: "wav" });
     const translateToChinese = vi.fn().mockResolvedValue("主人，希琳一直都在这里哦~");
 
     let audioInstance: any = null;
@@ -284,10 +298,17 @@ describe("CompanionVoiceService", () => {
     const voice = new CompanionVoiceService({ initialMuted: false });
     const success = await voice.speak("Master, Cyrene is always right here for you~");
 
-    expect(translateToChinese).toHaveBeenCalledWith("Master, Cyrene is always right here for you");
+    // Translation is now handled by the main process; voice.ts must NOT call translateToChinese
+    expect(translateToChinese).not.toHaveBeenCalled();
+
+    // The cleaned English text flows directly to synthesizeCachedGptsovits
     expect(synthesizeCachedGptsovits).toHaveBeenCalledWith(
       expect.objectContaining({
-        text: "主人，希琳一直都在这里哦~",
+        baseUrl: "http://127.0.0.1:9880",
+        refAudioPath: "D:/models/ref.wav",
+        promptText: "Prompt text",
+        // English text is passed as-is; main process translates inside prepareGptsovitsVoicePayload
+        text: "Master, Cyrene is always right here for you",
       }),
     );
     expect(success).toBe(true);

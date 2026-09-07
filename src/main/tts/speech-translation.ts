@@ -79,3 +79,56 @@ export async function translateEnglishToMandarinSpeech(
     clearTimeout(timer);
   }
 }
+
+/**
+ * Translates Chinese companion speech into English for log display.
+ */
+export async function translateChineseToEnglishText(
+  text: string,
+  config: ModelEndpointConfig | null | undefined,
+  options: SpeechTranslationOptions = {},
+): Promise<string> {
+  const trimmed = text.trim();
+  if (!trimmed) return "";
+  if (!config || !isModelEndpointUsable(config)) return trimmed;
+
+  const timeoutMs = options.timeoutMs ?? 6000;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  const systemPrompt =
+    "You are an English translation bridge for an AI companion. " +
+    "Translate the Chinese speech into natural, warm, sweet English. " +
+    "Output ONLY the translated English text with no explanations or notes.";
+
+  try {
+    const url = buildVendorUrlByProvider(config.provider ?? "", config.baseUrl);
+    const response = await fetch(url, {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+        ...modelAuthorizationHeaders(config),
+      },
+      body: JSON.stringify({
+        model: config.model,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: trimmed },
+        ],
+        temperature: 0.2,
+        max_tokens: 1000,
+        stream: false,
+      }),
+    });
+
+    if (!response.ok) return trimmed;
+    const data = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
+    return data.choices?.[0]?.message?.content?.trim() || trimmed;
+  } catch {
+    return trimmed;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+

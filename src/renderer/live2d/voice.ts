@@ -26,6 +26,9 @@ export function cleanTextForSpeech(text: string): string {
 
   let cleaned = text;
 
+  // Strip leading leaked timestamps e.g. [2026-09-07 10:04, UTC-5] or [2026-07-13 13:36, Asia/Shanghai]
+  cleaned = cleaned.trimStart().replace(/^\s*(?:\[\d{4}[-/.]\d{2}[-/.]\d{2}[ T]\d{2}:\d{2}(?::\d{2})?(?:,\s*[^\]]+)?\]\s*)+/, "").trimStart();
+
   // Strip code blocks and inline code
   cleaned = cleaned.replace(/```[\s\S]*?```/g, "");
   cleaned = cleaned.replace(/`[^`]*`/g, "");
@@ -68,11 +71,13 @@ export function cleanTextForSpeech(text: string): string {
 export class CompanionVoiceService {
   private muted = false;
   private isSpeaking = false;
+  private isSynthesizing = false;
   private currentAudio: HTMLAudioElement | null = null;
   private currentUtterance: SpeechSynthesisUtterance | null = null;
   private onStartSpeaking?: (durationMs: number) => void;
   private onStopSpeaking?: () => void;
   private disposed = false;
+  private speechQueue: string[] = [];
 
   constructor(options: CompanionVoiceOptions = {}) {
     this.onStartSpeaking = options.onStartSpeaking;
@@ -113,82 +118,85 @@ export class CompanionVoiceService {
   }
 
   getIsSpeaking(): boolean {
-    return this.isSpeaking;
+    return this.isSpeaking || this.isSynthesizing;
   }
 
   /**
    * Speak the given text out loud in sweet Chinese anime voice (Cyrene) and coordinate Live2D mouth movements.
    * Cleans kaomoji/emojis, strips actions/thoughts, and speaks in Chinese dialogue.
    */
-  async speak(text: string): Promise<boolean> {
+  async speak(text: string, options?: { queue?: boolean }): Promise<boolean> {
     if (this.disposed || this.muted || !text) return false;
 
+    if (options?.queue && (this.isSpeaking || this.isSynthesizing)) {
+      this.speechQueue.push(text);
+      return true;
+    }
+
+    this.speechQueue = [];
     const cleaned = cleanTextForSpeech(text);
     if (!cleaned) return false;
 
     this.stop();
+    this.isSynthesizing = true;
 
-    // =========================================================================
-    // [ARCHITECTURAL CONTRACT - GOLDEN IN-MEMORY TRANSLATION BRIDGE - DO NOT REMOVE]
-    // Documented in AGENTS.md Section 1.2 & 9.1.
-    // UI surface is 100% English. Spoken voice dialogue is 100% Chinese (昔涟 / Cyrene original voice).
-    // If the spoken text is in English, automatically translate it into natural, sweet spoken Mandarin Chinese!
-    // This translation is strictly ephemeral in memory for TTS synthesis, keeping UI surface 100% English.
-    // =========================================================================
-    let speechDialogue = cleaned;
-    if (!/[\u4e00-\u9fa5]/.test(speechDialogue)) {
-      try {
-        const win = typeof window !== "undefined" ? window : (globalThis as unknown as Window);
-        const tts = (win as unknown as { tts?: { translateToChinese?: (t: string) => Promise<string> } }).tts;
-        if (tts?.translateToChinese) {
-          const translated = await tts.translateToChinese(speechDialogue);
-          if (translated && /[\u4e00-\u9fa5]/.test(translated)) {
-            speechDialogue = translated;
-          }
-        }
-      } catch (trErr) {
-        console.warn("[CompanionVoice] Pre-synthesis translation to Chinese failed:", trErr);
-      }
-    }
-
-    // Check if cloud/local TTS engine is configured
     try {
+      console.info("[CompanionVoice] speak() started for text:", cleaned.slice(0, 80));
+
+      // =========================================================================
+      // [ARCHITECTURAL CONTRACT - GOLDEN IN-MEMORY TRANSLATION BRIDGE - DO NOT REMOVE]
+      // Documented in AGENTS.md Section 1.2 & 9.1.
+      // UI surface is 100% English. Spoken voice dialogue is 100% Chinese (昔涟 / Cyrene original voice).
+      //
+      // IMPORTANT: Translation is performed ONCE in the main process inside
+      // prepareGptsovitsVoicePayload (index.ts). Pre-translating here causes
+      // a double-translation round-trip (renderer → main → GTX → main) adding
+      // 1–6 seconds of latency. The cleaned English text is passed directly to
+      // synthesizeCachedGptsovits; the main process bridge handles Mandarin
+      // conversion in-memory before feeding GPT-SoVITS.
+      //
+      // DO NOT restore the old window.tts.translateToChinese() call here.
+      // =========================================================================
+      const speechDialogue = cleaned;
+
+      // Check if cloud/local TTS engine is configured
       const win = typeof window !== "undefined" ? window : (globalThis as unknown as Window);
       const settings = await (win as unknown as { settings?: { getGeneral: () => Promise<Record<string, unknown>> } })
-        .settings?.getGeneral?.();
+        .settings?.getGeneral?.().catch(() => ({}));
 
-      const engine = String(settings?.ttsEngine || (settings ? "gptsovits" : "web-speech"));
+      const engine = String(
+        settings?.ttsEngine || (settings || (win as any).tts ? "gptsovits" : "web-speech")
+      );
 
       if (engine === "off") {
+        console.info("[CompanionVoice] TTS is configured to 'off' in settings");
         return false;
       }
 
       if (engine === "gptsovits") {
-        const played = await this.playGptsovits(speechDialogue, settings);
+        console.info("[CompanionVoice] Synthesizing via Hugging Face GPT-SoVITS local server...");
+        const played = await this.playGptsovits(speechDialogue, settings || {});
         if (!played) {
           console.warn("[CompanionVoice] GPT-SoVITS server (http://127.0.0.1:9880) is unreachable or offline. Suppressing speech to prevent robot voice leaks.");
           return false;
         }
         return true;
       } else if (engine === "edge") {
-        const played = await this.playOnlineNeural(speechDialogue);
-        return played;
+        return await this.playOnlineNeural(speechDialogue);
       } else if (engine === "minimax" && settings?.ttsMinimaxKey && settings?.ttsMinimaxVoiceId) {
-        const played = await this.playCloudMinimax(speechDialogue, settings);
-        return played;
+        return await this.playCloudMinimax(speechDialogue, settings);
       } else if (engine === "mossland" && settings?.ttsMosslandKey && settings?.ttsMosslandVoiceId) {
-        const played = await this.playCloudMossland(speechDialogue, settings);
-        return played;
+        return await this.playCloudMossland(speechDialogue, settings);
       } else if (engine === "web-speech") {
         return this.speakWebSpeech(speechDialogue);
       }
-    } catch {
-      return false;
-    }
 
-    // Default: try GPT-SoVITS local server. If offline, return false silently rather than leaking robot voice.
-    return false;
+      return false;
+    } finally {
+      this.isSynthesizing = false;
+    }
   }
+
 
   private async playOnlineNeural(text: string): Promise<boolean> {
     try {
@@ -395,7 +403,10 @@ export class CompanionVoiceService {
       }) => Promise<{ base64: string; format: string }>;
     } }).tts;
 
-    if (!tts?.synthesizeCachedGptsovits) return false;
+    if (!tts?.synthesizeCachedGptsovits) {
+      console.warn("[CompanionVoice] window.tts.synthesizeCachedGptsovits not available");
+      return false;
+    }
 
     const baseUrl = String(settings.ttsGptsovitsBaseUrl || "http://127.0.0.1:9880");
     const refAudioPath = String(settings.ttsGptsovitsRefAudioPath || "resources/voice/cyrene/ref_audio.wav");
@@ -407,6 +418,7 @@ export class CompanionVoiceService {
     }
 
     try {
+      console.info(`[CompanionVoice] Requesting GPT-SoVITS synthesis from ${baseUrl} for "${text.slice(0, 40)}"`);
       const res = await tts.synthesizeCachedGptsovits({
         baseUrl,
         refAudioPath,
@@ -417,9 +429,11 @@ export class CompanionVoiceService {
       });
 
       if (res && res.base64) {
+        console.info(`[CompanionVoice] GPT-SoVITS returned audio (${res.base64.length} chars base64). Starting playback...`);
         const volume = typeof settings.ttsVolume === "number" ? settings.ttsVolume : 1.0;
         return this.playBase64Audio(res.base64, res.format || "wav", volume);
       }
+      console.warn("[CompanionVoice] GPT-SoVITS returned empty response payload");
     } catch (err) {
       console.warn("[CompanionVoice] GPT-SoVITS synthesis failed:", err);
       try {
@@ -440,12 +454,56 @@ export class CompanionVoiceService {
 
     try {
       const mime = format === "wav" ? "audio/wav" : "audio/mpeg";
-      const audio = new Audio(`data:${mime};base64,${base64}`);
+      let audioSrc = `data:${mime};base64,${base64}`;
+      let blobUrl: string | null = null;
+
+      // Prefer native Blob URL for fast and reliable browser audio decoding
+      if (
+        typeof Blob !== "undefined" &&
+        typeof URL !== "undefined" &&
+        typeof URL.createObjectURL === "function" &&
+        typeof atob === "function"
+      ) {
+        try {
+          const binary = atob(base64);
+          const bytes = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i);
+          }
+          const blob = new Blob([bytes], { type: mime });
+          blobUrl = URL.createObjectURL(blob);
+          audioSrc = blobUrl;
+        } catch {
+          // Fall back to data URI
+        }
+      }
+
+      const audio = new Audio(audioSrc);
       audio.volume = Math.max(0, Math.min(1, Number(volume ?? 1.0)));
       this.currentAudio = audio;
       this.isSpeaking = true;
 
+      const cleanup = () => {
+        this.isSpeaking = false;
+        this.currentAudio = null;
+        if (blobUrl && typeof URL !== "undefined" && typeof URL.revokeObjectURL === "function") {
+          try {
+            URL.revokeObjectURL(blobUrl);
+          } catch {}
+          blobUrl = null;
+        }
+        this.onStopSpeaking?.();
+
+        if (this.speechQueue.length > 0) {
+          const nextText = this.speechQueue.shift();
+          if (nextText) {
+            void this.speak(nextText);
+          }
+        }
+      };
+
       audio.onplay = () => {
+        console.info("[CompanionVoice] Audio playback actively started on speakers");
         const durationMs = Number.isFinite(audio.duration) && audio.duration > 0
           ? Math.round(audio.duration * 1000)
           : 3000;
@@ -453,25 +511,54 @@ export class CompanionVoiceService {
       };
 
       audio.onended = () => {
-        this.isSpeaking = false;
-        this.currentAudio = null;
-        this.onStopSpeaking?.();
+        console.info("[CompanionVoice] Audio playback ended naturally");
+        cleanup();
       };
 
       audio.onerror = (e) => {
         console.warn("[CompanionVoice] Audio element error event:", e);
-        this.isSpeaking = false;
-        this.currentAudio = null;
-        this.onStopSpeaking?.();
+        cleanup();
       };
 
       const playPromise = audio.play();
       if (playPromise && typeof playPromise.catch === "function") {
-        playPromise.catch((err) => {
-          console.warn("[CompanionVoice] audio.play() promise rejected:", err);
-          this.isSpeaking = false;
-          this.currentAudio = null;
-          this.onStopSpeaking?.();
+        playPromise.catch(async (err) => {
+          console.warn("[CompanionVoice] audio.play() rejected, attempting Web Audio API direct output fallback:", err);
+          try {
+            const win = typeof window !== "undefined" ? window : (globalThis as unknown as Window);
+            const AudioCtx = (win as any).AudioContext || (win as any).webkitAudioContext;
+            if (AudioCtx && typeof atob === "function") {
+              const ctx = new AudioCtx();
+              if (ctx.state === "suspended") {
+                await ctx.resume();
+              }
+              const binary = atob(base64);
+              const bytes = new Uint8Array(binary.length);
+              for (let i = 0; i < binary.length; i++) {
+                bytes[i] = binary.charCodeAt(i);
+              }
+              const audioBuffer = await ctx.decodeAudioData(bytes.buffer.slice(0));
+              const source = ctx.createBufferSource();
+              source.buffer = audioBuffer;
+              const gainNode = ctx.createGain();
+              gainNode.gain.value = Math.max(0, Math.min(1, Number(volume ?? 1.0)));
+              source.connect(gainNode);
+              gainNode.connect(ctx.destination);
+              this.isSpeaking = true;
+              this.onStartSpeaking?.(Math.round(audioBuffer.duration * 1000));
+              source.onended = () => {
+                console.info("[CompanionVoice] Web Audio API playback ended naturally");
+                cleanup();
+                ctx.close().catch(() => {});
+              };
+              source.start();
+              console.info("[CompanionVoice] Web Audio API fallback playback started successfully!");
+              return;
+            }
+          } catch (ctxErr) {
+            console.warn("[CompanionVoice] Web Audio API fallback failed:", ctxErr);
+          }
+          cleanup();
         });
       }
       return true;
@@ -485,7 +572,9 @@ export class CompanionVoiceService {
   }
 
   stop(): void {
+    this.speechQueue = [];
     this.isSpeaking = false;
+    this.isSynthesizing = false;
 
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
       try {
