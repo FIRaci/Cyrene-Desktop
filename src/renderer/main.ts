@@ -76,6 +76,8 @@ const gestureController = new GestureInteractionController({
 let accumulatedAgentSpeech = "";
 let earlySentenceDelivered = false;
 let earlySentenceText = "";
+let roleplayReactionTriggeredThisTurn = false;
+let lastRoleplayReactionTime = 0;
 let lastAgentSpeechKaomojiTime = 0;
 let isChatOpen = false;
 
@@ -98,6 +100,10 @@ const chatVisibilityOff = window.petCompanion?.onChatVisibilityChanged?.((visibl
 }) ?? (() => {});
 
 function triggerRoleplayReactions(text: string): void {
+  const now = Date.now();
+  if (now - lastRoleplayReactionTime < 4000) return;
+  lastRoleplayReactionTime = now;
+
   const lower = text.toLowerCase();
 
   const isAffectionate = /(kiss|embrace|hug|hold|caress|touch|blush|shy|flutter|tender|sweet|warm|heart|love|darling|master|passionate|lips|gently|lean)/i.test(lower);
@@ -170,6 +176,7 @@ const petAgentEventOff = window.petCompanion?.onAgentEvent((rawEvent) => {
     accumulatedAgentSpeech = "";
     earlySentenceDelivered = false;
     earlySentenceText = "";
+    roleplayReactionTriggeredThisTurn = false;
   } else if (event.type === "TEXT_MESSAGE_CONTENT") {
     if (event.delta) {
       accumulatedAgentSpeech += event.delta;
@@ -179,6 +186,7 @@ const petAgentEventOff = window.petCompanion?.onAgentEvent((rawEvent) => {
         if (sentenceMatch && sentenceMatch[1].trim().length >= 8) {
           earlySentenceDelivered = true;
           earlySentenceText = sentenceMatch[1].trim();
+          roleplayReactionTriggeredThisTurn = true;
           triggerRoleplayReactions(earlySentenceText);
           if (!suppressBubbles) {
             companionBubbles.say(earlySentenceText, 4000, companionVoice);
@@ -192,14 +200,12 @@ const petAgentEventOff = window.petCompanion?.onAgentEvent((rawEvent) => {
       const speechToDeliver = accumulatedAgentSpeech.trim();
       accumulatedAgentSpeech = "";
 
-      triggerRoleplayReactions(speechToDeliver);
+      if (!roleplayReactionTriggeredThisTurn) {
+        roleplayReactionTriggeredThisTurn = true;
+        triggerRoleplayReactions(speechToDeliver);
+      }
 
       if (!suppressBubbles) {
-        const now = Date.now();
-        if (now - lastAgentSpeechKaomojiTime > 15_000) {
-          lastAgentSpeechKaomojiTime = now;
-          kaomojiController.spawn();
-        }
         companionBubbles.say(speechToDeliver, 4000, companionVoice);
       }
 
