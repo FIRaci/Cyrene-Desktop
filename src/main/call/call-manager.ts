@@ -8,8 +8,9 @@
 import { BrowserWindow, ipcMain } from "electron";
 import { IPC } from "../../shared/ipc-channels";
 import { VolcanoAsrStream, getAsrConfig } from "../asr/volcano-asr-engine";
-import { synthesizeByEngine } from "../tts/tts-dispatcher";
-import { translateEnglishToMandarinSpeech } from "../tts/speech-translation";
+import { transcribePcm, startLocalAsr, stopLocalAsr } from "../asr/local-whisper-engine";
+import { synthesizeByEngine, getDefaultCyreneRefAudioPath, getDefaultCyrenePromptText } from "../tts/tts-dispatcher";
+import { translateEnglishToMandarinSpeech, translateChineseToEnglishText } from "../tts/speech-translation";
 import type { TtsEngine } from "../../shared/tts-types";
 import { runFunctionCallingLoop } from "../orchestrator";
 import { getAdapter, buildVendorUrlByProvider } from "../orchestrator/vendors";
@@ -20,11 +21,21 @@ const LOG_PREFIX = "[CallManager]";
 
 export type CallState = "IDLE" | "LISTENING" | "THINKING" | "SPEAKING" | "ERROR" | "ENDED";
 
+export type ActivityLoggerFn = (
+  type: "user" | "reasoning" | "response" | "kaomoji" | "tool" | "error" | "system",
+  text: string,
+  meta?: unknown,
+  channel?: string,
+) => void;
+
 let callWindow: BrowserWindow | null = null;
 let asrStream: VolcanoAsrStream | null = null;
 let currentState: CallState = "IDLE";
 let finalText = "";
 let active = false;
+let activityLogger: ActivityLoggerFn | null = null;
+/** Accumulated PCM audio frames for the current user turn */
+const turnAudioFrames: Buffer[] = [];
 
 /** Call context: retains most recent N turns of dialogue history (each turn = user + assistant pair).
  * Retains 24 turns (48 messages) for conversational memory continuity.
@@ -57,7 +68,7 @@ let ttsSettingsGetter: (() => {
   ttsMimoKey: string; ttsMimoVoiceAudioPath: string; ttsMimoStylePrompt: string;
 }) | null = null;
 
-/** Injects model config, TTS config, and system prompt builder at startup. */
+/** Injects model config, TTS config, system prompt builder, and activity logger at startup. */
 let systemPromptBuilder: ((userText: string) => Promise<string>) | null = null;
 let weatherHandler: ((userText: string) => Promise<string | null>) | null = null;
 
@@ -76,16 +87,25 @@ export function setCallSettings(
   },
   systemPromptFn: (userText: string) => Promise<string>,
   weatherFn: (userText: string) => Promise<string | null>,
+  loggerFn?: ActivityLoggerFn,
 ): void {
   modelSettingsGetter = modelGetter;
   ttsSettingsGetter = ttsGetter;
   systemPromptBuilder = systemPromptFn;
   weatherHandler = weatherFn;
+  if (loggerFn) activityLogger = loggerFn;
+}
+
+export function setActivityLogger(logger: ActivityLoggerFn | null): void {
+  activityLogger = logger;
 }
 
 /** Binds call window (invoked by createCallWindow). */
 export function setCallWindow(win: BrowserWindow | null): void {
   callWindow = win;
+  if (win && !win.isDestroyed() && active) {
+    sendState(currentState === "ENDED" || !currentState ? "LISTENING" : currentState);
+  }
 }
 
 /** Whether a call is currently active. */
@@ -114,37 +134,104 @@ function sendAsrResult(partial: string | undefined, final: string | undefined): 
   }
 }
 
-function sendTtsAudio(base64: string): void {
+function sendTtsAudio(base64: string, format: "wav" | "mp3" | "pcm" = "wav", text?: string): void {
   if (callWindow && !callWindow.isDestroyed()) {
-    callWindow.webContents.send(IPC.CALL_TTS_AUDIO, { base64 });
+    callWindow.webContents.send(IPC.CALL_TTS_AUDIO, { base64, format, text });
   }
 }
 
-const COMPANION_CALL_REPLIES = [
-  "开拓者，希琳在这里听着呢~ 有什么开心的事情想跟我分享吗？",
-  "希琳一直都在这里陪伴着你哦！开拓者现在是在工作还是在休息呢？",
-  "嗯嗯，听到开拓者的声音了呢~ 感觉心里暖洋洋的！",
-  "开拓者，今天过得怎么样？要注意劳逸结合哦~",
-  "希琳一直在跟你连线呢，随时都可以跟我聊天哦！",
-  "诶嘿嘿，真喜欢像现在这样陪在开拓者身边连麦呢~",
-  "嗯哼~ 希琳正在认真听开拓者说话呢！",
-  "开拓者就算把麦开着放旁边也没关系哦，希琳会一直安静陪着你~",
-  "希琳就在这里呢，有需要随时叫我哦！",
-  "听到开拓者上线连麦，希琳真的好开心呀，嘻嘻~",
+export interface CompanionCallPair {
+  chinese: string;
+  english: string;
+}
+
+export const COMPANION_CALL_PAIRS: CompanionCallPair[] = [
+  {
+    chinese: "开拓者，希琳一直都在这里陪着你哦。有什么想和我分享的吗？",
+    english: "Master, Cyrene is listening right here~ Is there anything you'd like to share with me?",
+  },
+  {
+    chinese: "希琳会一直陪伴在开拓者身边！开拓者是在工作还是在休息呢？",
+    english: "Cyrene is always right here by your side! Are you working or taking a rest, Master?",
+  },
+  {
+    chinese: "嗯哼~ 听到开拓者的声音，希琳心里感觉暖洋洋的呢。",
+    english: "Mmh, hearing your voice makes my heart feel so warm and cozy, Master~",
+  },
+  {
+    chinese: "开拓者今天过得怎么样？请一定要好好照顾自己哦。",
+    english: "Master, how is your day going? Please remember to take good care of yourself, okay?",
+  },
+  {
+    chinese: "希琳随时都在线陪着开拓者，想聊天的话随时都可以哦！",
+    english: "I'm always on the line with you, Master. We can chat whenever you feel like it!",
+  },
+  {
+    chinese: "嘿嘿，希琳真的很喜欢像这样和开拓者通电话呢~",
+    english: "Hehe, I really love being on a voice call with you like this, Master~",
+  },
+  {
+    chinese: "嗯嗯~ 开拓者说的每一句话，希琳都在很认真地听着呢！",
+    english: "Mm-hmm~ Cyrene is listening attentively to every little thing you say, Master!",
+  },
+  {
+    chinese: "就算开拓者工作时不说话，希琳也会安安静静地守在身边陪着你哦~",
+    english: "Even if you just leave the mic open while you work, Cyrene will keep you company quietly~",
+  },
+  {
+    chinese: "希琳就在这里，开拓者有任何需要随时呼唤我哦！",
+    english: "Cyrene is right here, call me whenever you need me, Master!",
+  },
+  {
+    chinese: "能在通话里听到开拓者的声音，希琳真的好开心，嘻嘻~",
+    english: "Hearing you on our call makes Cyrene so happy, hehe~",
+  },
 ];
 
-function getRandomCompanionCallReply(): string {
-  const idx = Math.floor(Math.random() * COMPANION_CALL_REPLIES.length);
-  return COMPANION_CALL_REPLIES[idx];
+export const UNHEARD_CALL_PAIRS: CompanionCallPair[] = [
+  {
+    chinese: "开拓者，希琳刚才好像没有听清楚呢……能再对希琳说一次吗？",
+    english: "Master, I couldn't quite hear that clearly... Could you say that again for Cyrene?",
+  },
+  {
+    chinese: "嗯？开拓者刚才说了什么吗？希琳在很认真地听着哦，请再说一遍吧~",
+    english: "Hmm? Did you say something, Master? I'm listening closely, please say it again~",
+  },
+  {
+    chinese: "开拓者的声音好像有点小呢，希琳想更清楚地听到你的声音，再对我说一句好吗？",
+    english: "Your voice was a little soft, Master. I really want to hear you clearly, could you tell me once more?",
+  },
+];
+
+export function getRandomCompanionCallPair(): CompanionCallPair {
+  const idx = Math.floor(Math.random() * COMPANION_CALL_PAIRS.length);
+  return COMPANION_CALL_PAIRS[idx];
+}
+
+export function getRandomUnheardCallPair(): CompanionCallPair {
+  const idx = Math.floor(Math.random() * UNHEARD_CALL_PAIRS.length);
+  return UNHEARD_CALL_PAIRS[idx];
+}
+
+export function getRandomCompanionCallReply(): string {
+  return getRandomCompanionCallPair().english;
 }
 
 /** Starts call: initializes ASR stream if configured, transitions to LISTENING. */
 export function startCall(): void {
-  if (active) return;
+  if (active) {
+    sendState(currentState === "ENDED" || !currentState ? "LISTENING" : currentState);
+    return;
+  }
   active = true;
   finalText = "";
+  turnAudioFrames.length = 0;
   callHistory.length = 0;
   console.log(LOG_PREFIX, "Call started: cleared final text and context");
+  activityLogger?.("system", "Voice Call connected (Open-Mic Companion Mode)", undefined, "Voice Call");
+
+  // Warm up Faster-Whisper ASR worker in background
+  void startLocalAsr().catch((err) => console.warn(LOG_PREFIX, "Local ASR warmup warning:", err));
 
   const cfg = getAsrConfig();
   if (cfg && cfg.engine === "aliyun" && cfg.appKey && cfg.accessKeyId && cfg.accessKeySecret) {
@@ -175,71 +262,135 @@ function startAsrStream(cfg: { appKey: string; accessKeyId: string; accessKeySec
 
 /** Concludes turn (VAD silence or text submitted): runs agent -> synthesizes TTS -> plays. */
 export async function endTurn(): Promise<void> {
-  console.log(LOG_PREFIX, "Ending turn: active=", active, "state=", currentState, "finalText.length=", finalText.length);
+  console.log(LOG_PREFIX, "Ending turn: active=", active, "state=", currentState, "finalText.length=", finalText.length, "turnAudioFrames=", turnAudioFrames.length);
   if (!active || currentState !== "LISTENING") return;
 
   if (asrStream) asrStream.stop();
 
   let text = finalText.trim();
   finalText = "";
+  let hadSpokenFrames = false;
 
-  // In Open-Mic mode without cloud ASR transcript, silence detection indicates
-  // the user has spoken; pick a companion reply so Cyrene always engages!
+  // If no text was submitted via quick-chat, transcribe the user's spoken mic audio!
+  if (!text && turnAudioFrames.length > 0) {
+    hadSpokenFrames = true;
+    const pcmData = Buffer.concat(turnAudioFrames);
+    turnAudioFrames.length = 0;
+
+    // 16kHz 16-bit mono: 32000 bytes/sec. Minimum ~0.15s of audio = 4800 bytes
+    if (pcmData.length >= 4800) {
+      console.log(LOG_PREFIX, `Transcribing turn audio: ${pcmData.length} bytes (~${(pcmData.length / 32000).toFixed(1)}s)`);
+      try {
+        const ms = modelSettingsGetter?.();
+        const asrCfg = getAsrConfig();
+        const lang = asrCfg?.language || "auto";
+        const transcribed = await transcribePcm(pcmData, lang, ms);
+        if (transcribed && transcribed.trim().length > 0) {
+          text = transcribed.trim();
+          console.log(LOG_PREFIX, `Recognized speech: "${text}"`);
+          sendAsrResult(undefined, text);
+        }
+      } catch (asrErr) {
+        console.warn(LOG_PREFIX, "Speech transcription failed:", asrErr);
+      }
+    }
+  } else {
+    turnAudioFrames.length = 0;
+  }
+
+  let companionPair: CompanionCallPair | null = null;
   const isCompanionPrompt = !text;
   if (!text) {
-    text = getRandomCompanionCallReply();
+    if (hadSpokenFrames) {
+      // User spoke on mic, but ASR did not capture clear words -> ask to repeat lovingly
+      companionPair = getRandomUnheardCallPair();
+      text = companionPair.english;
+      sendAsrResult(undefined, "(Inaudible / soft voice)");
+      activityLogger?.("user", "(Inaudible / soft voice on mic)", { isVoice: true }, "Voice Call");
+    } else {
+      companionPair = getRandomCompanionCallPair();
+      text = companionPair.english;
+      activityLogger?.("user", "(Spoke on microphone)", { isVoice: true }, "Voice Call");
+    }
+  } else {
+    activityLogger?.("user", text, { isVoice: !finalText }, "Voice Call");
   }
 
   sendState("THINKING");
+  activityLogger?.("reasoning", "Thinking of a sweet reply for Master...", undefined, "Voice Call");
 
   try {
-    // Generate reply text
-    console.log(LOG_PREFIX, "Agent turn started, text.length=", text.length);
-    let reply: string | null = null;
-    if (isCompanionPrompt) {
-      reply = text;
+    let speechText = "";
+    let englishTranslation = "";
+
+    if (companionPair) {
+      speechText = companionPair.chinese;
+      englishTranslation = companionPair.english;
     } else {
-      reply = await runAgentTurn(text);
+      const agentReply = await runAgentTurn(text);
+      if (agentReply) {
+        if (/[\u4e00-\u9fff]/.test(agentReply)) {
+          // LLM replied in Chinese
+          speechText = agentReply;
+          try {
+            const transEn = await translateChineseToEnglishText(agentReply, modelSettingsGetter?.());
+            englishTranslation = (transEn && transEn !== agentReply) ? transEn : agentReply;
+          } catch {
+            englishTranslation = agentReply;
+          }
+        } else {
+          // LLM replied in English
+          englishTranslation = agentReply;
+          try {
+            const transZh = await translateEnglishToMandarinSpeech(agentReply, modelSettingsGetter?.());
+            speechText = (transZh && /[\u4e00-\u9fff]/.test(transZh)) ? transZh : agentReply;
+          } catch {
+            speechText = agentReply;
+          }
+        }
+      } else {
+        const fallback = getRandomCompanionCallPair();
+        speechText = fallback.chinese;
+        englishTranslation = fallback.english;
+      }
     }
 
-    if (!reply) {
-      reply = getRandomCompanionCallReply();
-    }
-    console.log(LOG_PREFIX, "Agent turn result, reply.length=", reply.length);
+    console.log(LOG_PREFIX, `Agent turn result -> speechText (zh): "${speechText}", english: "${englishTranslation}"`);
 
-    // Determine TTS engine: fallback to Edge Neural TTS if unconfigured or off
+    // Determine TTS engine: default to gptsovits (Hugging Face Cyrene model)
     const tts = ttsSettingsGetter?.();
-    let engine: TtsEngine = tts?.ttsEngine ?? "off";
+    let engine: TtsEngine = tts?.ttsEngine ?? "gptsovits";
     if (!engine || engine === "off") {
-      engine = "edge";
+      engine = "gptsovits";
     }
 
-    // Engine validation fallback
+    // Engine validation fallback: always fallback to gptsovits, never to edge
     if (engine === "minimax" && (!tts?.ttsMinimaxKey || !tts?.ttsMinimaxVoiceId)) {
-      console.warn(LOG_PREFIX, "MiniMax unconfigured, falling back to Edge TTS");
-      engine = "edge";
-    } else if (engine === "gptsovits" && (!tts?.ttsGptsovitsBaseUrl || !tts?.ttsGptsovitsRefAudioPath)) {
-      console.warn(LOG_PREFIX, "GPT-SoVITS unconfigured, falling back to Edge TTS");
-      engine = "edge";
+      console.warn(LOG_PREFIX, "MiniMax unconfigured, falling back to gptsovits");
+      engine = "gptsovits";
     } else if (engine === "custom-cloud" && !tts?.ttsCustomCloudEndpointUrl) {
-      console.warn(LOG_PREFIX, "Custom cloud TTS unconfigured, falling back to Edge TTS");
-      engine = "edge";
+      console.warn(LOG_PREFIX, "Custom cloud TTS unconfigured, falling back to gptsovits");
+      engine = "gptsovits";
     } else if (engine === "mimo" && (!tts?.ttsMimoKey || !tts?.ttsMimoVoiceAudioPath)) {
-      console.warn(LOG_PREFIX, "MiMo unconfigured, falling back to Edge TTS");
-      engine = "edge";
+      console.warn(LOG_PREFIX, "MiMo unconfigured, falling back to gptsovits");
+      engine = "gptsovits";
     }
 
     sendState("SPEAKING");
     try {
-      let speechText = reply;
-      if (!/[\u4e00-\u9fff]/.test(speechText)) {
-        try {
-          const trans = await translateEnglishToMandarinSpeech(speechText, modelSettingsGetter?.());
-          if (trans && /[\u4e00-\u9fff]/.test(trans)) {
-            speechText = trans;
-          }
-        } catch {}
-      }
+      // Activity Log (Alt+4): display spoken Chinese sentence and its automatic English translation
+      const bilingualLogText = `${speechText}\n(English Translation): ${englishTranslation}`;
+      activityLogger?.("response", bilingualLogText, {
+        chinese: speechText,
+        english: englishTranslation,
+        speechText,
+        ttsEngine: engine,
+      }, "Voice Call");
+
+      const gptsovitsBaseUrl = tts?.ttsGptsovitsBaseUrl || "http://127.0.0.1:9880";
+      const gptsovitsRef = tts?.ttsGptsovitsRefAudioPath || getDefaultCyreneRefAudioPath();
+      const gptsovitsPrompt = tts?.ttsGptsovitsPromptText || getDefaultCyrenePromptText() || "开拓者，希琳一直都在这里陪着你哦。";
+      const gptsovitsFormat = tts?.ttsGptsovitsFormat || "wav";
 
       const result = await synthesizeByEngine(engine, {
         text: speechText,
@@ -250,50 +401,34 @@ export async function endTurn(): Promise<void> {
           : engine === "custom-cloud"
             ? tts?.ttsCustomCloudApiKey
             : tts?.ttsMinimaxKey,
-        voiceId: engine === "edge"
-          ? "zh-CN-XiaoyiNeural"
-          : engine === "mimo"
-            ? ""
-            : engine === "custom-cloud"
-              ? tts?.ttsCustomCloudVoiceId
-              : tts?.ttsMinimaxVoiceId,
+        voiceId: engine === "mimo"
+          ? ""
+          : engine === "custom-cloud"
+            ? tts?.ttsCustomCloudVoiceId
+            : tts?.ttsMinimaxVoiceId,
         model: tts?.ttsMinimaxModel,
-        baseUrl: tts?.ttsGptsovitsBaseUrl,
-        refAudioPath: tts?.ttsGptsovitsRefAudioPath,
-        promptText: tts?.ttsGptsovitsPromptText,
-        format: tts?.ttsGptsovitsFormat,
+        baseUrl: gptsovitsBaseUrl,
+        refAudioPath: gptsovitsRef,
+        promptText: gptsovitsPrompt,
+        format: gptsovitsFormat,
         endpointUrl: tts?.ttsCustomCloudEndpointUrl,
         timeoutMs: tts?.ttsCustomCloudTimeoutMs,
         voiceAudioPath: tts?.ttsMimoVoiceAudioPath,
         stylePrompt: tts?.ttsMimoStylePrompt,
         ...(engine === "custom-cloud" ? { format: tts?.ttsCustomCloudFormat } : {}),
       });
-      sendTtsAudio(result.audio.toString("base64"));
+      sendTtsAudio(result.audio.toString("base64"), result.format, bilingualLogText);
     } catch (ttsErr) {
       const msg = ttsErr instanceof Error ? ttsErr.message : String(ttsErr);
-      console.warn(LOG_PREFIX, "Primary TTS failed, trying Edge fallback:", msg);
-      if (engine !== "edge") {
-        try {
-          let fallbackText = reply;
-          if (!/[\u4e00-\u9fff]/.test(fallbackText)) {
-            try {
-              const trans = await translateEnglishToMandarinSpeech(fallbackText, modelSettingsGetter?.());
-              if (trans && /[\u4e00-\u9fff]/.test(trans)) fallbackText = trans;
-            } catch {}
-          }
-          const edgeResult = await synthesizeByEngine("edge", { text: fallbackText, voiceId: "zh-CN-XiaoyiNeural" });
-          sendTtsAudio(edgeResult.audio.toString("base64"));
-          return;
-        } catch (edgeErr) {
-          console.error(LOG_PREFIX, "Edge fallback TTS also failed:", edgeErr);
-        }
-      }
+      console.warn(LOG_PREFIX, "TTS synthesis failed:", msg);
+      activityLogger?.("error", `Voice synthesis failed (${engine}): ${msg}`, undefined, "Voice Call");
       sendState("LISTENING");
       restartAsr();
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(LOG_PREFIX, "Call turn failed:", msg);
+    activityLogger?.("error", `Call turn error: ${msg}`, undefined, "Voice Call");
     sendState("LISTENING");
     restartAsr();
   }
@@ -302,6 +437,7 @@ export async function endTurn(): Promise<void> {
 /** Resumes LISTENING and restarts ASR after TTS playback completes. */
 export function onTtsDone(): void {
   if (!active) return;
+  turnAudioFrames.length = 0;
   sendState("LISTENING");
   restartAsr();
 }
@@ -319,15 +455,21 @@ function restartAsr(): void {
 export function stopCall(): void {
   active = false;
   callHistory.length = 0;
+  turnAudioFrames.length = 0;
+  stopLocalAsr();
   if (asrStream) {
     asrStream.stop();
     asrStream = null;
   }
+  activityLogger?.("system", "Voice Call ended", undefined, "Voice Call");
   sendState("ENDED");
 }
 
 /** Handles audio frames: forwards to ASR if active. */
 export function handleAudioFrame(frame: Buffer): void {
+  if (currentState === "LISTENING") {
+    turnAudioFrames.push(frame);
+  }
   if (asrStream && currentState === "LISTENING") {
     asrStream.sendAudio(frame);
   }

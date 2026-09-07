@@ -140,11 +140,11 @@ body { overflow: hidden; }
 
 .call__transcript-user {
   text-align: right; color: var(--rb-text-default); font-size: 13px;
-  margin-bottom: 8px; line-height: 1.6;
+  margin-bottom: 8px; line-height: 1.6; white-space: pre-wrap; word-break: break-word;
 }
 .call__transcript-bot {
   text-align: left; color: var(--rb-text-on-pink); font-size: 13px;
-  margin-bottom: 8px; line-height: 1.6;
+  margin-bottom: 8px; line-height: 1.6; white-space: pre-wrap; word-break: break-word;
 }
 
 /* Quick chat input bar */
