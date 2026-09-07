@@ -137,3 +137,7 @@ walkthrough.md
 
 # External runtime repos & vendors
 vendor/gpt-sovits/
+
+# Python cache
+__pycache__/
+*.pyc
