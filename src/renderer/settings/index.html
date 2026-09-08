@@ -1182,7 +1182,7 @@
               <div class="plugin-card__icon"><svg width="22" height="22" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M30.7826 24.5652C34.5285 24.5652 37.5652 21.5285 37.5652 17.7826C37.5652 14.0367 34.5285 11 30.7826 11C27.4338 11 24.6518 13.427 24.0996 16.618" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M33 7C34.1046 7 35 6.10457 35 5C35 3.89543 34.1046 3 33 3C31.8954 3 31 3.89543 31 5C31 6.10457 31.8954 7 33 7Z" fill="currentColor"/><path d="M42 12C43.1046 12 44 11.1046 44 10C44 8.89543 43.1046 8 42 8C40.8954 8 40 8.89543 40 10C40 11.1046 40.8954 12 42 12Z" fill="currentColor"/><path d="M44 21C45.1046 21 46 20.1046 46 19C46 17.8954 45.1046 17 44 17C42.8954 17 42 17.8954 42 19C42 20.1046 42.8954 21 44 21Z" fill="currentColor"/><path d="M22 10C23.1046 10 24 9.10457 24 8C24 6.89543 23.1046 6 22 6C20.8954 6 20 6.89543 20 8C20 9.10457 20.8954 10 22 10Z" fill="currentColor"/><path d="M9.45455 39.9942C6.14242 37.461 4 33.4278 4 28.8851C4 21.2166 10.1052 15 17.6364 15C23.9334 15 29.2336 19.3462 30.8015 25.2533C32.0353 24.6159 33.431 24.2567 34.9091 24.2567C39.9299 24.2567 44 28.4011 44 33.5135C44 37.3094 41.7562 40.5716 38.5455 42" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M22.2426 24.7574C21.1569 23.6716 19.6569 23 18 23C14.6863 23 12 25.6863 12 29C12 30.6569 12.6716 32.1569 13.7574 33.2426" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
               <div class="plugin-card__body">
                 <h2>Weather Inquiry</h2>
-                <p>Check real-time weather and city forecasts. Open-Meteo needs no configuration, or use AMap (<a href="https://lbs.amap.com" target="_blank" rel="noopener">register a key</a>).</p>
+                <p>Check real-time weather and city forecasts powered by Open-Meteo with zero configuration.</p>
                 <div class="plugin-config" id="plugin-weather-config">
                   <div class="tts-field">
                     <label for="weather-city-input">Current Location / City</label>
@@ -1192,21 +1192,7 @@
                     <span class="weather-privacy-badge__icon" aria-hidden="true">🛡️</span>
                     <span>Manual coarse city only. Cyrene never accesses your GPS, never traces your IP, and never shares your personal location.</span>
                   </div>
-                  <div class="tts-field">
-                    <label for="weather-source">Weather Source</label>
-                    <select id="weather-source">
-                      <option value="open-meteo">Open-Meteo (No Config, Recommended)</option>
-                      <option value="amap">AMap Weather (Requires Key, Accurate in China)</option>
-                    </select>
-                  </div>
-                  <div id="amap-fields" style="display:none">
-                    <div class="tts-field">
-                      <label for="amap-key">Google Maps / AMap Key (Optional)</label>
-                      <input type="password" id="amap-key" placeholder="Register Web Service Key at lbs.amap.com" autocomplete="off" />
-                    </div>
-                    <p class="user-field-hint">AMap Open Platform → Console → App Management → Create 'Web Service' Key.</p>
-                  </div>
-                  <p class="user-field-hint">Open-Meteo works out of the box with zero configuration.</p>
+                  <p class="user-field-hint">Open-Meteo provides global weather with zero API key configuration.</p>
                 </div>
               </div>
               <label class="plugin-switch" aria-label="Enable Weather Inquiry">
@@ -1219,17 +1205,11 @@
             <article class="plugin-card" id="plugin-travel-card">
               <div class="plugin-card__icon plugin-card__icon--nudge-left"><svg width="22" height="22" viewBox="0 0 128 128" fill="#34A1E6" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M112.5,16.5L15.5,64l48,16l16,48l48-96L112.5,16.5z M80.5,80.5l-16-16l32-32L80.5,80.5z"/></svg></div>
               <div class="plugin-card__body">
-                <h2>AMap Travel</h2>
-                <p>Check driving/walking/cycling/transit route plans and ETA. Requires AMap Key (
-                  <a href="https://lbs.amap.com" target="_blank" rel="noopener">Register Key</a>,
-                  Shared with Weather Inquiry).
+                <h2>Global Travel Planner</h2>
+                <p>Calculate driving, walking, cycling, and transit routes and estimated travel duration using keyless global coordinate geocoding (Open-Meteo Geocoding).
                 </p>
                 <div class="plugin-config" id="plugin-travel-config">
-                  <div class="tts-field">
-                    <label for="travel-amap-key">AMap Key</label>
-                    <input type="password" id="travel-amap-key" placeholder="Register Web Service Key at lbs.amap.com" autocomplete="off" />
-                  </div>
-                  <p class="user-field-hint">AMap Open Platform → Console → App Management → Create 'Web Service' Key. Shared with Weather Inquiry.</p>
+                  <p class="user-field-hint">Worldwide geocoding and road estimation works out of the box with zero configuration.</p>
                 </div>
               </div>
               <label class="plugin-switch" aria-label="Enable Travel Tools">
@@ -1413,19 +1393,19 @@
                 <div class="plugin-card__icon"><svg width="22" height="22" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M24 4C12.9543 4 4 12.9543 4 24C4 35.0457 12.9543 44 24 44C35.0457 44 44 35.0457 44 24C44 21.2883 43.4603 18.7026 42.4825 16.3446C42.2308 15.7376 41.9501 15.1457 41.6421 14.5707" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M35 10C37.2091 10 39 8.65685 39 7C39 5.34315 37.2091 4 35 4C32.7909 4 31 5.34315 31 7C31 8.65685 32.7909 10 35 10Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M24 31C27.866 31 31 27.866 31 24C31 20.134 27.866 17 24 17C20.134 17 17 20.134 17 24C17 27.866 20.134 31 24 31Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M31 6.5V24" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
                 <div class="plugin-card__body">
                   <h2>Music Tools</h2>
-                  <p>NetEase Cloud Music, QQ Music, Spotify, and Local Music.</p>
+                  <p>YouTube Music and Local Music.</p>
                 </div>
                 <button type="button" class="accordion-toggle" id="plugin-music-toggle" aria-label="Expand Music Tools" aria-expanded="false">▾</button>
               </div>
               <div class="plugin-accordion-body is-collapsed" id="plugin-music-body">
                 <div class="music-platform-grid" id="music-platform-list">
                   <button type="button" class="plugin-card plugin-card--sub music-platform" id="music-platform-netease" data-platform="netease">
-                    <div class="plugin-card__icon"><img data-music-logo alt="NetEase Cloud Music" /></div>
-                    <div class="plugin-card__body"><h2>NetEase Cloud Music</h2><p>Scan QR Code to Log In, then search and play songs.</p><span id="music-platform-status">Not Connected</span></div>
+                    <div class="plugin-card__icon">
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="#FF0000" aria-hidden="true"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>
+                    </div>
+                    <div class="plugin-card__body"><h2>YouTube Music</h2><p>Daily recommendations, song search, and web player.</p><span id="music-platform-status">Ready</span></div>
                   </button>
-                  <article class="plugin-card plugin-card--sub is-muted"><div class="plugin-card__body"><h2>QQ Music</h2><p>Coming Soon</p></div><span class="plugin-placeholder-tag">Coming Soon</span></article>
-                  <article class="plugin-card plugin-card--sub is-muted"><div class="plugin-card__body"><h2>Spotify</h2><p>Coming Soon</p></div><span class="plugin-placeholder-tag">Coming Soon</span></article>
-                  <article class="plugin-card plugin-card--sub is-muted"><div class="plugin-card__body"><h2>Local Music</h2><p>Coming Soon</p></div><span class="plugin-placeholder-tag">Coming Soon</span></article>
+                  <article class="plugin-card plugin-card--sub is-muted"><div class="plugin-card__body"><h2>Local Music</h2><p>System audio playback</p></div><span class="plugin-placeholder-tag">Available</span></article>
                 </div>
               </div>
             </article>
@@ -1467,20 +1447,23 @@
           </div>
           <div id="netease-detail-view" class="is-hidden">
             <button type="button" class="music-return-btn" id="music-return-btn">← Back to Music Platforms</button>
-            <header class="music-detail-header"><img data-music-logo alt="NetEase Cloud Music" /><div><h1>NetEase Cloud Music</h1><p>Scan QR Code to Log In, then search and play songs via desktop client.</p></div></header>
+            <header class="music-detail-header">
+              <div class="plugin-card__icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="#FF0000" aria-hidden="true"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg></div>
+              <div><h1>YouTube Music</h1><p>Daily recommendations, song search, and web playback with zero configuration.</p></div>
+            </header>
             <div class="music-card music-status-card">
-              <div class="music-status-main"><span class="music-status-dot" id="music-status-dot"></span><strong id="music-account-status-text">Not Connected</strong><span id="music-status-description"></span></div>
-              <div class="music-actions" id="music-actions"><button type="button" class="btn-primary" id="music-login-btn">Connect NetEase Cloud</button></div>
+              <div class="music-status-main"><span class="music-status-dot is-online" id="music-status-dot"></span><strong id="music-account-status-text">Ready</strong><span id="music-status-description">YouTube Music Companion is active and ready.</span></div>
+              <div class="music-actions" id="music-actions"><button type="button" class="btn-primary" id="music-login-btn">Open YouTube Music</button></div>
             </div>
             <div class="music-qr is-hidden" id="music-qr">
-              <img class="music-qr__img" id="music-qr-img" alt="Netease Music Login QR Code" />
+              <img class="music-qr__img" id="music-qr-img" alt="Music Login QR Code" />
               <div>
-                <strong>Scan with NetEase Cloud Music App</strong>
-                <p id="music-qr-tip">Please use NetEase Cloud Music App to scan the QR code to log in.</p>
-                <p id="music-qr-status">Current Status: Waiting for Scan</p>
+                <strong>Music Service Status</strong>
+                <p id="music-qr-tip">YouTube Music requires no phone scan or login credentials.</p>
+                <p id="music-qr-status">Current Status: Connected</p>
               </div>
             </div>
-            <div class="music-search-card music-card" id="music-search-card"><div class="music-card__header"><h2>Search Songs</h2></div><div class="music-card__body"><p id="music-search-hint" class="panel-hint">Search songs and get daily recommendations after connecting to NetEase Cloud.</p><div id="music-search-form" class="form-input-with-action is-hidden"><input type="text" id="music-search-input" class="form-input form-input--wide" placeholder="Enter song title or artist" autocomplete="off" /><button type="button" class="btn-secondary" id="music-search-btn">Search</button></div><div class="music-search-results" id="music-search-results"><p class="empty-hint">Search songs and get daily recommendations after connecting to NetEase Cloud.</p></div></div></div>
+            <div class="music-search-card music-card" id="music-search-card"><div class="music-card__header"><h2>Search Songs</h2></div><div class="music-card__body"><p id="music-search-hint" class="panel-hint">Search tracks and play directly via YouTube Music.</p><div id="music-search-form" class="form-input-with-action"><input type="text" id="music-search-input" class="form-input form-input--wide" placeholder="Enter song title or artist (e.g., Honkai Star Rail, Lofi Girl)" autocomplete="off" /><button type="button" class="btn-secondary" id="music-search-btn">Search</button></div><div class="music-search-results" id="music-search-results"><p class="empty-hint">Enter a keyword to search songs.</p></div></div></div>
             <div class="music-feedback" id="music-feedback"></div>
           </div>
         </section>

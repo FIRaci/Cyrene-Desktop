@@ -3689,44 +3689,34 @@ function setMusicFeedback(kind: "info" | "ok" | "err", msg: string): void {
 function renderMusicStatus(snapshot: MusicStatusSnapshot): void {
   const state = deriveNeteaseViewState(snapshot);
   const labels: Record<NeteaseViewState, string> = {
-    backend_starting: "Music service unavailable", backend_error: "Music service unavailable", signed_out: "Not connected",
+    backend_starting: "Music service unavailable", backend_error: "Music service unavailable", signed_out: "Ready",
     creating_qr: "Waiting for scan", waiting_scan: "Waiting for scan", waiting_confirm: "Scanned, confirm on mobile",
-    login_expired: "QR code expired", login_failed: "Login failed", connected: "Connected to NetEase Music", connected_without_client: "Logged in, but desktop client not detected",
+    login_expired: "QR code expired", login_failed: "Login failed", connected: "Connected to YouTube Music", connected_without_client: "Connected to YouTube Music",
   };
   if (musicAccountStatusText) musicAccountStatusText.textContent = labels[state];
   const musicStatusDot = document.getElementById("music-status-dot");
-  if (musicStatusDot) musicStatusDot.classList.toggle("is-connected", state === "connected" || state === "connected_without_client");
+  if (musicStatusDot) musicStatusDot.classList.toggle("is-connected", state === "connected" || state === "connected_without_client" || state === "signed_out");
   const actionHost = document.getElementById("music-actions");
   if (actionHost) {
     actionHost.innerHTML = "";
     const button = document.createElement("button");
     button.type = "button";
-    button.className = state === "signed_out" || state === "backend_error" ? "btn-primary" : "btn-secondary";
-    const actions: Partial<Record<NeteaseViewState, string>> = { signed_out: "Connect NetEase", creating_qr: "Cancel", waiting_scan: "Cancel", waiting_confirm: "Cancel", login_expired: "Regenerate QR", login_failed: "Retry login", connected: "Disconnect", connected_without_client: "Disconnect", backend_error: "Restart music service" };
-    if (actions[state]) { button.textContent = actions[state]!; button.addEventListener("click", () => void handleMusicAction(state)); actionHost.appendChild(button); }
+    button.className = "btn-primary";
+    button.textContent = "Open YouTube Music";
+    button.addEventListener("click", () => {
+      void window.open("https://music.youtube.com", "_blank");
+    });
+    actionHost.appendChild(button);
   }
-  const loggedIn = state === "connected" || state === "connected_without_client";
-  musicSearchForm?.classList.toggle("is-hidden", !loggedIn);
-  if (musicSearchHint) musicSearchHint.textContent = loggedIn ? "Search NetEase Music library." : "Connect NetEase Music to search songs and get daily recommendations.";
-  musicQrBox?.classList.toggle("is-hidden", !(state === "creating_qr" || state === "waiting_scan" || state === "waiting_confirm" || state === "login_expired"));
-  if (musicQrStatus) musicQrStatus.textContent = state === "connected" || state === "connected_without_client" ? "Status: NetEase Music Connected" : state === "waiting_confirm" ? "Status: Awaiting phone confirmation" : state === "login_expired" ? "Status: QR code expired" : "Status: Waiting for QR scan";
+  const loggedIn = true;
+  musicSearchForm?.classList.toggle("is-hidden", false);
+  if (musicSearchHint) musicSearchHint.textContent = "Search YouTube Music and play directly.";
+  musicQrBox?.classList.toggle("is-hidden", true);
+  if (musicQrStatus) musicQrStatus.textContent = "Status: YouTube Music Connected";
 }
 
-async function handleMusicAction(state: NeteaseViewState): Promise<void> {
-  const api = getMusicApi(); if (!api) { setMusicFeedback("err", "Music API not ready"); return; }
-  if (state === "signed_out" || state === "login_expired" || state === "login_failed") return void startMusicLogin();
-  if (state === "connected" || state === "connected_without_client") {
-    setMusicFeedback("info", "Disconnecting...");
-    try {
-      const r = await api.logout();
-    if (r.ok) setMusicFeedback("ok", "Disconnected");
-    else setMusicFeedback("err", "Disconnect failed: " + r.errorCode);
-    } catch (err) {
-      setMusicFeedback("err", "Disconnect error: " + (err instanceof Error ? err.message : String(err)));
-    }
-    return;
-  }
-  if (state === "creating_qr" || state === "waiting_scan" || state === "waiting_confirm") { await api.cancelLogin?.(); clearMusicQr(); }
+async function handleMusicAction(_state: NeteaseViewState): Promise<void> {
+  void window.open("https://music.youtube.com", "_blank");
 }
 
 function updateMusicActionsForAccount(account: string): void {
