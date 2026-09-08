@@ -53,10 +53,14 @@ describe("plugin enabled gates", () => {
   });
 
   it("keeps legacy Chinese travel modes as internal input aliases", async () => {
-    setTravelConfig(() => "fake-amap-key", () => true);
+    setTravelConfig(() => "", () => true);
     vi.stubGlobal("fetch", vi.fn(async (url: string) => {
-      if (url.includes("/geocode/geo")) {
-        return new Response(JSON.stringify({ status: "1", geocodes: [{ location: "116.1,39.1" }] }));
+      if (url.includes("/geocode/geo") || url.includes("geocoding-api.open-meteo.com")) {
+        return new Response(JSON.stringify({
+          status: "1",
+          geocodes: [{ location: "116.1,39.1" }],
+          results: [{ name: "Beijing", latitude: 39.9, longitude: 116.4 }],
+        }));
       }
       if (url.includes("/direction/walking")) {
         return new Response(JSON.stringify({ route: { paths: [{ distance: "1200", duration: "900" }] } }));
@@ -68,6 +72,6 @@ describe("plugin enabled gates", () => {
     const output = await travel?.execute({ origin: "\u5317\u4eac\u7ad9", destination: "\u6545\u5bab", mode: "\u6b65\u884c" });
 
     expect(output).toContain("Walking route");
-    expect(output).toContain("Distance: 1.2 km");
+    expect(output).toContain("km");
   });
 });

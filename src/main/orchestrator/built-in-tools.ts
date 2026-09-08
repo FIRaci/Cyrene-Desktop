@@ -432,31 +432,6 @@ function weatherIconFromText(text: string): string {
   return "🌤️";
 }
 
-/** Translate Amap's Chinese weather payload while retaining its raw-input compatibility. */
-function translateAmapWeatherText(text: string): string {
-  const exact: Record<string, string> = {
-    "\u6674": "Clear", "\u5c11\u4e91": "Mostly clear", "\u6674\u95f4\u591a\u4e91": "Mostly clear", "\u591a\u4e91": "Cloudy", "\u9634": "Overcast",
-    "\u9635\u96e8": "Rain showers", "\u96f7\u9635\u96e8": "Thunderstorms", "\u5c0f\u96e8": "Light rain", "\u4e2d\u96e8": "Rain",
-    "\u5927\u96e8": "Heavy rain", "\u66b4\u96e8": "Torrential rain", "\u5c0f\u96ea": "Light snow", "\u4e2d\u96ea": "Snow",
-    "\u5927\u96ea": "Heavy snow", "\u66b4\u96ea": "Blizzard", "\u96fe": "Fog", "\u973e": "Haze", "\u96e8\u5939\u96ea": "Sleet",
-    "Clear": "Clear", "Mostly clear": "Mostly clear", "Cloudy": "Cloudy", "Overcast": "Overcast",
-    "Rain showers": "Rain showers", "Thunderstorms": "Thunderstorms", "Light rain": "Light rain", "Rain": "Rain",
-    "Heavy rain": "Heavy rain", "Torrential rain": "Torrential rain", "Light snow": "Light snow", "Snow": "Snow",
-    "Heavy snow": "Heavy snow", "Blizzard": "Blizzard", "Fog": "Fog", "Haze": "Haze", "Sleet": "Sleet",
-  };
-  return exact[text.trim()] ?? "Unknown";
-}
-
-function translateAmapWindDirection(text: string): string {
-  const exact: Record<string, string> = {
-    "\u65e0\u98ce\u5411": "Variable", "\u5317": "N", "\u4e1c\u5317": "NE", "\u4e1c": "E", "\u4e1c\u5357": "SE",
-    "\u5357": "S", "\u897f\u5357": "SW", "\u897f": "W", "\u897f\u5317": "NW",
-    "Variable": "Variable", "N": "N", "NE": "NE", "E": "E", "SE": "SE",
-    "S": "S", "SW": "SW", "W": "W", "NW": "NW",
-  };
-  const normalized = text.replace(/(?:\u98ce|wind)$/i, "").trim();
-  return exact[normalized] ?? "Variable";
-}
 
 /** AQI -> description text + kaomoji. */
 function aqiKaomoji(aqi: number): { text: string; kaomoji: string } {
@@ -643,121 +618,6 @@ function omWindDir(deg: number): string {
   return dirs[Math.round(deg / 22.5) % 16];
 }
 
-// -- Amap weather implementation (requires key) --
-
-interface AmapDistrict { adcode: string; name: string; level: string }
-
-/** Amap district query: city name -> adcode. */
-async function amapResolveAdcode(city: string, key: string): Promise<AmapDistrict | null> {
-  const url = `https://restapi.amap.com/v3/config/district?keywords=${encodeURIComponent(city)}&subdistrict=0&key=${key}`;
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), WEATHER_TIMEOUT_MS);
-  try {
-    const resp = await fetch(url, { signal: ctrl.signal });
-    if (!resp.ok) return null;
-    const data = await resp.json() as { status?: string; districts?: AmapDistrict[] };
-    if (data.status !== "1" || !data.districts || data.districts.length === 0) return null;
-    return data.districts[0];
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-/** Amap real-time weather query. */
-async function amapFetchWeather(city: string, key: string): Promise<string> {
-  const district = await amapResolveAdcode(city, key);
-  if (!district) {
-    return `[Error] City "${city}" was not found. Check the city name; Chinese city names are supported.`;
-  }
-
-  // Request live + forecast in parallel
-  const baseUrl = `https://restapi.amap.com/v3/weather/weatherInfo?city=${district.adcode}&key=${key}`;
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), WEATHER_TIMEOUT_MS);
-  try {
-    const [baseResp, forecastResp] = await Promise.all([
-      fetch(`${baseUrl}&extensions=base`, { signal: ctrl.signal }),
-      fetch(`${baseUrl}&extensions=all`, { signal: ctrl.signal }),
-    ]);
-
-    // Parse live weather
-    if (!baseResp.ok) return `[Error] Weather lookup failed: HTTP ${baseResp.status}`;
-    const baseData = await baseResp.json() as { status?: string; lives?: Array<{
-      province: string; city: string; weather: string; temperature: string;
-      winddirection: string; windpower: string; humidity: string; reporttime: string;
-    }> };
-    if (baseData.status !== "1" || !baseData.lives || baseData.lives.length === 0) {
-      return `[Error] Weather lookup failed: Amap returned status=${baseData.status ?? "?"}.`;
-    }
-    const w = baseData.lives[0];
-    const icon = weatherIconFromText(w.weather);
-
-    // Parse forecast
-    const forecast: WeatherForecastDay[] = [];
-    if (forecastResp.ok) {
-      const fcData = await forecastResp.json() as { status?: string; forecasts?: Array<{
-        city: string; adcode: string; province: string;
-        casts: Array<{
-          date: string; week: string; dayweather: string; nightweather: string;
-          daytemp: string; nighttemp: string; daywind: string; nightwind: string;
-          daypower: string; nightpower: string;
-        }>;
-      }> };
-      if (fcData.status === "1" && fcData.forecasts?.[0]?.casts) {
-        const weekMap: Record<string, string> = { "1": "Monday", "2": "Tuesday", "3": "Wednesday", "4": "Thursday", "5": "Friday", "6": "Saturday", "7": "Sunday" };
-        const today = new Date().toISOString().slice(0, 10);
-        for (const c of fcData.forecasts[0].casts) {
-          const dt = new Date(c.date + "T00:00:00");
-          forecast.push({
-            date: `${dt.getMonth() + 1}/${dt.getDate()}`,
-            weekDay: c.date === today ? "Today" : (weekMap[c.week] ?? `Day ${c.week}`),
-            textDay: translateAmapWeatherText(c.dayweather),
-            textNight: translateAmapWeatherText(c.nightweather),
-            hi: Number(c.daytemp),
-            lo: Number(c.nighttemp),
-            windDir: translateAmapWindDirection(c.daywind),
-            windScale: `Force ${c.daypower}`,
-          });
-        }
-      }
-    }
-
-    const weatherData = {
-      city: w.city,
-      region: w.province,
-      weather: translateAmapWeatherText(w.weather),
-      temperature: Number(w.temperature),
-      humidity: Number(w.humidity),
-      windDirection: translateAmapWindDirection(w.winddirection),
-      windSpeed: `Force ${w.windpower}`,
-      source: "Amap Weather",
-      updateTime: w.reporttime.slice(11, 16) || new Date().toLocaleString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
-    };
-
-    // Send weather card data to renderer
-    if (weatherCardCallback) {
-      weatherCardCallback({
-        city: weatherData.city, adm: weatherData.region, temp: weatherData.temperature,
-        text: weatherData.weather, icon,
-        humidity: weatherData.humidity, windDir: weatherData.windDirection,
-        windScale: weatherData.windSpeed,
-        source: weatherData.source, updateTime: weatherData.updateTime,
-        hi: forecast[0]?.hi, lo: forecast[0]?.lo,
-        forecast,
-      });
-    }
-
-    return JSON.stringify(weatherData);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return "[Error] Weather lookup failed: " + msg;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
 async function executeWeather(args: Record<string, unknown>): Promise<string> {
   if (weatherEnabledGetter && !weatherEnabledGetter()) {
     return "[Error] Weather feature is disabled. Please enable it in Settings.";
@@ -789,20 +649,8 @@ async function executeWeather(args: Record<string, unknown>): Promise<string> {
     return "[Notice] No city was provided and no default city is configured. Ask the user to set one under Settings > Plugins > Weather or provide a city name.";
   }
 
-  // Branch by weather source
-  if (source === "open-meteo") {
-    return omFetchWeather(city);
-  }
-  if (source === "amap") {
-    const amapKey = amapKeyGetter?.() ?? "";
-    if (!amapKey) {
-      return "[Error] No Amap Weather key is configured. Add one under Settings > Plugins > Weather, or switch to Open-Meteo.";
-    }
-    return amapFetchWeather(city, amapKey);
-  }
-
-  // Unknown weather source
-  return `[Error] Unknown weather source "${source}". Select Open-Meteo or Amap Weather under Settings > Plugins > Weather.`;
+  // Keyless Open-Meteo weather (global coverage, zero configuration)
+  return omFetchWeather(city);
 }
 
 toolRegistry.register({
