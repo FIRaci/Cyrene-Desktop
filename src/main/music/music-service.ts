@@ -8,7 +8,9 @@ import { LoginOrchestrator } from "./login-orchestrator";
 import { SelectionSetCache } from "./selection-set-cache";
 import { MusicInputError } from "./types";
 import { MusicRouter } from "./music-router";
+import type { MusicProvider, MusicProviderId } from "./music-provider";
 import { NeteaseMusicProvider, NETEASE_PROVIDER_ID } from "./netease-music-provider";
+import { YouTubeMusicProvider, YOUTUBE_MUSIC_PROVIDER_ID } from "./youtube-music-provider";
 import type { MusicPaths } from "./paths";
 import type {
   MusicSelectionSet,
@@ -38,6 +40,7 @@ export class MusicService {
   private activeProfile: MusicProfile | null = null;
   private shuttingDown = false;
 
+  private readonly defaultProviderId: string;
   private readonly client: MusicMcpClient;
   private readonly detector: ProtocolDetector;
   private readonly vault: CookieVault;
@@ -52,12 +55,20 @@ export class MusicService {
   private flowListeners = new Set<StateListener<LoginFlowState>>();
   private stateListeners = new Set<StateListener<MusicStatusSnapshot>>();
 
-  constructor(paths: MusicPaths) {
+  constructor(paths: MusicPaths, defaultProviderId: string = YOUTUBE_MUSIC_PROVIDER_ID) {
     this.paths = paths;
+    this.defaultProviderId = defaultProviderId;
     this.client = new MusicMcpClient(paths.vendorDir, paths.runtimeDir);
     this.detector = new ProtocolDetector();
     const netease = new NeteaseMusicProvider(this.client);
-    this.router = new MusicRouter(new Map([[netease.id, netease]]), () => NETEASE_PROVIDER_ID);
+    const youtube = new YouTubeMusicProvider();
+    this.router = new MusicRouter(
+      new Map<MusicProviderId, MusicProvider>([
+        [youtube.id, youtube],
+        [netease.id, netease],
+      ]),
+      () => this.defaultProviderId,
+    );
     this.vault = new CookieVault(path.dirname(paths.accountPath));
     this.orchestrator = new LoginOrchestrator({
       client: this.client,
@@ -72,52 +83,59 @@ export class MusicService {
   async start(): Promise<void> {
     this.backendState = "starting";
     try {
-      await this.client.connect();
-      const contract = await this.client.verifyContractOnConnect();
-      if (!contract.ok) {
-        this.backendState = "incompatible";
-        return;
-      }
+      if (this.defaultProviderId === NETEASE_PROVIDER_ID) {
+        await this.client.connect();
+        const contract = await this.client.verifyContractOnConnect();
+        if (!contract.ok) {
+          this.backendState = "incompatible";
+          return;
+        }
 
-      const protocolOk = await this.detector.isRegistered();
-      this.playerState = protocolOk ? "available" : "unavailable";
+        const protocolOk = await this.detector.isRegistered();
+        this.playerState = protocolOk ? "available" : "unavailable";
 
-      // Restore saved account session into runtime cookies
-      try {
-        const blob = await this.vault.load();
-        if (blob) {
-          const payload = await this.vault.decrypt(blob);
-          const cookiesPath = path.join(this.paths.runtimeDir, "cookies.json");
-          await fs.mkdir(this.paths.runtimeDir, { recursive: true });
-          await fs.writeFile(cookiesPath, JSON.stringify(payload.cookies), "utf8");
-          this.orchestrator.setAccountState("validating");
-          this.emitAccountChange("validating");
-          // Three-state validation per spec §8.3
-          const r = await this.validateSessionThreeState();
-          switch (r.state) {
-            case "valid":
-              this.orchestrator.setAccountState("signed_in");
-              this.activeProfile = r.profile ?? null;
-              this.emitAccountChange("signed_in");
-              break;
-            case "invalid_credentials":
-              await fs.rm(this.paths.accountPath, { force: true }).catch(() => {});
-              this.activeProfile = null;
-              this.orchestrator.setAccountState("signed_out");
-              this.emitAccountChange("signed_out");
-              break;
-            case "temporarily_unavailable":
-              this.orchestrator.setAccountState("temporarily_unavailable");
-              this.emitAccountChange("temporarily_unavailable");
-              break;
+        // Restore saved account session into runtime cookies
+        try {
+          const blob = await this.vault.load();
+          if (blob) {
+            const payload = await this.vault.decrypt(blob);
+            const cookiesPath = path.join(this.paths.runtimeDir, "cookies.json");
+            await fs.mkdir(this.paths.runtimeDir, { recursive: true });
+            await fs.writeFile(cookiesPath, JSON.stringify(payload.cookies), "utf8");
+            this.orchestrator.setAccountState("validating");
+            this.emitAccountChange("validating");
+            // Three-state validation per spec §8.3
+            const r = await this.validateSessionThreeState();
+            switch (r.state) {
+              case "valid":
+                this.orchestrator.setAccountState("signed_in");
+                this.activeProfile = r.profile ?? null;
+                this.emitAccountChange("signed_in");
+                break;
+              case "invalid_credentials":
+                await fs.rm(this.paths.accountPath, { force: true }).catch(() => {});
+                this.activeProfile = null;
+                this.orchestrator.setAccountState("signed_out");
+                this.emitAccountChange("signed_out");
+                break;
+              case "temporarily_unavailable":
+                this.orchestrator.setAccountState("temporarily_unavailable");
+                this.emitAccountChange("temporarily_unavailable");
+                break;
+            }
+          } else {
+            this.orchestrator.setAccountState("signed_out");
+            this.emitAccountChange("signed_out");
           }
-        } else {
+        } catch {
           this.orchestrator.setAccountState("signed_out");
           this.emitAccountChange("signed_out");
         }
-      } catch {
-        this.orchestrator.setAccountState("signed_out");
-        this.emitAccountChange("signed_out");
+      } else {
+        // YouTube Music: ready immediately with zero local daemon requirements
+        this.playerState = "available";
+        this.orchestrator.setAccountState("signed_in");
+        this.activeProfile = { userId: "yt-guest", nickname: "YouTube Music" };
       }
 
       this.backendState = "ready";
@@ -266,8 +284,10 @@ export class MusicService {
     options: { provider?: string; resolutionRunId?: string } = {},
   ): Promise<MusicSelectionSet> {
     this.requireReady();
-    this.requireSignedIn();
     const provider = this.router.resolve(options.provider);
+    if (provider.id === NETEASE_PROVIDER_ID) {
+      this.requireSignedIn();
+    }
     const tracks = await provider.getDailyRecommendations();
     const setId = crypto.randomUUID();
     const set: MusicSelectionSet = {
@@ -354,7 +374,12 @@ export class MusicService {
 
   async playTrack(input: CandidatePlaybackRequest): Promise<PlaybackDispatchResult> {
     const trackId = input.trackId;
-    if (!/^\d+$/.test(trackId)) throw new MusicInputError("E_INVALID_ID_FORMAT");
+    if (input.provider === NETEASE_PROVIDER_ID && !/^\d+$/.test(trackId)) {
+      throw new MusicInputError("E_INVALID_ID_FORMAT");
+    }
+    if (!trackId || typeof trackId !== "string" || !/^[\w%-]{1,128}$/.test(trackId)) {
+      throw new MusicInputError("E_INVALID_ID_FORMAT");
+    }
     const set = this.cache.get(input.setId, input.conversationId);
     if (!set) throw new MusicInputError("E_SET_NOT_FOUND");
     if (set.provider !== input.provider) throw new MusicInputError("E_PROVIDER_MISMATCH");
@@ -373,13 +398,25 @@ export class MusicService {
 
   /** Trusted renderer path: card/settings IDs originate from MusicService results. */
   async playTrackFromUi(trackId: string): Promise<PlaybackDispatchResult> {
-    if (!/^\d+$/.test(trackId)) throw new MusicInputError("E_INVALID_ID_FORMAT");
-    return this.router.resolve().playTrack(trackId);
+    const provider = this.router.resolve();
+    if (provider.id === NETEASE_PROVIDER_ID && !/^\d+$/.test(trackId)) {
+      throw new MusicInputError("E_INVALID_ID_FORMAT");
+    }
+    if (!trackId || typeof trackId !== "string" || !/^[\w%-]{1,128}$/.test(trackId)) {
+      throw new MusicInputError("E_INVALID_ID_FORMAT");
+    }
+    return provider.playTrack(trackId);
   }
 
   async playPlaylist(playlistId: string): Promise<PlaybackDispatchResult> {
-    if (!/^\d+$/.test(playlistId)) throw new MusicInputError("E_INVALID_ID_FORMAT");
-    return this.router.resolve().playPlaylist(playlistId);
+    const provider = this.router.resolve();
+    if (provider.id === NETEASE_PROVIDER_ID && !/^\d+$/.test(playlistId)) {
+      throw new MusicInputError("E_INVALID_ID_FORMAT");
+    }
+    if (!playlistId || typeof playlistId !== "string" || !/^[\w%-]{1,128}$/.test(playlistId)) {
+      throw new MusicInputError("E_INVALID_ID_FORMAT");
+    }
+    return provider.playPlaylist(playlistId);
   }
 
   // ── Helpers ────────────────────────────────────────────────

@@ -11,7 +11,7 @@ describe("requestTrackPlayback", () => {
     const result = await requestTrackPlayback({ playTrack }, { id: "123", name: "Song" });
 
     expect(playTrack).toHaveBeenCalledWith("123");
-    expect(result).toEqual({ kind: "ok", message: "Sent playback request to NetEase Cloud Music: Song" });
+    expect(result).toEqual({ kind: "ok", message: "Sent playback request: Song" });
   });
 
   it("explains when the NetEase desktop client is unavailable", async () => {
@@ -23,7 +23,7 @@ describe("requestTrackPlayback", () => {
     const result = await requestTrackPlayback({ playTrack }, { id: "123", name: "Song" });
 
     expect(result.kind).toBe("err");
-    expect(result.message).toContain("requires NetEase Cloud Music desktop client");
+    expect(result.message).toContain("requires desktop client");
   });
 
   it("reports the MCP browser fallback without claiming desktop dispatch", async () => {
@@ -34,6 +34,6 @@ describe("requestTrackPlayback", () => {
 
     const result = await requestTrackPlayback({ playTrack }, { id: "123", name: "Song" });
 
-    expect(result).toEqual({ kind: "ok", message: "NetEase desktop client unavailable, opened in browser: Song" });
+    expect(result).toEqual({ kind: "ok", message: "Opened in browser / web player: Song" });
   });
 });

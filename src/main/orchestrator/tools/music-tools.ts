@@ -69,7 +69,7 @@ function issueSelectionContext(
       conversationId: set.conversationId,
       domain: "music",
       kind: "selection_set",
-      label: set.source === "daily_recommendation" ? "NetEase Cloud Music daily recommendations" : `Music search: ${set.query ?? ""}`,
+      label: set.source === "daily_recommendation" ? "YouTube Music daily recommendations" : `Music search: ${set.query ?? ""}`,
       attributes: { source: [set.source] },
       lifecycle: "active",
       expiresAt: set.expiresAt,
@@ -193,7 +193,7 @@ export function buildMusicTools(service: MusicService, hooks: MusicToolHooks = {
       id: "music_get_daily_recommendations",
       capability: "music.daily_recommendations",
       name: "Get daily music recommendations",
-      description: "Get the user's NetEase Cloud Music daily recommendations and present up to five tracks as a card. Requires a signed-in account and returns trusted candidate references.",
+      description: "Get the user's YouTube Music daily recommendations and present up to five tracks as a card. Returns trusted candidate references.",
       enabled: true,
       risk: "safe",
       inputSchema: { type: "object", properties: {}, required: [] },
@@ -206,7 +206,7 @@ export function buildMusicTools(service: MusicService, hooks: MusicToolHooks = {
         fields: { title: "name", artists: "artists", album: "album", position: "position" },
       },
       soulErrorMessages: {
-        E_ACCOUNT_REQUIRED: "A signed-in NetEase Cloud Music account is required",
+        E_ACCOUNT_REQUIRED: "A music service account is required",
         E_BACKEND_NOT_READY: "The music service is not ready",
       },
       completionEvidence: [
@@ -232,8 +232,8 @@ export function buildMusicTools(service: MusicService, hooks: MusicToolHooks = {
     {
       id: "music_search",
       capability: "music.search",
-      name: "Search NetEase Cloud Music",
-      description: "Search NetEase Cloud Music by keyword. Use purpose=discover to show candidates or purpose=play when a uniquely confirmed result may be played during this turn. Returns trusted references for up to 20 real tracks.",
+      name: "Search YouTube Music",
+      description: "Search YouTube Music by keyword. Use purpose=discover to show candidates or purpose=play when a uniquely confirmed result may be played during this turn. Returns trusted references for up to 20 real tracks.",
       enabled: true,
       risk: "safe",
       inputSchema: {
@@ -337,8 +337,8 @@ export function buildMusicTools(service: MusicService, hooks: MusicToolHooks = {
     {
       id: "music_play_track",
       capability: "music.play_track",
-      name: "Play a NetEase Cloud Music track",
-      description: "Send a playback request to the default music source. Accepts only trusted candidate references supplied by CITA; dispatched does not mean playback has started.",
+      name: "Play a YouTube Music track",
+      description: "Send a playback request to the default music source (YouTube Music or local). Accepts only trusted candidate references supplied by CITA; dispatched does not mean playback has started.",
       enabled: true,
       risk: "input-control",
       inputSchema: {
@@ -385,8 +385,8 @@ export function buildMusicTools(service: MusicService, hooks: MusicToolHooks = {
     {
       id: "music_play_playlist",
       capability: "music.play_playlist",
-      name: "Play a NetEase Cloud Music playlist",
-      description: "Play a playlist by ID using the local NetEase Cloud Music client.",
+      name: "Play a playlist",
+      description: "Play a playlist by ID.",
       enabled: true,
       risk: "input-control",
       inputSchema: {

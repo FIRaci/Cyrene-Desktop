@@ -15,13 +15,13 @@ export async function requestTrackPlayback(
     return { kind: "err", message: `Playback request failed: ${result.errorCode ?? "E_UNKNOWN"}` };
   }
   if (result.data?.state === "dispatched") {
-    return { kind: "ok", message: `Sent playback request to NetEase Cloud Music: ${track.name}` };
+    return { kind: "ok", message: `Sent playback request: ${track.name}` };
   }
   if (result.data?.state === "web_fallback") {
-    return { kind: "ok", message: `NetEase desktop client unavailable, opened in browser: ${track.name}` };
+    return { kind: "ok", message: `Opened in browser / web player: ${track.name}` };
   }
   if (result.data?.state === "client_unavailable") {
-    return { kind: "err", message: `Found "${track.name}", but playback requires NetEase Cloud Music desktop client.` };
+    return { kind: "err", message: `Found "${track.name}", but playback requires desktop client.` };
   }
-  return { kind: "err", message: `Failed to send playback request to NetEase Cloud Music: ${track.name}` };
+  return { kind: "err", message: `Failed to send playback request: ${track.name}` };
 }

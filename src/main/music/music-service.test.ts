@@ -59,6 +59,7 @@ vi.mock("electron", () => ({
 }));
 
 import { MusicService } from "./music-service";
+import { NETEASE_PROVIDER_ID } from "./netease-music-provider";
 
 beforeEach(() => {
   beginTool.mockReset(); checkTool.mockReset(); cancelTool.mockReset(); validateTool.mockReset();
@@ -89,7 +90,7 @@ async function freshServiceWithTmpPaths(): Promise<{ svc: MusicService; accountP
     runtimeDir,
     accountPath,
     resourceBaseDir: "/repo",
-  });
+  }, NETEASE_PROVIDER_ID);
   return {
     svc,
     accountPath,
@@ -101,7 +102,7 @@ async function freshServiceWithTmpPaths(): Promise<{ svc: MusicService; accountP
 describe("MusicService", () => {
   it("uses the dedicated three-state validator instead of a fake QR session", async () => {
     validateTool.mockResolvedValue({ state: "valid", profile: { userId: "1", nickname: "alice" } });
-    const s = new MusicService(PATHS);
+    const s = new MusicService(PATHS, NETEASE_PROVIDER_ID);
 
     const result = await (s as unknown as { validateSessionThreeState(): Promise<unknown> }).validateSessionThreeState();
 
@@ -110,14 +111,14 @@ describe("MusicService", () => {
     expect(checkTool).not.toHaveBeenCalled();
   });
   it("getDailyRecommendations rejects when backend not ready (stopped initial)", async () => {
-    const s = new MusicService(PATHS);
+    const s = new MusicService(PATHS, NETEASE_PROVIDER_ID);
     expect(s.getBackendState()).toBe("stopped");
     await expect(s.getDailyRecommendations("c1")).rejects.toThrow(/E_BACKEND_NOT_READY/);
   });
 
   it("searchTracks returns a set after start", async () => {
     searchTool.mockResolvedValue({ success: true, items: [{ id: 1, name: "X", artist: "Y" }] });
-    const s = new MusicService(PATHS);
+    const s = new MusicService(PATHS, NETEASE_PROVIDER_ID);
     await s.start();
     const set = await s.searchTracks("X", "c1", undefined, { resolutionRunId: "run-1" });
     expect(set.source).toBe("search");
@@ -129,20 +130,20 @@ describe("MusicService", () => {
   });
 
   it("searchTracks rejects keyword longer than 100 chars", async () => {
-    const s = new MusicService(PATHS);
+    const s = new MusicService(PATHS, NETEASE_PROVIDER_ID);
     await s.start();
     await expect(s.searchTracks("x".repeat(101), "c1")).rejects.toThrow(/E_INVALID_KEYWORD_TOO_LONG/);
   });
 
   it("searchTracks rejects empty keyword", async () => {
-    const s = new MusicService(PATHS);
+    const s = new MusicService(PATHS, NETEASE_PROVIDER_ID);
     await s.start();
     await expect(s.searchTracks("   ", "c1")).rejects.toThrow(/E_INVALID_KEYWORD_EMPTY/);
   });
 
   it("searchTracks sends category song without forwarding local limit", async () => {
     searchTool.mockResolvedValue([]);
-    const s = new MusicService(PATHS);
+    const s = new MusicService(PATHS, NETEASE_PROVIDER_ID);
     await s.start();
     await s.searchTracks("q", "c1", 999);
     expect(searchTool).toHaveBeenCalledWith({ keyword: "q", category: "song" });
@@ -154,7 +155,7 @@ describe("MusicService", () => {
       name: `Song ${i + 1}`,
       artist: "Artist",
     })));
-    const s = new MusicService(PATHS);
+    const s = new MusicService(PATHS, NETEASE_PROVIDER_ID);
     await s.start();
 
     const set = await s.searchTracks("q", "c1", 3);
@@ -164,7 +165,7 @@ describe("MusicService", () => {
 
   it("presentTracks validates trackIds belong to the set", async () => {
     searchTool.mockResolvedValue({ success: true, items: [{ id: 1, name: "X", artist: "Y" }] });
-    const s = new MusicService(PATHS);
+    const s = new MusicService(PATHS, NETEASE_PROVIDER_ID);
     await s.start();
     const set = await s.searchTracks("X", "c1");
     await expect(s.presentTracks({ setId: set.setId, conversationId: "c1", trackIds: ["999"] }))
@@ -181,7 +182,7 @@ describe("MusicService", () => {
 
   it("presentTracks limits to 5 selected", async () => {
     searchTool.mockResolvedValue({ success: true, items: [{ id: 1, name: "X", artist: "Y" }] });
-    const s = new MusicService(PATHS);
+    const s = new MusicService(PATHS, NETEASE_PROVIDER_ID);
     await s.start();
     const set = await s.searchTracks("X", "c1");
     await expect(s.presentTracks({ setId: set.setId, conversationId: "c1", trackIds: ["1", "1", "1", "1", "1", "1"] }))
@@ -190,7 +191,7 @@ describe("MusicService", () => {
 
   it("presentTracks validates reason length", async () => {
     searchTool.mockResolvedValue({ success: true, items: [{ id: 1, name: "X", artist: "Y" }] });
-    const s = new MusicService(PATHS);
+    const s = new MusicService(PATHS, NETEASE_PROVIDER_ID);
     await s.start();
     const set = await s.searchTracks("X", "c1");
     await expect(s.presentTracks({ setId: set.setId, conversationId: "c1", trackIds: ["1"], reasons: ["x".repeat(51)] }))
@@ -198,7 +199,7 @@ describe("MusicService", () => {
   });
 
   it("playTrack rejects non-numeric id", async () => {
-    const s = new MusicService(PATHS);
+    const s = new MusicService(PATHS, NETEASE_PROVIDER_ID);
     await expect(s.playTrackFromUi("not-num")).rejects.toThrow(/E_INVALID_ID/);
   });
 
@@ -206,14 +207,14 @@ describe("MusicService", () => {
     playTool.mockResolvedValue(
       "\u26a0\ufe0f \u672a\u68c0\u6d4b\u5230\u5ba2\u6237\u7aef\uff0c\u5df2\u5728\u6d4f\u89c8\u5668\u4e2d\u64ad\u653e: https://music.163.com/#/song?id=123",
     );
-    const s = new MusicService(PATHS);
+    const s = new MusicService(PATHS, NETEASE_PROVIDER_ID);
     const r = await s.playTrackFromUi("123");
     expect(r.state).toBe("web_fallback");
     expect(playTool).toHaveBeenCalledWith({ id: "123", type: "song" });
   });
 
   it("playTrack dispatches through the MCP tool", async () => {
-    const s = new MusicService(PATHS);
+    const s = new MusicService(PATHS, NETEASE_PROVIDER_ID);
     const r = await s.playTrackFromUi("123");
     expect(r.state).toBe("dispatched");
     expect(r.resourceType).toBe("song");
@@ -226,7 +227,7 @@ describe("MusicService", () => {
     searchTool.mockResolvedValue([{ id: 123, name: "Dao Xiang", artist: "Jay Chou" }]);
     isRegistered.mockResolvedValue(true);
     openExternal.mockResolvedValue(undefined);
-    const s = new MusicService(PATHS);
+    const s = new MusicService(PATHS, NETEASE_PROVIDER_ID);
     await s.start();
     const set = await s.searchTracks("Dao Xiang", "c1", 5, { resolutionRunId: "run-1", purpose: "play" });
 
@@ -254,7 +255,7 @@ describe("MusicService", () => {
     ]);
     isRegistered.mockResolvedValue(true);
     openExternal.mockResolvedValue(undefined);
-    const s = new MusicService(PATHS);
+    const s = new MusicService(PATHS, NETEASE_PROVIDER_ID);
     await s.start();
     const set = await s.searchTracks("Jay Chou", "c1", 5, { resolutionRunId: "run-1" });
     await s.presentTracks({ setId: set.setId, conversationId: "c1", trackIds: ["456"] });
@@ -278,7 +279,7 @@ describe("MusicService", () => {
 
   it("rejects a provider or track id not contained in the real candidate set", async () => {
     searchTool.mockResolvedValue([{ id: 123, name: "Dao Xiang", artist: "Jay Chou" }]);
-    const s = new MusicService(PATHS);
+    const s = new MusicService(PATHS, NETEASE_PROVIDER_ID);
     await s.start();
     const set = await s.searchTracks("Dao Xiang", "c1", 5, { resolutionRunId: "run-1", purpose: "play" });
 
@@ -297,7 +298,7 @@ describe("MusicService", () => {
 
   it("getSelectionSet retrieves set by id and conversationId", async () => {
     searchTool.mockResolvedValue({ success: true, items: [{ id: 1, name: "X", artist: "Y" }] });
-    const s = new MusicService(PATHS);
+    const s = new MusicService(PATHS, NETEASE_PROVIDER_ID);
     await s.start();
     const set = await s.searchTracks("X", "c1");
     expect(s.getSelectionSet(set.setId, "c1")).toEqual(set);
@@ -305,17 +306,17 @@ describe("MusicService", () => {
   });
 
   it("getLoginFlowState returns orchestrator flow state", () => {
-    const s = new MusicService(PATHS);
+    const s = new MusicService(PATHS, NETEASE_PROVIDER_ID);
     expect(s.getLoginFlowState()).toBe("idle");
   });
 
   it("getActiveProfile returns null before login", () => {
-    const s = new MusicService(PATHS);
+    const s = new MusicService(PATHS, NETEASE_PROVIDER_ID);
     expect(s.getActiveProfile()).toBeNull();
   });
 
   it("event listeners return unsubscribe functions", () => {
-    const s = new MusicService(PATHS);
+    const s = new MusicService(PATHS, NETEASE_PROVIDER_ID);
     const fn = () => {};
     const unsub = s.onBackendStateChange(fn);
     unsub();
@@ -324,7 +325,7 @@ describe("MusicService", () => {
   });
 
   it("shutdown returns a MusicShutdownReport", async () => {
-    const s = new MusicService(PATHS);
+    const s = new MusicService(PATHS, NETEASE_PROVIDER_ID);
     const report = await s.shutdown();
     expect(report).toEqual({
       rootProcessPid: undefined,
@@ -335,7 +336,7 @@ describe("MusicService", () => {
   });
 
   it("shutdown is idempotent", async () => {
-    const s = new MusicService(PATHS);
+    const s = new MusicService(PATHS, NETEASE_PROVIDER_ID);
     const r1 = await s.shutdown();
     const r2 = await s.shutdown();
     expect(r1).toEqual(r2);
