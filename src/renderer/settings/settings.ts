@@ -486,6 +486,14 @@ interface PlayerApi {
   onStateChanged: (callback: (state: PlaybackState) => void) => () => void;
 }
 
+interface CameraApi {
+  getConfig: () => Promise<{ enabled: boolean; consentMode: "ask" | "always_allow" | "off"; deviceId?: string }>;
+  saveConfig: (config: { enabled?: boolean; consentMode?: "ask" | "always_allow" | "off"; deviceId?: string }) => Promise<{ ok: boolean; config: { enabled: boolean; consentMode: "ask" | "always_allow" | "off"; deviceId?: string } }>;
+  sendCapturedFrame: (requestId: string, payload: { frameBase64?: string; error?: string }) => Promise<{ ok: boolean }>;
+  onCaptureRequested: (callback: (payload: { requestId: string; deviceId?: string }) => void) => () => void;
+  onConfigChanged: (callback: (config: { enabled: boolean; consentMode: "ask" | "always_allow" | "off"; deviceId?: string }) => void) => () => void;
+}
+
 declare global {
   interface Window {
     settings?: SettingsApi;
@@ -493,6 +501,7 @@ declare global {
     user?: UserApi;
     memoryPanel?: MemoryPanelApi;
     player?: PlayerApi;
+    camera?: CameraApi;
   }
 }
 
@@ -6707,3 +6716,231 @@ void loadTtsConfig();
     });
   }
 })();
+
+// Camera Vision & Companion Eye settings wiring
+(function setupCameraSettings() {
+  const cameraCard = document.getElementById("camera-setting-card");
+  if (!cameraCard) return;
+
+  const cameraEnabledInput = document.getElementById("camera-enabled") as HTMLInputElement | null;
+  const cameraOptionsWrap = document.getElementById("camera-options-wrap") as HTMLElement | null;
+  const cameraConsentSelect = document.getElementById("camera-consent-mode") as HTMLSelectElement | null;
+  const cameraDeviceSelect = document.getElementById("camera-device-select") as HTMLSelectElement | null;
+  const cameraRefreshBtn = document.getElementById("camera-refresh-devices-btn") as HTMLButtonElement | null;
+  const cameraTestBtn = document.getElementById("camera-test-btn") as HTMLButtonElement | null;
+  const cameraTestIconPlay = document.getElementById("camera-test-icon-play") as HTMLElement | null;
+  const cameraTestIconStop = document.getElementById("camera-test-icon-stop") as HTMLElement | null;
+  const cameraTestLabel = document.getElementById("camera-test-label") as HTMLElement | null;
+  const cameraStatusBadge = document.getElementById("camera-status-badge") as HTMLElement | null;
+  const cameraPreviewContainer = document.getElementById("camera-preview-container") as HTMLElement | null;
+  const cameraPreviewVideo = document.getElementById("camera-preview-video") as HTMLVideoElement | null;
+
+  let currentConfig = {
+    enabled: false,
+    consentMode: "ask" as "ask" | "always_allow" | "off",
+    deviceId: "",
+  };
+  let previewStream: MediaStream | null = null;
+
+  async function populateDevices(selectedId?: string): Promise<void> {
+    if (!cameraDeviceSelect) return;
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoDevices = devices.filter((d) => d.kind === "videoinput");
+
+      cameraDeviceSelect.innerHTML = '<option value="">Default System Camera</option>';
+      videoDevices.forEach((device, index) => {
+        const opt = document.createElement("option");
+        opt.value = device.deviceId;
+        opt.textContent = device.label || `Camera ${index + 1} (${device.deviceId.slice(0, 8)}...)`;
+        cameraDeviceSelect.appendChild(opt);
+      });
+
+      const targetId = selectedId ?? currentConfig.deviceId;
+      if (targetId && videoDevices.some((d) => d.deviceId === targetId)) {
+        cameraDeviceSelect.value = targetId;
+      } else {
+        cameraDeviceSelect.value = "";
+      }
+    } catch (err) {
+      console.warn("[CameraSettings] Device enumeration failed:", err);
+    }
+  }
+
+  function stopPreview(): void {
+    if (previewStream) {
+      previewStream.getTracks().forEach((track) => track.stop());
+      previewStream = null;
+    }
+    if (cameraPreviewVideo) {
+      cameraPreviewVideo.srcObject = null;
+    }
+    if (cameraPreviewContainer) {
+      cameraPreviewContainer.style.display = "none";
+    }
+    if (cameraTestIconPlay) cameraTestIconPlay.style.display = "inline";
+    if (cameraTestIconStop) cameraTestIconStop.style.display = "none";
+    if (cameraTestLabel) cameraTestLabel.textContent = "Test Camera Preview";
+    if (cameraStatusBadge) {
+      cameraStatusBadge.textContent = "Idle";
+      cameraStatusBadge.style.color = "rgba(255, 255, 255, 0.65)";
+      cameraStatusBadge.style.background = "rgba(255, 255, 255, 0.06)";
+    }
+  }
+
+  async function startPreview(): Promise<void> {
+    stopPreview();
+    if (cameraStatusBadge) {
+      cameraStatusBadge.textContent = "Connecting...";
+      cameraStatusBadge.style.color = "#fbbf24";
+      cameraStatusBadge.style.background = "rgba(245, 158, 11, 0.15)";
+    }
+
+    const selectedDeviceId = cameraDeviceSelect?.value || currentConfig.deviceId;
+    const constraints: MediaStreamConstraints = {
+      video: selectedDeviceId
+        ? { deviceId: { exact: selectedDeviceId }, width: { ideal: 1280 }, height: { ideal: 720 } }
+        : { width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false,
+    };
+
+    try {
+      previewStream = await navigator.mediaDevices.getUserMedia(constraints);
+      if (cameraPreviewVideo) {
+        cameraPreviewVideo.srcObject = previewStream;
+        await cameraPreviewVideo.play();
+      }
+      if (cameraPreviewContainer) {
+        cameraPreviewContainer.style.display = "block";
+      }
+      if (cameraTestIconPlay) cameraTestIconPlay.style.display = "none";
+      if (cameraTestIconStop) cameraTestIconStop.style.display = "inline";
+      if (cameraTestLabel) cameraTestLabel.textContent = "Stop Preview";
+      if (cameraStatusBadge) {
+        cameraStatusBadge.textContent = "Camera Ready (Active)";
+        cameraStatusBadge.style.color = "#4ade80";
+        cameraStatusBadge.style.background = "rgba(34, 197, 94, 0.15)";
+      }
+      void populateDevices(selectedDeviceId);
+    } catch (err) {
+      console.error("[CameraSettings] Preview error:", err);
+      if (cameraStatusBadge) {
+        cameraStatusBadge.textContent = "Access Denied / Busy";
+        cameraStatusBadge.style.color = "#f87171";
+        cameraStatusBadge.style.background = "rgba(239, 68, 68, 0.15)";
+      }
+      void showAlert({
+        title: "Camera Access Error",
+        message: err instanceof Error ? err.message : "Unable to access the selected camera device.",
+      });
+      stopPreview();
+    }
+  }
+
+  cameraEnabledInput?.addEventListener("change", async () => {
+    const wantsEnabled = cameraEnabledInput.checked;
+    if (wantsEnabled) {
+      const confirmed = await showConfirm({
+        title: "Enable Camera Vision?",
+        message: "Do you want to enable Camera Vision for Cyrene? When enabled, Cyrene can observe you or inspect objects in front of the camera when requested. You can choose whether she asks before every snapshot.",
+        confirmText: "Enable Camera",
+        cancelText: "Cancel",
+      });
+
+      if (!confirmed) {
+        cameraEnabledInput.checked = false;
+        return;
+      }
+
+      currentConfig.enabled = true;
+      if (cameraOptionsWrap) {
+        cameraOptionsWrap.style.display = "flex";
+      }
+      if (window.camera) {
+        await window.camera.saveConfig({
+          enabled: true,
+          consentMode: (cameraConsentSelect?.value as "ask" | "always_allow" | "off") || currentConfig.consentMode,
+          deviceId: cameraDeviceSelect?.value || currentConfig.deviceId,
+        });
+      }
+      await populateDevices();
+    } else {
+      stopPreview();
+      currentConfig.enabled = false;
+      if (cameraOptionsWrap) {
+        cameraOptionsWrap.style.display = "none";
+      }
+      if (window.camera) {
+        await window.camera.saveConfig({ enabled: false });
+      }
+    }
+  });
+
+  cameraConsentSelect?.addEventListener("change", async () => {
+    const mode = (cameraConsentSelect.value as "ask" | "always_allow" | "off") || "ask";
+    currentConfig.consentMode = mode;
+    if (window.camera) {
+      await window.camera.saveConfig({ consentMode: mode });
+    }
+  });
+
+  cameraDeviceSelect?.addEventListener("change", async () => {
+    const devId = cameraDeviceSelect.value;
+    currentConfig.deviceId = devId;
+    if (window.camera) {
+      await window.camera.saveConfig({ deviceId: devId });
+    }
+    if (previewStream) {
+      await startPreview();
+    }
+  });
+
+  cameraRefreshBtn?.addEventListener("click", async () => {
+    await populateDevices();
+  });
+
+  cameraTestBtn?.addEventListener("click", () => {
+    if (previewStream) {
+      stopPreview();
+    } else {
+      void startPreview();
+    }
+  });
+
+  if (window.camera) {
+    void window.camera.getConfig().then(async (cfg) => {
+      if (!cfg) return;
+      currentConfig = {
+        enabled: Boolean(cfg.enabled),
+        consentMode: cfg.consentMode || "ask",
+        deviceId: cfg.deviceId || "",
+      };
+      if (cameraEnabledInput) cameraEnabledInput.checked = currentConfig.enabled;
+      if (cameraOptionsWrap) cameraOptionsWrap.style.display = currentConfig.enabled ? "flex" : "none";
+      if (cameraConsentSelect) cameraConsentSelect.value = currentConfig.consentMode;
+      await populateDevices(currentConfig.deviceId);
+    }).catch((err) => {
+      console.warn("[CameraSettings] Failed to fetch initial camera config:", err);
+    });
+
+    window.camera.onConfigChanged((cfg) => {
+      if (!cfg) return;
+      currentConfig = {
+        enabled: Boolean(cfg.enabled),
+        consentMode: cfg.consentMode || "ask",
+        deviceId: cfg.deviceId || "",
+      };
+      if (cameraEnabledInput) cameraEnabledInput.checked = currentConfig.enabled;
+      if (cameraOptionsWrap) cameraOptionsWrap.style.display = currentConfig.enabled ? "flex" : "none";
+      if (cameraConsentSelect) cameraConsentSelect.value = currentConfig.consentMode;
+      if (cameraDeviceSelect && currentConfig.deviceId) {
+        cameraDeviceSelect.value = currentConfig.deviceId;
+      }
+    });
+  }
+
+  window.addEventListener("beforeunload", () => {
+    stopPreview();
+  });
+})();
+

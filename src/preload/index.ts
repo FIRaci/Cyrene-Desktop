@@ -727,3 +727,22 @@ const playerApi = {
 };
 contextBridge.exposeInMainWorld("player", playerApi);
 
+// Camera Vision API (Settings panel device enumeration, consent, and frame capture)
+const cameraApi = {
+  getConfig: () => ipcRenderer.invoke(IPC.CAMERA_GET_CONFIG),
+  saveConfig: (patch: unknown) => ipcRenderer.invoke(IPC.CAMERA_SAVE_CONFIG, patch),
+  sendCapturedFrame: (payload: { requestId: string; ok: boolean; dataUrl?: string; error?: string }) =>
+    ipcRenderer.send(IPC.CAMERA_CAPTURE_FRAME, payload),
+  onCaptureRequested: (h: (req: { requestId: string; deviceId: string }) => void) => {
+    const listener = (_: unknown, req: { requestId: string; deviceId: string }) => h(req);
+    ipcRenderer.on(IPC.CAMERA_REQUEST_CAPTURE, listener);
+    return () => ipcRenderer.removeListener(IPC.CAMERA_REQUEST_CAPTURE, listener);
+  },
+  onConfigChanged: (h: (cfg: unknown) => void) => {
+    const listener = (_: unknown, cfg: unknown) => h(cfg);
+    ipcRenderer.on(IPC.CAMERA_STATE_CHANGED, listener);
+    return () => ipcRenderer.removeListener(IPC.CAMERA_STATE_CHANGED, listener);
+  },
+};
+contextBridge.exposeInMainWorld("camera", cameraApi);
+

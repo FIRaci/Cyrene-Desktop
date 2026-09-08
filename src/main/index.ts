@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, screen, shell, dialog, protocol, net, powerMonitor, globalShortcut } from "electron";
+import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, screen, shell, dialog, protocol, net, powerMonitor, globalShortcut, session } from "electron";
 import { spawn, execSync } from "node:child_process";
 import * as path from "path";
 import * as fs from "fs";
@@ -160,6 +160,8 @@ import { registerDocumentTools } from "./orchestrator/document-tools";
 import { registerLifeTools, setTranslateConfig } from "./orchestrator/life-tools";
 import { registerTravelTools, setTravelConfig } from "./orchestrator/travel-tools";
 import { registerEmailTools, setEmailConfig } from "./orchestrator/email-tools";
+import { CameraService } from "./camera/camera-service";
+import { buildCameraTools } from "./orchestrator/tools/camera-tools";
 import { resolveMusicPaths } from "./music/paths";
 import { bootstrapMusicService } from "./music/bootstrap";
 import { installShutdownLatch } from "./music/shutdown-latch";
@@ -566,6 +568,111 @@ function getCoWatchService(): CoWatchService {
   return coWatchService;
 }
 
+let cameraService: CameraService | null = null;
+
+function getCameraService(): CameraService {
+  if (!cameraService) {
+    cameraService = new CameraService({
+      getConfig: () => {
+        const s = loadGeneralSettings();
+        return {
+          enabled: Boolean(s.cameraEnabled),
+          consentMode: s.cameraConsentMode || "ask",
+          deviceId: s.cameraDeviceId || "",
+        };
+      },
+      saveConfig: (patch) => {
+        const updated = saveGeneralSettings({
+          ...(patch.enabled !== undefined ? { cameraEnabled: patch.enabled } : {}),
+          ...(patch.consentMode !== undefined ? { cameraConsentMode: patch.consentMode } : {}),
+          ...(patch.deviceId !== undefined ? { cameraDeviceId: patch.deviceId } : {}),
+        });
+        syncBuiltInToolToggles(updated);
+        broadcastCameraConfig();
+      },
+      requestFrameFromRenderer: async (deviceId) => {
+        return requestCameraFrameFromRenderer(deviceId);
+      },
+      promptUserConsent: async (details) => {
+        return promptCameraConsent(details);
+      },
+      pushLog: (type, text, meta) => {
+        pushActivityLog(type, text, meta, "camera");
+      },
+    });
+  }
+  return cameraService;
+}
+
+function broadcastCameraConfig(): void {
+  const cfg = getCameraService().getConfig();
+  for (const win of [mainWindow, chatWindow, sidebarWindow, settingsWindow]) {
+    if (win && !win.isDestroyed()) {
+      win.webContents.send(IPC.CAMERA_STATE_CHANGED, cfg);
+    }
+  }
+}
+
+async function promptCameraConsent(details: { reason?: string }): Promise<boolean> {
+  const targetWin = (chatWindow && !chatWindow.isDestroyed())
+    ? chatWindow
+    : (mainWindow && !mainWindow.isDestroyed() ? mainWindow : null);
+
+  const reasonDetail = details.reason ? `Request context: "${details.reason}"\n\n` : "";
+  const result = await dialog.showMessageBox(targetWin as any, {
+    type: "question",
+    buttons: ["Allow Once", "Deny"],
+    defaultId: 0,
+    cancelId: 1,
+    title: "Cyrene Camera Vision Request",
+    message: "Cyrene wants to look through your camera.",
+    detail: `${reasonDetail}Cyrene will take a single snapshot frame to observe and immediately release the camera.\n\nDo you want to allow camera access?`,
+    noLink: true,
+  });
+
+  return result.response === 0;
+}
+
+async function requestCameraFrameFromRenderer(deviceId: string): Promise<{ ok: boolean; dataUrl?: string; error?: string }> {
+  const targetWin = (mainWindow && !mainWindow.isDestroyed())
+    ? mainWindow
+    : (settingsWindow && !settingsWindow.isDestroyed() ? settingsWindow : null);
+
+  if (!targetWin) {
+    return { ok: false, error: "NO_ACTIVE_RENDERER_WINDOW" };
+  }
+
+  return new Promise((resolve) => {
+    const requestId = randomUUID();
+    const timeout = setTimeout(() => {
+      ipcMain.removeListener(IPC.CAMERA_CAPTURE_FRAME, listener);
+      resolve({ ok: false, error: "CAMERA_CAPTURE_TIMEOUT" });
+    }, 12_000);
+
+    const listener = (_event: Electron.IpcMainEvent, res: { requestId: string; ok: boolean; dataUrl?: string; error?: string }) => {
+      if (res && res.requestId === requestId) {
+        clearTimeout(timeout);
+        ipcMain.removeListener(IPC.CAMERA_CAPTURE_FRAME, listener);
+        resolve({ ok: res.ok, dataUrl: res.dataUrl, error: res.error });
+      }
+    };
+
+    ipcMain.on(IPC.CAMERA_CAPTURE_FRAME, listener);
+    targetWin.webContents.send(IPC.CAMERA_REQUEST_CAPTURE, { requestId, deviceId });
+  });
+}
+
+function registerCameraTools(): void {
+  const tools = buildCameraTools({
+    cameraService: getCameraService(),
+    loadModelSettings: () => loadModelSettings(),
+    loadVisionConfig: () => loadVisionConfig(),
+  });
+  for (const t of tools) {
+    toolRegistry.register(t);
+  }
+}
+
 async function captureScreenForCoWatch(): Promise<{ filePath: string; previewUrl: string; mime: string } | null> {
   return runExplicitScreenCapture("vision", async () => {
     const { desktopCapturer, screen } = await import("electron");
@@ -670,6 +777,12 @@ function initializeScreenshotService(initialHotkey: string): ScreenshotService {
   });
   ipcMain.handle(IPC.COWATCH_GET_STATE, () => {
     return getCoWatchService().getState();
+  });
+  ipcMain.handle(IPC.CAMERA_GET_CONFIG, () => {
+    return getCameraService().getConfig();
+  });
+  ipcMain.handle(IPC.CAMERA_SAVE_CONFIG, (_event, patch: Record<string, unknown>) => {
+    return getCameraService().updateConfig(patch as any);
   });
   ipcMain.handle(IPC.SCREENSHOT_SAVE_TEMP, (event, base64: string, mime: string) => {
     if (chatWindow?.webContents.id !== event.sender.id) throw new Error("UNTRUSTED_SCREEN_CAPTURE_SENDER");
@@ -1491,6 +1604,12 @@ interface GeneralSettings {
   travelEnabled: boolean;
   /** 📍 Share location for nearby place recommendations (default: false) */
   shareLocation: boolean;
+  /** 📷 Camera Vision enabled */
+  cameraEnabled: boolean;
+  /** 📷 Camera Consent mode: "ask" | "always_allow" | "off" */
+  cameraConsentMode: "ask" | "always_allow" | "off";
+  /** 📷 Camera Device ID */
+  cameraDeviceId: string;
   /** 🖥️ （Playwright MCP）。 false，。 */
   playwrightMcpEnabled: boolean;
   // ： +  key
@@ -1746,6 +1865,9 @@ const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   amapKey: "",
   travelEnabled: true,
   shareLocation: false,
+  cameraEnabled: false,
+  cameraConsentMode: "ask",
+  cameraDeviceId: "",
   playwrightMcpEnabled: false,
   searchEngine: "ddg",
   searchBochaKey: "",
@@ -2216,6 +2338,11 @@ function normalizeGeneralSettings(input: Partial<GeneralSettings> | null | undef
     amapKey: typeof input?.amapKey === "string" ? input.amapKey : "",
     travelEnabled: Boolean(input?.travelEnabled),
     shareLocation: Boolean(input?.shareLocation),
+    cameraEnabled: Boolean(input?.cameraEnabled),
+    cameraConsentMode: (["ask", "always_allow", "off"].includes(String(input?.cameraConsentMode))
+      ? input!.cameraConsentMode
+      : "ask") as "ask" | "always_allow" | "off",
+    cameraDeviceId: typeof input?.cameraDeviceId === "string" ? input.cameraDeviceId : "",
     playwrightMcpEnabled: Boolean(input?.playwrightMcpEnabled),
     searchEngine: ["off", "ddg", "bocha", "tavily", "minimax"].includes(String(input?.searchEngine))
       ? (input!.searchEngine as "off" | "ddg" | "bocha" | "tavily" | "minimax")
@@ -2367,6 +2494,7 @@ function syncBuiltInToolToggles(settings: GeneralSettings): void {
   toolRegistry.setEnabled("weather", settings.weatherEnabled);
   toolRegistry.setEnabled("plan_trip", settings.travelEnabled);
   toolRegistry.setEnabled("find_nearby_places", settings.travelEnabled);
+  toolRegistry.setEnabled("look_at_master", settings.cameraEnabled);
 }
 
 /** MiniMax  MCP Server  ID。 */
@@ -6450,7 +6578,21 @@ app.whenReady().then(async () => {
 
   // （SMTP ， SMTP ）
   registerEmailTools();
+  registerCameraTools();
   syncBuiltInToolToggles(loadGeneralSettings());
+
+  // Configure media (camera & mic) permissions for defaultSession
+  session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
+    if (permission === "media") {
+      callback(true);
+      return;
+    }
+    callback(true);
+  });
+  session.defaultSession.setPermissionCheckHandler((_wc, permission) => {
+    if (permission === "media") return true;
+    return true;
+  });
 
   //  MCP ：Playwright (,)
   const initialSettings = loadGeneralSettings();

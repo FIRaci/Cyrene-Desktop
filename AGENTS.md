@@ -252,7 +252,39 @@
 
 ---
 
-## 10. BẢNG TỔNG HỢP SỰ CỐ & GIẢI PHÁP TRIỆT ĐỂ (REGRESSION PREVENTION LEDGER)
+## 10. THỊ GIÁC CAMERA & BẠN ĐỒNG HÀNH: CAMERA VISION & COMPANION EYE (CAMERA VISION CONTRACT)
+> 🚨 **CHỈ THỊ QUYỀN RIÊNG TƯ & THỊ GIÁC CAMERA:**
+> Tính năng Camera Vision (`look_at_master`) cho phép Cyrene quan sát Người Khai Phá hoặc đồ vật xung quanh khi được yêu cầu.
+> **BẢO MẬT & QUYỀN RIÊNG TƯ LÀ ƯU TIÊN SỐ 1: MẶC ĐỊNH TẮT (DEFAULT-OFF), PHẢI CÓ XÁC NHẬN ĐỒNG THUẬN VÀ CHỈ CHỤP 1 KHUNG HÌNH DUY NHẤT RỒI TẮT NGAY LẬP TỨC.**
+
+### 10.1. Quyền Riêng tư Tối thượng & Hộp thoại Xác nhận (Privacy-First & Confirmation Dialog):
+- **Mặc định TẮT (Default-OFF)**: Thiết lập Camera mặc định luôn ở trạng thái OFF (`cameraEnabled: false`).
+- **Hộp thoại xác nhận khi bật toggle**: Khi Master chủ động bật toggle Camera trong Cài đặt (`Alt+6`), ứng dụng bắt buộc phải hiển thị modal xác nhận (`showConfirm`): giải thích rõ ràng mục đích Cyrene quan sát. Nếu Master nhấn Cancel, toggle lập tức hoàn tác về OFF và không lưu cấu hình bật.
+
+### 10.2. Ba Chế độ Đồng thuận (Consent & Confirmation Modes):
+- `ask` (**Mặc định & Khuyên dùng**): Mỗi khi Cyrene được hỏi nhìn Master hoặc đồ vật (gọi tool `look_at_master`), ứng dụng sẽ hiển thị hộp thoại xác nhận xin phép (`Allow Cyrene to look through the camera?`). Chỉ khi Master nhấn Đồng ý (`Allow`), camera mới được kích hoạt để chụp.
+- `always_allow`: Tự động cho phép chụp khi Cyrene gọi tool mà không cần hỏi lại từng lần, chỉ áp dụng khi camera đã được bật ON trong Settings.
+- `off`: Khóa hoàn toàn tính năng camera. Nếu Cyrene gọi tool `look_at_master`, hệ thống từ chối ngay lập tức và lịch sự nhắc Master bật camera trong Settings.
+
+### 10.3. Cơ chế Chụp 1 Khung hình & Tắt Đèn LED Phần cứng Ngay lập tức (Instant Single-Frame Capture & LED Release):
+- **Tuyệt đối cấm stream video ngầm**: Ứng dụng không bao giờ duy trì luồng quay video (stream) chạy ngầm trong nền.
+- **Giải phóng Track ngay sau khi chụp**: Khi có yêu cầu chụp, renderer khởi tạo `getUserMedia` với thiết bị đã chọn, vẽ 1 khung hình lên `<canvas>`, xuất chuỗi ảnh base64 JPEG, và **NGAY LẬP TỨC** gọi `track.stop()` trên toàn bộ các media stream tracks.
+- **Tắt LED phần cứng**: Đèn LED báo hiệu camera trên laptop/màn hình chỉ chớp sáng trong tích tắc để chụp rồi tắt lịm ngay lập tức, đảm bảo an tâm tuyệt đối cho Master.
+
+### 10.4. Bộ chọn Thiết bị Camera & Xem thử Góc nhìn (Device Selector & Live Preview):
+- **Liệt kê camera**: Settings (`Alt+6`) tự động quét và hiển thị danh sách tất cả các thiết bị camera kết nối (`navigator.mediaDevices.enumerateDevices()` lọc `videoinput`).
+- **Nút Rescan**: Cho phép quét lại thiết bị khi cắm thêm webcam ngoài.
+- **Test Camera Preview**: Cho phép Master bật xem thử khung hình trực tiếp để căn chỉnh góc nhìn, ánh sáng; tự động dừng stream và giải phóng thiết bị khi tắt hoặc đóng cửa sổ Settings.
+
+### 10.5. Tương tác Tự nhiên qua Vision Language Model (VLM Companion Flow):
+- Khi Master yêu cầu ("Nhìn anh nè", "Chiếc áo anh đang mặc màu gì?", "Xem giúp anh cuốn sách này"), Cyrene gọi tool `look_at_master(prompt)`.
+- Khung hình tĩnh được chuyển đến Vision LLM (VLM) để phân tích chi tiết.
+- Cyrene phản hồi ngọt ngào, tinh tế bằng 1-2 câu tiếng Anh (phát âm tiếng Trung theo đúng hợp đồng giọng nói).
+- **Tuyệt đối không dùng emoji**: Toàn bộ icon thị giác là vector SVG chuẩn, không emoji.
+
+---
+
+## 11. BẢNG TỔNG HỢP SỰ CỐ & GIẢI PHÁP TRIỆT ĐỂ (REGRESSION PREVENTION LEDGER)
 
 | STT | Sự cố đã từng xảy ra | Nguyên nhân gốc rễ | Giải pháp kỹ thuật triệt để |
 |---|---|---|---|
@@ -279,13 +311,14 @@
 | **21** | **Lập lịch ảo (Hallucinated Schedule), không ghi vào Alt+3** | Agent thiếu bộ tool tương tác với Scheduler trong `toolRegistry`, dẫn đến việc LLM chỉ roleplay hứa hẹn mà không có tool thực thi. | Bổ sung `scheduler-tools.ts` (`schedule_task`, `query_scheduled_tasks`, `delete_scheduled_task`) vào `toolRegistry`, kết nối trực tiếp với `schedulerStore` và kích hoạt `schedulerEngine.start()`. Nhắc nhở đúng hạn trên Live2D Pet qua giọng nói + bong bóng thoại. |
 | **22** | **Dịch vụ âm nhạc NetEase phụ thuộc tài khoản nội địa & quét mã QR** | Tích hợp NetEase Cloud Music làm dịch vụ mặc định, đòi hỏi server MCP cục bộ, quét mã QR tài khoản Trung Quốc gây lỗi và phiền phức cho người dùng. | Thay thế vĩnh viễn bằng `YouTubeMusicProvider` (YouTube Music). Cung cấp gợi ý hàng ngày tự động không cần đăng nhập, tìm kiếm bài hát trực tiếp qua YouTube Music data scraping, mở phát trực tiếp trên `music.youtube.com`, hỗ trợ ID 11 ký tự YouTube, và cập nhật toàn bộ Settings UI sang YouTube Music 100% tiếng Anh. |
 | **23** | **Dịch vụ thời tiết & lộ trình phụ thuộc AMap nội địa Trung Quốc** | Sử dụng API Gaode Maps (`restapi.amap.com`) bắt buộc phải có API key Trung Quốc và mapping bảng mã `adcode` tỉnh/thành phố nội địa, không hỗ trợ tốt địa danh quốc tế. | Gỡ bỏ 100% AMap. Chuyển sang **Open-Meteo** (toàn cầu, keyless). Sử dụng Open-Meteo Geocoding để tra cứu tọa độ toàn cầu và tính toán lộ trình `planGlobalTrip` dựa trên công thức Great Circle * hệ số 1.3 đường bộ cho mọi phương thức di chuyển. Xóa bỏ hoàn toàn các helper dịch tiếng Trung cũ. |
+| **24** | **Camera xâm phạm riêng tư hoặc giữ đèn LED webcam sáng liên tục** | Camera stream ngầm hoặc tự ý bật mà không có sự đồng thuận của người dùng, hoặc không ngắt media stream sau khi chụp khiến đèn LED camera sáng hoài. | Camera mặc định TẮT (Default-OFF). Khi bật toggle trong Settings, hiển thị modal xác nhận. Cung cấp 3 chế độ đồng thuận (`ask`, `always_allow`, `off`). Chụp đúng 1 khung hình tĩnh và NGAY LẬP TỨC giải phóng `track.stop()`, tắt hoàn toàn đèn LED phần cứng của webcam. Hỗ trợ bộ chọn thiết bị camera và kiểm tra góc nhìn (Test Preview). |
 
 ---
 
-## 11. NGUYÊN TẮC THIẾT KẾ SOLID & BẢN ĐỒ VỊ TRÍ CODE BẤT KHẢ XÂM PHẠM (CODE ANCHOR MAP)
+## 12. NGUYÊN TẮC THIẾT KẾ SOLID & BẢN ĐỒ VỊ TRÍ CODE BẤT KHẢ XÂM PHẠM (CODE ANCHOR MAP)
 > **Mục tiêu**: Code có độ kết dính cao (High Cohesion), độ phụ thuộc thấp (Low Coupling), khó làm hỏng tính năng cũ (Closed for modification) nhưng dễ dàng mở rộng (Open for extension).
 
-### 11.1. Bản đồ Vị trí Code Trọng yếu (Critical File Anchors):
+### 12.1. Bản đồ Vị trí Code Trọng yếu (Critical File Anchors):
 1. **Quản lý Session & Khử Duplicate Chat**:
    - `src/main/chats/chats-store.ts` (Hàm `appendMessage`):
      * **Trách nhiệm duy nhất (SRP)**: Lưu trữ, truy xuất tin nhắn session và đảm bảo tính idempotent.
@@ -313,15 +346,23 @@
    - `src/main/orchestrator/travel-tools.ts` & `src/main/orchestrator/built-in-tools.ts`:
      * **Trách nhiệm duy nhất (SRP)**: Xử lý định vị địa lý, dự báo thời tiết, quy hoạch lộ trình di chuyển (`plan_trip`) và tìm kiếm quán ăn/địa điểm xung quanh (`find_nearby_places`).
      * **KHÔNG ĐƯỢC CHẠM VÀO**: Logic Great Circle routing, Geocoding Open-Meteo và chính sách bảo mật vị trí mặc định tắt.
+8. **Thị giác Camera & Điều phối Đồng thuận (Camera Vision & Consent Guard)**:
+   - `src/main/camera/camera-service.ts` & `src/main/orchestrator/tools/camera-tools.ts`:
+     * **Trách nhiệm duy nhất (SRP)**: Quản lý trạng thái camera (bật/tắt, chế độ đồng thuận, deviceId), hộp thoại xác nhận khi chụp và công cụ `look_at_master`.
+     * **KHÔNG ĐƯỢC CHẠM VÀO**: Quy trình kiểm tra consent gate (`ask` -> native dialog) trước khi gọi renderer capture.
+   - `src/renderer/camera/camera-capturer.ts`:
+     * **Trách nhiệm duy nhất (SRP)**: Mở webcam, chụp duy nhất 1 frame tĩnh dạng JPEG base64 và lập tức gọi `track.stop()` trên mọi video track.
+     * **KHÔNG ĐƯỢC CHẠM VÀO**: Logic giải phóng track ngay lập tức để ngắt đèn LED phần cứng của webcam.
 
 ---
 
-## 12. QUY TRÌNH LÀM VIỆC & TIÊU CHUẨN ĐÓNG GÓI (WORKING PROTOCOL)
+## 13. QUY TRÌNH LÀM VIỆC & TIÊU CHUẨN ĐÓNG GÓI (WORKING PROTOCOL)
 1. **Đọc tệp này đầu tiên**: Trước khi bắt đầu bất kỳ chỉnh sửa nào liên quan đến Voice, Chat, Live2D, Co-Watch, UI Layout, hãy đối chiếu với tệp này.
 2. **Tuyệt đối không tự ý giả định (No Assumptions)**: Nếu có điểm chưa rõ về ý muốn của User, giữ nguyên các thiết lập đã khóa trong tài liệu này hoặc hỏi trực tiếp, không tự ý "sửa hộ" sang công nghệ khác.
 3. **Bảo toàn Test & Build**:
-   - Luôn chạy `npx vitest run` (Toàn bộ 264 file test, 2,011+ tests phải pass 100%).
+   - Luôn chạy `npx vitest run` (Toàn bộ 266+ file test, 2,020+ tests phải pass 100%).
    - Luôn chạy `npm run build` để biên dịch TypeScript và Vite.
    - Luôn chạy `npm run package:win:dir` để đóng gói bản chạy thực tế tại `release\win-unpacked\Cyrene.exe`.
 4. **Git Commit & Push**: Tuân thủ conventional commit (`feat`, `fix`, `style`, `refactor`), cập nhật tài liệu và push lên nhánh `master` khi hoàn thành.
+
 

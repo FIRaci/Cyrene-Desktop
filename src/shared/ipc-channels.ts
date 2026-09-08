@@ -333,6 +333,14 @@ export const IPC = {
   // Auto Updater
   APP_CHECK_FOR_UPDATES: "app:check-for-updates",
 
+  // Camera Vision & Companion Eye
+  CAMERA_GET_CONFIG: "camera:get-config",
+  CAMERA_SAVE_CONFIG: "camera:save-config",
+  CAMERA_CAPTURE_FRAME: "camera:capture-frame",
+  CAMERA_REQUEST_CAPTURE: "camera:request-capture",
+  CAMERA_CONFIRM_CONSENT: "camera:confirm-consent",
+  CAMERA_STATE_CHANGED: "camera:state-changed",
+
   // Weather Telemetry
   WEATHER_GET_CURRENT: "weather:get-current",
 } as const;

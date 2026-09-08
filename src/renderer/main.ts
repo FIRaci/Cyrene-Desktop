@@ -17,6 +17,7 @@ import { PetCoWatchIndicator } from "./live2d/cowatch-indicator";
 import { GestureInteractionController } from "./live2d/gesture-interaction-controller";
 import { CompanionVoiceService } from "./live2d/voice";
 import { AutonomousThoughtController } from "./live2d/autonomous-thoughts";
+import { registerCameraCapturer } from "./camera/camera-capturer";
 import {
   PetZoomHydrationState,
   shouldStartPetDrag,
@@ -823,3 +824,5 @@ addTrackedEventListener(window, "window:blur", "blur", () => {
   if (isDragging) finishDrag();
   if (isZoomDragging) finishZoomDrag();
 });
+
+registerCameraCapturer();

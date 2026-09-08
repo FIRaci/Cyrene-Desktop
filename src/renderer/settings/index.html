@@ -549,6 +549,66 @@
               </div>
               <div id="inapp-player-empty" style="font-size:12px;opacity:.5;padding:2px 0">No track currently playing</div>
             </div>
+
+            <!-- Camera Vision & Companion Eye Card -->
+            <div class="setting-row" id="camera-setting-card" style="flex-direction:column;align-items:stretch;gap:12px;">
+              <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
+                <div>
+                  <div style="display:flex;align-items:center;gap:8px">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                    <strong>Camera Vision & Companion Eye</strong>
+                  </div>
+                  <span style="display:block;margin-top:2px">Allow Cyrene to observe you or inspect objects in front of the camera when requested. Off by default for privacy.</span>
+                </div>
+                <span class="switch"><input id="camera-enabled" type="checkbox" /><span class="switch__track"><span class="switch__thumb"></span></span></span>
+              </div>
+
+              <!-- Camera Options (shown when camera is enabled) -->
+              <div id="camera-options-wrap" style="display:none;flex-direction:column;gap:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08)">
+                <div style="display:flex;flex-direction:column;gap:6px">
+                  <label for="camera-consent-mode" style="font-size:12px;font-weight:600;opacity:0.85">Consent & Confirmation Mode</label>
+                  <select id="camera-consent-mode" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.14);border-radius:6px;color:inherit;font-size:12px;padding:6px 10px;cursor:pointer;outline:none">
+                    <option value="ask" selected>Ask for confirmation before each observation (Recommended)</option>
+                    <option value="always_allow">Always allow when camera is enabled</option>
+                    <option value="off">Never allow camera capture (Disabled)</option>
+                  </select>
+                  <span style="font-size:11px;opacity:0.65">In "Ask" mode, Cyrene displays a prompt for your explicit approval before taking a snapshot.</span>
+                </div>
+
+                <div style="display:flex;flex-direction:column;gap:6px">
+                  <label for="camera-device-select" style="font-size:12px;font-weight:600;opacity:0.85">Camera Device Selection</label>
+                  <div style="display:flex;align-items:center;gap:8px">
+                    <select id="camera-device-select" style="flex:1;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.14);border-radius:6px;color:inherit;font-size:12px;padding:6px 10px;cursor:pointer;outline:none">
+                      <option value="">Default System Camera</option>
+                    </select>
+                    <button type="button" class="btn" id="camera-refresh-devices-btn" title="Rescan Camera Devices" aria-label="Rescan Camera Devices" style="padding:6px 10px;font-size:12px;display:inline-flex;align-items:center;gap:4px;border:1px solid rgba(255,255,255,0.14);border-radius:6px;cursor:pointer">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                      <span>Rescan</span>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Camera Test / Preview Box -->
+                <div style="display:flex;flex-direction:column;gap:8px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:10px 12px">
+                  <div style="display:flex;align-items:center;justify-content:space-between">
+                    <span style="font-size:12px;font-weight:500">Camera Test Preview</span>
+                    <span id="camera-status-badge" style="font-size:11px;padding:2px 8px;border-radius:10px;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.65)">Idle</span>
+                  </div>
+                  <div id="camera-preview-container" style="display:none;position:relative;width:100%;max-width:320px;border-radius:6px;overflow:hidden;background:#000">
+                    <video id="camera-preview-video" playsinline muted style="width:100%;display:block;transform:scaleX(-1)"></video>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:8px">
+                    <button type="button" class="btn" id="camera-test-btn" style="padding:5px 12px;font-size:12px;display:inline-flex;align-items:center;gap:6px;border:1px solid rgba(255,255,255,0.15);border-radius:6px;cursor:pointer">
+                      <svg id="camera-test-icon-play" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                      <svg id="camera-test-icon-stop" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/></svg>
+                      <span id="camera-test-label">Test Camera Preview</span>
+                    </button>
+                    <span style="font-size:11px;opacity:0.6">Click to verify camera orientation and feed</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <label class="setting-row">
               <div>
                 <strong>SFX</strong>
