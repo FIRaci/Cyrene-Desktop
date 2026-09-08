@@ -1047,7 +1047,24 @@ function startPlanCardFadeIfTerminal(card: HTMLElement): void {
     setTimeout(() => {
       if (card.classList.contains("plan-card--fading")) card.remove();
     }, 400);
-  }, 5000);
+  }, 1500);
+}
+
+function dismissPlanCardOnRunFinished(): void {
+  const card = document.querySelector(".plan-card") as HTMLElement | null;
+  if (!card) return;
+  const badge = card.querySelector(".plan-card__badge");
+  if (badge && badge.textContent === "Executing") {
+    badge.textContent = "Completed";
+    badge.className = "plan-card__badge plan-card__badge--completed";
+  }
+  if (planCardFadeTimer) clearTimeout(planCardFadeTimer);
+  planCardFadeTimer = window.setTimeout(() => {
+    card.classList.add("plan-card--fading");
+    setTimeout(() => {
+      if (card.classList.contains("plan-card--fading")) card.remove();
+    }, 400);
+  }, 1500);
 }
 
 /** 。todos 。
@@ -2080,7 +2097,15 @@ function render(preserveScroll = false): void {
     } else {
       const currentMode = isChatMode() ? "chat" : "work";
       const cleanContent = m.role === "model"
-        ? m.content.trimStart().replace(/^\s*(?:\[\d{4}[-/.]\d{2}[-/.]\d{2}[ T]\d{2}:\d{2}(?::\d{2})?(?:,\s*[^\]]+)?\]\s*)+/, "").trimStart()
+        ? m.content
+            .trimStart()
+            .replace(/^\s*(?:\[\d{4}[-/.]\d{2}[-/.]\d{2}[ T]\d{2}:\d{2}(?::\d{2})?(?:,\s*[^\]]+)?\]\s*)+/, "")
+            .replace(/\[\s*Projection:[^\]]*\]/gi, "")
+            .replace(/\[\/?(?:assistant|thought|system|internal)[^\]]*\]/gi, "")
+            .replace(/<\/?(?:assistant|thought|system)[^>]*>/gi, "")
+            .replace(/<\|[^|>]+\|>/g, "")
+            .replace(/(?![♪♫\u2669-\u266f])[\u2600-\u27BF\uFE00-\uFE0F]|[\u{1F300}-\u{1FAFF}]/gu, "")
+            .trim()
         : m.content;
       const segments = getAssistantReplyBubbleTexts(cleanContent, currentMode, segmentedOutputMode, {
         preserveEmpty: !!m.transient,
@@ -3580,10 +3605,12 @@ async function triggerCyreneGreeting(): Promise<void> {
             }
             break;
           case "RUN_FINISHED":
+            dismissPlanCardOnRunFinished();
             runFinishedArrived = true;
             tryFinish();
             break;
           case "RUN_ERROR":
+            dismissPlanCardOnRunFinished();
             failRun(new AgentRenderError(event.code, event.message ?? "Model request failed"));
             break;
           default:
@@ -4141,10 +4168,12 @@ async function send(): Promise<void> {
             break;
           case "RUN_FINISHED":
             // Final signal received, but wait for playback queue to drain before finishRun (ensures stream completes)
+            dismissPlanCardOnRunFinished();
             runFinishedArrived = true;
             tryFinish();
             break;
           case "RUN_ERROR":
+            dismissPlanCardOnRunFinished();
             failRun(new AgentRenderError(event.code, event.message ?? "Model request failed"));
             break;
           default:

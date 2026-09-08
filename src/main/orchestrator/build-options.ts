@@ -362,38 +362,6 @@ function buildStylePromptBlock(markdown: string): string {
   ].join("\n");
 }
 
-/**
- * Detects whether the user's message contains operational secretary/assistant intent
- * (such as scheduling, task management, alarms, reminders, weather queries, or calculations).
- * When detected, Cyrene promotes executionMode to "work" so that the appropriate tools
- * (schedule_task, query_scheduled_tasks, weather, etc.) are available instead of leaving the agent tool-less in chat loop.
- */
-export function detectAssistantOperationalIntent(text: string): boolean {
-  if (!text || typeof text !== "string") return false;
-  const trimmed = text.trim();
-  if (!trimmed) return false;
-
-  const lower = trimmed.toLowerCase();
-
-  // 1. Scheduling, reminders, calendar, deadlines, study plans, appointments (English & Vietnamese)
-  const scheduleEn = /\b(schedule|reschedule|appointment|meeting|calendar|remind|reminder|due|alarm|event|deadline)\b/i;
-  const scheduleVi = /(lập lịch|đặt lịch|lịch trình|hẹn giờ|nhắc nhở|nhắc tôi|nhắc nhở tôi|báo thức|thời khóa biểu|công việc|nhiệm vụ|hạn chót)/iu;
-
-  // 2. Weather & environment
-  const weatherEn = /\b(weather|forecast|temperature|climate)\b/i;
-  const weatherVi = /(thời tiết|dự báo thời tiết|nhiệt độ|trời mưa|trời nắng)/iu;
-
-  // 3. Explicit tool instructions (search, note, calculate, translate)
-  const toolEn = /\b(search online|google|calculate|take note|set a task|add task|create task|query task|view task|check schedule)\b/i;
-  const toolVi = /(tìm kiếm|tra cứu|tính toán|ghi chú|tạo task|thêm việc|xem lịch|kiểm tra lịch)/iu;
-
-  return scheduleEn.test(lower) ||
-    scheduleVi.test(lower) ||
-    weatherEn.test(lower) ||
-    weatherVi.test(lower) ||
-    toolEn.test(lower) ||
-    toolVi.test(lower);
-}
 
 /**
  * Construct options required by CyreneAgent.runWithEvents + extract latestUserText.
@@ -424,12 +392,9 @@ export async function buildAgentRunOptions(
   const requestedExecutionMode = resolveExecutionMode(
     input.executionMode ?? ((input.style || "").startsWith("talk") ? "chat" : "work"),
   );
-  // If user is in "chat" mode but asks for operational secretary/assistant work (e.g. scheduling, reminders, weather),
-  // automatically promote to "work" mode so Cyrene can execute the required tools instead of mere roleplay yapping!
-  const hasOperationalIntent = detectAssistantOperationalIntent(latestUserText);
-  const executionMode: AgentExecutionMode = (requestedExecutionMode === "chat" && hasOperationalIntent)
-    ? "work"
-    : requestedExecutionMode;
+  // Deterministic mode separation: Chat mode is pure companion conversation (0 tools, fastest latency).
+  // Work mode is operational assistant with full tool schemas (schedule_task, weather, web search, etc.).
+  const executionMode: AgentExecutionMode = requestedExecutionMode;
   const isChatMode = executionMode === "chat";
   const conversationId = input.sessionId || "default";
   const socialContextEnabled = isChatMode

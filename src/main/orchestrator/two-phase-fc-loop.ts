@@ -216,6 +216,11 @@ function stripTextualToolProtocol(text: string): string {
     .replace(/<tool_call\b[^>]*>[\s\S]*?<\/tool_call>/gi, "")
     .replace(/\[tool_call\][\s\S]*?\[\/tool_call\]/gi, "")
     .replace(/<invoke\b[^>]*>[\s\S]*?<\/invoke>/gi, "")
+    .replace(/\[\s*Projection:[^\]]*\]/gi, "")
+    .replace(/\[\/?(?:assistant|thought|system|internal)[^\]]*\]/gi, "")
+    .replace(/<\/?(?:assistant|thought|system)[^>]*>/gi, "")
+    .replace(/<\|[^|>]+\|>/g, "")
+    .replace(/(?![♪♫\u2669-\u266f])[\u2600-\u27BF\uFE00-\uFE0F]|[\u{1F300}-\u{1FAFF}]/gu, "")
     .trim();
 }
 

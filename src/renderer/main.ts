@@ -74,8 +74,6 @@ const gestureController = new GestureInteractionController({
 (window as unknown as { companionVoice?: unknown; gestureController?: unknown }).gestureController = gestureController;
 
 let accumulatedAgentSpeech = "";
-let earlySentenceDelivered = false;
-let earlySentenceText = "";
 let roleplayReactionTriggeredThisTurn = false;
 let lastRoleplayReactionTime = 0;
 let lastAgentSpeechKaomojiTime = 0;
@@ -174,26 +172,10 @@ const petAgentEventOff = window.petCompanion?.onAgentEvent((rawEvent) => {
 
   if (event.type === "RUN_STARTED") {
     accumulatedAgentSpeech = "";
-    earlySentenceDelivered = false;
-    earlySentenceText = "";
     roleplayReactionTriggeredThisTurn = false;
   } else if (event.type === "TEXT_MESSAGE_CONTENT") {
     if (event.delta) {
       accumulatedAgentSpeech += event.delta;
-      // Early voice playback: When first sentence completes, speak immediately so voice starts before typewriter finishes!
-      if (!earlySentenceDelivered && accumulatedAgentSpeech.length >= 15) {
-        const sentenceMatch = /^([^。！？!?;\n]+[。！？!?;\n])(?:\s+.*)?$/s.exec(accumulatedAgentSpeech);
-        if (sentenceMatch && sentenceMatch[1].trim().length >= 8) {
-          earlySentenceDelivered = true;
-          earlySentenceText = sentenceMatch[1].trim();
-          roleplayReactionTriggeredThisTurn = true;
-          triggerRoleplayReactions(earlySentenceText);
-          if (!suppressBubbles) {
-            companionBubbles.say(earlySentenceText, 4000, companionVoice);
-          }
-          void companionVoice.speak(earlySentenceText);
-        }
-      }
     }
   } else if (event.type === "TEXT_MESSAGE_END" || event.type === "RUN_FINISHED") {
     if (accumulatedAgentSpeech.trim()) {
@@ -209,27 +191,12 @@ const petAgentEventOff = window.petCompanion?.onAgentEvent((rawEvent) => {
         companionBubbles.say(speechToDeliver, 4000, companionVoice);
       }
 
-      if (!earlySentenceDelivered) {
-        void companionVoice.speak(speechToDeliver);
-      } else {
-        const remainder = speechToDeliver.startsWith(earlySentenceText)
-          ? speechToDeliver.slice(earlySentenceText.length).trim()
-          : speechToDeliver;
-        if (remainder) {
-          void companionVoice.speak(remainder, { queue: true });
-        }
-      }
-      earlySentenceDelivered = false;
-      earlySentenceText = "";
+      void companionVoice.speak(speechToDeliver);
     } else if (event.type === "RUN_FINISHED") {
       companionBubbles.clearThought();
-      earlySentenceDelivered = false;
-      earlySentenceText = "";
     }
   } else if (event.type === "RUN_ERROR") {
     accumulatedAgentSpeech = "";
-    earlySentenceDelivered = false;
-    earlySentenceText = "";
     companionBubbles.clearThought();
   } else if (event.type === "say") {
     if (event.text) {

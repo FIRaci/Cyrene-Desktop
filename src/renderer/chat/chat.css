@@ -2706,15 +2706,16 @@ body {
   display: flex;
   flex-direction: column;
   border-radius: 16px;
-  background: var(--rb-bg-glass, rgba(255, 255, 255, 0.92));
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 180, 200, 0.3);
-  box-shadow: 0 8px 32px rgba(180, 100, 140, 0.18);
+  background: linear-gradient(135deg, rgba(34, 28, 70, 0.95) 0%, rgba(15, 13, 31, 0.96) 100%);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(236, 72, 153, 0.35);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5), 0 0 24px rgba(236, 72, 153, 0.2);
   overflow: hidden;
-  transition: opacity 0.4s ease;
+  transition: opacity 0.3s ease, transform 0.3s ease;
   opacity: 1;
 }
-.plan-card--fading { opacity: 0; pointer-events: none; }
+.plan-card--fading { opacity: 0; pointer-events: none; transform: translateY(-6px); }
 
 .plan-card__header {
   display: flex;
@@ -2723,15 +2724,16 @@ body {
   padding: 12px 16px;
   cursor: grab;
   user-select: none;
-  border-bottom: 1px solid rgba(200, 180, 200, 0.15);
+  border-bottom: 1px solid rgba(236, 72, 153, 0.18);
+  background: rgba(255, 255, 255, 0.03);
 }
 .plan-card__header:active { cursor: grabbing; }
-.plan-card__icon { font-size: 18px; flex-shrink: 0; }
+.plan-card__icon { color: var(--rb-pink-400, #f472b6); flex-shrink: 0; }
 .plan-card__goal {
   flex: 1;
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 600;
-  color: var(--rb-text-primary, #3d2b38);
+  color: var(--rb-text-strong, #fef7ff);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2743,12 +2745,12 @@ body {
   font-weight: 500;
   flex-shrink: 0;
 }
-.plan-card__badge--running { background: rgba(100, 180, 255, 0.15); color: #3b82f6; }
-.plan-card__badge--completed { background: rgba(100, 200, 130, 0.15); color: #22c55e; }
-.plan-card__badge--failed { background: rgba(255, 100, 100, 0.15); color: #ef4444; }
-.plan-card__badge--cancelled { background: rgba(150, 150, 150, 0.15); color: #999; }
-.plan-card__badge--awaiting_user { background: rgba(255, 200, 80, 0.15); color: #f59e0b; }
-.plan-card__badge--paused { background: rgba(150, 150, 150, 0.15); color: #999; }
+.plan-card__badge--running { background: rgba(168, 85, 247, 0.25); color: #c084fc; border: 1px solid rgba(192, 132, 252, 0.4); }
+.plan-card__badge--completed { background: rgba(34, 197, 94, 0.2); color: #4ade80; border: 1px solid rgba(74, 222, 128, 0.4); }
+.plan-card__badge--failed { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(248, 113, 113, 0.4); }
+.plan-card__badge--cancelled { background: rgba(156, 163, 175, 0.2); color: #9ca3af; }
+.plan-card__badge--awaiting_user { background: rgba(245, 158, 11, 0.25); color: #fbbf24; border: 1px solid rgba(251, 191, 36, 0.4); }
+.plan-card__badge--paused { background: rgba(156, 163, 175, 0.2); color: #9ca3af; }
 
 .plan-card__steps {
   flex: 1;
@@ -2762,16 +2764,16 @@ body {
   padding: 6px 16px;
   font-size: 13px;
   line-height: 1.5;
-  color: var(--rb-text-primary, #3d2b38);
+  color: var(--rb-text-default, #ebe5f5);
 }
 .plan-card__step-icon { flex-shrink: 0; width: 18px; text-align: center; }
 .plan-card__step-text { flex: 1; }
-.plan-card__step--running .plan-card__step-text { font-weight: 600; }
-.plan-card__step--completed { color: var(--rb-text-secondary, #8b7180); }
-.plan-card__step--failed { color: #ef4444; }
-.plan-card__step--failed .plan-card__step-text { color: #ef4444; }
+.plan-card__step--running .plan-card__step-text { font-weight: 600; color: #fff; }
+.plan-card__step--completed { color: var(--rb-text-muted, #a094c1); }
+.plan-card__step--failed { color: #f87171; }
+.plan-card__step--failed .plan-card__step-text { color: #f87171; }
 .plan-card__step--superseded {
-  color: var(--rb-text-tertiary, #b0a0a8);
+  color: var(--rb-text-faint, #6b6388);
   padding-left: 28px;
 }
 .plan-card__step--superseded .plan-card__step-text {
@@ -2780,17 +2782,17 @@ body {
 }
 .plan-card__step-failure {
   font-size: 11px;
-  color: #ef4444;
+  color: #f87171;
   margin-top: 2px;
   padding-left: 26px;
 }
-.plan-card__step--skipped { color: var(--rb-text-tertiary, #b0a0a8); }
+.plan-card__step--skipped { color: var(--rb-text-faint, #6b6388); }
 
 .plan-card__footer {
   padding: 6px 16px;
   font-size: 11px;
-  color: var(--rb-text-tertiary, #b0a0a8);
-  border-top: 1px solid rgba(200, 180, 200, 0.1);
+  color: var(--rb-text-muted, #a094c1);
+  border-top: 1px solid rgba(236, 72, 153, 0.12);
 }
 
 [data-ui-theme="pearl-white"] .plan-card {

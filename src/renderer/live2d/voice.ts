@@ -77,7 +77,6 @@ export class CompanionVoiceService {
   private onStartSpeaking?: (durationMs: number) => void;
   private onStopSpeaking?: () => void;
   private disposed = false;
-  private speechQueue: string[] = [];
 
   constructor(options: CompanionVoiceOptions = {}) {
     this.onStartSpeaking = options.onStartSpeaking;
@@ -125,15 +124,9 @@ export class CompanionVoiceService {
    * Speak the given text out loud in sweet Chinese anime voice (Cyrene) and coordinate Live2D mouth movements.
    * Cleans kaomoji/emojis, strips actions/thoughts, and speaks in Chinese dialogue.
    */
-  async speak(text: string, options?: { queue?: boolean }): Promise<boolean> {
+  async speak(text: string): Promise<boolean> {
     if (this.disposed || this.muted || !text) return false;
 
-    if (options?.queue && (this.isSpeaking || this.isSynthesizing)) {
-      this.speechQueue.push(text);
-      return true;
-    }
-
-    this.speechQueue = [];
     const cleaned = cleanTextForSpeech(text);
     if (!cleaned) return false;
 
@@ -493,13 +486,6 @@ export class CompanionVoiceService {
           blobUrl = null;
         }
         this.onStopSpeaking?.();
-
-        if (this.speechQueue.length > 0) {
-          const nextText = this.speechQueue.shift();
-          if (nextText) {
-            void this.speak(nextText);
-          }
-        }
       };
 
       audio.onplay = () => {
@@ -572,7 +558,6 @@ export class CompanionVoiceService {
   }
 
   stop(): void {
-    this.speechQueue = [];
     this.isSpeaking = false;
     this.isSynthesizing = false;
 

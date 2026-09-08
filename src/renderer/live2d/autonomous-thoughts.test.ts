@@ -30,6 +30,7 @@ describe("AutonomousThoughtController", () => {
       bubbles,
       kaomoji,
       thoughts: [{ text: "Thinking of you~", kaomoji: "(｡♥‿♥｡)" }],
+      kaomojiProbability: 1.0,
       minIntervalMs: 10_000,
       maxIntervalMs: 20_000,
     });
@@ -62,6 +63,7 @@ describe("AutonomousThoughtController", () => {
       bubbles,
       kaomoji,
       thoughts: [{ text: "Periodic thought", kaomoji: "(✿◠‿◠)" }],
+      kaomojiProbability: 1.0,
       minIntervalMs: 1_000,
       maxIntervalMs: 1_000,
     });
