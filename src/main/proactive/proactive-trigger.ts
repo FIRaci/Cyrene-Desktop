@@ -190,6 +190,8 @@ function timeWindowFit(
 /** Event urgency (0-20). Regular time greetings score 0. */
 function eventUrgency(sceneId: string, ctx: ProactiveTriggerContext): number {
   switch (sceneId) {
+    case "late_night_grind":
+      return 15;
     case "back_from_away":
       // Higher score the longer away, capped at 20
       return clamp(Math.round(ctx.snapshot.idleSec / 60), 0, 20);
@@ -316,6 +318,18 @@ const SCENES: readonly SceneDefinition[] = [
       const activeMs = ctx.now - ctx.activeSessionStartedAt;
       const applicable = activeMs >= WORK_BREAK_MIN_MS;
       return { fit: 0, urgency: eventUrgency("work_break", ctx), applicable };
+    },
+  },
+  {
+    sceneId: "late_night_grind",
+    baseScore: 72,
+    sceneCooldownMs: 5 * 60 * 60 * 1000,
+    priority: 1,
+    compute(ctx) {
+      // 00:00 - 03:30
+      const fit = timeWindowFit(ctx.localHour, ctx.localMinute, 0, 3 * 60 + 30);
+      const applicable = fit > 0 && ctx.snapshot.idleSec < ACTIVE_THRESHOLD_SEC;
+      return { fit, urgency: eventUrgency("late_night_grind", ctx), applicable };
     },
   },
 ];

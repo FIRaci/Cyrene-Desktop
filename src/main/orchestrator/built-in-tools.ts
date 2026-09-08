@@ -653,6 +653,22 @@ async function executeWeather(args: Record<string, unknown>): Promise<string> {
   return omFetchWeather(city);
 }
 
+/** Fetch current weather summary string for proactive morning briefings. */
+export async function fetchCurrentWeatherSummary(city?: string): Promise<string> {
+  try {
+    const raw = await executeWeather({ city });
+    if (raw.startsWith("[Error]") || raw.startsWith("[Notice]")) {
+      return raw;
+    }
+    const data = JSON.parse(raw);
+    const feelsLike = data.feelsLike !== undefined ? `, feels like ${data.feelsLike}°C` : "";
+    return `${data.city}: ${data.weather}, ${data.temperature}°C${feelsLike}, humidity ${data.humidity}%, wind ${data.windSpeed}`;
+  } catch {
+    return "[Error] Weather lookup failed";
+  }
+}
+
+
 toolRegistry.register({
   id: "weather",
   name: "Weather",

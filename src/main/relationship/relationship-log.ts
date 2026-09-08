@@ -1,6 +1,8 @@
 import * as fs from "fs"
 import * as path from "path"
 import { app } from "electron"
+import { getBondEngine } from "./bond-engine"
+import { getEpisodicStore, detectEpisodicEventFromText } from "../memory/episodic-store"
 
 export type RelationshipChannel = "desktop" | "wechat" | "feishu"
 
@@ -191,23 +193,41 @@ export class RelationshipLogStore {
   }
 
   async buildContext(): Promise<string> {
+    const sections: string[] = []
+
+    try {
+      const bondPrompt = getBondEngine().buildBondPersonaPrompt()
+      if (bondPrompt) sections.push(bondPrompt)
+    } catch {
+      // ignore
+    }
+
+    try {
+      const episodicPrompt = getEpisodicStore().buildPendingEventsPrompt()
+      if (episodicPrompt) sections.push(episodicPrompt)
+    } catch {
+      // ignore
+    }
+
     const data = readData(this.filePath)
     const recent = data.entries.slice(-8)
-    if (recent.length === 0) return ""
+    if (recent.length > 0) {
+      const lastMood = [...recent].reverse().find((e) => e.userMood !== "unknown")?.userMood ?? "stable"
+      const latestSummary = data.dailySummaries.at(-1)?.summary
+      const preference = [...recent].reverse().find((e) => e.importantMoment)?.importantMoment
+      const cues = [...new Set(recent.map((e) => e.nextCareCue).filter(Boolean))].slice(-3)
 
-    const lastMood = [...recent].reverse().find((e) => e.userMood !== "unknown")?.userMood ?? "stable"
-    const latestSummary = data.dailySummaries.at(-1)?.summary
-    const preference = [...recent].reverse().find((e) => e.importantMoment)?.importantMoment
-    const cues = [...new Set(recent.map((e) => e.nextCareCue).filter(Boolean))].slice(-3)
+      const lines = [
+        "[Recent Relationship Cues]",
+        `- User recent state: ${lastMood}`,
+      ]
+      if (latestSummary) lines.push(`- Recent diary summary: ${latestSummary}`)
+      if (preference) lines.push(`- Important interaction preference: ${preference}`)
+      if (cues.length > 0) lines.push(`- Next response cue: ${cues.join("; ")}`)
+      sections.push(lines.join("\n"))
+    }
 
-    const lines = [
-      "[Recent Relationship Cues]",
-      `- User recent state: ${lastMood}`,
-    ]
-    if (latestSummary) lines.push(`- Recent diary summary: ${latestSummary}`)
-    if (preference) lines.push(`- Important interaction preference: ${preference}`)
-    if (cues.length > 0) lines.push(`- Next response cue: ${cues.join("; ")}`)
-    return lines.join("\n")
+    return sections.join("\n\n")
   }
 }
 
@@ -219,9 +239,25 @@ function getDefaultStore(): RelationshipLogStore {
 }
 
 export function recordRelationshipTurn(input: RelationshipTurnInput): Promise<RelationshipLogEntry | null> {
+  try {
+    const detected = detectEpisodicEventFromText(input.userText)
+    if (detected) {
+      getEpisodicStore().addEvent(detected)
+    }
+  } catch {
+    // ignore
+  }
+
+  try {
+    getBondEngine().recordInteraction("chat_message")
+  } catch {
+    // ignore
+  }
+
   return getDefaultStore().recordTurn(input)
 }
 
 export function buildRelationshipContext(): Promise<string> {
   return getDefaultStore().buildContext()
 }
+

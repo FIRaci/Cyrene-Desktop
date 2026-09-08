@@ -223,6 +223,34 @@ describe("candidate selection and evaluation", () => {
     await ctx.trigger.evaluateNow("third");
     expect(ctx.evaluateCandidate).toHaveBeenCalledTimes(2);
   });
+
+  it("generates late_night_grind candidate during late night window when user is active", async () => {
+    const ctx = setup();
+    // 2026-07-21 17:30 UTC = 01:30 Asia/Shanghai (in late night window 00:00 - 03:30)
+    const lateNightNow = Date.UTC(2026, 6, 21, 17, 30, 0);
+    ctx.setSnapshot({ now: lateNightNow, idleSec: 15 });
+    await ctx.trigger.evaluateNow("test");
+    expect(ctx.evaluateCandidate).toHaveBeenCalledTimes(1);
+    const arg = ctx.evaluateCandidate.mock.calls[0][0] as ProactiveCandidate;
+    expect(arg.sceneId).toBe("late_night_grind");
+    expect(arg.sceneCooldownMs).toBe(5 * 60 * 60 * 1000);
+  });
+
+  it("generates work_break candidate when active work exceeds 90 minutes", async () => {
+    const ctx = setup();
+    // 2026-07-21 06:00 UTC = 14:00 Asia/Shanghai (outside morning/evening/late_night)
+    const afternoonNow = Date.UTC(2026, 6, 21, 6, 0, 0);
+    // 100 minutes active session
+    ctx.setSnapshot({ now: afternoonNow - 100 * 60 * 1000, idleSec: 0 });
+    await ctx.trigger.evaluateNow("seed_session");
+    // Now 100 minutes later
+    ctx.setSnapshot({ now: afternoonNow, idleSec: 10 });
+    await ctx.trigger.evaluateNow("break_check");
+    expect(ctx.evaluateCandidate).toHaveBeenCalledTimes(1);
+    const arg = ctx.evaluateCandidate.mock.calls[0][0] as ProactiveCandidate;
+    expect(arg.sceneId).toBe("work_break");
+    expect(arg.sceneCooldownMs).toBe(3 * 60 * 60 * 1000);
+  });
 });
 
 describe("back_from_away edge detection", () => {

@@ -154,12 +154,14 @@ import { translateEnglishToMandarinSpeech } from "./tts/speech-translation";
 import { convertVoiceWithRvc } from "./tts/rvc-engine";
 import { ALLOWED_TTS_SETTING_KEYS, type GptsovitsLanguageMode } from "../shared/tts-types";
 import { registerAgUiIpc, type AguiRunInput } from "./agui-bridge";
-import { setWeatherConfig, setSearchConfig, loadTodos, onTodosChange, setDelegateSettings, setUserTimezoneConfig } from "./orchestrator/built-in-tools";
+import { setWeatherConfig, fetchCurrentWeatherSummary, setSearchConfig, loadTodos, onTodosChange, setDelegateSettings, setUserTimezoneConfig } from "./orchestrator/built-in-tools";
 import { registerRecallHistoryTool } from "./orchestrator/history-tools";
 import { registerDocumentTools } from "./orchestrator/document-tools";
 import { registerLifeTools, setTranslateConfig } from "./orchestrator/life-tools";
 import { registerTravelTools, setTravelConfig } from "./orchestrator/travel-tools";
 import { registerEmailTools, setEmailConfig } from "./orchestrator/email-tools";
+import { registerInboxTools, setInboxConfig } from "./orchestrator/inbox-tools";
+import { registerDownloadsJanitorTools } from "./orchestrator/downloads-janitor-tools";
 import { CameraService } from "./camera/camera-service";
 import { buildCameraTools } from "./orchestrator/tools/camera-tools";
 import { resolveMusicPaths } from "./music/paths";
@@ -190,6 +192,9 @@ import {
   type OnRunFinishedDeps,
 } from "./orchestrator/build-options";
 import { buildRelationshipContext, recordRelationshipTurn } from "./relationship/relationship-log";
+import { getBondEngine, type BondInteractionType } from "./relationship/bond-engine";
+import { getEpisodicStore } from "./memory/episodic-store";
+import { getWakeWordEngine } from "./voice/wake-word-engine";
 import { createFeelingScores, smoothFeeling } from "./orchestrator/runtime-state-smoother";
 import { getSchedulerStore } from "./scheduler/scheduler-store";
 import { SchedulerEngine } from "./scheduler/scheduler-engine";
@@ -3356,10 +3361,48 @@ async function buildProactiveAgentMessages(candidate: ProactiveCandidate) {
   // ：resolver  prompt， profile.timezone。
   const profile = loadUserProfile();
   const timezone = resolveChatContextTimezone(profile.timezone);
+
+  let briefingContext: string | undefined;
+  if (candidate.sceneId === "morning_greeting") {
+    const weatherText = await fetchCurrentWeatherSummary(profile.defaultCity || "Hanoi").catch(() => "");
+    let tasksText = "";
+    try {
+      const store = getSchedulerStore();
+      const tasks = store.getTasks().filter((t) => t.enabled);
+      if (tasks.length === 0) {
+        tasksText = "No tasks scheduled for today.";
+      } else {
+        const todayStr = new Date().toISOString().slice(0, 10);
+        const todayTasks = tasks.filter((t) => {
+          if (t.schedule?.kind === "daily") return true;
+          if (t.nextFireAt && t.nextFireAt.startsWith(todayStr)) return true;
+          return false;
+        });
+        if (todayTasks.length === 0) {
+          tasksText = `Total active scheduled tasks: ${tasks.length} (none due specifically today).`;
+        } else {
+          const titles = todayTasks.map((t) => `• ${t.title}`).join("; ");
+          tasksText = `Today's tasks (${todayTasks.length}): ${titles}`;
+        }
+      }
+    } catch {
+      // ignore scheduler store reading errors
+    }
+
+    const briefingParts = [
+      weatherText ? `[Weather in ${profile.defaultCity || "Hanoi"}]: ${weatherText}` : "",
+      tasksText ? `[Today's Schedule / Tasks]: ${tasksText}` : "",
+    ].filter(Boolean);
+    if (briefingParts.length > 0) {
+      briefingContext = briefingParts.join("\n");
+    }
+  }
+
   return buildProactiveMessages({
     basePersona: buildProactivePersonaPrompt(),
     userProfile: profileContext,
     relevantMemory: memoryContext,
+    briefingContext,
     ordinaryHistory: histories.ordinary,
     proactiveHistory: histories.proactive,
     sceneId: candidate.sceneId,
@@ -3920,6 +3963,29 @@ function createWindow(): void {
     () => loadGeneralSettings().emailSmtpPass,
     () => loadGeneralSettings().emailFromName,
   );
+
+  setInboxConfig({
+    enabledGetter: () => loadGeneralSettings().emailEnabled,
+    userGetter: () => loadGeneralSettings().emailSmtpUser,
+    passGetter: () => loadGeneralSettings().emailSmtpPass,
+    hostGetter: () => loadGeneralSettings().emailSmtpHost,
+    portGetter: () => 993,
+  });
+  registerInboxTools();
+  registerDownloadsJanitorTools();
+
+  getWakeWordEngine().onDetected((event) => {
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (!win.isDestroyed()) {
+        try {
+          win.webContents.send(IPC.WAKE_WORD_DETECTED, event);
+        } catch {
+          // ignore destroyed windows
+        }
+      }
+    }
+  });
+
 
   //  ASR （， GeneralSettings）
   setAsrConfig(() => {
@@ -5395,6 +5461,42 @@ ipcMain.handle(IPC.MODEL_CONFIG_GET, () => {
 ipcMain.handle(IPC.RUNTIME_STATE_GET, () => {
   return runtimeState;
 });
+
+ipcMain.handle(IPC.BOND_GET_STATE, () => {
+  return getBondEngine().getState();
+});
+
+ipcMain.handle(IPC.BOND_RECORD_INTERACTION, (_event, type: BondInteractionType) => {
+  const res = getBondEngine().recordInteraction(type);
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) {
+      try {
+        win.webContents.send(IPC.BOND_STATE_CHANGED, getBondEngine().getState());
+      } catch {
+        // ignore destroyed windows
+      }
+    }
+  }
+  return res;
+});
+
+ipcMain.handle(IPC.EPISODIC_GET_EVENTS, () => {
+  return getEpisodicStore().listEvents();
+});
+
+ipcMain.handle(IPC.EPISODIC_RESOLVE_EVENT, (_event, id: string, note?: string) => {
+  return getEpisodicStore().resolveEvent(id, note);
+});
+
+ipcMain.handle(IPC.WAKE_WORD_GET_CONFIG, () => {
+  return getWakeWordEngine().getConfig();
+});
+
+ipcMain.handle(IPC.WAKE_WORD_UPDATE_CONFIG, (_event, patch) => {
+  getWakeWordEngine().updateConfig(patch);
+  return getWakeWordEngine().getConfig();
+});
+
 
 ipcMain.handle(IPC.SETTINGS_SAVE_CONFIG, (event, settings: Partial<ModelSettings>) => {
   assertSettingsMainFrame(event);

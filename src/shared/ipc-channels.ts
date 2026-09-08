@@ -343,5 +343,19 @@ export const IPC = {
 
   // Weather Telemetry
   WEATHER_GET_CURRENT: "weather:get-current",
+
+  // Bond & Affection
+  BOND_GET_STATE: "bond:get-state",
+  BOND_RECORD_INTERACTION: "bond:record-interaction",
+  BOND_STATE_CHANGED: "bond:state-changed",
+
+  // Episodic Memory
+  EPISODIC_GET_EVENTS: "episodic:get-events",
+  EPISODIC_RESOLVE_EVENT: "episodic:resolve-event",
+
+  // Wake-word Engine
+  WAKE_WORD_GET_CONFIG: "wake-word:get-config",
+  WAKE_WORD_UPDATE_CONFIG: "wake-word:update-config",
+  WAKE_WORD_DETECTED: "wake-word:detected",
 } as const;
 

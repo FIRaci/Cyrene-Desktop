@@ -196,6 +196,12 @@ export class GestureInteractionController {
     this.currentReply = "";
 
     const win = typeof window !== "undefined" ? window : (globalThis as unknown as Window);
+    try {
+      (win as unknown as { electron?: { ipcRenderer?: { invoke: (ch: string, ...args: unknown[]) => Promise<unknown> } } })
+        .electron?.ipcRenderer?.invoke("bond:record-interaction", "pet_gesture");
+    } catch {
+      // ignore
+    }
     const store = (win as unknown as { chatStore?: {
       getActiveSession?: () => Promise<string | { id: string } | null>;
       append: (arg1: unknown, arg2?: unknown) => Promise<unknown>;

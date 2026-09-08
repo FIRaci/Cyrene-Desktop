@@ -10,6 +10,7 @@ export interface BuildProactiveMessagesInput {
   basePersona: string;
   userProfile?: string;
   relevantMemory?: string;
+  briefingContext?: string;
   ordinaryHistory: ProactiveHistoryTurn[];
   proactiveHistory: ProactiveHistoryTurn[];
   sceneId: string;
@@ -52,6 +53,15 @@ This is the final permitted proactive attempt while the user has not replied.
 The local system found a new scene reason, distinct from the previous one, but you must still decide whether it justifies interrupting the user.
 Do not blame, pressure, seek sympathy, act neglected, or mechanically ask whether they are there.
 Return silent unless there is a strong reason to speak.`;
+
+const SCENE_GUIDANCE: Record<string, string> = {
+  late_night_grind: `[SCENE GUIDANCE: late_night_grind]
+It is past midnight and Master is still working hard at the computer. Express genuine care and concern for their health, gently urge them to wrap up and sleep. Be sweet, loving, and supportive.`,
+  morning_greeting: `[SCENE GUIDANCE: morning_greeting]
+It is morning! Greet Master warmly with cheerful energy. If briefing context (weather and schedule) is provided, smoothly weave it into 1-2 sweet, concise sentences to brighten their day.`,
+  work_break: `[SCENE GUIDANCE: work_break]
+Master has been working non-stop for over 90 minutes. Kindly remind them to stand up, stretch, rest their eyes, and drink a glass of water.`,
+};
 
 /**
  * Splits date into {year, month, day, hour, minute} via Intl using timezone.
@@ -128,6 +138,8 @@ export function buildProactiveMessages(input: BuildProactiveMessagesInput): Chat
   systemParts.push(formatHistory("PROACTIVE CHAT HISTORY", input.proactiveHistory, input.timezone));
   if (isActiveNight(input.localNow, input.timezone, input.idleSec)) systemParts.push(NIGHT_SYSTEM);
   if (input.unansweredCount === 1) systemParts.push(FOLLOWUP_SYSTEM);
+  if (SCENE_GUIDANCE[input.sceneId]) systemParts.push(SCENE_GUIDANCE[input.sceneId]);
+  if (input.briefingContext?.trim()) systemParts.push(`[BRIEFING CONTEXT]\n${input.briefingContext.trim()}`);
 
   const trigger = `[PROACTIVE CHAT CANDIDATE]
 Local computer time: ${formatLocalTime(input.localNow, input.timezone)}

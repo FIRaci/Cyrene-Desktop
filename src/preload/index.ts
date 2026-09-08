@@ -54,6 +54,22 @@ const cyreneApi = {
     ipcRenderer.on(IPC.COWATCH_STATE_CHANGED, listener);
     return () => ipcRenderer.removeListener(IPC.COWATCH_STATE_CHANGED, listener);
   },
+  onWakeWordDetected: (callback: (event: { word: string; matchedText: string; timestamp: number }) => void) => {
+    const listener = (_e: unknown, event: { word: string; matchedText: string; timestamp: number }) => callback(event);
+    ipcRenderer.on(IPC.WAKE_WORD_DETECTED, listener);
+    return () => ipcRenderer.removeListener(IPC.WAKE_WORD_DETECTED, listener);
+  },
+  getBondState: () => ipcRenderer.invoke(IPC.BOND_GET_STATE) as Promise<unknown>,
+  recordBondInteraction: (type: string) => ipcRenderer.invoke(IPC.BOND_RECORD_INTERACTION, type) as Promise<unknown>,
+  onBondStateChanged: (callback: (state: unknown) => void) => {
+    const listener = (_e: unknown, state: unknown) => callback(state);
+    ipcRenderer.on(IPC.BOND_STATE_CHANGED, listener);
+    return () => ipcRenderer.removeListener(IPC.BOND_STATE_CHANGED, listener);
+  },
+  getEpisodicEvents: () => ipcRenderer.invoke(IPC.EPISODIC_GET_EVENTS) as Promise<unknown>,
+  resolveEpisodicEvent: (id: string, note?: string) => ipcRenderer.invoke(IPC.EPISODIC_RESOLVE_EVENT, id, note) as Promise<boolean>,
+  getWakeWordConfig: () => ipcRenderer.invoke(IPC.WAKE_WORD_GET_CONFIG) as Promise<unknown>,
+  updateWakeWordConfig: (patch: unknown) => ipcRenderer.invoke(IPC.WAKE_WORD_UPDATE_CONFIG, patch) as Promise<unknown>,
 };
 
 const chatApi = {
