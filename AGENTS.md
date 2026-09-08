@@ -155,9 +155,51 @@
 
 ---
 
-## 7. BỐ CỤC PET, ZOOM, PHÍM TẮT & QUY TRÌNH BUILD (UI, SHORTCUTS & PACKAGING)
+## 7. ĐỒNG HÀNH ÂM NHẠC: YOUTUBE MUSIC & LOCAL MUSIC (MUSIC COMPANION CONTRACT)
+> 🚨 **CHỈ THỊ KHÓA CHẾT DỊCH VỤ ÂM NHẠC:**
+> Dịch vụ âm nhạc mặc định của Cyrene là **YouTube Music** (kết hợp phát nhạc cục bộ `local`).
+> **TUYỆT ĐỐI KHÔNG DÙNG NETEASE CLOUD MUSIC HOẶC BẤT KỲ ỨNG DỤNG NỘI ĐỊA TRUNG QUỐC NÀO NỮA!**
 
-### 7.1. Điều khiển Live2D Pet
+### 7.1. Gợi ý Hàng ngày không cần Đăng nhập (Zero-Login Daily Recommendations):
+- Trải nghiệm gợi ý bài hát hàng ngày (`music_get_daily_recommendations`) tự động phục vụ danh sách bài hát tuyển chọn (curated tracks) có sẵn ngay từ đầu.
+- **TUYỆT ĐỐI KHÔNG ĐƯỢC** bắt người dùng phải đăng nhập tài khoản, không bắt quét mã QR đăng nhập để nghe bài hát hàng ngày của Cyrene.
+- Cấu trúc danh sách bài hát trả về bao gồm `id`, `name`, `artists`, `album`, `durationMs`, được gói bảo mật trong `selection_set` của CITA.
+
+### 7.2. Tìm kiếm Thời gian thực & Phát nhạc (Live Search & Direct Playback):
+- **Tìm kiếm trực tiếp**: `YouTubeMusicProvider` gửi truy vấn tìm kiếm tới YouTube Music, bóc tách cấu trúc dữ liệu `ytInitialData` (kết hợp regex fallback thông minh) để lấy các bài hát chính xác, nghệ sĩ, album và thumbnail.
+- **Phát nhạc**: Hỗ trợ mở bài hát trực tiếp qua URL `https://music.youtube.com/watch?v={id}` hoặc ứng dụng tương thích.
+- **Định dạng ID linh hoạt**: Hỗ trợ ID 11 ký tự đặc trưng của YouTube Music (`[\w%-]{1,128}`), tương thích 100% với cơ chế tạo và kiểm tra context-refs của CITA runtime.
+
+### 7.3. Giao diện & Thẻ cài đặt Settings (`Alt+6`):
+- Giao diện thẻ nhạc trong Cài đặt là **YouTube Music** với SVG logo chuẩn màu đỏ/trắng, mô tả rõ ràng tính năng, form tìm kiếm trực tiếp và nút mở nhanh YouTube Music.
+- 100% Tiếng Anh bề mặt, không còn sót lại bất kỳ thuật ngữ hay giao diện quét mã QR NetEase cũ nào.
+
+---
+
+## 8. THỜI TIẾT & DI CHUYỂN TOÀN CẦU: OPEN-METEO EXCLUSIVE (WEATHER & TRAVEL CONTRACT)
+> 🚨 **CHỈ THỊ KHÓA CHẾT DỊCH VỤ BẢN ĐỒ & THỜI TIẾT:**
+> Hệ thống sử dụng **Open-Meteo** (toàn cầu, keyless, không giới hạn địa lý) cho toàn bộ tính năng thời tiết và lập lộ trình di chuyển.
+> **TUYỆT ĐỐI KHÔNG GỌI API AMAP (GAODE MAPS / `restapi.amap.com`) HOẶC DÙNG MÃ ADCODE NỘI ĐỊA TRUNG QUỐC!**
+
+### 8.1. Dự báo Thời tiết Toàn cầu (Global Weather Forecast):
+- Toàn bộ truy vấn thời tiết thực thi qua Open-Meteo API (`api.open-meteo.com/v1/forecast`).
+- Tự động phân giải vị trí địa lý thông qua Geocoding Open-Meteo, không cần API key, phản hồi nhanh chóng, chính xác.
+- Biểu tượng thời tiết sử dụng vector SVG hiện đại, tinh tế (không dùng emoji).
+
+### 8.2. Quy hoạch Lộ trình & Chuyến đi Toàn cầu (`planGlobalTrip`):
+- Công cụ di chuyển `travel-tools.ts` sử dụng API Geocoding của Open-Meteo (`geocoding-api.open-meteo.com/v1/search`) để chuyển đổi tên địa điểm xuất phát và đích đến sang tọa độ vĩ độ/kinh độ (`latitude`, `longitude`) trên toàn thế giới.
+- Khoảng cách được tính toán bằng công thức Great Circle (Haversine), kết hợp với hệ số uốn lượn đường bộ tiêu chuẩn quốc tế (`1.3 winding factor`).
+- Hỗ trợ đầy đủ các phương thức di chuyển: Lái xe (`driving`), Đi bộ (`walking`), Đi xe đạp (`cycling`), và Phương tiện công cộng (`transit`).
+
+### 8.3. Những điều NGHIÊM CẤM (STRICT PROHIBITIONS):
+1. **CẤM** gọi lại domain `restapi.amap.com` hoặc bất kỳ API AMap nào dưới mọi hình thức.
+2. **CẤM** sử dụng logic dịch địa danh tiếng Trung (`amapTranslateChineseCityToPinyin`) hay phụ thuộc vào mã bưu chính / mã phân vùng hành chính nội địa (`adcode`) của Trung Quốc.
+
+---
+
+## 9. BỐ CỤC PET, ZOOM, PHÍM TẮT & QUY TRÌNH BUILD (UI, SHORTCUTS & PACKAGING)
+
+### 9.1. Điều khiển Live2D Pet
 - `Alt + Drag`: Kéo di chuyển Pet đến bất kỳ vị trí nào trên màn hình.
 - `Alt + Wheel`: Phóng to / Thu nhỏ Pet mượt mà.
 - **Thanh hiển thị % Zoom (`.pet-zoom-hud`)**:
@@ -169,7 +211,7 @@
   - Vị trí neo chuẩn: `top: calc(var(--cyrene-feet, 418px) + 18px); left: 50%; transform: translateX(-50%) translateY(0) scale(var(--pet-zoom, 1));`.
   - Giữ khoảng cách thoáng mắt ngay bên dưới đôi giày của Cyrene (~8-10px), tuyệt đối không để mép khung chat đè lên chân hoặc giày của Pet.
 
-### 7.2. Bản đồ Phím tắt Toàn cục (Global Shortcuts):
+### 9.2. Bản đồ Phím tắt Toàn cục (Global Shortcuts):
 - `Alt+1`: **Cyrene Chat Window** (Cửa sổ trò chuyện đầy đủ).
 - `Alt+2`: **Status & Companion Panel** (Bảng trạng thái cảm xúc, hoạt động).
 - `Alt+3`: **Today's Schedule & Tasks** (Quản lý lịch biểu, thời tiết).
@@ -180,11 +222,11 @@
 - `Alt+Q`: **Quick Quit Application** (Tắt nhanh toàn bộ ứng dụng).
   * **Cơ chế thoát dứt khoát**: Đăng ký trong `src/main/index.ts`. Gọi `app.quit()` kết hợp bộ fallback `setTimeout(() => app.exit(0), 400)` để đảm bảo tiến trình Electron và mọi cửa sổ con tắt ngay lập tức, không bị treo tiến trình chạy ngầm.
 
-### 7.3. Activity & Response Log (`Alt+4`)
+### 9.3. Activity & Response Log (`Alt+4`)
 - Log ghi đầy đủ: reasoning, suy nghĩ, kaomoji, user prompt, tool calls, channel, timestamps.
 - Nút "Clear Log" phải thực sự xóa sạch buffer và cập nhật giao diện để giải phóng bộ nhớ cho máy người dùng.
 
-### 7.4. Tiêu chuẩn Đóng gói & Build (Packaging Standards):
+### 9.4. Tiêu chuẩn Đóng gói & Build (Packaging Standards):
 - Sau mỗi đợt chỉnh sửa, **bắt buộc phải build lại toàn bộ**:
   1. `npm run build`: Build TypeScript main, preload, renderer và skills.
   2. `npm run package:win:dir`: Đóng gói ứng dụng vào thư mục `release\win-unpacked\Cyrene.exe`.
@@ -192,7 +234,7 @@
 
 ---
 
-## 8. BẢNG TỔNG HỢP SỰ CỐ & GIẢI PHÁP TRIỆT ĐỂ (REGRESSION PREVENTION LEDGER)
+## 10. BẢNG TỔNG HỢP SỰ CỐ & GIẢI PHÁP TRIỆT ĐỂ (REGRESSION PREVENTION LEDGER)
 
 | STT | Sự cố đã từng xảy ra | Nguyên nhân gốc rễ | Giải pháp kỹ thuật triệt để |
 |---|---|---|---|
@@ -217,14 +259,15 @@
 | **19** | **Voice không phát ra âm thanh khi tương tác thực tế (5 nguyên nhân gốc rễ)** | 1. `ref_audio_path` truyền đường dẫn tương đối `resources/voice/cyrene/ref_audio.wav`, nhưng server GPT-SoVITS chạy trong `vendor/gpt-sovits` nên ném lỗi HTTP 400: `resources/voice/... not exists`.<br>2. Thiếu tài nguyên NLTK (`averaged_perceptron_tagger_eng`, `cmudict`) khiến server ném lỗi HTTP 400 khi văn bản có từ tiếng Anh.<br>3. Google GTX rate-limit trả về HTML Captcha làm hỏng cầu nối dịch sang tiếng Trung.<br>4. Server GPT-SoVITS mất ~20s nạp 2.1GB weights vào RAM nhưng timeout retry của client quá ngắn (3s) gây `ECONNREFUSED`.<br>5. Chính sách Autoplay của Chromium trong Electron chặn `audio.play()` khi không có cử chỉ người dùng trực tiếp trên cửa sổ HTML trong suốt. | 1. **Resolve đường dẫn tuyệt đối**: Chuẩn hóa `ref_audio_path` thành đường dẫn tuyệt đối đã được xác minh tồn tại trên đĩa (`D:\Cyrene-Desktop\resources\voice\cyrene\ref_audio.wav` hoặc đường dẫn trong packaged resources).<br>2. **Tải trọn bộ NLTK**: Tải và xác minh `averaged_perceptron_tagger_eng`, `averaged_perceptron_tagger`, `cmudict`, `punkt`, `punkt_tab` vào `%APPDATA%\nltk_data`. Tự động kiểm tra trong launcher `cyrene_tts.py`.<br>3. **Đa tầng dịch in-memory**: Kết hợp LLM endpoint -> MyMemory Translation API -> Google GTX fallback.<br>4. **Mở rộng retry & pre-flight**: Tăng retry lên 12 lần x 2000ms trong `gptsovits-engine.ts`, thêm `waitForGptsovitsServerOnline(25000)`.<br>5. **Bỏ Autoplay Policy**: Thêm `app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required")` trong `main/index.ts` và gán volume + bắt lỗi `audio.play().catch(...)` trong `voice.ts`. |
 | **20** | **Lỗi write EPIPE khi tắt/đóng cửa sổ Call** | Node.js stream `child.stdin` của Faster-Whisper ASR và Screenshot helper thiếu listener bắt lỗi `'error'`. Khi tắt cửa sổ Call, tiến trình đóng pipe khiến lệnh ghi phát sinh EPIPE làm bung modal lỗi Electron. | Gắn `child.stdin.on("error", ...)` nuốt lỗi EPIPE/ERR_STREAM_DESTROYED, drain hàng đợi an toàn, và lọc bỏ lỗi pipe vô hại tại `process.on("uncaughtException")`. |
 | **21** | **Lập lịch ảo (Hallucinated Schedule), không ghi vào Alt+3** | Agent thiếu bộ tool tương tác với Scheduler trong `toolRegistry`, dẫn đến việc LLM chỉ roleplay hứa hẹn mà không có tool thực thi. | Bổ sung `scheduler-tools.ts` (`schedule_task`, `query_scheduled_tasks`, `delete_scheduled_task`) vào `toolRegistry`, kết nối trực tiếp với `schedulerStore` và kích hoạt `schedulerEngine.start()`. Nhắc nhở đúng hạn trên Live2D Pet qua giọng nói + bong bóng thoại. |
-
+| **22** | **Dịch vụ âm nhạc NetEase phụ thuộc tài khoản nội địa & quét mã QR** | Tích hợp NetEase Cloud Music làm dịch vụ mặc định, đòi hỏi server MCP cục bộ, quét mã QR tài khoản Trung Quốc gây lỗi và phiền phức cho người dùng. | Thay thế vĩnh viễn bằng `YouTubeMusicProvider` (YouTube Music). Cung cấp gợi ý hàng ngày tự động không cần đăng nhập, tìm kiếm bài hát trực tiếp qua YouTube Music data scraping, mở phát trực tiếp trên `music.youtube.com`, hỗ trợ ID 11 ký tự YouTube, và cập nhật toàn bộ Settings UI sang YouTube Music 100% tiếng Anh. |
+| **23** | **Dịch vụ thời tiết & lộ trình phụ thuộc AMap nội địa Trung Quốc** | Sử dụng API Gaode Maps (`restapi.amap.com`) bắt buộc phải có API key Trung Quốc và mapping bảng mã `adcode` tỉnh/thành phố nội địa, không hỗ trợ tốt địa danh quốc tế. | Gỡ bỏ 100% AMap. Chuyển sang **Open-Meteo** (toàn cầu, keyless). Sử dụng Open-Meteo Geocoding để tra cứu tọa độ toàn cầu và tính toán lộ trình `planGlobalTrip` dựa trên công thức Great Circle * hệ số 1.3 đường bộ cho mọi phương thức di chuyển. Xóa bỏ hoàn toàn các helper dịch tiếng Trung cũ. |
 
 ---
 
-## 9. NGUYÊN TẮC THIẾT KẾ SOLID & BẢN ĐỒ VỊ TRÍ CODE BẤT KHẢ XÂM PHẠM (CODE ANCHOR MAP)
+## 11. NGUYÊN TẮC THIẾT KẾ SOLID & BẢN ĐỒ VỊ TRÍ CODE BẤT KHẢ XÂM PHẠM (CODE ANCHOR MAP)
 > **Mục tiêu**: Code có độ kết dính cao (High Cohesion), độ phụ thuộc thấp (Low Coupling), khó làm hỏng tính năng cũ (Closed for modification) nhưng dễ dàng mở rộng (Open for extension).
 
-### 9.1. Bản đồ Vị trí Code Trọng yếu (Critical File Anchors):
+### 11.1. Bản đồ Vị trí Code Trọng yếu (Critical File Anchors):
 1. **Quản lý Session & Khử Duplicate Chat**:
    - `src/main/chats/chats-store.ts` (Hàm `appendMessage`):
      * **Trách nhiệm duy nhất (SRP)**: Lưu trữ, truy xuất tin nhắn session và đảm bảo tính idempotent.
@@ -244,14 +287,22 @@
 5. **Vòng đời Ứng dụng & Phím tắt Nhanh**:
    - `src/main/index.ts` (Hàm đăng ký `Alt+Q`):
      * **Trách nhiệm duy nhất (SRP)**: Khởi tạo ứng dụng, gán global shortcut và đảm bảo tiến trình tắt sạch sẽ.
+6. **Dịch vụ Âm nhạc Toàn cầu (YouTube Music & Local)**:
+   - `src/main/music/youtube-music-provider.ts` & `src/main/music/music-service.ts`:
+     * **Trách nhiệm duy nhất (SRP)**: Quản lý provider mặc định YouTube Music, gợi ý bài hát hàng ngày zero-login, tìm kiếm thời gian thực và phát nhạc.
+     * **KHÔNG ĐƯỢC CHẠM VÀO**: Logic phân giải bài hát không yêu cầu login và regex bóc tách dữ liệu YouTube.
+7. **Thời tiết & Lộ trình Di chuyển Toàn cầu (Open-Meteo)**:
+   - `src/main/orchestrator/travel-tools.ts` & `src/main/orchestrator/built-in-tools.ts`:
+     * **Trách nhiệm duy nhất (SRP)**: Xử lý định vị địa lý, dự báo thời tiết và quy hoạch lộ trình di chuyển toàn cầu độc quyền qua Open-Meteo (keyless).
+     * **KHÔNG ĐƯỢC CHẠM VÀO**: Logic Great Circle routing và Geocoding Open-Meteo.
 
 ---
 
-## 10. QUY TRÌNH LÀM VIỆC & TIÊU CHUẨN ĐÓNG GÓI (WORKING PROTOCOL)
+## 12. QUY TRÌNH LÀM VIỆC & TIÊU CHUẨN ĐÓNG GÓI (WORKING PROTOCOL)
 1. **Đọc tệp này đầu tiên**: Trước khi bắt đầu bất kỳ chỉnh sửa nào liên quan đến Voice, Chat, Live2D, Co-Watch, UI Layout, hãy đối chiếu với tệp này.
 2. **Tuyệt đối không tự ý giả định (No Assumptions)**: Nếu có điểm chưa rõ về ý muốn của User, giữ nguyên các thiết lập đã khóa trong tài liệu này hoặc hỏi trực tiếp, không tự ý "sửa hộ" sang công nghệ khác.
 3. **Bảo toàn Test & Build**:
-   - Luôn chạy `npx vitest run` (Toàn bộ 256 file test, 1,932+ tests phải pass 100%).
+   - Luôn chạy `npx vitest run` (Toàn bộ 263 file test, 1,999 tests phải pass 100%).
    - Luôn chạy `npm run build` để biên dịch TypeScript và Vite.
    - Luôn chạy `npm run package:win:dir` để đóng gói bản chạy thực tế tại `release\win-unpacked\Cyrene.exe`.
 4. **Git Commit & Push**: Tuân thủ conventional commit (`feat`, `fix`, `style`, `refactor`), cập nhật tài liệu và push lên nhánh `master` khi hoàn thành.
