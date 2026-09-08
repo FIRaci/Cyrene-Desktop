@@ -1,24 +1,25 @@
 import * as fs from "fs";
 import * as path from "path";
 import { app } from "electron";
+import {
+  BondLevel,
+  BondLevelName,
+  BondLevelInfo,
+  BOND_LEVELS,
+  MAX_BOND_SCORE,
+  computeBondLevel,
+  formatBondPersonaPrompt,
+} from "./bond-persona-config";
 
-export type BondLevel = 1 | 2 | 3 | 4 | 5;
-
-export type BondLevelName =
-  | "Acquaintance"
-  | "Companion"
-  | "Close Friend"
-  | "Trusted Confidant"
-  | "Soulmate";
-
-export interface BondLevelInfo {
-  level: BondLevel;
-  name: BondLevelName;
-  minScore: number;
-  maxScore: number;
-  honorific: string;
-  toneDescription: string;
-}
+export {
+  BondLevel,
+  BondLevelName,
+  BondLevelInfo,
+  BOND_LEVELS,
+  MAX_BOND_SCORE,
+  computeBondLevel,
+  formatBondPersonaPrompt,
+};
 
 export type BondInteractionType =
   | "chat_message"
@@ -49,50 +50,6 @@ export interface BondEngineDeps {
   now?: () => number;
 }
 
-export const BOND_LEVELS: readonly BondLevelInfo[] = [
-  {
-    level: 1,
-    name: "Acquaintance",
-    minScore: 0,
-    maxScore: 100,
-    honorific: "Master",
-    toneDescription: "Polite, sweet, well-mannered, and attentive. Cyrene addresses you respectfully as Master and is eager to be helpful.",
-  },
-  {
-    level: 2,
-    name: "Companion",
-    minScore: 101,
-    maxScore: 300,
-    honorific: "Master",
-    toneDescription: "Warm, open, and friendly. Cyrene shows curiosity about your daily activities and feelings, treating you as a trusted travel companion.",
-  },
-  {
-    level: 3,
-    name: "Close Friend",
-    minScore: 301,
-    maxScore: 600,
-    honorific: "Dear Master",
-    toneDescription: "Cozy, warm, and playful. Cyrene teases lightly, worries genuinely about your health and rest, and shares her own fond feelings.",
-  },
-  {
-    level: 4,
-    name: "Trusted Confidant",
-    minScore: 601,
-    maxScore: 850,
-    honorific: "Dearest Master",
-    toneDescription: "Deeply bonded, protective, and affectionate. Cyrene knows your habits well, leans into your presence, and speaks with gentle, heartfelt tenderness.",
-  },
-  {
-    level: 5,
-    name: "Soulmate",
-    minScore: 851,
-    maxScore: 1000,
-    honorific: "My beloved Master",
-    toneDescription: "Unconditional devotion, mutual trust, and profound closeness. Cyrene regards Master as the center of her world and cherishes every moment together.",
-  },
-];
-
-const MAX_SCORE = 1000;
 const MAX_DAILY_PET_POINTS = 15;
 const MAX_DAILY_MUSIC_POINTS = 15;
 
@@ -110,16 +67,6 @@ function todayLocalDate(ts: number): string {
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
-}
-
-export function computeBondLevel(score: number): BondLevelInfo {
-  const clamped = Math.max(0, Math.min(MAX_SCORE, score));
-  for (let i = BOND_LEVELS.length - 1; i >= 0; i--) {
-    if (clamped >= BOND_LEVELS[i].minScore) {
-      return BOND_LEVELS[i];
-    }
-  }
-  return BOND_LEVELS[0];
 }
 
 export class BondEngine {
@@ -164,7 +111,7 @@ export class BondEngine {
         if (parsed && typeof parsed.affectionScore === "number") {
           const lvl = computeBondLevel(parsed.affectionScore);
           this.state = {
-            affectionScore: Math.min(MAX_SCORE, Math.max(0, parsed.affectionScore)),
+            affectionScore: Math.min(MAX_BOND_SCORE, Math.max(0, parsed.affectionScore)),
             level: lvl.level,
             levelName: lvl.name,
             lastInteractionAt: parsed.lastInteractionAt || this.nowFn(),
@@ -260,7 +207,7 @@ export class BondEngine {
     }
 
     const oldLevel = this.state.level;
-    this.state.affectionScore = Math.min(MAX_SCORE, this.state.affectionScore + points);
+    this.state.affectionScore = Math.min(MAX_BOND_SCORE, this.state.affectionScore + points);
     const newLevelInfo = computeBondLevel(this.state.affectionScore);
     this.state.level = newLevelInfo.level;
     this.state.levelName = newLevelInfo.name;
@@ -284,7 +231,7 @@ export class BondEngine {
 
   public setScore(score: number): void {
     this.ensureLoaded();
-    this.state.affectionScore = Math.min(MAX_SCORE, Math.max(0, score));
+    this.state.affectionScore = Math.min(MAX_BOND_SCORE, Math.max(0, score));
     const lvl = computeBondLevel(this.state.affectionScore);
     this.state.level = lvl.level;
     this.state.levelName = lvl.name;
@@ -298,13 +245,10 @@ export class BondEngine {
 
   public buildBondPersonaPrompt(): string {
     const s = this.getState();
-    const lvl = computeBondLevel(s.affectionScore);
-    return `[CYRENE BOND & AFFECTION SYSTEM]
-Current Bond Level: Level ${lvl.level} (${lvl.name}) - Affection Score: ${s.affectionScore}/1000
-Preferred Honorific: "${lvl.honorific}"
-Behavioral & Intimacy Guidance:
-${lvl.toneDescription}
-Naturally reflect this relationship depth in your responses and conversational closeness, without explicitly reciting numerical scores.`;
+    return formatBondPersonaPrompt({
+      affectionScore: s.affectionScore,
+      totalInteractions: s.totalInteractions,
+    });
   }
 }
 

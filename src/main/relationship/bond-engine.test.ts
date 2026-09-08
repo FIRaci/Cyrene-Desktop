@@ -32,7 +32,7 @@ describe("BondEngine", () => {
     expect(computeBondLevel(1000).name).toBe("Soulmate");
   });
 
-  it("initializes with zero score and Acquaintance level", () => {
+  it("initializes with zero score and Acquaintance level with unconditional warmth", () => {
     const engine = new BondEngine({
       filePath: testFile,
       now: () => simulatedTime,
@@ -41,6 +41,12 @@ describe("BondEngine", () => {
     expect(state.affectionScore).toBe(0);
     expect(state.level).toBe(1);
     expect(state.levelName).toBe("Acquaintance");
+
+    const prompt = engine.buildBondPersonaPrompt();
+    expect(prompt).toContain("Level 1 (Acquaintance)");
+    expect(prompt).toContain("absolute and unconditional");
+    expect(prompt).toContain("Task & Technical Mode (Omnipotent & Useful)");
+    expect(prompt).toContain("Affectionate & Sweet Mode (Adorable Companion)");
   });
 
   it("awards points for chat messages and tracks totals", () => {
@@ -116,7 +122,7 @@ describe("BondEngine", () => {
     expect(engine.getState().unlockedMilestones).toContain("Companion");
   });
 
-  it("builds bond persona prompt with proper level guidelines", () => {
+  it("builds bond persona prompt with proper level guidelines and omnipotent instructions", () => {
     const engine = new BondEngine({
       filePath: testFile,
       now: () => simulatedTime,
@@ -126,5 +132,7 @@ describe("BondEngine", () => {
     expect(prompt).toContain("Level 5 (Soulmate)");
     expect(prompt).toContain("My beloved Master");
     expect(prompt).toContain("888/1000");
+    expect(prompt).toContain("NO HARDCODED REPLIES");
+    expect(prompt).toContain("Omnipotent & Useful");
   });
 });
