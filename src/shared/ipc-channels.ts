@@ -293,6 +293,16 @@ export const IPC = {
   CHANNELS_LOG_GET: "channels:log:get",
   CHANNELS_LOG_CLEAR: "channels:log:clear",
 
+  // In-app background music player (manual control from settings / mini-player)
+  PLAYER_GET_STATE: "player:get-state",          // renderer -> main: get current PlaybackState
+  PLAYER_PAUSE: "player:pause",                  // renderer -> main: pause playback
+  PLAYER_RESUME: "player:resume",                // renderer -> main: resume playback
+  PLAYER_STOP: "player:stop",                    // renderer -> main: stop & destroy hidden window
+  PLAYER_SEEK: "player:seek",                    // renderer -> main: seek { seconds, relative }
+  PLAYER_SET_SPEED: "player:set-speed",          // renderer -> main: set playback speed
+  PLAYER_SET_VOLUME: "player:set-volume",        // renderer -> main: set volume 0-100
+  PLAYER_STATE_CHANGED: "player:state-changed",  // main -> renderer: push PlaybackState after any mutation
+
   // Music
   MUSIC_GET_STATUS: "music:get-status",
   MUSIC_BEGIN_LOGIN: "music:begin-login",

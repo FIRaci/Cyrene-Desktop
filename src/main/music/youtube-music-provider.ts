@@ -1,4 +1,5 @@
 import { shell } from "electron";
+import { inAppPlayer } from "./in-app-player-manager";
 import type { MusicProvider } from "./music-provider";
 import type { MusicTrack, PlaybackDispatchResult } from "./types";
 
@@ -112,13 +113,8 @@ export class YouTubeMusicProvider implements MusicProvider {
   }
 
   async playTrack(trackId: string): Promise<PlaybackDispatchResult> {
-    const isVideoId = /^[a-zA-Z0-9_-]{11}$/.test(trackId);
-    const url = isVideoId
-      ? `https://music.youtube.com/watch?v=${trackId}`
-      : `https://music.youtube.com/search?q=${encodeURIComponent(trackId)}`;
-
     try {
-      await shell.openExternal(url);
+      await inAppPlayer.play(trackId);
       return {
         state: "dispatched",
         resourceType: "song",

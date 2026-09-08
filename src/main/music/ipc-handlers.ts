@@ -3,6 +3,7 @@ import { IPC } from "../../shared/ipc-channels";
 import { MusicInputError, type MusicBackendState, type MusicAccountState, type MusicPlayerState } from "./types";
 import type { MusicService } from "./music-service";
 import { sanitizeLogLine } from "./log-sanitizer";
+import { inAppPlayer } from "./in-app-player-manager";
 
 export type MusicIpcResult<T> =
   | { ok: true; data: T }
@@ -96,8 +97,47 @@ export function registerMusicIpcHandlers(service: MusicService): () => void {
     }
   });
 
+  // ── In-app background player manual controls ──────────────────────────────────────
+  // These allow the Settings panel (General section) to directly pause / resume / stop
+  // the hidden YouTube background player window without going through the AI.
+  ipcMain.handle(IPC.PLAYER_GET_STATE, () => inAppPlayer.getState());
+  channels.push(IPC.PLAYER_GET_STATE);
+
+  ipcMain.handle(IPC.PLAYER_PAUSE, async () => inAppPlayer.pause());
+  channels.push(IPC.PLAYER_PAUSE);
+
+  ipcMain.handle(IPC.PLAYER_RESUME, async () => inAppPlayer.resume());
+  channels.push(IPC.PLAYER_RESUME);
+
+  ipcMain.handle(IPC.PLAYER_STOP, async () => inAppPlayer.stop());
+  channels.push(IPC.PLAYER_STOP);
+
+  ipcMain.handle(IPC.PLAYER_SEEK, async (_e, payload: { seconds: number; relative?: boolean }) =>
+    inAppPlayer.seek(payload.seconds, payload.relative ?? false),
+  );
+  channels.push(IPC.PLAYER_SEEK);
+
+  ipcMain.handle(IPC.PLAYER_SET_SPEED, async (_e, speed: number) =>
+    inAppPlayer.setSpeed(speed),
+  );
+  channels.push(IPC.PLAYER_SET_SPEED);
+
+  ipcMain.handle(IPC.PLAYER_SET_VOLUME, async (_e, volume: number) =>
+    inAppPlayer.setVolume(volume),
+  );
+  channels.push(IPC.PLAYER_SET_VOLUME);
+
+  // Broadcast in-app player state changes to all renderer windows
+  inAppPlayer.on("state-changed", (state) => {
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (!win.isDestroyed()) win.webContents.send(IPC.PLAYER_STATE_CHANGED, state);
+    }
+  });
+
   return function dispose() {
     for (const ch of channels) ipcMain.removeHandler(ch);
     unsubState();
   };
 }
+
+

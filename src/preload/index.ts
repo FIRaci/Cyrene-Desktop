@@ -709,3 +709,21 @@ const activityLogApi = {
 };
 contextBridge.exposeInMainWorld("activityLog", activityLogApi);
 
+// In-app background player manual control API (Settings panel, mini-player)
+const playerApi = {
+  getState: () => ipcRenderer.invoke(IPC.PLAYER_GET_STATE),
+  pause: () => ipcRenderer.invoke(IPC.PLAYER_PAUSE),
+  resume: () => ipcRenderer.invoke(IPC.PLAYER_RESUME),
+  stop: () => ipcRenderer.invoke(IPC.PLAYER_STOP),
+  seek: (seconds: number, relative?: boolean) =>
+    ipcRenderer.invoke(IPC.PLAYER_SEEK, { seconds, relative }),
+  setSpeed: (speed: number) => ipcRenderer.invoke(IPC.PLAYER_SET_SPEED, speed),
+  setVolume: (volume: number) => ipcRenderer.invoke(IPC.PLAYER_SET_VOLUME, volume),
+  onStateChanged: (h: (s: unknown) => void) => {
+    const listener = (_: unknown, s: unknown) => h(s);
+    ipcRenderer.on(IPC.PLAYER_STATE_CHANGED, listener);
+    return () => ipcRenderer.removeListener(IPC.PLAYER_STATE_CHANGED, listener);
+  },
+};
+contextBridge.exposeInMainWorld("player", playerApi);
+

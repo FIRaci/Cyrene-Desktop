@@ -369,7 +369,7 @@ interface GeneralSettings {
 }
 
 interface UserApi {
-  getProfile: () => Promise<{ nickname: string; callPreference: string; birthday: string; timezone: string; avatarPath: string; defaultCity: string; gender: string }>;
+  getProfile: () => Promise<{ nickname: string; callPreference: string; birthday: string; timezone: string; avatarPath: string; defaultCity: string; gender: string; shareLocation?: boolean }>;
   saveProfile: (profile: Record<string, unknown>) => Promise<unknown>;
   uploadAvatar: () => Promise<{ avatarPath: string } | null>;
   getAvatar: () => Promise<string | null>;
@@ -464,12 +464,35 @@ interface SettingsApi {
   endScreenshotHotkeyCapture: () => Promise<boolean>;
 }
 
+interface PlaybackState {
+  status: "playing" | "paused" | "stopped";
+  currentTrackId?: string;
+  currentTrackName?: string;
+  currentTrackArtist?: string;
+  playbackSpeed: number;
+  volume: number;
+  currentTime?: number;
+  duration?: number;
+}
+
+interface PlayerApi {
+  getState: () => Promise<PlaybackState>;
+  pause: () => Promise<void>;
+  resume: () => Promise<void>;
+  stop: () => Promise<void>;
+  seek: (seconds: number, relative?: boolean) => Promise<void>;
+  setSpeed: (speed: number) => Promise<void>;
+  setVolume: (volume: number) => Promise<void>;
+  onStateChanged: (callback: (state: PlaybackState) => void) => () => void;
+}
+
 declare global {
   interface Window {
     settings?: SettingsApi;
     cyreneScheduler?: SchedulerApi;
     user?: UserApi;
     memoryPanel?: MemoryPanelApi;
+    player?: PlayerApi;
   }
 }
 
@@ -2015,6 +2038,7 @@ void loadWeatherConfig();
 const travelEnabledCheckbox = document.getElementById("plugin-travel-enabled") as HTMLInputElement | null;
 const travelConfig = document.getElementById("plugin-travel-config") as HTMLElement | null;
 const travelAmapKeyInput = document.getElementById("travel-amap-key") as HTMLInputElement | null;
+const travelShareLocationCheckbox = document.getElementById("plugin-travel-share-location") as HTMLInputElement | null;
 
 function syncTravelConfigVisibility(): void {
   if (travelConfig) travelConfig.style.display = travelEnabledCheckbox?.checked ? "block" : "none";
@@ -2022,6 +2046,12 @@ function syncTravelConfigVisibility(): void {
 travelEnabledCheckbox?.addEventListener("change", () => {
   syncTravelConfigVisibility();
   void saveTravelField("travelEnabled", travelEnabledCheckbox.checked);
+});
+travelShareLocationCheckbox?.addEventListener("change", () => {
+  const isChecked = Boolean(travelShareLocationCheckbox.checked);
+  if (userShareLocationInput) userShareLocationInput.checked = isChecked;
+  void saveTravelField("shareLocation", isChecked);
+  void window.user?.saveProfile({ shareLocation: isChecked });
 });
 travelAmapKeyInput?.addEventListener("change", () => {
   //  amapKey （)
@@ -2050,6 +2080,9 @@ async function loadTravelConfig(): Promise<void> {
     const cfg = await window.tts?.loadSettings();
     if (cfg && travelEnabledCheckbox) {
       travelEnabledCheckbox.checked = Boolean(cfg.travelEnabled);
+    }
+    if (cfg && travelShareLocationCheckbox) {
+      travelShareLocationCheckbox.checked = Boolean(cfg.shareLocation);
     }
     if (cfg && travelAmapKeyInput) {
       travelAmapKeyInput.value = String(cfg.amapKey ?? "");
@@ -4399,6 +4432,8 @@ async function loadMemoryPanel(): Promise<void> {
   }
 }
 
+const userShareLocationInput = document.getElementById("user-share-location") as HTMLInputElement | null;
+
 async function loadUserProfile(): Promise<void> {
   try {
     const avatarDataUrl = await window.user?.getAvatar();
@@ -4414,6 +4449,8 @@ async function loadUserProfile(): Promise<void> {
       if (userDefaultCityInput) userDefaultCityInput.value = city;
       if (weatherCityInput) weatherCityInput.value = city;
       if (userTimezoneSelect) userTimezoneSelect.value = normalizeTimezoneOptionValue(profile.timezone);
+      if (userShareLocationInput) userShareLocationInput.checked = Boolean(profile.shareLocation);
+      if (travelShareLocationCheckbox) travelShareLocationCheckbox.checked = Boolean(profile.shareLocation);
       const gender = String(profile.gender ?? "secret");
       if (userGenderGroup) {
         userGenderGroup.querySelectorAll(".gender-select__btn").forEach((btn) => {
@@ -4425,6 +4462,13 @@ async function loadUserProfile(): Promise<void> {
     console.warn("[settings] load user profile failed");
   }
 }
+
+userShareLocationInput?.addEventListener("change", () => {
+  const isChecked = Boolean(userShareLocationInput.checked);
+  if (travelShareLocationCheckbox) travelShareLocationCheckbox.checked = isChecked;
+  void window.user?.saveProfile({ shareLocation: isChecked });
+  void saveTravelField("shareLocation", isChecked);
+});
 
 function bindUserProfileSave(input: HTMLInputElement | null, field: string): void {
   if (!input) return;
@@ -6559,4 +6603,107 @@ void loadTtsConfig();
       checkUpdateBtn.disabled = false;
     }
   });
+})();
+
+// In-App Background Music Player manual controls wiring
+(function setupInAppPlayerControls() {
+  const row = document.getElementById("inapp-player-row");
+  if (!row) return;
+
+  const infoEl = document.getElementById("inapp-player-info");
+  const trackLabelEl = document.getElementById("inapp-player-track-label");
+  const badgeEl = document.getElementById("inapp-player-status-badge");
+  const controlsEl = document.getElementById("inapp-player-controls");
+  const playPauseBtn = document.getElementById("inapp-player-play-pause") as HTMLButtonElement | null;
+  const playPauseText = document.getElementById("inapp-player-play-pause-text");
+  const pauseIcon = document.getElementById("inapp-player-pause-icon") as HTMLElement | null;
+  const playIcon = document.getElementById("inapp-player-play-icon") as HTMLElement | null;
+  const stopBtn = document.getElementById("inapp-player-stop") as HTMLButtonElement | null;
+  const seekBackBtn = document.getElementById("inapp-player-seek-back") as HTMLButtonElement | null;
+  const seekFwdBtn = document.getElementById("inapp-player-seek-fwd") as HTMLButtonElement | null;
+  const volumeInput = document.getElementById("inapp-player-volume") as HTMLInputElement | null;
+  const volumeVal = document.getElementById("inapp-player-volume-val");
+  const speedSelect = document.getElementById("inapp-player-speed") as HTMLSelectElement | null;
+  const emptyEl = document.getElementById("inapp-player-empty");
+
+  let currentState: PlaybackState = {
+    status: "stopped",
+    playbackSpeed: 1.0,
+    volume: 100,
+  };
+
+  const updateUI = (state: PlaybackState): void => {
+    if (!state) return;
+    currentState = state;
+    const isPlaying = state.status === "playing";
+    const isPaused = state.status === "paused";
+    const hasTrack = isPlaying || isPaused;
+
+    if (emptyEl) emptyEl.style.display = hasTrack ? "none" : "block";
+    if (infoEl) infoEl.style.display = hasTrack ? "flex" : "none";
+    if (controlsEl) controlsEl.style.display = hasTrack ? "flex" : "none";
+
+    if (hasTrack) {
+      if (trackLabelEl) {
+        const title = state.currentTrackName || "Background Audio Track";
+        const artist = state.currentTrackArtist ? ` • ${state.currentTrackArtist}` : "";
+        trackLabelEl.textContent = `${title}${artist}`;
+      }
+      if (badgeEl) {
+        badgeEl.textContent = isPlaying ? "Playing" : "Paused";
+        badgeEl.style.background = isPlaying ? "rgba(34, 197, 94, 0.15)" : "rgba(245, 158, 11, 0.15)";
+        badgeEl.style.color = isPlaying ? "#4ade80" : "#fbbf24";
+        badgeEl.style.border = isPlaying ? "1px solid rgba(34, 197, 94, 0.3)" : "1px solid rgba(245, 158, 11, 0.3)";
+      }
+      if (pauseIcon) pauseIcon.style.display = isPlaying ? "block" : "none";
+      if (playIcon) playIcon.style.display = isPlaying ? "none" : "block";
+      if (playPauseText) playPauseText.textContent = isPlaying ? "Pause" : "Resume";
+      if (playPauseBtn) playPauseBtn.setAttribute("aria-label", isPlaying ? "Pause" : "Resume");
+    }
+
+    if (volumeInput) volumeInput.value = String(state.volume ?? 100);
+    if (volumeVal) volumeVal.textContent = `${state.volume ?? 100}%`;
+    if (speedSelect) speedSelect.value = String(state.playbackSpeed ?? 1.0);
+  };
+
+  playPauseBtn?.addEventListener("click", () => {
+    if (currentState.status === "playing") {
+      void window.player?.pause();
+    } else {
+      void window.player?.resume();
+    }
+  });
+
+  stopBtn?.addEventListener("click", () => {
+    void window.player?.stop();
+  });
+
+  seekBackBtn?.addEventListener("click", () => {
+    void window.player?.seek(-10, true);
+  });
+
+  seekFwdBtn?.addEventListener("click", () => {
+    void window.player?.seek(10, true);
+  });
+
+  volumeInput?.addEventListener("input", () => {
+    const val = parseInt(volumeInput.value, 10);
+    if (volumeVal) volumeVal.textContent = `${val}%`;
+    void window.player?.setVolume(val);
+  });
+
+  speedSelect?.addEventListener("change", () => {
+    const spd = parseFloat(speedSelect.value);
+    void window.player?.setSpeed(spd);
+  });
+
+  if (window.player) {
+    void window.player.getState().then((st) => {
+      if (st) updateUI(st);
+    }).catch(() => {});
+
+    window.player.onStateChanged((st) => {
+      if (st) updateUI(st);
+    });
+  }
 })();

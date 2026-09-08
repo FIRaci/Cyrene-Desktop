@@ -521,6 +521,34 @@
               </div>
             </label>
 
+            <!-- In-App Music Player Control card -->
+            <div class="setting-row" id="inapp-player-row" style="flex-direction:column;align-items:stretch;gap:10px;">
+              <div>
+                <strong>In-App Music Player Control</strong>
+                <span>Directly pause, resume, or stop the background YouTube player Cyrene controls. You stay in charge even when AI is managing playback.</span>
+              </div>
+              <div class="inapp-player-info" id="inapp-player-info" style="display:none;align-items:center;gap:8px;background:rgba(255,255,255,0.04);padding:8px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.08)">
+                <span id="inapp-player-track-label" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:500"></span>
+                <span id="inapp-player-status-badge" class="inapp-player-badge" style="font-size:11px;padding:2px 8px;border-radius:10px;text-transform:uppercase;font-weight:600"></span>
+              </div>
+              <div class="inapp-player-controls" id="inapp-player-controls" style="display:none;align-items:center;gap:8px;flex-wrap:wrap">
+                <button type="button" class="btn" id="inapp-player-seek-back" title="Rewind 10s" aria-label="Rewind 10 seconds" style="padding:4px 8px;font-size:12px;display:inline-flex;align-items:center;gap:4px;border:1px solid rgba(255,255,255,0.12);border-radius:6px;cursor:pointer"><svg width="14" height="14" viewBox="0 0 48 48" fill="none" aria-hidden="true"><path d="M11.2721 36.7279C14.5294 39.9853 19.0294 42 24 42C33.9411 42 42 33.9411 42 24C42 14.0589 33.9411 6 24 6C19.0294 6 14.5294 8.01472 11.2721 11.2721C9.6231 12.9211 6 17 6 17" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 9V17H14" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg> -10s</button>
+                <button type="button" class="btn btn-primary" id="inapp-player-play-pause" title="Pause / Resume" aria-label="Pause" style="padding:4px 12px;font-size:12px;display:inline-flex;align-items:center;gap:4px;border-radius:6px;cursor:pointer">
+                  <svg width="14" height="14" viewBox="0 0 48 48" fill="none" aria-hidden="true" id="inapp-player-pause-icon"><rect x="10" y="6" width="10" height="36" rx="2" fill="currentColor"/><rect x="28" y="6" width="10" height="36" rx="2" fill="currentColor"/></svg>
+                  <svg width="14" height="14" viewBox="0 0 48 48" fill="none" aria-hidden="true" id="inapp-player-play-icon" style="display:none"><path d="M15 8L38 24L15 40V8Z" fill="currentColor"/></svg>
+                  <span id="inapp-player-play-pause-text">Pause</span>
+                </button>
+                <button type="button" class="btn" id="inapp-player-seek-fwd" title="Forward 10s" aria-label="Forward 10 seconds" style="padding:4px 8px;font-size:12px;display:inline-flex;align-items:center;gap:4px;border:1px solid rgba(255,255,255,0.12);border-radius:6px;cursor:pointer"><svg width="14" height="14" viewBox="0 0 48 48" fill="none" aria-hidden="true"><path d="M36.7279 11.2721C33.4706 8.01472 28.9706 6 24 6C14.0589 6 6 14.0589 6 24C6 33.9411 14.0589 42 24 42C28.9706 42 33.4706 39.9853 36.7279 36.7279C38.3769 35.0789 42 31 42 31" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M42 23V31H34" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg> +10s</button>
+                <button type="button" class="btn" id="inapp-player-stop" title="Stop playback" aria-label="Stop" style="padding:4px 10px;font-size:12px;display:inline-flex;align-items:center;gap:4px;border:1px solid rgba(239,68,68,0.3);color:#ef4444;border-radius:6px;cursor:pointer"><svg width="14" height="14" viewBox="0 0 48 48" fill="none" aria-hidden="true"><rect x="8" y="8" width="32" height="32" rx="3" fill="currentColor"/></svg> Stop</button>
+                <div style="display:inline-flex;align-items:center;gap:6px;margin-left:8px">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="opacity:0.7"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
+                  <input type="range" id="inapp-player-volume" min="0" max="100" value="100" style="width:76px;cursor:pointer" aria-label="Volume" />
+                  <span id="inapp-player-volume-val" style="font-size:11px;opacity:.65;min-width:26px">100%</span>
+                </div>
+                <select id="inapp-player-speed" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,.12);border-radius:6px;color:inherit;font-size:12px;cursor:pointer;outline:none;padding:3px 6px;margin-left:6px" aria-label="Speed"><option value="0.5">0.5x</option><option value="0.75">0.75x</option><option value="1" selected>1.0x</option><option value="1.25">1.25x</option><option value="1.5">1.5x</option><option value="2">2.0x</option></select>
+              </div>
+              <div id="inapp-player-empty" style="font-size:12px;opacity:.5;padding:2px 0">No track currently playing</div>
+            </div>
             <label class="setting-row">
               <div>
                 <strong>SFX</strong>
@@ -855,11 +883,15 @@
                   <label for="user-default-city">Current City / Location</label>
                   <input type="text" id="user-default-city" placeholder="e.g., Hanoi, Tokyo, London (Used for weather & tools)" />
                 </div>
+                <div class="tts-field checkbox-row">
+                  <label for="user-share-location">Share Location for Recommendations</label>
+                  <input type="checkbox" id="user-share-location" />
+                </div>
                 <div class="tts-field">
                   <label for="user-timezone">Timezone</label>
                   <select id="user-timezone" data-timezone-select></select>
                 </div>
-                <p class="user-field-hint">City is manual coarse location for weather and tool planning. Cyrene never accesses your GPS or traces your IP address.</p>
+                <p class="user-field-hint">City is manual coarse location for weather and tool planning. Location sharing is off by default for your privacy; enable it to allow Cyrene to recommend nearby spots.</p>
               </div>
             </div>
           </div>
@@ -1205,11 +1237,14 @@
             <article class="plugin-card" id="plugin-travel-card">
               <div class="plugin-card__icon plugin-card__icon--nudge-left"><svg width="22" height="22" viewBox="0 0 128 128" fill="#34A1E6" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M112.5,16.5L15.5,64l48,16l16,48l48-96L112.5,16.5z M80.5,80.5l-16-16l32-32L80.5,80.5z"/></svg></div>
               <div class="plugin-card__body">
-                <h2>Global Travel Planner</h2>
-                <p>Calculate driving, walking, cycling, and transit routes and estimated travel duration using keyless global coordinate geocoding (Open-Meteo Geocoding).
-                </p>
+                <h2>Global Travel & Nearby Places</h2>
+                <p>Calculate driving, walking, cycling, and transit routes, and discover nearby restaurants, cafes, and attractions with Google Maps navigation.</p>
                 <div class="plugin-config" id="plugin-travel-config">
-                  <p class="user-field-hint">Worldwide geocoding and road estimation works out of the box with zero configuration.</p>
+                  <div class="tts-field checkbox-row">
+                    <label for="plugin-travel-share-location">Share My Location for Nearby Recommendations</label>
+                    <input type="checkbox" id="plugin-travel-share-location" />
+                  </div>
+                  <p class="user-field-hint">Off by default for privacy. When enabled, Cyrene uses your configured city to find nearby spots. When disabled, Cyrene only searches places when you explicitly name an area.</p>
                 </div>
               </div>
               <label class="plugin-switch" aria-label="Enable Travel Tools">

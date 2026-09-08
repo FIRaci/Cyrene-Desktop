@@ -60,6 +60,12 @@ describe("music Agent tools", () => {
       music_present_tracks: "music.present_tracks",
       music_play_track: "music.play_track",
       music_play_playlist: "music.play_playlist",
+      music_pause: "music.pause",
+      music_resume: "music.resume",
+      music_seek: "music.seek",
+      music_set_speed: "music.set_speed",
+      music_set_volume: "music.set_volume",
+      music_stop: "music.stop",
     });
   });
 
@@ -325,5 +331,31 @@ describe("music Agent tools", () => {
     await tool.execute({ playlistId: "456" });
 
     expect(service.playPlaylist).toHaveBeenCalledWith("456");
+  });
+
+  it("executes in-app playback control tools", async () => {
+    const tools = buildMusicTools(serviceDouble() as never);
+    const pauseTool = tools.find((t) => t.id === "music_pause")!;
+    const resumeTool = tools.find((t) => t.id === "music_resume")!;
+    const seekTool = tools.find((t) => t.id === "music_seek")!;
+    const speedTool = tools.find((t) => t.id === "music_set_speed")!;
+    const volumeTool = tools.find((t) => t.id === "music_set_volume")!;
+    const stopTool = tools.find((t) => t.id === "music_stop")!;
+
+    expect(pauseTool).toBeDefined();
+    expect(resumeTool).toBeDefined();
+    expect(seekTool).toBeDefined();
+    expect(speedTool).toBeDefined();
+    expect(volumeTool).toBeDefined();
+    expect(stopTool).toBeDefined();
+
+    const speedRes = await speedTool.execute({ speed: 2.0 });
+    expect(JSON.parse(speedRes)).toMatchObject({ kind: "playback_control", action: "set_speed", speed: 2 });
+
+    const volumeRes = await volumeTool.execute({ volume: 75 });
+    expect(JSON.parse(volumeRes)).toMatchObject({ kind: "playback_control", action: "set_volume", volume: 75 });
+
+    const stopRes = await stopTool.execute({});
+    expect(JSON.parse(stopRes)).toMatchObject({ kind: "playback_control", action: "stop" });
   });
 });

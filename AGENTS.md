@@ -174,6 +174,17 @@
 - Giao diện thẻ nhạc trong Cài đặt là **YouTube Music** với SVG logo chuẩn màu đỏ/trắng, mô tả rõ ràng tính năng, form tìm kiếm trực tiếp và nút mở nhanh YouTube Music.
 - 100% Tiếng Anh bề mặt, không còn sót lại bất kỳ thuật ngữ hay giao diện quét mã QR NetEase cũ nào.
 
+### 7.4. Trình phát Ngầm trong App & Bộ điều khiển Toàn năng (In-App Player & Playback Controls):
+- **Phát nhạc ngầm trong App (`InAppPlayerManager`)**: Âm thanh bài hát phát trực tiếp từ tiến trình nền của Cyrene Desktop (`show: false`), tuyệt đối không tự động bật cửa sổ trình duyệt ngoài (Chrome/Edge) làm phiền Master.
+- **Trọn bộ Công cụ Điều khiển cho Cyrene**:
+  * `music_pause`: Tạm dừng bài hát.
+  * `music_resume`: Tiếp tục phát bài hát.
+  * `music_seek`: Tua thời gian bài hát (nhảy theo giây hoặc nhảy tương đối).
+  * `music_set_speed`: Đổi tốc độ phát (0.75x, 1.0x, 1.25x, 1.5x, 2.0x).
+  * `music_set_volume`: Chỉnh âm lượng từ 0 đến 100.
+  * `music_stop`: Dừng hẳn nhạc và đóng player ngầm.
+- **TUYỆT ĐỐI CẤM EMOJI**: Toàn bộ hệ thống (giao diện, bong bóng thoại, log, phản hồi, công cụ) TUYỆT ĐỐI KHÔNG DÙNG EMOJI. Chỉ dùng Vector SVG icons chuẩn hoặc văn bản thanh lịch.
+
 ---
 
 ## 8. THỜI TIẾT & DI CHUYỂN TOÀN CẦU: OPEN-METEO EXCLUSIVE (WEATHER & TRAVEL CONTRACT)
@@ -191,9 +202,16 @@
 - Khoảng cách được tính toán bằng công thức Great Circle (Haversine), kết hợp với hệ số uốn lượn đường bộ tiêu chuẩn quốc tế (`1.3 winding factor`).
 - Hỗ trợ đầy đủ các phương thức di chuyển: Lái xe (`driving`), Đi bộ (`walking`), Đi xe đạp (`cycling`), và Phương tiện công cộng (`transit`).
 
-### 8.3. Những điều NGHIÊM CẤM (STRICT PROHIBITIONS):
+### 8.3. Đề xuất Địa điểm & Quán ăn Xung quanh (`find_nearby_places`):
+- **Bảo mật Vị trí Mặc định TẮT (Default-OFF Location Privacy)**: Tùy chọn chia sẻ vị trí (`shareLocation`) mặc định là **OFF (false)** nhằm bảo vệ tối đa quyền riêng tư của Master.
+- **Hành vi khi tắt**: Khi Master hỏi tìm quán ăn, cafe, địa điểm quanh đây mà chưa bật chia sẻ vị trí và không cung cấp địa điểm cụ thể, Cyrene sẽ lịch sự thông báo tính năng vị trí đang tắt và nhắc Master nêu rõ tên khu vực (ví dụ: 'ở Cầu Giấy, Hà Nội') hoặc bật `Share My Location` trong Settings (`Alt+6`).
+- **Hành vi khi có địa điểm cụ thể**: Nếu Master nói rõ tên khu vực/quận huyện, Cyrene tìm kiếm ngay lập tức qua OpenStreetMap / Nominatim và trả về gợi ý chi tiết kèm link dẫn đường Google Maps trực tiếp (`https://www.google.com/maps/search/?api=1&query=...`).
+- **Hành vi khi bật vị trí**: Cyrene tự động sử dụng thành phố/khu vực cấu hình trong Settings (`defaultCity`) làm điểm neo tìm kiếm mà không đòi hỏi Master phải nhập lại.
+
+### 8.4. Những điều NGHIÊM CẤM (STRICT PROHIBITIONS):
 1. **CẤM** gọi lại domain `restapi.amap.com` hoặc bất kỳ API AMap nào dưới mọi hình thức.
 2. **CẤM** sử dụng logic dịch địa danh tiếng Trung (`amapTranslateChineseCityToPinyin`) hay phụ thuộc vào mã bưu chính / mã phân vùng hành chính nội địa (`adcode`) của Trung Quốc.
+3. **CẤM** tự ý bật ngầm chia sẻ vị trí nếu Master chưa chủ động bật toggle `Share My Location` trong Settings.
 
 ---
 
@@ -291,10 +309,10 @@
    - `src/main/music/youtube-music-provider.ts` & `src/main/music/music-service.ts`:
      * **Trách nhiệm duy nhất (SRP)**: Quản lý provider mặc định YouTube Music, gợi ý bài hát hàng ngày zero-login, tìm kiếm thời gian thực và phát nhạc.
      * **KHÔNG ĐƯỢC CHẠM VÀO**: Logic phân giải bài hát không yêu cầu login và regex bóc tách dữ liệu YouTube.
-7. **Thời tiết & Lộ trình Di chuyển Toàn cầu (Open-Meteo)**:
+7. **Thời tiết, Lộ trình & Đề xuất Địa điểm Xung quanh (Open-Meteo & Nominatim)**:
    - `src/main/orchestrator/travel-tools.ts` & `src/main/orchestrator/built-in-tools.ts`:
-     * **Trách nhiệm duy nhất (SRP)**: Xử lý định vị địa lý, dự báo thời tiết và quy hoạch lộ trình di chuyển toàn cầu độc quyền qua Open-Meteo (keyless).
-     * **KHÔNG ĐƯỢC CHẠM VÀO**: Logic Great Circle routing và Geocoding Open-Meteo.
+     * **Trách nhiệm duy nhất (SRP)**: Xử lý định vị địa lý, dự báo thời tiết, quy hoạch lộ trình di chuyển (`plan_trip`) và tìm kiếm quán ăn/địa điểm xung quanh (`find_nearby_places`).
+     * **KHÔNG ĐƯỢC CHẠM VÀO**: Logic Great Circle routing, Geocoding Open-Meteo và chính sách bảo mật vị trí mặc định tắt.
 
 ---
 
@@ -302,7 +320,7 @@
 1. **Đọc tệp này đầu tiên**: Trước khi bắt đầu bất kỳ chỉnh sửa nào liên quan đến Voice, Chat, Live2D, Co-Watch, UI Layout, hãy đối chiếu với tệp này.
 2. **Tuyệt đối không tự ý giả định (No Assumptions)**: Nếu có điểm chưa rõ về ý muốn của User, giữ nguyên các thiết lập đã khóa trong tài liệu này hoặc hỏi trực tiếp, không tự ý "sửa hộ" sang công nghệ khác.
 3. **Bảo toàn Test & Build**:
-   - Luôn chạy `npx vitest run` (Toàn bộ 263 file test, 1,999 tests phải pass 100%).
+   - Luôn chạy `npx vitest run` (Toàn bộ 264 file test, 2,011+ tests phải pass 100%).
    - Luôn chạy `npm run build` để biên dịch TypeScript và Vite.
    - Luôn chạy `npm run package:win:dir` để đóng gói bản chạy thực tế tại `release\win-unpacked\Cyrene.exe`.
 4. **Git Commit & Push**: Tuân thủ conventional commit (`feat`, `fix`, `style`, `refactor`), cập nhật tài liệu và push lên nhánh `master` khi hoàn thành.

@@ -1,6 +1,8 @@
+
 import { randomUUID } from "crypto";
 import type { ContextEvent } from "../../cita";
 import type { MusicService } from "../../music/music-service";
+import { inAppPlayer } from "../../music/in-app-player-manager";
 import type {
   MusicCandidateRefPayload,
   MusicSelectionSet,
@@ -416,6 +418,119 @@ export function buildMusicTools(service: MusicService, hooks: MusicToolHooks = {
       execute: async (args) => {
         const dispatch = await service.playPlaylist(String(args.playlistId));
         return JSON.stringify({ kind: "playback", dispatch });
+      },
+    },
+    {
+      id: "music_pause",
+      capability: "music.pause",
+      name: "Pause music",
+      description: "Pause the currently playing track in the in-app player.",
+      enabled: true,
+      risk: "safe",
+      inputSchema: { type: "object", properties: {}, required: [] },
+      soulActionLabel: "Pause playback",
+      completionEvidence: [{ kind: "tool_succeeded" }],
+      execute: async () => {
+        const ok = await inAppPlayer.pause();
+        return JSON.stringify({ kind: "playback_control", action: "pause", success: ok });
+      },
+    },
+    {
+      id: "music_resume",
+      capability: "music.resume",
+      name: "Resume music",
+      description: "Resume paused music playback in the in-app player.",
+      enabled: true,
+      risk: "safe",
+      inputSchema: { type: "object", properties: {}, required: [] },
+      soulActionLabel: "Resume playback",
+      completionEvidence: [{ kind: "tool_succeeded" }],
+      execute: async () => {
+        const ok = await inAppPlayer.resume();
+        return JSON.stringify({ kind: "playback_control", action: "resume", success: ok });
+      },
+    },
+    {
+      id: "music_seek",
+      capability: "music.seek",
+      name: "Seek music track",
+      description: "Fast-forward or rewind the current track by seconds. Set relative to true for relative jump (e.g. +30 or -15), or false for absolute position.",
+      enabled: true,
+      risk: "safe",
+      inputSchema: {
+        type: "object",
+        properties: {
+          seconds: { type: "number", description: "Number of seconds to seek by or to" },
+          relative: { type: "boolean", description: "True for relative jump, false for absolute timestamp. Default is true." },
+        },
+        required: ["seconds"],
+      },
+      soulActionLabel: "Seek position",
+      completionEvidence: [{ kind: "tool_succeeded" }],
+      execute: async (args) => {
+        const seconds = Number(args.seconds ?? 0);
+        const relative = args.relative !== false;
+        const pos = await inAppPlayer.seek(seconds, relative);
+        return JSON.stringify({ kind: "playback_control", action: "seek", positionSeconds: pos });
+      },
+    },
+    {
+      id: "music_set_speed",
+      capability: "music.set_speed",
+      name: "Set playback speed",
+      description: "Change the playback speed of the current track (e.g. 0.75, 1.0, 1.25, 1.5, 2.0).",
+      enabled: true,
+      risk: "safe",
+      inputSchema: {
+        type: "object",
+        properties: {
+          speed: { type: "number", description: "Playback speed multiplier, e.g. 1.0, 1.25, 1.5, 2.0" },
+        },
+        required: ["speed"],
+      },
+      soulActionLabel: "Set playback speed",
+      completionEvidence: [{ kind: "tool_succeeded" }],
+      execute: async (args) => {
+        const speed = Number(args.speed ?? 1.0);
+        const ok = await inAppPlayer.setSpeed(speed);
+        return JSON.stringify({ kind: "playback_control", action: "set_speed", speed, success: ok });
+      },
+    },
+    {
+      id: "music_set_volume",
+      capability: "music.set_volume",
+      name: "Set playback volume",
+      description: "Adjust the music playback volume from 0 to 100.",
+      enabled: true,
+      risk: "safe",
+      inputSchema: {
+        type: "object",
+        properties: {
+          volume: { type: "number", description: "Volume level from 0 to 100" },
+        },
+        required: ["volume"],
+      },
+      soulActionLabel: "Set volume",
+      completionEvidence: [{ kind: "tool_succeeded" }],
+      execute: async (args) => {
+        const volume = Number(args.volume ?? 100);
+        const ok = await inAppPlayer.setVolume(volume);
+        return JSON.stringify({ kind: "playback_control", action: "set_volume", volume, success: ok });
+      },
+    },
+    {
+      id: "music_stop",
+      capability: "music.stop",
+      name: "Stop music",
+      description: "Stop music playback and close the in-app player.",
+      enabled: true,
+      risk: "safe",
+      inputSchema: { type: "object", properties: {}, required: [] },
+      soulActionLabel: "Stop playback",
+      completionEvidence: [{ kind: "tool_succeeded" }],
+      execute: async () => {
+        const ok = await inAppPlayer.stop();
+        return JSON.stringify({ kind: "playback_control", action: "stop", success: ok });
       },
     },
   ];

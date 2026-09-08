@@ -1400,6 +1400,8 @@ interface UserProfile {
   defaultCity: string;
   /** ：secret() | male() | female() */
   gender: string;
+  /** Share location for nearby recommendations (default: false) */
+  shareLocation: boolean;
 }
 
 interface GeneralSettings {
@@ -1487,6 +1489,8 @@ interface GeneralSettings {
   amapKey: string;
   /** 🚗 */
   travelEnabled: boolean;
+  /** 📍 Share location for nearby place recommendations (default: false) */
+  shareLocation: boolean;
   /** 🖥️ （Playwright MCP）。 false，。 */
   playwrightMcpEnabled: boolean;
   // ： +  key
@@ -1741,6 +1745,7 @@ const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   weatherEnabled: true,
   amapKey: "",
   travelEnabled: true,
+  shareLocation: false,
   playwrightMcpEnabled: false,
   searchEngine: "ddg",
   searchBochaKey: "",
@@ -1794,6 +1799,7 @@ const DEFAULT_USER_PROFILE: UserProfile = {
   avatarPath: "",
   defaultCity: "Hanoi",
   gender: "secret",
+  shareLocation: false,
 };
 
 function loadUserProfile(): UserProfile {
@@ -1807,6 +1813,7 @@ function loadUserProfile(): UserProfile {
     if (!loaded.timezone || !loaded.timezone.trim() || (loaded.timezone === "Asia/Shanghai" && loaded.defaultCity.toLowerCase().includes("hanoi"))) {
       loaded.timezone = "Asia/Ho_Chi_Minh";
     }
+    loaded.shareLocation = Boolean(loaded.shareLocation);
     return loaded;
   } catch {
     return DEFAULT_USER_PROFILE;
@@ -1826,6 +1833,9 @@ function saveUserProfile(profile: Partial<UserProfile>): UserProfile {
   const filePath = getUserProfilePath();
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, JSON.stringify(merged, null, 2), "utf8");
+  if (profile.shareLocation !== undefined) {
+    saveGeneralSettings({ shareLocation: Boolean(profile.shareLocation) });
+  }
   return merged;
 }
 
@@ -2205,6 +2215,7 @@ function normalizeGeneralSettings(input: Partial<GeneralSettings> | null | undef
     weatherEnabled: Boolean(input?.weatherEnabled),
     amapKey: typeof input?.amapKey === "string" ? input.amapKey : "",
     travelEnabled: Boolean(input?.travelEnabled),
+    shareLocation: Boolean(input?.shareLocation),
     playwrightMcpEnabled: Boolean(input?.playwrightMcpEnabled),
     searchEngine: ["off", "ddg", "bocha", "tavily", "minimax"].includes(String(input?.searchEngine))
       ? (input!.searchEngine as "off" | "ddg" | "bocha" | "tavily" | "minimax")
@@ -2355,6 +2366,7 @@ function saveGeneralSettings(settings: Partial<GeneralSettings>): GeneralSetting
 function syncBuiltInToolToggles(settings: GeneralSettings): void {
   toolRegistry.setEnabled("weather", settings.weatherEnabled);
   toolRegistry.setEnabled("plan_trip", settings.travelEnabled);
+  toolRegistry.setEnabled("find_nearby_places", settings.travelEnabled);
 }
 
 /** MiniMax  MCP Server  ID。 */
@@ -3762,8 +3774,13 @@ function createWindow(): void {
     () => loadGeneralSettings().searchTavilyKey,
   );
 
-  //  amapKey （ GeneralSettings  amapKey）
-  setTravelConfig(() => loadGeneralSettings().amapKey, () => loadGeneralSettings().travelEnabled);
+  // Travel tools config (Open-Meteo geocoding + nearby places)
+  setTravelConfig(
+    () => loadGeneralSettings().amapKey,
+    () => loadGeneralSettings().travelEnabled,
+    () => loadUserProfile().shareLocation || loadGeneralSettings().shareLocation,
+    () => loadUserProfile().defaultCity || "Hanoi",
+  );
 
   //  SMTP （ GeneralSettings）
   setEmailConfig(
