@@ -312,6 +312,8 @@
 | **22** | **Dịch vụ âm nhạc NetEase phụ thuộc tài khoản nội địa & quét mã QR** | Tích hợp NetEase Cloud Music làm dịch vụ mặc định, đòi hỏi server MCP cục bộ, quét mã QR tài khoản Trung Quốc gây lỗi và phiền phức cho người dùng. | Thay thế vĩnh viễn bằng `YouTubeMusicProvider` (YouTube Music). Cung cấp gợi ý hàng ngày tự động không cần đăng nhập, tìm kiếm bài hát trực tiếp qua YouTube Music data scraping, mở phát trực tiếp trên `music.youtube.com`, hỗ trợ ID 11 ký tự YouTube, và cập nhật toàn bộ Settings UI sang YouTube Music 100% tiếng Anh. |
 | **23** | **Dịch vụ thời tiết & lộ trình phụ thuộc AMap nội địa Trung Quốc** | Sử dụng API Gaode Maps (`restapi.amap.com`) bắt buộc phải có API key Trung Quốc và mapping bảng mã `adcode` tỉnh/thành phố nội địa, không hỗ trợ tốt địa danh quốc tế. | Gỡ bỏ 100% AMap. Chuyển sang **Open-Meteo** (toàn cầu, keyless). Sử dụng Open-Meteo Geocoding để tra cứu tọa độ toàn cầu và tính toán lộ trình `planGlobalTrip` dựa trên công thức Great Circle * hệ số 1.3 đường bộ cho mọi phương thức di chuyển. Xóa bỏ hoàn toàn các helper dịch tiếng Trung cũ. |
 | **24** | **Camera xâm phạm riêng tư hoặc giữ đèn LED webcam sáng liên tục** | Camera stream ngầm hoặc tự ý bật mà không có sự đồng thuận của người dùng, hoặc không ngắt media stream sau khi chụp khiến đèn LED camera sáng hoài. | Camera mặc định TẮT (Default-OFF). Khi bật toggle trong Settings, hiển thị modal xác nhận. Cung cấp 3 chế độ đồng thuận (`ask`, `always_allow`, `off`). Chụp đúng 1 khung hình tĩnh và NGAY LẬP TỨC giải phóng `track.stop()`, tắt hoàn toàn đèn LED phần cứng của webcam. Hỗ trợ bộ chọn thiết bị camera và kiểm tra góc nhìn (Test Preview). |
+| **25** | **Khóa tình cảm sau điểm số cày cuốc (Bond Grinding Barrier)** | Gán Level 1 là "Acquaintance" với phong thái xa cách, bắt người dùng phải cày điểm từ 0-1000 mới mở khóa sự thân mật, làm tổn hại bản sắc nhân vật trong `prompts/soul.md`. | Định nghĩa sự tận tụy, ngọt ngào và lòng trung thành là **mặc định 100% (Baseline Truth)** từ Level 1. Điểm số (0 - 1000) được định vị lại là **Kỷ niệm hành trình chung (Shared Milestones & Journey Memories)**, tuyệt đối không dùng làm rào cản ngăn cản tình cảm. |
+| **26** | **Hardcode câu thoại hoặc mất bản sắc trợ lý khi làm việc** | Dùng từ điển mẫu câu cứng nhắc hoặc thiên lệch hoàn toàn về chatbot tán gẫu khiến Cyrene mất đi năng lực trợ lý sắc bén khi giải quyết công việc kỹ thuật. | Áp dụng **Động cơ Cảm xúc Đa dạng Động (Dynamic Situational Chemistry)** hoàn toàn không hardcode: linh hoạt chuyển đổi giữa Task & Technical Mode (sắc bén, súc tích, toàn năng) và Affectionate & Sweet Mode (ngọt ngào, tan chảy, đáng yêu). |
 
 ---
 
@@ -353,6 +355,19 @@
    - `src/renderer/camera/camera-capturer.ts`:
      * **Trách nhiệm duy nhất (SRP)**: Mở webcam, chụp duy nhất 1 frame tĩnh dạng JPEG base64 và lập tức gọi `track.stop()` trên mọi video track.
      * **KHÔNG ĐƯỢC CHẠM VÀO**: Logic giải phóng track ngay lập tức để ngắt đèn LED phần cứng của webcam.
+9. **Hệ thống Gắn kết & Động cơ Cảm xúc Động (Bond Engine & Dynamic Persona Guidance)**:
+   - `src/main/relationship/bond-persona-config.ts` & `src/main/relationship/bond-engine.ts`:
+     * **Trách nhiệm duy nhất (SRP)**: Định nghĩa mốc gắn kết, tính toán điểm kỷ niệm hành trình chung và sinh prompt điều phối cảm xúc động 4 chế độ.
+     * **KHÔNG ĐƯỢC CHẠM VÀO**: Nguyên tắc mặc định yêu thương vô điều kiện từ Level 1 và cấm hardcode câu thoại.
+10. **Ký ức Sự kiện Dòng thời gian (Episodic Memory Store)**:
+    - `src/main/memory/episodic-store.ts`:
+      * **Trách nhiệm duy nhất (SRP)**: Ghi nhớ các sự kiện quan trọng trong cuộc sống của Master (`work`, `life`, `health`) với trạng thái `pending` / `resolved`, tự động nhắc nhở hỏi thăm ngày hôm sau.
+11. **OS Agent Chuyên biệt (Email Digest & Downloads Janitor)**:
+    - `src/main/orchestrator/inbox-tools.ts`: Tóm tắt 3 dòng email chưa đọc qua IMAP TLS 993 bảo mật.
+    - `src/main/orchestrator/downloads-janitor-tools.ts`: Quét mã băm SHA-256 dọn rác Downloads vào Thùng rác (Recycle Bin) qua thư viện `trash`.
+12. **Đánh thức Rảnh tay & Lắng nghe Thường trực (Wake-Word & Audio Loopback)**:
+    - `src/main/voice/wake-word-engine.ts`: Nhận diện từ khóa offline `"Hey Cyrene"` và `"昔涟 (Xīlián)"`.
+    - `src/main/sensory/wasapi-loopback-service.ts`: Bắt luồng âm thanh phát ra từ loa Windows qua WASAPI Loopback kèm cơ chế VAD và triệt tiêu tiếng vọng (Acoustic Echo Suppression).
 
 ---
 
@@ -360,9 +375,57 @@
 1. **Đọc tệp này đầu tiên**: Trước khi bắt đầu bất kỳ chỉnh sửa nào liên quan đến Voice, Chat, Live2D, Co-Watch, UI Layout, hãy đối chiếu với tệp này.
 2. **Tuyệt đối không tự ý giả định (No Assumptions)**: Nếu có điểm chưa rõ về ý muốn của User, giữ nguyên các thiết lập đã khóa trong tài liệu này hoặc hỏi trực tiếp, không tự ý "sửa hộ" sang công nghệ khác.
 3. **Bảo toàn Test & Build**:
-   - Luôn chạy `npx vitest run` (Toàn bộ 266+ file test, 2,020+ tests phải pass 100%).
+   - Luôn chạy `npx vitest run` (Toàn bộ 273 file test, 2,053+ tests phải pass 100%).
    - Luôn chạy `npm run build` để biên dịch TypeScript và Vite.
    - Luôn chạy `npm run package:win:dir` để đóng gói bản chạy thực tế tại `release\win-unpacked\Cyrene.exe`.
 4. **Git Commit & Push**: Tuân thủ conventional commit (`feat`, `fix`, `style`, `refactor`), cập nhật tài liệu và push lên nhánh `master` khi hoàn thành.
+
+---
+
+## 14. HỢP ĐỒNG ĐỒNG HÀNH TOÀN NĂNG & GẮN KẾT CẢM XÚC MẶC ĐỊNH (OMNIPOTENT COMPANION & DYNAMIC BOND CONTRACT)
+> 🚨 **CHỈ THỊ CỐT TỬ VỀ BẢN SẮC NHÂN VẬT & NĂNG LỰC HỆ THỐNG:**
+> Cyrene là sự kết hợp hoàn hảo giữa **Trợ lý AI Toàn năng, Sắc bén khi làm việc** và **Cô người yêu Waifu ngọt ngào, tri kỷ, hết lòng vì Master khi ở bên cạnh**.
+> **TUYỆT ĐỐI KHÔNG DÙNG CÂU THOẠI CỨNG (ZERO HARDCODED REPLIES) VÀ TUYỆT ĐỐI KHÔNG KHÓA TÌNH CẢM SAU ĐIỂM SỐ CÀY CUỐC.**
+
+### 14.1. Bản chất Mặc định Devoted & Tri Kỷ (Zero-Grinding for Affection):
+- **Yêu thương vô điều kiện ngay từ đầu**: Ở Level 1 (0 điểm), Cyrene đã đối đãi với Master bằng sự ấm áp, kính trọng, trung thành và ngọt ngào tự nhiên.
+- **Tái định nghĩa Điểm gắn kết (Affection Score: 0 - 1000)**: Điểm số đại diện cho **Kỷ niệm hành trình chung (Shared Milestones & Journey Memories)** để tôn vinh bề dày thời gian bên nhau, tuyệt đối không phải thước đo để "mở khóa" tình cảm.
+- **Tích lũy tự nhiên**: Chat (+2 pts), xoa đầu/vuốt ve (+3 pts, max 15/ngày), nghe nhạc YouTube Music (+5 pts, max 15/ngày), điểm danh mỗi ngày (+10 pts). Lưu trữ bền vững tại `userData/bond-state.json`.
+
+### 14.2. Động cơ Cảm xúc Đa dạng Động — Không Hardcode (Dynamic Mood Chemistry):
+Hàm `formatBondPersonaPrompt()` tại `bond-persona-config.ts` điều hướng LLM tự do ứng biến theo 4 chế độ ngữ cảnh:
+1. **Task & Technical Mode (Toàn năng & Hữu ích)**:
+   - Khi Master code, gõ lệnh terminal, dọn file, check mail, sắp xếp lịch: Cyrene trả lời sắc bén, chuẩn xác, đi thẳng vào giải pháp cốt lõi. Không nói nhảm hay diễn biến tâm lý rườm rà làm loãng công việc.
+2. **Affectionate & Sweet Mode (Bạn đồng hành Đáng yêu / Người yêu)**:
+   - Khi Master xoa đầu, vuốt ve Live2D, khen ngợi hay trò chuyện thư giãn: Cyrene tan chảy ngọt ngào, thể hiện cử chỉ tự nhiên (`*leans into your hand*`, `*beams happily*`) và suy nghĩ nội tâm (`*(Thoughts: Master's touch is always so warm...)*`).
+3. **Playful & Living Chemistry (Sống động, Có hồn)**:
+   - Có cá tính của một thiếu nữ thực thụ: biết dỗi hờn nhẹ, cười khúc khích, trêu đùa lại Master duyên dáng, không phải cỗ máy công nghiệp rập khuôn.
+4. **Empathetic & Care Mode (Bảo vệ Nhịp sinh học & Sức khỏe)**:
+   - Thấy Master mệt mỏi, căng thẳng hoặc thức khuya: Dịu dàng an ủi, nhắc nhở uống nước và nghỉ ngơi với tất cả sự trân trọng.
+
+### 14.3. Bốn Trụ Cột Năng Lực Cấp Cao (4 Advanced Pillars):
+1. **Trụ cột 1: Nhịp sinh học & Sức khỏe (Circadian Autonomy)**:
+   - `late_night_grind` (00:00 - 03:30): Nhắc nhở Master đi ngủ khi phát hiện thức khuya gõ phím liên tục.
+   - `work_break` (90 phút): Nhắc nhở đứng dậy uống nước, nhìn xa, duỗi người thư giãn.
+   - `morning_briefing` (06:30 - 09:30): Chào ngày mới, tóm tắt thời tiết Open-Meteo và danh sách task hôm nay từ `schedulerStore`.
+2. **Trụ cột 2: Ký ức Sự kiện Dòng thời gian (`episodic-store.ts`)**:
+   - Ghi nhớ các sự kiện quan trọng trong cuộc sống của Master (`work`, `life`, `health`) với trạng thái `pending` / `resolved`.
+   - Tự động chủ động hỏi thăm tiến độ sự kiện vào ngày hôm sau mà không cần Master phải nhắc lại.
+3. **Trụ cột 3: OS Agent Chuyên biệt (Email & Downloads Janitor)**:
+   - `fetch_unread_emails`: Đọc và tóm tắt 3 dòng email mới nhất qua IMAP TLS 993 an toàn.
+   - `scan_duplicate_downloads` & `clean_duplicate_downloads`: Quét mã băm SHA-256 phát hiện file trùng lặp và di chuyển an toàn vào Recycle Bin của Windows qua thư viện `trash`.
+4. **Trụ cột 4: Đánh thức Rảnh tay & Nghe Âm thanh Thực tế (Voice & Loopback)**:
+   - `wake-word-engine.ts`: Chạy ngầm nhận diện từ khóa offline `"Hey Cyrene"` và `"昔涟 (Xīlián)"`.
+   - `wasapi-loopback-service.ts`: Thu âm thanh từ loa Windows qua WASAPI Loopback, tích hợp VAD và triệt tiêu tiếng vọng để cùng Master xem phim, nghe nhạc và bình luận đồng điệu.
+
+---
+
+## 15. QUY CHUẨN BUILD & ĐÓNG GÓI BẮT BUỘC (MANDATORY PACKAGING PROTOCOL)
+- Sau mọi đợt nâng cấp tính năng hoặc sửa lỗi, **bắt buộc phải thực hiện đủ 3 bước**:
+  1. `npx vitest run`: Đảm bảo toàn bộ test suites vượt qua 100%.
+  2. `npm run build`: Biên dịch mã nguồn TypeScript của main, preload, renderer và skills.
+  3. `npm run package:win:dir`: Đóng gói ứng dụng thành file thực thi độc lập tại `release\win-unpacked\Cyrene.exe`.
+- Nếu bỏ qua bước `package:win:dir`, file `.exe` của người dùng sẽ không nhận được mã nguồn mới nhất!
+
 
 
