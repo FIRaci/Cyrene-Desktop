@@ -248,7 +248,7 @@ describe("MiniChatWidget", () => {
     expect(run).toHaveBeenCalledWith(
       expect.objectContaining({
         sessionId: "shared-session-123",
-        executionMode: "chat",
+        executionMode: "work",
       }),
     );
 

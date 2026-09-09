@@ -336,7 +336,7 @@ export class MiniChatWidget {
           sessionId,
           userTurnId,
           assistantTurnId,
-          executionMode: "chat",
+          executionMode: "work",
         });
 
         if (!ack.success) {

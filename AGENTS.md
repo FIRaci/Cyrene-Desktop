@@ -129,6 +129,10 @@
    - Khi cửa sổ Chat nhận `focus`, phải kiểm tra `session.updatedAt > seenSessionUpdatedAt` và cập nhật tức thì.
 6. **Không cướp quyền điều khiển (Non-intrusive)**:
    - Các phản hồi tự động trong nền (Co-Watch, Gesture, Idle Thoughts) ghi vào chat trong im lặng, **không được tự động bung cửa sổ Chat (`Alt+1`)** đè lên phần mềm người dùng đang làm việc.
+7. **Khả năng Thực Thi Công Cụ ở Quick Mini-Chat (Alt+5 Full Tools Capability)**:
+   - `Alt+5` chạy với `executionMode: "work"` để người dùng khi gõ yêu cầu tác vụ (dọn dẹp, tra cứu, shell, mở nhạc, xem thời tiết, v.v.) thì Cyrene lập tức thực thi Tool trong nền, không tước bỏ công cụ khiến AI phải nói suông hay yêu cầu đổi chế độ thủ công.
+8. **Quy Tắc Chống Yapping & Hành Động Trước (Task-First & No Yapping Contract)**:
+   - Khi Master ra lệnh tác vụ thực thi, Cyrene bắt buộc gọi Tool trước, sau đó chỉ xác nhận kết quả bằng 1-2 câu ngắn gọn trong ngoặc kép `"..."`. Tuyệt đối cấm văn tả cảnh, văn nghị luận, hoặc bịa chuyện đi chơi làm loãng dòng công việc của Master. Cú pháp phản hồi chuẩn mực: `*hành động* /suy nghĩ/ "lời thoại"`.
 
 ---
 
