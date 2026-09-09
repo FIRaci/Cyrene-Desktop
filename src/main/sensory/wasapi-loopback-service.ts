@@ -16,7 +16,7 @@ export interface SpeechSegment {
 }
 
 const DEFAULT_CONFIG: WasapiLoopbackConfig = {
-  enabled: true,
+  enabled: false,
   sampleRate: 16000,
   channels: 1,
   vadRmsThreshold: 0.015,

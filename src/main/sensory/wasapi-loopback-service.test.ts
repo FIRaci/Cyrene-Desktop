@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import {
   WasapiLoopbackService,
   computePcmRms,
@@ -14,6 +14,14 @@ describe("WasapiLoopbackService", () => {
     return buf;
   }
 
+  it("defaults to disabled", () => {
+    const service = new WasapiLoopbackService();
+    expect(service.getConfig().enabled).toBe(false);
+    service.start();
+    const chunk = createPcmSineWave(1600, 0.5);
+    expect(service.processAudioChunk(chunk)).toBeNull();
+  });
+
   it("calculates RMS energy correctly", () => {
     const silence = Buffer.alloc(3200); // 1600 samples of zero
     expect(computePcmRms(silence)).toBe(0);
@@ -26,7 +34,7 @@ describe("WasapiLoopbackService", () => {
   });
 
   it("echo suppression prevents capturing while Cyrene is vocalizing", () => {
-    const service = new WasapiLoopbackService();
+    const service = new WasapiLoopbackService({ enabled: true });
     service.start();
     service.setCompanionSpeaking(true);
 
@@ -38,7 +46,7 @@ describe("WasapiLoopbackService", () => {
   it("segments speech based on silence threshold", () => {
     let now = 1000;
     const service = new WasapiLoopbackService(
-      { vadRmsThreshold: 0.05, silenceThresholdMs: 500 },
+      { enabled: true, vadRmsThreshold: 0.05, silenceThresholdMs: 500 },
       () => now,
     );
     service.start();

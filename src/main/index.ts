@@ -162,6 +162,7 @@ import { registerTravelTools, setTravelConfig } from "./orchestrator/travel-tool
 import { registerEmailTools, setEmailConfig } from "./orchestrator/email-tools";
 import { registerInboxTools, setInboxConfig } from "./orchestrator/inbox-tools";
 import { registerDownloadsJanitorTools } from "./orchestrator/downloads-janitor-tools";
+import { registerChatHistoryTools } from "./orchestrator/chat-history-tools";
 import { CameraService } from "./camera/camera-service";
 import { buildCameraTools } from "./orchestrator/tools/camera-tools";
 import { resolveMusicPaths } from "./music/paths";
@@ -3973,6 +3974,7 @@ function createWindow(): void {
   });
   registerInboxTools();
   registerDownloadsJanitorTools();
+  registerChatHistoryTools();
 
   getWakeWordEngine().onDetected((event) => {
     for (const win of BrowserWindow.getAllWindows()) {

@@ -24,7 +24,7 @@ export const DEFAULT_WAKE_WORDS = [
 ];
 
 const DEFAULT_CONFIG: WakeWordConfig = {
-  enabled: true,
+  enabled: false,
   sensitivity: 0.8,
   cooldownMs: 5000,
   wakeWords: [...DEFAULT_WAKE_WORDS],

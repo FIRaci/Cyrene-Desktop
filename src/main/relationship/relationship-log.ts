@@ -6,6 +6,7 @@ import {
   getEpisodicStore,
   detectEpisodicEventFromText,
 } from "../memory/episodic-store";
+import { buildCrossSessionSummary } from "../memory/cross-session-history";
 import {
   RelationshipChannel,
   RelationshipTurnInput,
@@ -111,22 +112,23 @@ export class RelationshipLogStore {
     return entry;
   }
 
-  async buildContext(): Promise<string> {
+  async buildContext(currentSessionId?: string): Promise<string> {
     const sections: string[] = [];
 
     try {
       const bondPrompt = getBondEngine().buildBondPersonaPrompt();
       if (bondPrompt) sections.push(bondPrompt);
-    } catch {
-      // ignore
-    }
+    } catch {}
 
     try {
       const episodicPrompt = getEpisodicStore().buildPendingEventsPrompt();
       if (episodicPrompt) sections.push(episodicPrompt);
-    } catch {
-      // ignore
-    }
+    } catch {}
+
+    try {
+      const crossSessionPrompt = buildCrossSessionSummary(currentSessionId);
+      if (crossSessionPrompt) sections.push(crossSessionPrompt);
+    } catch {}
 
     const data = readData(this.filePath);
     const recent = data.entries.slice(-8);
@@ -172,19 +174,15 @@ export function recordRelationshipTurn(
     if (detected) {
       getEpisodicStore().addEvent(detected);
     }
-  } catch {
-    // ignore
-  }
+  } catch {}
 
   try {
     getBondEngine().recordInteraction("chat_message");
-  } catch {
-    // ignore
-  }
+  } catch {}
 
   return getDefaultStore().recordTurn(input);
 }
 
-export function buildRelationshipContext(): Promise<string> {
-  return getDefaultStore().buildContext();
+export function buildRelationshipContext(currentSessionId?: string): Promise<string> {
+  return getDefaultStore().buildContext(currentSessionId);
 }

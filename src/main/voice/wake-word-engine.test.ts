@@ -6,6 +6,11 @@ import {
 } from "./wake-word-engine";
 
 describe("WakeWordEngine", () => {
+  it("defaults to disabled", () => {
+    const engine = new WakeWordEngine();
+    expect(engine.getConfig().enabled).toBe(false);
+  });
+
   it("normalizes text and strips punctuation", () => {
     expect(normalizeForWakeWord("Hey, Cyrene! How are you?")).toBe(
       "hey cyrene how are you",
@@ -21,9 +26,9 @@ describe("WakeWordEngine", () => {
     expect(matchWakeWord("Just normal typing here").matched).toBe(false);
   });
 
-  it("triggers onDetected callback and enters cooldown", () => {
+  it("triggers onDetected callback and enters cooldown when enabled", () => {
     let now = 1000;
-    const engine = new WakeWordEngine({ cooldownMs: 3000 }, () => now);
+    const engine = new WakeWordEngine({ enabled: true, cooldownMs: 3000 }, () => now);
     engine.start();
 
     const cb = vi.fn();
