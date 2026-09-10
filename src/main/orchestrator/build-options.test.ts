@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest"
 import {
   buildAgentRunOptions,
   buildChannelSystem,
+  detectAssistantOperationalIntent,
   onAgentRunFinished,
   type BuildOptionsDeps,
   type OnRunFinishedDeps,
@@ -698,17 +699,56 @@ describe("build-options", () => {
     })
   })
 
-  describe("deterministic mode separation (Work = operational assistant, Chat = pure companion)", () => {
-    it("keeps executionMode strictly 'chat' with 0 tools even when user asks for scheduling", async () => {
+  describe("detectAssistantOperationalIntent & auto-promotion", () => {
+    it("detects English scheduling requests", () => {
+      expect(detectAssistantOperationalIntent("Can you schedule 2pm at 08 September I have to go to study ?")).toBe(true);
+      expect(detectAssistantOperationalIntent("Please remind me to submit homework tomorrow")).toBe(true);
+      expect(detectAssistantOperationalIntent("Set a calendar event for 10am")).toBe(true);
+    });
+
+    it("detects Vietnamese scheduling requests", () => {
+      expect(detectAssistantOperationalIntent("Lập lịch cho tôi 2h chiều ngày 8/9 đi học nhé")).toBe(true);
+      expect(detectAssistantOperationalIntent("Nhắc nhở tôi lúc 8 giờ sáng mai")).toBe(true);
+      expect(detectAssistantOperationalIntent("Hẹn giờ chiều nay đi họp")).toBe(true);
+    });
+
+    it("detects weather queries", () => {
+      expect(detectAssistantOperationalIntent("What's the weather like in Hanoi?")).toBe(true);
+      expect(detectAssistantOperationalIntent("Thời tiết hôm nay thế nào em?")).toBe(true);
+    });
+
+    it("returns false for casual chat without assistant intent", () => {
+      expect(detectAssistantOperationalIntent("Hello Cyrene, how are you?")).toBe(false);
+      expect(detectAssistantOperationalIntent("Em ăn cơm chưa?")).toBe(false);
+      expect(detectAssistantOperationalIntent("Hôm nay chán quá à")).toBe(false);
+    });
+
+    it("keeps executionMode as chat with 0 tools for casual chat", async () => {
       const deps = createBuildDeps();
       const result = await buildAgentRunOptions({
-        messages: [{ role: "user", content: "Can you schedule 2pm at 08 September I have to go to study ?" }],
+        messages: [{ role: "user", content: "Hello Cyrene, how are you today?" }],
         style: "talk_normal",
         executionMode: "chat",
       }, deps);
 
       expect(result.options.executionMode).toBe("chat");
       expect(result.options.tools).toEqual([]);
+    });
+
+    it("auto-promotes executionMode from chat to work when scheduling intent is present", async () => {
+      const deps = createBuildDeps();
+      deps.toolRegistry = {
+        getEnabled: () => [{ id: "schedule_task", name: "schedule_task" } as any],
+      };
+      const result = await buildAgentRunOptions({
+        messages: [{ role: "user", content: "Can you schedule 2pm at 08 September I have to go to study ?" }],
+        style: "talk_normal",
+        executionMode: "chat",
+      }, deps);
+
+      expect(result.options.executionMode).toBe("work");
+      expect(result.options.tools?.length).toBe(1);
+      expect(result.options.tools?.[0]?.id).toBe("schedule_task");
     });
 
     it("keeps executionMode strictly 'work' with enabled tools when work mode is requested", async () => {
@@ -727,4 +767,5 @@ describe("build-options", () => {
     });
   })
 })
+
 

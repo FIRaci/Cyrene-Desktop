@@ -364,6 +364,39 @@ function buildStylePromptBlock(markdown: string): string {
 
 
 /**
+ * Detects whether the user's message contains operational secretary/assistant intent
+ * (such as scheduling, task management, alarms, reminders, weather queries, or calculations).
+ * When detected, Cyrene promotes executionMode to "work" so that the appropriate tools
+ * (schedule_task, query_scheduled_tasks, weather, etc.) are available instead of leaving the agent tool-less in chat loop.
+ */
+export function detectAssistantOperationalIntent(text: string): boolean {
+  if (!text || typeof text !== "string") return false;
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+
+  const lower = trimmed.toLowerCase();
+
+  // 1. Scheduling, reminders, calendar, deadlines, study plans, appointments (English & Vietnamese)
+  const scheduleEn = /\b(schedule|reschedule|appointment|meeting|calendar|remind|reminder|due|alarm|event|deadline)\b/i;
+  const scheduleVi = /(l\u1eadp l\u1ecbch|\u0111\u1eb7t l\u1ecbch|l\u1ecbch tr\u00ecnh|h\u1eb9n gi\u1edd|nh\u1eafc nh\u1edf|nh\u1eafc t\u00f4i|nh\u1eafc nh\u1edf t\u00f4i|b\u00e1o th\u1ee9c|th\u1eddi kh\u00f3a bi\u1ec3u|c\u00f4ng vi\u1ec7c|nhi\u1ec7m v\u1ee5|h\u1ea1n ch\u00f3t)/iu;
+
+  // 2. Weather & environment
+  const weatherEn = /\b(weather|forecast|temperature|climate)\b/i;
+  const weatherVi = /(th\u1eddi ti\u1ebft|d\u1ef1 b\u00e1o th\u1eddi ti\u1ebft|nhi\u1ec7t \u0111\u1ed9|tr\u1eddi m\u01b0a|tr\u1eddi n\u1eafng)/iu;
+
+  // 3. Explicit tool instructions (search, note, calculate, translate)
+  const toolEn = /\b(search online|google|calculate|take note|set a task|add task|create task|query task|view task|check schedule)\b/i;
+  const toolVi = /(t\u00ecm ki\u1ebfm|tra c\u1ee9u|t\u00ednh to\u00e1n|ghi ch\u00fa|t\u1ea1o task|th\u00eam vi\u1ec7c|xem l\u1ecbch|ki\u1ec3m tra l\u1ecbch)/iu;
+
+  return scheduleEn.test(lower) ||
+    scheduleVi.test(lower) ||
+    weatherEn.test(lower) ||
+    weatherVi.test(lower) ||
+    toolEn.test(lower) ||
+    toolVi.test(lower);
+}
+
+/**
  * Construct options required by CyreneAgent.runWithEvents + extract latestUserText.
  * Completely identical in behavior to the original index.ts AG-UI bridge buildOptions.
  */
@@ -392,9 +425,12 @@ export async function buildAgentRunOptions(
   const requestedExecutionMode = resolveExecutionMode(
     input.executionMode ?? ((input.style || "").startsWith("talk") ? "chat" : "work"),
   );
-  // Deterministic mode separation: Chat mode is pure companion conversation (0 tools, fastest latency).
-  // Work mode is operational assistant with full tool schemas (schedule_task, weather, web search, etc.).
-  const executionMode: AgentExecutionMode = requestedExecutionMode;
+  // If user is in "chat" mode but asks for operational secretary/assistant work (e.g. scheduling, reminders, weather),
+  // automatically promote to "work" mode so Cyrene can execute the required tools instead of mere roleplay yapping!
+  const hasOperationalIntent = detectAssistantOperationalIntent(latestUserText);
+  const executionMode: AgentExecutionMode = (requestedExecutionMode === "chat" && hasOperationalIntent)
+    ? "work"
+    : requestedExecutionMode;
   const isChatMode = executionMode === "chat";
   const conversationId = input.sessionId || "default";
   const socialContextEnabled = isChatMode
