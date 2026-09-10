@@ -66,6 +66,10 @@
 3. **CẤM** để trống trường `ttsGptsovitsRefAudioPath` hay `ttsGptsovitsPromptText` dẫn đến việc GPT-SoVITS API ném lỗi và âm thầm fallback sang voice khác. Code bắt buộc phải tự động resolve về `resources/voice/cyrene/ref_audio.wav` và `prompt_text.txt`.
 4. Nếu GPT-SoVITS local server chưa bật, hệ thống giữ im lặng hoặc thông báo lỗi cấu hình, **tuyệt đối không được tự ý fallback sang giọng robot Edge-TTS** làm hỏng trải nghiệm người dùng.
 5. Khi người dùng nhắc nhở *"Dùng voice Trung đi"*, nghĩa là **hãy kiểm tra và dùng đúng Voice Hugging Face GPT-SoVITS qua cầu nối dịch âm thanh in-memory**, tuyệt đối không được hiểu nhầm thành Edge-TTS tiếng Trung!
+6. **Bộ lọc âm thanh (Voice Speech Filter - Strict Quotation Extraction)**: Khi văn bản có chứa câu thoại trong ngoặc kép (`"..."`, `“...”`, `「...」`, `『...』`), các hàm `extractSpokenText`, `cleanTextForSpeech` và `prepareGptsovitsVoicePayload` **BẮT BUỘC CHỈ TRÍCH XUẤT DUY NHẤT LỜI THOẠI TRONG NGOẶC KÉP** để gửi cho TTS GPT-SoVITS. Toàn bộ đoạn văn tả cảnh, dẫn chuyện ngôi thứ ba, hành động `*...*` và suy nghĩ `/[^/]+/` bên ngoài ngoặc kép phải bị loại bỏ 100%, tuyệt đối không bao giờ được đọc ra loa. Nếu văn bản thuần không có ngoặc kép (fallback), mới lọc bỏ `*...*` và `/[^/]+/`.
+   - **Cấm Tuyệt Đối Văn Tự Sự Ngôi Thứ Ba & Suy Đoán Hoạt Động (No 3rd-Person Narration & No Activity Hallucination)**:
+     - CẤM LLM viết đoạn văn mở đầu tự sự ngôi thứ ba (ví dụ: *"Cyrene leans into Master's gentle caress..."*). Phản hồi cử chỉ bắt buộc tuân theo định dạng chuẩn mực `*hành động* /suy nghĩ/ "lời thoại"`.
+     - CẤM Cyrene tự tiện suy đoán Master đang học bài, làm việc mệt mỏi nếu Co-Watch hoặc Lịch trình chưa ghi nhận. Phản xạ cử chỉ (xoa đầu, vuốt ve) phải tập trung hoàn toàn vào sự dịu dàng, ấm áp của cái chạm ngay tại khoảnh khắc hiện tại.
 
 ---
 
