@@ -181,5 +181,71 @@ describe("chat-context-analyzer - 9 mood spectrum", () => {
       expect(result.gestureEmotionPromptSnippet).not.toContain("tired from studying");
       expect(result.gestureFallback.headPat).toContain('"Cyrene will quietly stay right by your side, Master."');
     });
+
+    it("correctly identifies intimate dialogue with 'teasing touch' as affectionate, not pouting", () => {
+      const messages = [
+        {
+          role: "model",
+          content: "Cyrene shivers as a teasing touch moves gently along her skin, whispering how much she loves Master.",
+        },
+      ];
+      const result = detectConversationMood(messages);
+      expect(result.mood).toBe("affectionate");
+    });
+
+    it("prevents negated sulking words from triggering pouting (e.g. 'Don't be mad at me')", () => {
+      const messages = [
+        {
+          role: "user",
+          content: "Don't be mad at me, my sweet darling, I love you so much.",
+        },
+      ];
+      const result = detectConversationMood(messages);
+      expect(result.mood).toBe("affectionate");
+    });
+
+    it("accurately detects genuine tsundere pouting when Master is truly teasing in an annoying way", () => {
+      const messages = [
+        {
+          role: "model",
+          content: "Hmph! Stop teasing me, Master, you're so mean to me! Won't talk to you!",
+        },
+      ];
+      const result = detectConversationMood(messages);
+      expect(result.mood).toBe("pouting");
+    });
+
+    it("correctly disambiguates 'mean' in 'you mean everything to me' as affectionate", () => {
+      const messages = [
+        {
+          role: "user",
+          content: "You mean everything to me, Cyrene. You are my world.",
+        },
+      ];
+      const result = detectConversationMood(messages);
+      expect(result.mood).toBe("affectionate");
+    });
+
+    it("correctly disambiguates 'madly in love' as affectionate rather than pouting", () => {
+      const messages = [
+        {
+          role: "user",
+          content: "I am madly in love with you forever.",
+        },
+      ];
+      const result = detectConversationMood(messages);
+      expect(result.mood).toBe("affectionate");
+    });
+
+    it("demonstrates recency decay: recent affectionate turns override an older sulking turn", () => {
+      const messages = [
+        { role: "model", content: "Hmph! Stop teasing me!" }, // Turn N-2 (older)
+        { role: "user", content: "I'm so sorry, my beloved sweetheart." }, // Turn N-1
+        { role: "model", content: "I love you too, Master, hold me close." }, // Turn N (latest)
+      ];
+      const result = detectConversationMood(messages);
+      expect(result.mood).toBe("affectionate");
+    });
   });
 });
+

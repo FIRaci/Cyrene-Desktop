@@ -138,60 +138,19 @@ export const DEFAULT_IDLE_THOUGHTS: ContextualThought[] = [
   { text: "Hehe... Just secretly admiring Master's focused look~", kaomoji: "(⁄ ⁄>⁄ ▽ ⁄<⁄ ⁄)" },
 ];
 
-// Keyword patterns for mood classification
-const PATTERNS: Record<Exclude<ConversationMood, "default">, RegExp[]> = {
-  yandere: [
-    /(yandere|giam cầm|nhốt|của riêng|chỉ nhìn|chỉ được nhìn|chỉ mình em|đừng hòng thoát|sở hữu|ám ảnh|chỉ được phép|cướp)/i,
-    /\b(yandere|obsessed|possessive|mine alone|don't look at anyone else|cage|trap you|never leave me|stare intensely)\b/i,
-    /(\(★ω★\)|\( ◉ω◉ \)|\(⚆_⚆\)|\(♥ω♥\*\))/i,
-  ],
-  jealous: [
-    /(ghen|ghen tuông|ghen tị|cô nào|em nào|bạn gái khác|waifu khác|khen ai|nhìn ai)/i,
-    /\b(Firefly|Acheron|Kafka|March 7th|Sparkle|Himeko|Ruan Mei|Tingyun|Black Swan|Robin|Topaz|Seele|Bronya)\b/i,
-    /\b(jealous|who is she|other girl|another waifu|other woman|prefer her)\b/i,
-    /(\(╬ Ò﹏Ó\)|\(¬_¬ \)|\(ò_óˇ\))/i,
-  ],
-  pouting: [
-    /(dỗi|giận|hờn|ghét|không thèm|nghỉ chơi|trêu|chọc|bắt nạt|phạt|xấu tính|đáng ghét)/i,
-    /\b(pout|pouting|hmph|bicker|tease|teasing|annoy|annoying|mean|mad|ignore|ignoring|grumpy|sulking|sulk|baka)\b/i,
-    /(\*pouts\*|\*turns away\*|\*huffs\*|生气|撅嘴)/i,
-    /(\(・へ・\)|\(｡•ˇ‸ˇ•｡\)|\(︶\^︶\)|\( > 3 < \))/i,
-  ],
-  bored: [
-    /(chán|buồn tẻ|ngủ quên|ngáp|rảnh|sao không ai chơi|chán quá|buồn ngủ quá)/i,
-    /\b(bored|boring|nothing to do|sleepy lazily|yawn|lonely|pay attention to me|so dull|unentertained)\b/i,
-    /(\( ´_ゝ`\)|\(￣o￣\) \. z Z|\( -.- \)zZZ|\(￢_￢\)|\(o_ _\)o)/i,
-  ],
-  excited: [
-    /(vui quá|hào hứng|quẩy|phấn khích|tinh nghịch|chơi đi|thắng rồi|haha|quá đã|tuyệt vời)/i,
-    /\b(excited|yay|fun|let's play|won|celebrate|party|energy|energetic|hyped|awesome)\b/i,
-    /(٩\(ˊᗜˋ\*\)و|\(≧◡≦\) ♡|\(\*^▽^\*\))/i,
-  ],
-  shy: [
-    /(ngại|xấu hổ|đỏ mặt|e thẹn|ngượng|đừng nhìn|nhìn chằm chằm|ngại quá)/i,
-    /\b(shy|flustered|blushing|embarrassed|don't stare|too close|too sweet|bashful)\b/i,
-    /(\(⸝⸝⸝•﹏•⸝⸝⸝\)|\(⁄ ⁄•⁄ω⁄•⁄ ⁄\)|\(⁄ ⁄>⁄ ▽ ⁄<⁄ ⁄\))/i,
-  ],
-  study: [
-    /(đang học|học bài|ôn thi|làm bài tập|ôn bài|sắp thi|chuẩn bị thi|luận văn)/i,
-    /\b(study|studying|exam|cramming|homework)\b/i,
-  ],
-  comfort: [
-    /(mệt|đuối|áp lực|stress|buồn ngủ|nhức đầu|oải|kiệt sức|buồn|nản)/i,
-    /\b(tired|exhausted|sleepy|headache|stress|stressed|drained|sad|rough day|burnt out)\b/i,
-  ],
-  affectionate: [
-    /(?:^|[^\p{L}\p{N}])(yêu|thương|nhớ|hôn|ôm|xinh|đáng yêu|dễ thương|ngọt ngào|cưới|waifu)(?=[^\p{L}\p{N}]|$)/iu,
-    /\b(love|miss you|kiss|hug|adore|cherish|sweetheart|darling|precious|cute|blush)\b/i,
-  ],
-};
+import {
+  COMPREHENSIVE_LEXICON,
+  isNegatedExpression,
+  LexiconMood,
+} from "./comprehensive-affective-lexicon";
 
 function pickRandom<T>(items: T[]): T {
   return items[Math.floor(Math.random() * items.length)];
 }
 
 /**
- * Detects conversational mood from the recent turn history (up to last 10 messages).
+ * Detects conversational mood using a Weighted Sentiment Scoring Matrix with
+ * recency position decay, negation detection, and intimate disambiguation.
  */
 export function detectConversationMood(
   messages: Array<{ role: string; content: string }>
@@ -200,11 +159,13 @@ export function detectConversationMood(
     return { mood: "default", detectedKeywords: [] };
   }
 
-  // Focus on the tail (last 5 messages) to reflect the current atmosphere
+  // Focus on recent messages up to 5 turns
   const recent = messages.slice(-5);
-  const combinedText = recent.map((m) => m.content || "").join(" ");
+  const n = recent.length;
+  // Position weights: Turn N (latest) = 1.0, Turn N-1 = 0.75, Turn N-2 = 0.5, Turn N-3 = 0.35, Turn N-4 = 0.2
+  const positionWeights = [1.0, 0.75, 0.5, 0.35, 0.2];
 
-  const scores: Record<Exclude<ConversationMood, "default">, number> = {
+  const scores: Record<LexiconMood, number> = {
     yandere: 0,
     jealous: 0,
     pouting: 0,
@@ -216,7 +177,7 @@ export function detectConversationMood(
     affectionate: 0,
   };
 
-  const detected: Record<Exclude<ConversationMood, "default">, string[]> = {
+  const detected: Record<LexiconMood, string[]> = {
     yandere: [],
     jealous: [],
     pouting: [],
@@ -228,35 +189,80 @@ export function detectConversationMood(
     affectionate: [],
   };
 
-  for (const mood of Object.keys(PATTERNS) as Array<Exclude<ConversationMood, "default">>) {
-    for (const regex of PATTERNS[mood]) {
-      const match = regex.exec(combinedText);
-      if (match) {
-        scores[mood] += 1;
-        detected[mood].push(match[0]);
+  // Evaluate each turn with its position multiplier
+  recent.forEach((msg, idx) => {
+    const text = msg.content || "";
+    if (!text.trim()) return;
+
+    const distFromEnd = (n - 1) - idx;
+    const posMultiplier = positionWeights[distFromEnd] ?? 0.2;
+
+    for (const mood of Object.keys(COMPREHENSIVE_LEXICON) as LexiconMood[]) {
+      for (const item of COMPREHENSIVE_LEXICON[mood]) {
+        // Find all regex matches
+        const flags = item.regex.flags.includes("g") ? item.regex.flags : item.regex.flags + "g";
+        const matches = text.matchAll(new RegExp(item.regex.source, flags));
+        for (const match of matches) {
+          if (match.index !== undefined) {
+            // Check negation guard for negative emotion cues (pouting, anger)
+            if (mood === "pouting" && isNegatedExpression(text, match.index)) {
+              continue;
+            }
+            scores[mood] += item.weight * posMultiplier;
+            detected[mood].push(match[0]);
+          }
+        }
       }
+    }
+  });
+
+  // ── DECISION MATRIX & DOMINANCE EVALUATION ──────────────────────────────────
+  // 1. High-intensity interpersonal conflict (Yandere / Jealous):
+  // When rival girls or obsessive cues dominate affection (e.g. Master praises another girl),
+  // jealous/yandere reaction takes precedence over general praise words.
+  if (scores.yandere >= 2.5 && scores.yandere >= scores.affectionate) {
+    return { mood: "yandere", detectedKeywords: detected.yandere };
+  }
+  if (scores.jealous >= 2.5 && scores.jealous >= scores.affectionate) {
+    return { mood: "jealous", detectedKeywords: detected.jealous };
+  }
+
+  // 2. Affectionate Priority Override:
+  // If Master and Cyrene are sharing love, romance, erotic pleasure, or intimate cuddles,
+  // affectionate feelings immediately override casual teasing or faint sulking.
+  if (scores.affectionate >= 2.0 && scores.affectionate >= scores.pouting) {
+    return { mood: "affectionate", detectedKeywords: detected.affectionate };
+  }
+
+  // 3. Pouting / Tsundere:
+  // Requires strong pouting signal (>= 2.5) that genuinely dominates affectionate cues
+  if (scores.pouting >= 2.5 && scores.pouting > scores.affectionate * 1.5) {
+    return { mood: "pouting", detectedKeywords: detected.pouting };
+  }
+
+  // 4. Shy / Flustered:
+  if (scores.shy >= 2.0 && scores.shy >= scores.affectionate) {
+    return { mood: "shy", detectedKeywords: detected.shy };
+  }
+
+  // 5. General maximum score among remaining moods:
+  const candidateMoods: LexiconMood[] = [
+    "excited", "bored", "comfort", "study", "affectionate", "shy", "pouting", "jealous", "yandere"
+  ];
+  let bestMood: ConversationMood = "default";
+  let maxScore = 1.4; // Minimum activation threshold
+
+  for (const m of candidateMoods) {
+    if (scores[m] > maxScore) {
+      maxScore = scores[m];
+      bestMood = m;
     }
   }
 
-  // Priority weighting:
-  // 1. Yandere / Jealous (High intensity interpersonal conflict)
-  if (scores.yandere > 0) return { mood: "yandere", detectedKeywords: detected.yandere };
-  if (scores.jealous > 0) return { mood: "jealous", detectedKeywords: detected.jealous };
-  // 2. Pouting / Tsundere
-  if (scores.pouting > 0) return { mood: "pouting", detectedKeywords: detected.pouting };
-  // 3. Shy / Flustered
-  if (scores.shy > 0) return { mood: "shy", detectedKeywords: detected.shy };
-  // 4. Bored / Lonely
-  if (scores.bored > 0) return { mood: "bored", detectedKeywords: detected.bored };
-  // 5. Excited
-  if (scores.excited > 0) return { mood: "excited", detectedKeywords: detected.excited };
-  // 6. Comfort vs Study
-  if (scores.comfort > 0 && scores.comfort >= scores.study) return { mood: "comfort", detectedKeywords: detected.comfort };
-  if (scores.study > 0) return { mood: "study", detectedKeywords: detected.study };
-  // 7. Affectionate
-  if (scores.affectionate > 0) return { mood: "affectionate", detectedKeywords: detected.affectionate };
-
-  return { mood: "default", detectedKeywords: [] };
+  return {
+    mood: bestMood,
+    detectedKeywords: bestMood !== "default" ? detected[bestMood] : [],
+  };
 }
 
 /**
