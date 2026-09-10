@@ -226,7 +226,27 @@ function contentToText(content: ChatMessage["content"]): string {
   return "";
 }
 
-function stripTurnModelContextForSideEffects(text: string): string {
+export function sanitizeUserTextForDisplay(text: string): string {
+  if (!text) return "";
+  const trimmed = text.trim();
+  if (trimmed.includes("[Master gently pats your head]")) {
+    return "*Gently pats Cyrene's head*";
+  }
+  if (trimmed.includes("[Master gently caresses you]")) {
+    return "*Gently caresses Cyrene*";
+  }
+  return stripTurnModelContextForSideEffects(trimmed);
+}
+
+export function stripTurnModelContextForSideEffects(text: string): string {
+  if (!text) return "";
+  const trimmed = text.trim();
+  if (trimmed.includes("[Master gently pats your head]")) {
+    return "*Gently pats Cyrene's head*";
+  }
+  if (trimmed.includes("[Master gently caresses you]")) {
+    return "*Gently caresses Cyrene*";
+  }
   const markers = [
     "\n\n[Files for this turn]",
     "\n\n[Document content]",
@@ -249,10 +269,10 @@ function stripTurnModelContextForSideEffects(text: string): string {
     "\u3010\u56fe\u7247\u9644\u4ef6\u3011",
   ];
   const cut = markers
-    .map((marker) => text.indexOf(marker))
+    .map((marker) => trimmed.indexOf(marker))
     .filter((index) => index >= 0)
     .sort((a, b) => a - b)[0];
-  return (cut === undefined ? text : text.slice(0, cut)).trim();
+  return (cut === undefined ? trimmed : trimmed.slice(0, cut)).trim();
 }
 
 function withDirectImageAttachments(messages: ChatMessage[], input: AguiRunInput): ChatMessage[] {

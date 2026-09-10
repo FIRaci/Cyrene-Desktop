@@ -7,6 +7,7 @@ import {
   buildChannelSystem,
   detectAssistantOperationalIntent,
   onAgentRunFinished,
+  sanitizeUserTextForDisplay,
   type BuildOptionsDeps,
   type OnRunFinishedDeps,
 } from "./build-options"
@@ -764,6 +765,24 @@ describe("build-options", () => {
       expect(result.options.executionMode).toBe("work");
       expect(result.options.tools?.length).toBe(1);
       expect(result.options.tools?.[0]?.id).toBe("schedule_task");
+    });
+  })
+
+  describe("sanitizeUserTextForDisplay", () => {
+    it("converts head pat prompts into gentle descriptive text", () => {
+      expect(sanitizeUserTextForDisplay("[Master gently pats your head]\n\nPlease respond gently.")).toBe("*Gently pats Cyrene's head*");
+    });
+
+    it("converts petting prompts into gentle descriptive text", () => {
+      expect(sanitizeUserTextForDisplay("[Master gently caresses you]\n\nLove you Cyrene.")).toBe("*Gently caresses Cyrene*");
+    });
+
+    it("strips file context markers from normal user text", () => {
+      expect(sanitizeUserTextForDisplay("Can you read this?\n\n[Files for this turn]\ntest.txt")).toBe("Can you read this?");
+    });
+
+    it("returns empty string for empty or null text", () => {
+      expect(sanitizeUserTextForDisplay("")).toBe("");
     });
   })
 })

@@ -17,6 +17,7 @@ import { perf } from "./perf-trace";
 import type { StyleId } from "../shared/style-sampling";
 import * as chatsStore from "./chats/chats-store";
 import { broadcastChatsChanged } from "./chats/chats-ipc";
+import { sanitizeUserTextForDisplay } from "./orchestrator/build-options";
 
 /** Input supplied by the renderer when starting a run. */
 export interface AguiRunInput {
@@ -352,7 +353,8 @@ export function registerAgUiIpc(
       throw new Error("Cyrene could not start that request. Check Ollama and try again.");
     }
     const { options, latestUserText } = built;
-    onActivityLog?.("user", latestUserText, undefined, channel);
+    const displayUserText = sanitizeUserTextForDisplay(latestUserText);
+    onActivityLog?.("user", displayUserText, undefined, channel);
 
     const threadId = `thread-${Date.now()}`;
     const runId = `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -512,12 +514,12 @@ export function registerAgUiIpc(
                 if (targetSessionId) {
                   const session = chatsStore.getSession(targetSessionId);
                   if (session) {
-                  const hasUser = session.messages.some(m => m.id === input.userTurnId || (m.role === "user" && m.content === latestUserText));
+                  const hasUser = session.messages.some(m => m.id === input.userTurnId || (m.role === "user" && (m.content === latestUserText || m.content === displayUserText)));
                   if (!hasUser && latestUserText) {
                     chatsStore.appendMessage(targetSessionId, {
                       id: input.userTurnId || `user-${Date.now()}`,
                       role: "user",
-                      content: latestUserText,
+                      content: displayUserText,
                       at: Date.now(),
                     });
                   }

@@ -362,10 +362,30 @@ export function pushActivityLog(
     lastKaomojiLogTime = now;
   }
 
+  let processedText = text;
+  if (type === "user") {
+    if (processedText.includes("[Master gently pats your head]")) {
+      processedText = "*Gently pats Cyrene's head*";
+    } else if (processedText.includes("[Master gently caresses you]")) {
+      processedText = "*Gently caresses Cyrene*";
+    }
+
+    // Deduplicate identical user turns emitted within 2000ms (e.g. chats-ipc append vs agui-bridge log)
+    const lastItem = activityLogBuffer[activityLogBuffer.length - 1];
+    if (
+      lastItem &&
+      lastItem.type === "user" &&
+      lastItem.text === processedText &&
+      now - lastItem.timestamp < 2000
+    ) {
+      return;
+    }
+  }
+
   const item: ActivityLogItem = {
     timestamp: now,
     type,
-    text,
+    text: processedText,
     channel,
     meta,
   };
