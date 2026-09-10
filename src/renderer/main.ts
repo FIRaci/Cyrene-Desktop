@@ -632,8 +632,16 @@ addTrackedEventListener(document, "document:visibilitychange", "visibilitychange
   }
 });
 
-addTrackedEventListener(canvas, "canvas:pointerleave", "pointerleave", () => {
+addTrackedEventListener(canvas, "canvas:pointerleave", "pointerleave", (e) => {
   if (isDragging || isZoomDragging) return;
+  const event = e as PointerEvent;
+  if (typeof document !== "undefined" && typeof document.elementFromPoint === "function") {
+    const el = document.elementFromPoint(event.clientX, event.clientY);
+    if (el && (el.closest(".pet-bubble:not([hidden])") || el.closest(".pet-bubbles") || el.closest("#mini-chat-root"))) {
+      void window.cyrene.setInteractive(true);
+      return;
+    }
+  }
   void window.cyrene.setInteractive(false);
 });
 
@@ -796,7 +804,16 @@ addTrackedEventListener(canvas, "canvas:pointerup", "pointerup", (e) => {
     event.clientX > rect.right ||
     event.clientY < rect.top ||
     event.clientY > rect.bottom;
-  if (outside) void window.cyrene.setInteractive(false);
+  if (outside) {
+    const el = typeof document !== "undefined" && typeof document.elementFromPoint === "function"
+      ? document.elementFromPoint(event.clientX, event.clientY)
+      : null;
+    if (el && (el.closest(".pet-bubble:not([hidden])") || el.closest(".pet-bubbles") || el.closest("#mini-chat-root"))) {
+      void window.cyrene.setInteractive(true);
+      return;
+    }
+    void window.cyrene.setInteractive(false);
+  }
 });
 
 addTrackedEventListener(window, "window:pointerup", "pointerup", (e) => {

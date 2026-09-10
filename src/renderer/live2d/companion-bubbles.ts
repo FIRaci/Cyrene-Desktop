@@ -154,11 +154,94 @@ export class CompanionBubbleController {
     terminal: false,
   };
   private hideTimer: ReturnType<typeof setTimeout> | null = null;
+  private isHovered = false;
+  private isDraggingScroll = false;
+  private cleanups: Array<() => void> = [];
 
   constructor(
     private readonly speechEl: HTMLElement,
     private readonly thoughtEl: HTMLElement,
-  ) {}
+  ) {
+    this.setupInteractivity(this.speechEl);
+    this.setupInteractivity(this.thoughtEl);
+  }
+
+  private setupInteractivity(el: HTMLElement): void {
+    if (!el || typeof el.addEventListener !== "function") return;
+
+    const onPointerEnter = () => {
+      this.isHovered = true;
+      void (window as unknown as { cyrene?: { setInteractive: (v: boolean) => Promise<void> } }).cyrene?.setInteractive?.(true);
+    };
+
+    const onPointerLeave = () => {
+      this.isHovered = false;
+    };
+
+    const onWheel = (e: WheelEvent) => {
+      e.stopPropagation();
+      void (window as unknown as { cyrene?: { setInteractive: (v: boolean) => Promise<void> } }).cyrene?.setInteractive?.(true);
+      el.scrollTop += e.deltaY;
+    };
+
+    let startY = 0;
+    let initialScrollTop = 0;
+
+    const onPointerDown = (e: PointerEvent) => {
+      if (e.button !== 0) return; // left click only
+      void (window as unknown as { cyrene?: { setInteractive: (v: boolean) => Promise<void> } }).cyrene?.setInteractive?.(true);
+
+      // If clicking directly on native scrollbar (track/thumb), let browser handle native dragging
+      if (typeof el.getBoundingClientRect === "function" && typeof el.clientWidth === "number") {
+        const rect = el.getBoundingClientRect();
+        const clientLeft = el.clientLeft || 0;
+        const isOverScrollbar = e.clientX >= rect.left + clientLeft + el.clientWidth;
+        if (isOverScrollbar) {
+          return;
+        }
+      }
+
+      this.isDraggingScroll = true;
+      startY = e.clientY;
+      initialScrollTop = el.scrollTop;
+      try {
+        el.setPointerCapture?.(e.pointerId);
+      } catch {}
+    };
+
+    const onPointerMove = (e: PointerEvent) => {
+      void (window as unknown as { cyrene?: { setInteractive: (v: boolean) => Promise<void> } }).cyrene?.setInteractive?.(true);
+      if (!this.isDraggingScroll) return;
+      const deltaY = e.clientY - startY;
+      el.scrollTop = initialScrollTop - deltaY;
+    };
+
+    const onPointerUp = (e: PointerEvent) => {
+      if (!this.isDraggingScroll) return;
+      this.isDraggingScroll = false;
+      try {
+        el.releasePointerCapture?.(e.pointerId);
+      } catch {}
+    };
+
+    el.addEventListener("pointerenter", onPointerEnter);
+    el.addEventListener("pointerleave", onPointerLeave);
+    el.addEventListener("wheel", onWheel, { passive: true } as AddEventListenerOptions);
+    el.addEventListener("pointerdown", onPointerDown);
+    el.addEventListener("pointermove", onPointerMove);
+    el.addEventListener("pointerup", onPointerUp);
+    el.addEventListener("pointercancel", onPointerUp);
+
+    this.cleanups.push(() => {
+      el.removeEventListener("pointerenter", onPointerEnter);
+      el.removeEventListener("pointerleave", onPointerLeave);
+      el.removeEventListener("wheel", onWheel);
+      el.removeEventListener("pointerdown", onPointerDown);
+      el.removeEventListener("pointermove", onPointerMove);
+      el.removeEventListener("pointerup", onPointerUp);
+      el.removeEventListener("pointercancel", onPointerUp);
+    });
+  }
 
   get isBusy(): boolean {
     return !this.state.terminal && (this.state.speechVisible || this.state.thoughtVisible);
@@ -177,7 +260,7 @@ export class CompanionBubbleController {
         const scheduleDismissal = () => {
           this.clearHideTimer();
           this.hideTimer = globalThis.setTimeout(() => {
-            if (voiceService && voiceService.getIsSpeaking()) {
+            if ((voiceService && voiceService.getIsSpeaking()) || this.isHovered || this.isDraggingScroll) {
               scheduleDismissal();
             } else {
               this.hide();
@@ -217,12 +300,13 @@ export class CompanionBubbleController {
     // Documented in AGENTS.md Section 3.4 & 9.1.
     // Ensure bubble stays visible for the entire duration of spoken audio.
     // If voice is still speaking when timer expires, defer hiding until speaking finishes.
+    // Also keep visible if user is actively hovering or drag-scrolling the bubble.
     // =========================================================================
     const scheduleDismissal = () => {
       this.clearHideTimer();
       this.hideTimer = globalThis.setTimeout(() => {
-        if (voiceService && voiceService.getIsSpeaking()) {
-          // Voice is still actively speaking: defer dismissal until playback completes
+        if ((voiceService && voiceService.getIsSpeaking()) || this.isHovered || this.isDraggingScroll) {
+          // Voice is still actively speaking or user is reading/scrolling: defer dismissal
           scheduleDismissal();
         } else {
           this.hide();
@@ -264,13 +348,23 @@ export class CompanionBubbleController {
 
   dispose(): void {
     this.clearHideTimer();
+    for (const cleanup of this.cleanups) {
+      cleanup();
+    }
+    this.cleanups.length = 0;
   }
 
   private render(): void {
     renderFormattedSpeech(this.speechEl, this.state.speech);
     this.speechEl.hidden = !this.state.speechVisible;
+    if (this.state.speechVisible) {
+      this.speechEl.scrollTop = 0;
+    }
     this.thoughtEl.textContent = this.state.thought;
     this.thoughtEl.hidden = !this.state.thoughtVisible;
+    if (this.state.thoughtVisible) {
+      this.thoughtEl.scrollTop = 0;
+    }
   }
 
   private hide(): void {

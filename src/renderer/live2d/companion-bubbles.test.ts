@@ -196,4 +196,70 @@ describe("pet companion bubble lifecycle", () => {
 
     vi.unstubAllGlobals();
   });
+
+  it("handles wheel scrolling and drag-to-scroll with interactive notifications", () => {
+    const listeners: Record<string, Function[]> = {};
+    const setInteractiveMock = vi.fn();
+    vi.stubGlobal("window", {
+      cyrene: { setInteractive: setInteractiveMock },
+    });
+
+    const fakeSpeechEl: any = {
+      textContent: "",
+      hidden: true,
+      scrollTop: 0,
+      addEventListener: (type: string, fn: Function) => {
+        listeners[type] = listeners[type] || [];
+        listeners[type].push(fn);
+      },
+      removeEventListener: vi.fn(),
+      setPointerCapture: vi.fn(),
+      releasePointerCapture: vi.fn(),
+    };
+    const fakeThoughtEl: any = {
+      textContent: "",
+      hidden: true,
+      scrollTop: 0,
+      addEventListener: (type: string, fn: Function) => {
+        listeners[type] = listeners[type] || [];
+        listeners[type].push(fn);
+      },
+      removeEventListener: vi.fn(),
+    };
+
+    const controller = new CompanionBubbleController(fakeSpeechEl, fakeThoughtEl);
+
+    // 1. Pointer enter triggers interactivity
+    expect(listeners["pointerenter"]).toBeDefined();
+    listeners["pointerenter"][0]();
+    expect(setInteractiveMock).toHaveBeenCalledWith(true);
+
+    // 2. Wheel event scrolls scrollTop and prevents propagation
+    const fakeWheelEvent: any = {
+      deltaY: 50,
+      stopPropagation: vi.fn(),
+    };
+    listeners["wheel"][0](fakeWheelEvent);
+    expect(fakeWheelEvent.stopPropagation).toHaveBeenCalled();
+    expect(fakeSpeechEl.scrollTop).toBe(50);
+
+    // 3. Pointer drag-to-scroll ("kéo xuống / kéo lên")
+    fakeSpeechEl.getBoundingClientRect = () => ({ left: 10, top: 10, width: 200, height: 100 });
+    fakeSpeechEl.clientWidth = 190; // scrollbar occupies 190px - 200px
+    fakeSpeechEl.clientLeft = 0;
+
+    // 3a. Clicking on scrollbar (clientX = 205 >= left + clientLeft + clientWidth = 200) skips pointer capture
+    listeners["pointerdown"][0]({ button: 0, clientX: 205, clientY: 100, pointerId: 1 });
+    expect(fakeSpeechEl.setPointerCapture).not.toHaveBeenCalled();
+
+    // 3b. Clicking on content (clientX = 50 < 200) initiates drag-to-scroll
+    listeners["pointerdown"][0]({ button: 0, clientX: 50, clientY: 100, pointerId: 1 });
+    expect(fakeSpeechEl.setPointerCapture).toHaveBeenCalledWith(1);
+    listeners["pointermove"][0]({ clientY: 70, pointerId: 1 }); // drag upwards 30px -> scrolls down 30px
+    expect(fakeSpeechEl.scrollTop).toBe(80); // 50 + 30
+    listeners["pointerup"][0]({ pointerId: 1 });
+
+    controller.dispose();
+    vi.unstubAllGlobals();
+  });
 });

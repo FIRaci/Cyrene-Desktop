@@ -56,6 +56,9 @@ export class ClickThroughController {
     this.onInteractive = options.onInteractive;
 
     canvas.addEventListener("pointermove", this.handleMove);
+    if (typeof window !== "undefined") {
+      window.addEventListener("pointermove", this.handleMove);
+    }
   }
 
   pause(): void {
@@ -76,6 +79,9 @@ export class ClickThroughController {
     this.disposed = true;
     this.cancelPending();
     this.canvas.removeEventListener("pointermove", this.handleMove);
+    if (typeof window !== "undefined") {
+      window.removeEventListener("pointermove", this.handleMove);
+    }
   }
 
   private handleMove = (event: PointerEvent): void => {
@@ -99,12 +105,30 @@ export class ClickThroughController {
     this.onInteractive?.(interactive);
   };
 
+  private isOverInteractiveElement(cssX: number, cssY: number): boolean {
+    if (typeof document === "undefined" || typeof document.elementFromPoint !== "function") {
+      return false;
+    }
+    const el = document.elementFromPoint(cssX, cssY);
+    if (!el) return false;
+    return Boolean(
+      el.closest(".pet-bubble:not([hidden])") ||
+      el.closest(".pet-bubbles") ||
+      el.closest("#mini-chat-root") ||
+      el.closest(".zoom-hud")
+    );
+  }
+
   /**
    * True when the pixel under the given CSS coordinate is opaque enough to
-   * belong to the model. Reads a single 1x1 pixel from the WebGL drawing
-   * buffer (kept alive by `preserveDrawingBuffer`).
+   * belong to the model or over an interactive DOM element. Reads a single 1x1
+   * pixel from the WebGL drawing buffer (kept alive by `preserveDrawingBuffer`).
    */
   private hitTestAlpha(cssX: number, cssY: number): boolean {
+    if (this.isOverInteractiveElement(cssX, cssY)) {
+      return true;
+    }
+
     const gl = this.manager.getGL();
     if (!gl) return true; // before init, be permissive (don't block)
 
