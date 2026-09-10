@@ -346,6 +346,7 @@ export interface ActivityLogItem {
 }
 
 export const activityLogBuffer: ActivityLogItem[] = [];
+let lastKaomojiLogTime = 0;
 
 export function pushActivityLog(
   type: ActivityLogItem["type"],
@@ -353,8 +354,16 @@ export function pushActivityLog(
   meta?: unknown,
   channel?: string,
 ): void {
+  const now = Date.now();
+  if (type === "kaomoji") {
+    if (now - lastKaomojiLogTime < 2500) {
+      return; // Strictly deduplicate rapid kaomoji logs within 2.5s
+    }
+    lastKaomojiLogTime = now;
+  }
+
   const item: ActivityLogItem = {
-    timestamp: Date.now(),
+    timestamp: now,
     type,
     text,
     channel,

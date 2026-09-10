@@ -46,7 +46,8 @@ export class FloatingKaomojiController {
   private readonly container: HTMLElement;
   private disposed = false;
   private lastSpawnTimestamp = 0;
-  static readonly MIN_SPAWN_INTERVAL_MS = 1500;
+  static globalLastSpawnTimestamp = 0;
+  static readonly MIN_SPAWN_INTERVAL_MS = 2500;
 
   constructor(container?: HTMLElement | null) {
     if (container) {
@@ -68,20 +69,52 @@ export class FloatingKaomojiController {
    */
   resetCooldown(): void {
     this.lastSpawnTimestamp = 0;
+    FloatingKaomojiController.globalLastSpawnTimestamp = 0;
+    if (typeof window !== "undefined") {
+      delete (window as unknown as { __cyreneLastKaomojiTime?: number }).__cyreneLastKaomojiTime;
+    }
   }
 
   /**
    * Spawn a floating kaomoji particle that floats upwards and fades out.
-   * Debounced by MIN_SPAWN_INTERVAL_MS to prevent duplicate overlapping spawns.
+   * Debounced globally by MIN_SPAWN_INTERVAL_MS to prevent duplicate overlapping spawns across instances.
    */
   spawn(text?: string, clientX?: number, clientY?: number, force = false): HTMLElement | null {
     if (this.disposed || !this.container) return null;
 
     const now = Date.now();
-    if (!force && now - this.lastSpawnTimestamp < FloatingKaomojiController.MIN_SPAWN_INTERVAL_MS) {
+    const win = typeof window !== "undefined" ? (window as unknown as { __cyreneLastKaomojiTime?: number }) : null;
+    const globalLast = Math.max(
+      this.lastSpawnTimestamp,
+      FloatingKaomojiController.globalLastSpawnTimestamp,
+      win?.__cyreneLastKaomojiTime ?? 0,
+    );
+
+    if (!force && now - globalLast < FloatingKaomojiController.MIN_SPAWN_INTERVAL_MS) {
       return null;
     }
     this.lastSpawnTimestamp = now;
+    FloatingKaomojiController.globalLastSpawnTimestamp = now;
+    if (win) {
+      win.__cyreneLastKaomojiTime = now;
+    }
+
+    // Clean up any stale floating kaomoji elements in container to ensure exactly 1 visible particle during single-particle gestures
+    if (!force) {
+      try {
+        const existing = (this.container as unknown as { querySelectorAll?: (s: string) => NodeListOf<Element> }).querySelectorAll
+          ? Array.from((this.container as unknown as { querySelectorAll: (s: string) => NodeListOf<Element> }).querySelectorAll(".pet-kaomoji"))
+          : (this.container.children ? Array.from(this.container.children).filter((c: unknown) => (c as { className?: string }).className?.includes?.("pet-kaomoji")) : []);
+        for (const oldEl of existing) {
+          const parent = (oldEl as { parentNode?: { removeChild: (e: unknown) => void } }).parentNode;
+          if (parent) {
+            parent.removeChild(oldEl);
+          }
+        }
+      } catch {
+        // Ignore in non-DOM test environments
+      }
+    }
 
     const kaomojiText = text || EMOTION_KAOMOJIS[Math.floor(Math.random() * EMOTION_KAOMOJIS.length)];
     const el = document.createElement("div");

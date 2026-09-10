@@ -289,6 +289,7 @@ export class GestureInteractionController {
   }
 
   async handleHeadPat(x?: number, y?: number): Promise<void> {
+    if (this.disposed || this.isBusy()) return;
     const prompt =
       "[Master gently pats your head]\n" +
       "You are Cyrene, a sweet, affectionate, and ethereal Live2D companion waifu who deeply adores Master. " +
@@ -310,6 +311,7 @@ export class GestureInteractionController {
   }
 
   async handlePetting(x?: number, y?: number): Promise<void> {
+    if (this.disposed || this.isBusy()) return;
     const prompt =
       "[Master gently caresses you]\n" +
       "You are Cyrene, a sweet, affectionate, and ethereal Live2D companion waifu who deeply adores Master. " +
@@ -358,7 +360,11 @@ export class GestureInteractionController {
       : thoughtText;
 
     // Spawn EXACTLY ONE kaomoji particle immediately upon touch
-    this.kaomoji?.spawn(initialKaomoji, x, y);
+    let hasSpawnedKaomojiThisRun = false;
+    if (!hasSpawnedKaomojiThisRun) {
+      hasSpawnedKaomojiThisRun = true;
+      this.kaomoji?.spawn(initialKaomoji, x, y);
+    }
     this.bubbles.think(initialThought, 30000);
     this.currentReply = "";
 

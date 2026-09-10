@@ -49,6 +49,7 @@ function createFakeElement(tag: string): any {
 describe("FloatingKaomojiController", () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    FloatingKaomojiController.globalLastSpawnTimestamp = 0;
     vi.stubGlobal("document", {
       createElement: (tag: string) => createFakeElement(tag),
       getElementById: () => null,
@@ -57,6 +58,7 @@ describe("FloatingKaomojiController", () => {
   });
 
   afterEach(() => {
+    FloatingKaomojiController.globalLastSpawnTimestamp = 0;
     vi.clearAllTimers();
     vi.useRealTimers();
     vi.unstubAllGlobals();
@@ -120,9 +122,28 @@ describe("FloatingKaomojiController", () => {
     vi.advanceTimersByTime(FloatingKaomojiController.MIN_SPAWN_INTERVAL_MS + 10);
     const third = controller.spawn("(≧◡≦) ♡", 100, 200);
     expect(third).not.toBeNull();
-    expect(container.children.length).toBe(2);
+    // Exactly 1 visible particle since previous was removed by 1900ms timer and DOM cleanup
+    expect(container.children.length).toBe(1);
 
     controller.dispose();
+  });
+
+  it("enforces global debounce across different FloatingKaomojiController instances", () => {
+    const container1 = createFakeElement("div");
+    const container2 = createFakeElement("div");
+    const c1 = new FloatingKaomojiController(container1);
+    const c2 = new FloatingKaomojiController(container2);
+    c1.resetCooldown();
+
+    const first = c1.spawn("(｡♥‿♥｡)", 100, 200);
+    expect(first).not.toBeNull();
+
+    // c2 should be blocked even though it is a separate instance
+    const second = c2.spawn("(≧◡≦) ♡", 100, 200);
+    expect(second).toBeNull();
+
+    c1.dispose();
+    c2.dispose();
   });
 
   it("keeps kaomoji coordinates strictly within window boundaries and clear of edges", () => {
@@ -167,7 +188,8 @@ describe("FloatingKaomojiController", () => {
     const smileEl = controller.spawnIdle("smile");
     expect(smileEl).not.toBeNull();
 
-    expect(container.children.length).toBe(4);
+    // Exactly 1 visible particle because stale particles are cleaned up on each new non-forced spawn
+    expect(container.children.length).toBe(1);
     controller.dispose();
   });
 });

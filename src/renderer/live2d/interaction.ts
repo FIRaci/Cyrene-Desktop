@@ -153,7 +153,8 @@ export class InteractionController {
       return;
     }
 
-    if (this.didTriggerHeadPat) {
+    const now = Date.now();
+    if (this.didTriggerHeadPat || (now - this.lastPatTimestamp < 2500)) {
       this.didTriggerHeadPat = false;
       this.downHits = [];
       return;
@@ -169,6 +170,7 @@ export class InteractionController {
     const canvasH = this.canvas.clientHeight || (typeof window !== "undefined" ? window.innerHeight : 500) || 500;
     const isInHeadZone = e.clientY <= canvasH * 0.55;
 
+    this.lastPatTimestamp = now;
     if (hits.length > 0) {
       void this.fire(hits);
       if (isInHeadZone && this.options.onHeadPat) {
