@@ -171,4 +171,29 @@ describe("pet companion bubble lifecycle", () => {
 
     vi.unstubAllGlobals();
   });
+
+  it("strips [Cyrene's Thoughts] and normalizes third-person novel narration in renderFormattedSpeech", () => {
+    vi.stubGlobal("document", {
+      createElement: (tag: string) => ({ tagName: tag, className: "", textContent: "" }),
+      createTextNode: (text: string) => ({ textContent: text }),
+    });
+
+    const children: any[] = [];
+    const fakeEl: any = {
+      textContent: "",
+      replaceChildren: () => {
+        children.length = 0;
+      },
+      appendChild: (child: any) => {
+        children.push(child);
+      },
+    };
+
+    renderFormattedSpeech(fakeEl, "[Cyrene's Thoughts] Cyrene gasps as Master's hands suddenly encircle her");
+    expect(children.length).toBe(1);
+    expect(children[0].className).toBe("pet-bubble__action");
+    expect(children[0].textContent).toBe("*gasps as Master's hands suddenly encircle me*");
+
+    vi.unstubAllGlobals();
+  });
 });

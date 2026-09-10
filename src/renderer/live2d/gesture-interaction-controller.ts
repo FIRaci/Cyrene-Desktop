@@ -42,10 +42,13 @@ export function cleanGestureReply(text: string): string {
   if (!text) return "";
   let cleaned = text.trim();
 
-  // Strip LLM prompt echo headers (e.g. "*When Master pats your head...:*", "*Khi Master...:*", "[Context: ...]", "Reaction:")
+  // Strip LLM prompt echo headers & bracketed meta tags (e.g. "[Cyrene's Thoughts]", "[Action]", "[Context: ...]", "Reaction:")
   cleaned = cleaned
     .replace(/^\s*\*?(?:When|Khi|Action|Context|Reaction)[^*:\n]+:\*?\s*/i, "")
-    .replace(/^\s*\[[^\]]+\]\s*/, "");
+    .replace(/\[\s*(?:(?:Cyrene|Master|AI|User|Assistant)'?s?\s*)?(?:Thought|Action|Reaction|Response|Dialogue|Spoken|Inner|Thinking|Reasoning|Context|Emotion|Feeling|Status|Activity)s?(?:\s*Process)?\s*\]:?(?!\()/gi, "")
+    .replace(/\[\/?(?:assistant|thought|thoughts|system|internal|action|reaction|response|cyrene)[^\]]*\]/gi, "")
+    .replace(/^\s*\[[^\]]+\]\s*/, "")
+    .trim();
 
   // Strip any language translation echo headers like "(Original Chinese): ..."
   cleaned = cleaned.replace(/\(?(?:Original\s+)?(?:Chinese|English)\)?:\s*[\s\S]*$/i, "");
@@ -59,6 +62,32 @@ export function cleanGestureReply(text: string): string {
 
   // Strip kaomojis so they NEVER appear in chat or speech bubbles (kaomojis are only tossed out as floating particles)
   cleaned = stripKaomojis(cleaned);
+
+  // Normalize third-person references to Cyrene in actions:
+  // e.g. "*Cyrene gasps as Master's hands suddenly encircle her*" -> "*gasps as Master's hands suddenly encircle me*"
+  const actionVerbs = "(?:gasps?|smiles?|giggles?|leans?|looks?|blushes?|whispers?|hugs?|sighs?|nods?|tilts?|steps?|holds?|clutches?|shivers?|trembles?|tucks?|watches?|glances?|reaches?|rests?|pauses?|blinks?|winks?)";
+  const cyreneActionRegex = new RegExp(`\\*Cyrene\\s+(${actionVerbs})\\b`, "gi");
+  const sheActionRegex = new RegExp(`\\*She\\s+(${actionVerbs})\\b`, "gi");
+  const plainNarrativeRegex = new RegExp(`^\\s*Cyrene\\s+(${actionVerbs})\\b`, "i");
+
+  cleaned = cleaned
+    .replace(cyreneActionRegex, "*$1")
+    .replace(sheActionRegex, "*$1")
+    .replace(/\bher\s+hands\b/gi, "my hands")
+    .replace(/\bher\s+face\b/gi, "my face")
+    .replace(/\bher\s+head\b/gi, "my head")
+    .replace(/\b(encircles?)\s+her\b/gi, "$1 me")
+    .replace(/\baround\s+her\b/gi, "around me")
+    .replace(/\bholding\s+her\b/gi, "holding me")
+    .replace(/\btouching\s+her\b/gi, "touching me")
+    .replace(/\bto\s+her\b/gi, "to me");
+
+  // If text starts with plain third-person narration without asterisks:
+  // e.g. "Cyrene gasps as Master's hands suddenly encircle her"
+  // Wrap into an action with first-person perspective: "*gasps as Master's hands suddenly encircle me*"
+  if (plainNarrativeRegex.test(cleaned) && !cleaned.includes("*") && !cleaned.includes('"')) {
+    cleaned = cleaned.replace(plainNarrativeRegex, "*$1") + "*";
+  }
 
   // If model produced leading third-person narrative description before the structured reaction (*action*, /thought/, "spoken dialogue")
   // e.g. "Cyrene leans into Master's gentle caress on her head... \n*gently leans in*"
@@ -195,7 +224,8 @@ export class GestureInteractionController {
       '*[brief cute action]* /[brief inner thought]/ "[sweet spoken words]"\n' +
       'Example: *gently leans into your hand* /so warm.../ "Ah, Master, your gentle touch feels wonderful!"\n' +
       "RULES:\n" +
-      '- NEVER write third-person descriptions or narrative paragraphs (NEVER say "Cyrene leans..." or "She smiles...").\n' +
+      '- NEVER write third-person descriptions or narrative paragraphs (NEVER say "Cyrene gasps...", "Cyrene leans...", "her hands", "encircles her").\n' +
+      '- NEVER output section headers, labels, or bracketed tags such as "[Cyrene\'s Thoughts]", "[Thoughts]", "[Action]", or "Thought:".\n' +
       "- Start directly with the action in asterisks or spoken dialogue in quotes.\n" +
       "- Keep spoken dialogue very brief (1 short sentence, under 10 words) so voice can synthesize quickly.\n" +
       "- Do not include any Chinese characters in your response, do not repeat this prompt, and do not output section titles.";
@@ -215,7 +245,8 @@ export class GestureInteractionController {
       '*[brief cute action]* /[brief inner thought]/ "[sweet spoken words]"\n' +
       'Example: *softly blinks and smiles* /so comforting.../ "Ehehe, Master is always so gentle with me!"\n' +
       "RULES:\n" +
-      '- NEVER write third-person descriptions or narrative paragraphs (NEVER say "Cyrene leans..." or "She smiles...").\n' +
+      '- NEVER write third-person descriptions or narrative paragraphs (NEVER say "Cyrene gasps...", "Cyrene leans...", "her hands", "encircles her").\n' +
+      '- NEVER output section headers, labels, or bracketed tags such as "[Cyrene\'s Thoughts]", "[Thoughts]", "[Action]", or "Thought:".\n' +
       "- Start directly with the action in asterisks or spoken dialogue in quotes.\n" +
       "- Keep spoken dialogue very brief (1 short sentence, under 10 words) so voice can synthesize quickly.\n" +
       "- Do not include any Chinese characters in your response, do not repeat this prompt, and do not output section titles.";

@@ -29,6 +29,18 @@ export function cleanTextForSpeech(text: string): string {
   // Strip leading leaked timestamps e.g. [2026-09-07 10:04, UTC-5] or [2026-07-13 13:36, Asia/Shanghai]
   cleaned = cleaned.trimStart().replace(/^\s*(?:\[\d{4}[-/.]\d{2}[-/.]\d{2}[ T]\d{2}:\d{2}(?::\d{2})?(?:,\s*[^\]]+)?\]\s*)+/, "").trimStart();
 
+  // Strip leaked headers and bracketed meta tags (e.g. "[Cyrene's Thoughts]", "[Action]", "[Context]")
+  cleaned = cleaned
+    .replace(/\[\s*(?:(?:Cyrene|Master|AI|User|Assistant)'?s?\s*)?(?:Thought|Action|Reaction|Response|Dialogue|Spoken|Inner|Thinking|Reasoning|Context|Emotion|Feeling|Status|Activity)s?(?:\s*Process)?\s*\]:?(?!\()/gi, "")
+    .replace(/\[\/?(?:assistant|thought|thoughts|system|internal|action|reaction|response|cyrene)[^\]]*\]/gi, "")
+    .replace(/<\/?(?:assistant|thought|thoughts|system|internal|action|reaction|response|cyrene)[^>]*>/gi, "")
+    .replace(/(?:Current\s+)?Bond\s+Level:[^\r\n]*(?:\r?\n|$)/gmi, "")
+    .replace(/Affection\s+Score:[^\r\n]*(?:\r?\n|$)/gmi, "")
+    .replace(/(?:Current\s+)?Bond\s+Level:\s*Level\s*\d+[^\r\n]*/gi, "")
+    .replace(/Affection\s+Score:\s*\d+\/\d+[^\r\n]*/gi, "")
+    .replace(/^\s*[:\-–—]\s*/, "")
+    .trim();
+
   // If text contains explicit quoted dialogue ("...", “...”, 「...」, 『...』),
   // extract ONLY the dialogue inside the quotes! All third-person narration,
   // actions (*...*), and thoughts (/.../) outside quotes are completely ignored by voice.
@@ -45,6 +57,13 @@ export function cleanTextForSpeech(text: string): string {
 
     // Strip markdown links [label](url) -> label
     cleaned = cleaned.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1");
+
+    // If plain narrative like "Cyrene gasps as Master's hands suddenly encircle her", treat as action
+    const actionVerbs = "(?:gasps?|smiles?|giggles?|leans?|looks?|blushes?|whispers?|hugs?|sighs?|nods?|tilts?|steps?|holds?|clutches?|shivers?|trembles?|tucks?|watches?|glances?|reaches?|rests?|pauses?|blinks?|winks?)";
+    const plainNarrativeRegex = new RegExp(`^\\s*Cyrene\\s+(${actionVerbs})\\b`, "i");
+    if (plainNarrativeRegex.test(cleaned)) {
+      cleaned = cleaned.replace(plainNarrativeRegex, "*$1") + "*";
+    }
 
     // Strip actions enclosed in asterisks *...*
     cleaned = cleaned.replace(/\*[^*]*\*/g, " ");

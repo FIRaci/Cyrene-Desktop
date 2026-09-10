@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import {
   GestureInteractionController,
   sanitizeBubbleSpeech,
+  cleanGestureReply,
   extractSpokenText,
 } from "./gesture-interaction-controller";
 import type { CompanionBubbleController } from "./companion-bubbles";
@@ -39,6 +40,17 @@ describe("sanitizeBubbleSpeech & extractSpokenText", () => {
     const cleaned = sanitizeBubbleSpeech(raw);
     expect(cleaned).not.toContain("When Master");
     expect(cleaned).toContain("*gently nuzzles* Mmh... Cyrene loves it!");
+  });
+
+  it("strips [Cyrene's Thoughts] header and normalizes 3rd person novel narration", () => {
+    const raw = "[Cyrene's Thoughts] Cyrene gasps as Master's hands suddenly encircle her";
+    const cleaned = cleanGestureReply(raw);
+    expect(cleaned).toBe("*gasps as Master's hands suddenly encircle me*");
+    expect(cleaned).not.toContain("[Cyrene's Thoughts]");
+
+    const bubble = sanitizeBubbleSpeech(raw);
+    expect(bubble).toBe("*gasps as Master's hands suddenly encircle me*");
+    expect(bubble).not.toContain("[Cyrene's Thoughts]");
   });
 
   it("handles clean normal text directly", () => {

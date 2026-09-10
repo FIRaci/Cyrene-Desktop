@@ -217,10 +217,12 @@ function stripTextualToolProtocol(text: string): string {
     .replace(/\[tool_call\][\s\S]*?\[\/tool_call\]/gi, "")
     .replace(/<invoke\b[^>]*>[\s\S]*?<\/invoke>/gi, "")
     .replace(/\[\s*Projection:[^\]]*\]/gi, "")
-    .replace(/\[\/?(?:assistant|thought|system|internal)[^\]]*\]/gi, "")
-    .replace(/<\/?(?:assistant|thought|system)[^>]*>/gi, "")
+    .replace(/\[\s*(?:(?:Cyrene|Master|AI|User|Assistant)'?s?\s*)?(?:Thought|Action|Reaction|Response|Dialogue|Spoken|Inner|Thinking|Reasoning|Context|Emotion|Feeling|Status|Activity)s?(?:\s*Process)?\s*\]:?(?!\()/gi, "")
+    .replace(/\[\/?(?:assistant|thought|thoughts|system|internal|action|reaction|response|cyrene)[^\]]*\]/gi, "")
+    .replace(/<\/?(?:assistant|thought|thoughts|system|internal|action|reaction|response|cyrene)[^>]*>/gi, "")
     .replace(/<\|[^|>]+\|>/g, "")
     .replace(/(?![♪♫\u2669-\u266f])[\u2600-\u27BF\uFE00-\uFE0F]|[\u{1F300}-\u{1FAFF}]/gu, "")
+    .replace(/^\s*[:\-–—]\s*/, "")
     .trim();
 }
 

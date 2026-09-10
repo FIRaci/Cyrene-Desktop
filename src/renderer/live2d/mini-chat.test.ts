@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { MiniChatWidget } from "./mini-chat";
+import { MiniChatWidget, cleanReplyForMiniChat } from "./mini-chat";
 import type { CompanionBubbleController } from "./companion-bubbles";
 
 function createFakeElement(tag: string): any {
@@ -328,5 +328,12 @@ describe("MiniChatWidget", () => {
     expect(widget.isBusy).toBe(false);
 
     widget.dispose();
+  });
+
+  it("cleans [Cyrene's Thoughts] and normalizes 3rd person narration in cleanReplyForMiniChat", () => {
+    const raw = "[Cyrene's Thoughts] Cyrene gasps as Master's hands suddenly encircle her";
+    const cleaned = cleanReplyForMiniChat(raw);
+    expect(cleaned).toBe("*gasps as Master's hands suddenly encircle me*");
+    expect(cleaned).not.toContain("[Cyrene's Thoughts]");
   });
 });

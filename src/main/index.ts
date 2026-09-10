@@ -1277,12 +1277,29 @@ async function prepareGptsovitsVoicePayload(payload: {
   // --- Fix 3 & 4: Translation LRU cache + parallel race ---
   // Clean leaked timestamps, actions (*...*), thoughts (/.../), markdown symbols and kaomojis
   let text = stripLeakedChatTimeContext(payload.text || "");
+  // Strip leaked headers and bracketed meta tags (e.g. "[Cyrene's Thoughts]", "[Action]", "[Context]")
+  text = text
+    .replace(/\[\s*(?:(?:Cyrene|Master|AI|User|Assistant)'?s?\s*)?(?:Thought|Action|Reaction|Response|Dialogue|Spoken|Inner|Thinking|Reasoning|Context|Emotion|Feeling|Status|Activity)s?(?:\s*Process)?\s*\]:?(?!\()/gi, "")
+    .replace(/\[\/?(?:assistant|thought|thoughts|system|internal|action|reaction|response|cyrene)[^\]]*\]/gi, "")
+    .replace(/<\/?(?:assistant|thought|thoughts|system|internal|action|reaction|response|cyrene)[^>]*>/gi, "")
+    .replace(/(?:Current\s+)?Bond\s+Level:[^\r\n]*(?:\r?\n|$)/gmi, "")
+    .replace(/Affection\s+Score:[^\r\n]*(?:\r?\n|$)/gmi, "")
+    .replace(/(?:Current\s+)?Bond\s+Level:\s*Level\s*\d+[^\r\n]*/gi, "")
+    .replace(/Affection\s+Score:\s*\d+\/\d+[^\r\n]*/gi, "")
+    .replace(/^\s*[:\-–—]\s*/, "")
+    .trim();
+
   const quoteMatches = [...text.matchAll(/["“「『]([^"”」』]+)["”」』]/gu)]
     .map((m) => m[1].trim())
     .filter(Boolean);
   if (quoteMatches.length > 0) {
     text = quoteMatches.join(" ");
   } else {
+    const actionVerbs = "(?:gasps?|smiles?|giggles?|leans?|looks?|blushes?|whispers?|hugs?|sighs?|nods?|tilts?|steps?|holds?|clutches?|shivers?|trembles?|tucks?|watches?|glances?|reaches?|rests?|pauses?|blinks?|winks?)";
+    const plainNarrativeRegex = new RegExp(`^\\s*Cyrene\\s+(${actionVerbs})\\b`, "i");
+    if (plainNarrativeRegex.test(text)) {
+      text = text.replace(plainNarrativeRegex, "*$1") + "*";
+    }
     text = text.replace(/\*[^*]*\*/g, " ").replace(/\/[^/]+\//g, " ");
   }
   text = text.replace(/[*_~#>]+/g, " ");

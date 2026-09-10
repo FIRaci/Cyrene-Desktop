@@ -1874,12 +1874,39 @@ function appendBubbleForMessage(messageId: string): HTMLElement | null {
 
 function cleanBondMetadata(text: string): string {
   if (!text) return "";
-  return text
+  let cleaned = text
+    .replace(/\[\s*(?:(?:Cyrene|Master|AI|User|Assistant)'?s?\s*)?(?:Thought|Action|Reaction|Response|Dialogue|Spoken|Inner|Thinking|Reasoning|Context|Emotion|Feeling|Status|Activity)s?(?:\s*Process)?\s*\]:?(?!\()/gi, "")
+    .replace(/\[\/?(?:assistant|thought|thoughts|system|internal|action|reaction|response|cyrene)[^\]]*\]/gi, "")
+    .replace(/<\/?(?:assistant|thought|thoughts|system|internal|action|reaction|response|cyrene)[^>]*>/gi, "")
     .replace(/(?:Current\s+)?Bond\s+Level:[^\r\n]*(?:\r?\n|$)/gmi, "")
     .replace(/Affection\s+Score:[^\r\n]*(?:\r?\n|$)/gmi, "")
     .replace(/(?:Current\s+)?Bond\s+Level:\s*Level\s*\d+[^\r\n]*/gi, "")
     .replace(/Affection\s+Score:\s*\d+\/\d+[^\r\n]*/gi, "")
+    .replace(/^\s*[:\-–—]\s*/, "")
     .trim();
+
+  const actionVerbs = "(?:gasps?|smiles?|giggles?|leans?|looks?|blushes?|whispers?|hugs?|sighs?|nods?|tilts?|steps?|holds?|clutches?|shivers?|trembles?|tucks?|watches?|glances?|reaches?|rests?|pauses?|blinks?|winks?)";
+  const cyreneActionRegex = new RegExp(`\\*Cyrene\\s+(${actionVerbs})\\b`, "gi");
+  const sheActionRegex = new RegExp(`\\*She\\s+(${actionVerbs})\\b`, "gi");
+  const plainNarrativeRegex = new RegExp(`^\\s*Cyrene\\s+(${actionVerbs})\\b`, "i");
+
+  cleaned = cleaned
+    .replace(cyreneActionRegex, "*$1")
+    .replace(sheActionRegex, "*$1")
+    .replace(/\bher\s+hands\b/gi, "my hands")
+    .replace(/\bher\s+face\b/gi, "my face")
+    .replace(/\bher\s+head\b/gi, "my head")
+    .replace(/\b(encircles?)\s+her\b/gi, "$1 me")
+    .replace(/\baround\s+her\b/gi, "around me")
+    .replace(/\bholding\s+her\b/gi, "holding me")
+    .replace(/\btouching\s+her\b/gi, "touching me")
+    .replace(/\bto\s+her\b/gi, "to me");
+
+  if (plainNarrativeRegex.test(cleaned) && !cleaned.includes("*") && !cleaned.includes('"')) {
+    cleaned = cleaned.replace(plainNarrativeRegex, "*$1") + "*";
+  }
+
+  return cleaned;
 }
 
 /**
@@ -2105,19 +2132,14 @@ function render(preserveScroll = false): void {
     } else {
       const currentMode = isChatMode() ? "chat" : "work";
       const cleanContent = m.role === "model"
-        ? m.content
-            .trimStart()
-            .replace(/^\s*(?:\[\d{4}[-/.]\d{2}[-/.]\d{2}[ T]\d{2}:\d{2}(?::\d{2})?(?:,\s*[^\]]+)?\]\s*)+/, "")
-            .replace(/\[\s*Projection:[^\]]*\]/gi, "")
-            .replace(/\[\/?(?:assistant|thought|system|internal)[^\]]*\]/gi, "")
-            .replace(/<\/?(?:assistant|thought|system)[^>]*>/gi, "")
-            .replace(/<\|[^|>]+\|>/g, "")
-            .replace(/(?![♪♫\u2669-\u266f])[\u2600-\u27BF\uFE00-\uFE0F]|[\u{1F300}-\u{1FAFF}]/gu, "")
-            .replace(/(?:Current\s+)?Bond\s+Level:[^\r\n]*(?:\r?\n|$)/gmi, "")
-            .replace(/Affection\s+Score:[^\r\n]*(?:\r?\n|$)/gmi, "")
-            .replace(/(?:Current\s+)?Bond\s+Level:\s*Level\s*\d+[^\r\n]*/gi, "")
-            .replace(/Affection\s+Score:\s*\d+\/\d+[^\r\n]*/gi, "")
-            .trim()
+        ? cleanBondMetadata(
+            m.content
+              .trimStart()
+              .replace(/^\s*(?:\[\d{4}[-/.]\d{2}[-/.]\d{2}[ T]\d{2}:\d{2}(?::\d{2})?(?:,\s*[^\]]+)?\]\s*)+/, "")
+              .replace(/\[\s*Projection:[^\]]*\]/gi, "")
+              .replace(/<\|[^|>]+\|>/g, "")
+              .replace(/(?![♪♫\u2669-\u266f])[\u2600-\u27BF\uFE00-\uFE0F]|[\u{1F300}-\u{1FAFF}]/gu, "")
+          )
         : m.content;
       const segments = getAssistantReplyBubbleTexts(cleanContent, currentMode, segmentedOutputMode, {
         preserveEmpty: !!m.transient,
