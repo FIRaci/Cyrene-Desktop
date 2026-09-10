@@ -537,7 +537,10 @@ export function registerAgUiIpc(
                 console.warn("[AgUiBridge] Backend persistence check failed:", persistErr);
               }
             }
-            await perf.track("on_run_finished", async () => { await onFinished(lastResult, latestUserText); });
+            await Promise.race([
+              perf.track("on_run_finished", async () => { await onFinished(lastResult, latestUserText); }),
+              new Promise((resolve) => setTimeout(resolve, 3000)),
+            ]);
             // Index history asynchronously after visible post-run work.
             void indexConversationTurn(
               input.sessionId || "default",
@@ -547,12 +550,13 @@ export function registerAgUiIpc(
           }
         } catch (err) {
           console.warn("[AgUiBridge] Post-run work failed:", diagnosticError(err));
-        }
-        if (pendingRunFinishedEvent) {
-          send({
-            ...(pendingRunFinishedEvent as Record<string, unknown>),
-            reply: agent.lastResult?.reply,
-          });
+        } finally {
+          if (pendingRunFinishedEvent) {
+            send({
+              ...(pendingRunFinishedEvent as Record<string, unknown>),
+              reply: agent.lastResult?.reply,
+            });
+          }
         }
         endLifecycle();
         perf.dump();

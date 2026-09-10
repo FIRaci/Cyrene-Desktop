@@ -4069,10 +4069,22 @@ async function send(): Promise<void> {
     const getStreamingBubble = (): HTMLElement | null => {
       return getLastBubbleForMessage(streamMsgId);
     };
+    let textMessageEndArrived = false;
+    let completionGraceTimer: any = null;
     // Final condition: RUN_FINISHED received AND playback queue empty. finishRun when both met.
     const tryFinish = (): void => {
       if (runFinishedArrived && deltaQueue.length === 0 && playbackTimer === null) {
+        if (completionGraceTimer) { clearTimeout(completionGraceTimer); completionGraceTimer = null; }
         finishRun();
+        return;
+      }
+      // If all text deltas finished and playback queue is empty, but RUN_FINISHED is delayed from backend:
+      // Start a 6s safety grace timer so the UI does not hang or hit the 180s watchdog.
+      if (textMessageEndArrived && deltaQueue.length === 0 && playbackTimer === null && !completionGraceTimer) {
+        completionGraceTimer = setTimeout(() => {
+          console.warn("[Cyrene Chat] RUN_FINISHED did not arrive after playback drained; auto-finishing run.");
+          finishRun();
+        }, 6000);
       }
     };
     const startPlayback = (): void => {
@@ -4176,12 +4188,14 @@ async function send(): Promise<void> {
             }
             break;
           case "TEXT_MESSAGE_END":
-            // When all text deltas received, ttsContent is fully accumulated; streamContent replays at 40ms.
+            textMessageEndArrived = true;
+            // When all text deltas received, ttsContent is fully accumulated; streamContent replays at 20ms.
             // This allows audio to start early, independent of frontend typing animation queue.
             if (!autoSpeakTriggered && ttsContent.trim()) {
               autoSpeakTriggered = true;
               pendingTtsCachePromise = earlyMinimaxPlayback.finish(ttsContent);
             }
+            tryFinish();
             break;
           case "CUSTOM":
             // Custom events sent by main: sticker / weather card / task list / choice card
@@ -4265,6 +4279,7 @@ async function send(): Promise<void> {
       await Promise.race([runDone, watchdogPromise]);
     } finally {
       if (watchdogTimer) clearTimeout(watchdogTimer);
+      if (completionGraceTimer) { clearTimeout(completionGraceTimer); completionGraceTimer = null; }
       offEvent();
       if (playbackTimer !== null) { clearInterval(playbackTimer); playbackTimer = null; }
       if (streamSession) {
@@ -4315,26 +4330,44 @@ async function send(): Promise<void> {
     const code = err instanceof AgentRenderError ? err.code : undefined;
     const userMessage = classifyAgentError(code, message);
     const msg = runMessages.find(m => m.id === streamMsgId);
-    if (msg) {
-      msg.thinking = false;
-      msg.transient = false;
-      msg.content = userMessage;
+    if (streamContent.trim().length > 0) {
+      console.warn("[Cyrene Chat] Run completed with content despite error/timeout:", message);
+      if (msg) {
+        msg.thinking = false;
+        msg.transient = false;
+        msg.content = cleanBondMetadata(streamContent);
+        msg.sticker = sticker;
+        msg.musicCard = pendingMusicCard ?? undefined;
+      }
+      if (runSessionId && window.chatStore) {
+        void window.chatStore.replaceTail(runSessionId, runTailStart, toPersistableMessages(runMessages));
+      }
+      if (currentSessionId === runSessionId) {
+        finalizeStreamingBubble(streamMsgId, cleanBondMetadata(streamContent));
+      }
     } else {
-      runMessages.push({
-        id: String(Date.now() + 2),
-        role: "model",
-        content: userMessage,
-        at: Date.now(),
-      });
-    }
-    if (runSessionId && window.chatStore) {
-      void window.chatStore.replaceTail(runSessionId, runTailStart, toPersistableMessages(runMessages));
-    }
-    // Use single-bubble upgrade on error, avoiding full render()
-    if (currentSessionId === runSessionId) {
-      finalizeStreamingBubble(streamMsgId, userMessage);
+      if (msg) {
+        msg.thinking = false;
+        msg.transient = false;
+        msg.content = userMessage;
+      } else {
+        runMessages.push({
+          id: String(Date.now() + 2),
+          role: "model",
+          content: userMessage,
+          at: Date.now(),
+        });
+      }
+      if (runSessionId && window.chatStore) {
+        void window.chatStore.replaceTail(runSessionId, runTailStart, toPersistableMessages(runMessages));
+      }
+      // Use single-bubble upgrade on error, avoiding full render()
+      if (currentSessionId === runSessionId) {
+        finalizeStreamingBubble(streamMsgId, userMessage);
+      }
     }
   } finally {
+    if (completionGraceTimer) { clearTimeout(completionGraceTimer); completionGraceTimer = null; }
     sending = false;
     sendBtn.disabled = false;
     chatHintEl.textContent = formatModelHint(currentModelConfig);

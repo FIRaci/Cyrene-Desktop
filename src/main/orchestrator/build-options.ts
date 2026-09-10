@@ -739,12 +739,15 @@ export async function onAgentRunFinished(
   let stickerCandidate: string | null = null;
   if (settings.stickerEnabled && stickerIndex) {
     const matched = await perf.track("match_sticker", () =>
-      deps.matchSticker(
-        stickerQuery,
-        deps.getEmbeddingProvider(),
-        stickerIndex,
-        settings.stickerSimilarityThreshold ?? 0.55,
-      ),
+      Promise.race([
+        deps.matchSticker(
+          stickerQuery,
+          deps.getEmbeddingProvider(),
+          stickerIndex,
+          settings.stickerSimilarityThreshold ?? 0.55,
+        ),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 2500)),
+      ]).catch(() => null),
     );
     stickerCandidate = matched?.id ?? null;
   }
