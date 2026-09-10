@@ -107,6 +107,29 @@
       </div>
     </div>
     <div class="chat__file-tags" id="file-tags"></div>
+    <div class="chat__status-bar" id="chat-status-bar" hidden aria-live="polite">
+      <div class="chat__status-main">
+        <div class="chat__status-indicator">
+          <svg class="chat__status-spinner" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" stroke="rgba(255, 107, 181, 0.25)" stroke-width="3"></circle>
+            <path d="M12 3a9 9 0 0 1 9 9" stroke="#ff6bb5" stroke-width="3" stroke-linecap="round"></path>
+          </svg>
+          <span class="chat__status-text" id="chat-status-text">Thinking...</span>
+        </div>
+        <span class="chat__status-percent" id="chat-status-percent">0%</span>
+      </div>
+      <div class="chat__status-progress-track">
+        <div class="chat__status-progress-fill" id="chat-status-progress-fill" style="width: 0%;"></div>
+      </div>
+    </div>
+    <div class="chat__queue-bar" id="chat-queue-bar" hidden>
+      <span class="chat__queue-icon">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M4 6h16M4 12h16M4 18h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </span>
+      <span class="chat__queue-text" id="chat-queue-text">1 message queued</span>
+    </div>
     <form class="chat__input" id="composer">
       <input type="file" id="file-input" accept=".txt,.md,.json,.csv,.log,.png,.jpg,.jpeg,.webp,.gif,.bmp" multiple style="display:none" />
       <button type="button" class="chat__attach" id="attach-btn" aria-label="Upload File" title="Upload File">

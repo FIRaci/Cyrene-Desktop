@@ -109,6 +109,27 @@ describe("scheduler-tools", () => {
       expect(parsed?.getMinutes()).toBe(0);
       expect(parsed?.getDate()).toBe(8);
     });
+
+    it("parses casual 'h' and prepositional time formats like '12h30 pm at 10 September'", () => {
+      const now = new Date(2026, 8, 10, 10, 0, 0); // 10:00 AM Sept 10, 2026
+      const parsed = parseDateTimeInput("12h30 pm at 10 September", now);
+      expect(parsed).not.toBeNull();
+      expect(parsed?.getMonth()).toBe(8); // September
+      expect(parsed?.getDate()).toBe(10);
+      expect(parsed?.getHours()).toBe(12);
+      expect(parsed?.getMinutes()).toBe(30);
+    });
+
+    it("parses casual 14h00 and 8h30 formats", () => {
+      const now = new Date(2026, 8, 10, 6, 0, 0);
+      const parsed1 = parseDateTimeInput("14h00", now);
+      expect(parsed1?.getHours()).toBe(14);
+      expect(parsed1?.getMinutes()).toBe(0);
+
+      const parsed2 = parseDateTimeInput("8h30", now);
+      expect(parsed2?.getHours()).toBe(8);
+      expect(parsed2?.getMinutes()).toBe(30);
+    });
   });
 
   describe("formatFriendlySchedule", () => {
@@ -118,15 +139,15 @@ describe("scheduler-tools", () => {
         title: "Study",
         prompt: "Study prompt",
         schedule: { kind: "once", runAt: "2026-09-08T14:00:00.000Z" },
+        nextFireAt: null,
         enabled: true,
         toolMode: "all-enabled",
         allowedToolIds: [],
-        createdAt: "2026-09-08T00:00:00.000Z",
-        updatedAt: "2026-09-08T00:00:00.000Z",
-        nextFireAt: "2026-09-08T14:00:00.000Z",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       };
       const formatted = formatFriendlySchedule(task);
-      expect(formatted).toBeTruthy();
+      expect(formatted).toBeDefined();
     });
 
     it("formats daily schedule", () => {
@@ -135,12 +156,12 @@ describe("scheduler-tools", () => {
         title: "Daily Standup",
         prompt: "Standup prompt",
         schedule: { kind: "daily", timeOfDay: "09:30" },
+        nextFireAt: null,
         enabled: true,
         toolMode: "all-enabled",
         allowedToolIds: [],
-        createdAt: "2026-09-08T00:00:00.000Z",
-        updatedAt: "2026-09-08T00:00:00.000Z",
-        nextFireAt: "2026-09-08T09:30:00.000Z",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       };
       expect(formatFriendlySchedule(task)).toBe("Daily at 09:30");
     });
@@ -157,14 +178,36 @@ describe("scheduler-tools", () => {
       expect(ids).toContain("delete_scheduled_task");
     });
 
-    it("executes schedule_task and saves task to store", async () => {
+    it("rejects scheduling events in the past with a helpful temporal common sense message", async () => {
       registerSchedulerTools();
       const scheduleTool = toolRegistry.getById("schedule_task");
       expect(scheduleTool).toBeDefined();
 
+      const pastDate = new Date(Date.now() - 3600_000 * 5); // 5 hours ago
+      const pastStr = `${pastDate.getFullYear()}-${String(pastDate.getMonth() + 1).padStart(2, "0")}-${String(pastDate.getDate()).padStart(2, "0")} ${String(pastDate.getHours()).padStart(2, "0")}:${String(pastDate.getMinutes()).padStart(2, "0")}`;
+
+      const result = await scheduleTool!.execute({
+        title: "Past study session",
+        datetime: pastStr,
+      });
+
+      expect(result).toContain("[schedule_task Error]");
+      expect(result).toContain("has already passed relative to the current time");
+      expect(result).toContain("Scheduled reminders cannot be set in the past");
+      expect(mockAddTask).not.toHaveBeenCalled();
+    });
+
+    it("executes schedule_task for a future date and saves task to store", async () => {
+      registerSchedulerTools();
+      const scheduleTool = toolRegistry.getById("schedule_task");
+      expect(scheduleTool).toBeDefined();
+
+      const futureDate = new Date(Date.now() + 86400_000 * 3); // 3 days in future
+      const futureStr = `${futureDate.getFullYear()}-${String(futureDate.getMonth() + 1).padStart(2, "0")}-${String(futureDate.getDate()).padStart(2, "0")} 14:00`;
+
       const result = await scheduleTool!.execute({
         title: "Go to study",
-        datetime: "2026-09-08 14:00",
+        datetime: futureStr,
         category: "study",
         reminderMinutesBefore: 10,
       });

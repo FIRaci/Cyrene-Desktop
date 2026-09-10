@@ -3738,9 +3738,101 @@ async function triggerCyreneGreeting(): Promise<void> {
   }
 }
 
+interface QueuedMessage {
+  text: string;
+  files: Attachment[];
+}
+const chatMessageQueue: QueuedMessage[] = [];
+
+function updateQueueUi(): void {
+  const queueBar = document.getElementById("chat-queue-bar");
+  const queueText = document.getElementById("chat-queue-text");
+  if (!queueBar || !queueText) return;
+  if (chatMessageQueue.length === 0) {
+    queueBar.hidden = true;
+  } else {
+    queueBar.hidden = false;
+    queueText.textContent = `${chatMessageQueue.length} message${chatMessageQueue.length > 1 ? "s" : ""} queued · Cyrene is finishing her current task and will answer next`;
+  }
+}
+
+function formatFriendlyToolName(toolName?: string): string {
+  if (!toolName) return "Tool";
+  const map: Record<string, string> = {
+    schedule_task: "Scheduling task",
+    query_scheduled_tasks: "Checking calendar",
+    delete_scheduled_task: "Updating schedule",
+    web_search: "Searching the web",
+    weather: "Checking weather",
+    read_document: "Reading document",
+    music_search: "Searching music",
+    music_play_track: "Playing track",
+    music_get_daily_recommendations: "Fetching recommendations",
+  };
+  return map[toolName] || toolName.replace(/_/g, " ");
+}
+
+let runningProgressHideTimer: any = null;
+
+function updateRunningProgress(statusText: string, percent: number): void {
+  if (runningProgressHideTimer) {
+    clearTimeout(runningProgressHideTimer);
+    runningProgressHideTimer = null;
+  }
+  const bar = document.getElementById("chat-status-bar");
+  const textEl = document.getElementById("chat-status-text");
+  const fillEl = document.getElementById("chat-status-progress-fill");
+  const percentEl = document.getElementById("chat-status-percent");
+  if (!bar) return;
+  bar.hidden = false;
+  if (textEl) textEl.textContent = statusText;
+  if (fillEl) fillEl.style.width = `${Math.min(100, Math.max(0, percent))}%`;
+  if (percentEl) percentEl.textContent = `${Math.round(percent)}%`;
+}
+
+function hideRunningProgress(delayMs = 600): void {
+  if (runningProgressHideTimer) clearTimeout(runningProgressHideTimer);
+  runningProgressHideTimer = setTimeout(() => {
+    const bar = document.getElementById("chat-status-bar");
+    if (bar) bar.hidden = true;
+    runningProgressHideTimer = null;
+  }, delayMs);
+}
+
+function switchToWorkMode(): void {
+  const modeOptions = document.querySelectorAll(".mode-switch__option");
+  modeOptions.forEach((option) => {
+    const isWork = (option as HTMLElement).dataset.modeValue === "work";
+    option.classList.toggle("is-active", isWork);
+    option.setAttribute("aria-pressed", isWork ? "true" : "false");
+  });
+  try {
+    localStorage.setItem("cyrene_chat_mode", "work");
+  } catch {}
+}
+
 async function send(): Promise<void> {
   const text = inputEl.value.trim();
-  if ((!text && attachedFiles.length === 0) || sending) return;
+  if (!text && attachedFiles.length === 0) return;
+
+  if (sending) {
+    chatMessageQueue.push({
+      text,
+      files: [...attachedFiles],
+    });
+    inputEl.value = "";
+    autosize();
+    removeAttachedFiles();
+    updateQueueUi();
+    return;
+  }
+
+  // Auto-switch to Work mode if operational intent detected in Chat mode
+  const operationalRegex = /\b(schedule|reschedule|calendar|reminder|remind|appointment|meeting|due|alarm|deadline|weather|forecast|l\u1eadp l\u1ecbch|\u0111\u1eb7t l\u1ecbch|l\u1ecbch tr\u00ecnh|h\u1eb9n gi\u1edd|nh\u1eafc nh\u1edf|b\u00e1o th\u1ee9c|th\u1eddi ti\u1ebft)\b/i;
+  if (isChatMode() && operationalRegex.test(text)) {
+    switchToWorkMode();
+  }
+
   if (!currentSessionId) {
     console.warn("[Cyrene Chat] Session not yet initialized, creating emergency session");
     try {
@@ -3759,7 +3851,7 @@ async function send(): Promise<void> {
   const runTailStart = sessionTailStart;
 
   sending = true;
-  sendBtn.disabled = true;
+  updateRunningProgress("Analyzing request...", 15);
   await refreshModelConfig();
   chatHintEl.textContent = currentModelConfig?.connected ? `${currentModelConfig.model} thinking…` : "Model disconnected";
 
@@ -4075,6 +4167,8 @@ async function send(): Promise<void> {
     const tryFinish = (): void => {
       if (runFinishedArrived && deltaQueue.length === 0 && playbackTimer === null) {
         if (completionGraceTimer) { clearTimeout(completionGraceTimer); completionGraceTimer = null; }
+        updateRunningProgress("Completed", 100);
+        hideRunningProgress(700);
         finishRun();
         return;
       }
@@ -4133,6 +4227,9 @@ async function send(): Promise<void> {
         const msg = runMessages.find(m => m.id === streamMsgId);
         switch (event.type) {
           case "TOOL_CALL_START": {
+            const toolName = event.toolCallName ?? "tool";
+            const friendly = formatFriendlyToolName(toolName);
+            updateRunningProgress(`Running: ${friendly}...`, 45);
             // Tool call start: show "Calling: xxx" in thinking bubble, replacing three dots
             const bubble = getStreamingBubble();
             if (bubble) {
@@ -4143,10 +4240,10 @@ async function send(): Promise<void> {
               tip.dataset.toolCallId = event.toolCallId ?? "";
               const icon = document.createElement("span");
               icon.className = "msg__tool-icon";
-              icon.textContent = "🔧";
+              icon.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
               const text = document.createElement("span");
               text.className = "msg__tool-text";
-              text.textContent = "Calling: " + (event.toolCallName ?? "tool");
+              text.textContent = "Calling: " + friendly;
               tip.appendChild(icon);
               tip.appendChild(text);
               bubble.appendChild(tip);
@@ -4154,21 +4251,22 @@ async function send(): Promise<void> {
             break;
           }
           case "TOOL_CALL_END": {
-            // Tool call finished: change status to Completed, fade out to make room for text
+            const toolName = event.toolCallName ?? "tool";
+            const friendly = formatFriendlyToolName(toolName);
+            updateRunningProgress(`Completed: ${friendly}`, 75);
             const bubble = getStreamingBubble();
             if (bubble) {
               const tip = bubble.querySelector(".msg__tool-tip");
               if (tip) {
                 const textEl = tip.querySelector(".msg__tool-text");
-                if (textEl) textEl.textContent = "Completed";
+                if (textEl) textEl.textContent = "Completed: " + friendly;
                 tip.classList.add("msg__tool-tip--done");
               }
             }
             break;
           }
           case "TEXT_MESSAGE_START":
-            // Switch thinking dots → empty bubble, render once to establish DOM (with data-msg-id)
-            // Tool notice (if any) cleared by render rebuild, transitioning naturally to text
+            updateRunningProgress("Generating response...", 88);
             if (msg) { msg.thinking = false; render(); }
             break;
           case "TEXT_MESSAGE_CONTENT":
@@ -4234,6 +4332,8 @@ async function send(): Promise<void> {
             break;
           case "RUN_ERROR":
             dismissPlanCardOnRunFinished();
+            updateRunningProgress("Error processing request", 100);
+            hideRunningProgress(1500);
             failRun(new AgentRenderError(event.code, event.message ?? "Model request failed"));
             break;
           default:
@@ -4371,8 +4471,20 @@ async function send(): Promise<void> {
     sending = false;
     sendBtn.disabled = false;
     chatHintEl.textContent = formatModelHint(currentModelConfig);
+    updateRunningProgress("Completed", 100);
+    hideRunningProgress(700);
     inputEl.focus();
     void flushPendingProactiveReload();
+
+    // Check message queue and process next turn if available
+    if (chatMessageQueue.length > 0) {
+      const nextTurn = chatMessageQueue.shift()!;
+      updateQueueUi();
+      inputEl.value = nextTurn.text;
+      attachedFiles = [...nextTurn.files];
+      renderFileTags();
+      void send();
+    }
   }
 }
 async function clearChat(): Promise<void> {

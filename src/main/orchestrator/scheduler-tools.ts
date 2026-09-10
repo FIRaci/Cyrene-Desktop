@@ -29,8 +29,15 @@ export function parseDateTimeInput(input: string, now: Date = new Date()): Date 
   const trimmed = input.trim();
   if (!trimmed) return null;
 
+  // Normalize casual 'h' notation: 12h30 -> 12:30, 14h -> 14:00, 8h30 pm -> 8:30 pm
+  let normalized = trimmed
+    .replace(/\b(\d{1,2})h(\d{2})\b/gi, (_match, h, min) => `${h}:${min}`)
+    .replace(/\b(\d{1,2})h\b/gi, (_match, h) => `${h}:00`)
+    .replace(/\b(?:at|on)\s+/gi, " ")
+    .trim();
+
   // 1. Pure date like YYYY-MM-DD
-  const ymdOnly = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/.exec(trimmed);
+  const ymdOnly = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/.exec(normalized);
   if (ymdOnly) {
     const year = Number(ymdOnly[1]);
     const month = Number(ymdOnly[2]) - 1;
@@ -40,37 +47,46 @@ export function parseDateTimeInput(input: string, now: Date = new Date()): Date 
   }
 
   // 2. Format: YYYY-MM-DD HH:mm(:ss)?
-  const ymdMatch = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})[ T]+(\d{1,2}):(\d{2})(?::(\d{2}))?$/i.exec(trimmed);
+  const ymdMatch = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})[ T]+(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s*(am|pm))?$/i.exec(normalized);
   if (ymdMatch) {
     const year = Number(ymdMatch[1]);
     const month = Number(ymdMatch[2]) - 1;
     const day = Number(ymdMatch[3]);
-    const hours = Number(ymdMatch[4]);
+    let hours = Number(ymdMatch[4]);
     const minutes = Number(ymdMatch[5]);
     const seconds = ymdMatch[6] !== undefined ? Number(ymdMatch[6]) : 0;
+    const ampm = ymdMatch[7]?.toLowerCase();
+    if (ampm === "pm" && hours < 12) hours += 12;
+    if (ampm === "am" && hours === 12) hours = 0;
     const d = new Date(year, month, day, hours, minutes, seconds);
     if (!Number.isNaN(d.getTime())) return d;
   }
 
   // 3. Format: DD/MM/YYYY (or DD-MM-YYYY) with optional time
-  const dmyMatch = /^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})(?:[ T]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/i.exec(trimmed);
+  const dmyMatch = /^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})(?:[ T]+(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s*(am|pm))?)?$/i.exec(normalized);
   if (dmyMatch) {
     const day = Number(dmyMatch[1]);
     const month = Number(dmyMatch[2]) - 1;
     const year = Number(dmyMatch[3]);
-    const hours = dmyMatch[4] !== undefined ? Number(dmyMatch[4]) : 9;
+    let hours = dmyMatch[4] !== undefined ? Number(dmyMatch[4]) : 9;
     const minutes = dmyMatch[5] !== undefined ? Number(dmyMatch[5]) : 0;
     const seconds = dmyMatch[6] !== undefined ? Number(dmyMatch[6]) : 0;
+    const ampm = dmyMatch[7]?.toLowerCase();
+    if (ampm === "pm" && hours < 12) hours += 12;
+    if (ampm === "am" && hours === 12) hours = 0;
     const d = new Date(year, month, day, hours, minutes, seconds);
     if (!Number.isNaN(d.getTime())) return d;
   }
 
   // 4. Time only: HH:mm (today or tomorrow)
-  const timeMatch = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/i.exec(trimmed);
+  const timeMatch = /^(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s*(am|pm))?$/i.exec(normalized);
   if (timeMatch) {
-    const hours = Number(timeMatch[1]);
+    let hours = Number(timeMatch[1]);
     const minutes = Number(timeMatch[2]);
     const seconds = timeMatch[3] !== undefined ? Number(timeMatch[3]) : 0;
+    const ampm = timeMatch[4]?.toLowerCase();
+    if (ampm === "pm" && hours < 12) hours += 12;
+    if (ampm === "am" && hours === 12) hours = 0;
     const d = new Date(now);
     d.setHours(hours, minutes, seconds, 0);
     if (d.getTime() <= now.getTime()) {
@@ -79,10 +95,21 @@ export function parseDateTimeInput(input: string, now: Date = new Date()): Date 
     return d;
   }
 
-  // 5. Direct standard Date parsing (ISO 8601 or natural English strings like "September 8, 2026 14:00")
-  const direct = new Date(trimmed);
-  if (!Number.isNaN(direct.getTime())) {
-    return direct;
+  // 5. Direct standard Date parsing with current year fallback
+  // Only accept direct parse if it looks like a real date/time string with numbers
+  if (/\d/.test(normalized)) {
+    let direct = new Date(normalized);
+    if (!Number.isNaN(direct.getTime()) && direct.getFullYear() > 1970) {
+      return direct;
+    }
+    // Try appending current year ONLY if string has a month indicator (e.g. "12:30 pm 10 September")
+    const hasMonthIndicator = /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\b/i.test(normalized);
+    if (hasMonthIndicator && !/\b\d{4}\b/.test(normalized)) {
+      direct = new Date(`${normalized} ${now.getFullYear()}`);
+      if (!Number.isNaN(direct.getTime()) && direct.getFullYear() > 1970) {
+        return direct;
+      }
+    }
   }
 
   return null;
@@ -115,7 +142,7 @@ export function registerSchedulerTools(): void {
       "Always call this tool whenever the user mentions setting a schedule or reminder — do not merely roleplay or promise without executing this tool.\n\n" +
       "Parameters:\n" +
       "- title (required string): Short, clear title of the event (e.g. 'Study class', 'Math exam', 'Client meeting').\n" +
-      "- date_time (optional string): Specific date and time for 'once' schedule. Formats: YYYY-MM-DD HH:mm, ISO string (e.g. '2026-09-08 14:00', '2026-09-08T14:00:00').\n" +
+      "- date_time (optional string): Specific date and time for 'once' schedule. Formats: YYYY-MM-DD HH:mm, ISO string (e.g. '2026-09-08 14:00', '2026-09-08T14:00:00', '12h30 pm 10 September').\n" +
       "- kind (optional string): 'once' (default), 'daily', 'weekly', or 'interval'.\n" +
       "- time_of_day (optional string): 'HH:mm' (e.g. '14:00') if kind is 'daily' or 'weekly'.\n" +
       "- day_of_week (optional number): 0 (Sun) to 6 (Sat) if kind is 'weekly'.\n" +
@@ -165,6 +192,15 @@ export function registerSchedulerTools(): void {
         const parsedDate = parseDateTimeInput(rawDateTime, now);
         if (!parsedDate || Number.isNaN(parsedDate.getTime())) {
           return `[Error] Could not parse date_time "${rawDateTime}". Please provide format 'YYYY-MM-DD HH:mm' (e.g. '2026-09-08 14:00').`;
+        }
+        // Temporal common sense check: do not schedule events in the past
+        if (parsedDate.getTime() < now.getTime() - 60_000) {
+          const pastStr = `${parsedDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} on ${parsedDate.toLocaleDateString()}`;
+          const nowStr = `${now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} on ${now.toLocaleDateString()}`;
+          const tomorrow = new Date(parsedDate);
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          const tomorrowStr = tomorrow.toLocaleDateString();
+          return `[schedule_task Error] The requested time "${rawDateTime}" (${pastStr}) has already passed relative to the current time (${nowStr}). Scheduled reminders cannot be set in the past. Please ask Master if they meant tomorrow (${tomorrowStr}) or another future date/time.`;
         }
         scheduleConfig = { kind: "once", runAt: parsedDate.toISOString() };
       }

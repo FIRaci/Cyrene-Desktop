@@ -2804,3 +2804,148 @@ body {
 [data-ui-theme="pearl-white"] .plan-card__step { color: #3d2b38; }
 [data-ui-theme="pearl-white"] .plan-card__step--completed { color: #8b7180; }
 [data-ui-theme="pearl-white"] .plan-card__step--superseded { color: #b0a0a8; }
+
+/* ── Chat Running Status & Progress Bar ── */
+.chat__status-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 14px;
+  margin: 0 16px 8px 16px;
+  background: rgba(30, 18, 52, 0.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 107, 181, 0.25);
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35), 0 0 15px rgba(255, 107, 181, 0.12);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: statusBarSlideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.chat__status-bar[hidden] {
+  display: none !important;
+}
+
+@keyframes statusBarSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.chat__status-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.chat__status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.chat__status-spinner {
+  flex-shrink: 0;
+  animation: statusSpinnerRotate 1s linear infinite;
+}
+
+@keyframes statusSpinnerRotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.chat__status-text {
+  font-size: 12px;
+  font-weight: 500;
+  color: #ffb7df;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: 0.2px;
+}
+
+.chat__status-percent {
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: rgba(255, 255, 255, 0.7);
+  flex-shrink: 0;
+}
+
+.chat__status-progress-track {
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  overflow: hidden;
+  position: relative;
+}
+
+.chat__status-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #ff6bb5 0%, #a855f7 50%, #38bdf8 100%);
+  border-radius: 999px;
+  transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 0 8px rgba(255, 107, 181, 0.5);
+}
+
+/* ── Chat Queue Notification Pill ── */
+.chat__queue-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  margin: 0 16px 6px 16px;
+  background: rgba(168, 85, 247, 0.15);
+  border: 1px solid rgba(168, 85, 247, 0.3);
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #d8b4fe;
+  width: fit-content;
+  animation: statusBarSlideIn 0.2s ease-out;
+}
+
+.chat__queue-bar[hidden] {
+  display: none !important;
+}
+
+.chat__queue-icon {
+  display: inline-flex;
+  align-items: center;
+  color: #c084fc;
+}
+
+/* Light Theme overrides */
+[data-ui-theme="pearl-white"] .chat__status-bar {
+  background: rgba(255, 250, 253, 0.95);
+  border-color: rgba(236, 72, 153, 0.3);
+  box-shadow: 0 4px 20px rgba(180, 100, 140, 0.15);
+}
+
+[data-ui-theme="pearl-white"] .chat__status-text {
+  color: #be185d;
+}
+
+[data-ui-theme="pearl-white"] .chat__status-percent {
+  color: rgba(45, 32, 48, 0.7);
+}
+
+[data-ui-theme="pearl-white"] .chat__status-progress-track {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+[data-ui-theme="pearl-white"] .chat__queue-bar {
+  background: rgba(168, 85, 247, 0.1);
+  border-color: rgba(168, 85, 247, 0.25);
+  color: #7e22ce;
+}
+
