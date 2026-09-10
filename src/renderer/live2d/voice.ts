@@ -29,18 +29,29 @@ export function cleanTextForSpeech(text: string): string {
   // Strip leading leaked timestamps e.g. [2026-09-07 10:04, UTC-5] or [2026-07-13 13:36, Asia/Shanghai]
   cleaned = cleaned.trimStart().replace(/^\s*(?:\[\d{4}[-/.]\d{2}[-/.]\d{2}[ T]\d{2}:\d{2}(?::\d{2})?(?:,\s*[^\]]+)?\]\s*)+/, "").trimStart();
 
-  // Strip code blocks and inline code
-  cleaned = cleaned.replace(/```[\s\S]*?```/g, "");
-  cleaned = cleaned.replace(/`[^`]*`/g, "");
+  // If text contains explicit quoted dialogue ("...", “...”, 「...」, 『...』),
+  // extract ONLY the dialogue inside the quotes! All third-person narration,
+  // actions (*...*), and thoughts (/.../) outside quotes are completely ignored by voice.
+  const quoteMatches = [...cleaned.matchAll(/["“「『]([^"”」』]+)["”」』]/gu)]
+    .map((m) => m[1].trim())
+    .filter(Boolean);
 
-  // Strip markdown links [label](url) -> label
-  cleaned = cleaned.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1");
+  if (quoteMatches.length > 0) {
+    cleaned = quoteMatches.join(" ");
+  } else {
+    // Strip code blocks and inline code
+    cleaned = cleaned.replace(/```[\s\S]*?```/g, "");
+    cleaned = cleaned.replace(/`[^`]*`/g, "");
 
-  // Strip actions enclosed in asterisks *...*
-  cleaned = cleaned.replace(/\*[^*]*\*/g, " ");
+    // Strip markdown links [label](url) -> label
+    cleaned = cleaned.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1");
 
-  // Strip thoughts enclosed in slashes /.../
-  cleaned = cleaned.replace(/\/[^/]+\//g, " ");
+    // Strip actions enclosed in asterisks *...*
+    cleaned = cleaned.replace(/\*[^*]*\*/g, " ");
+
+    // Strip thoughts enclosed in slashes /.../
+    cleaned = cleaned.replace(/\/[^/]+\//g, " ");
+  }
 
   // Strip kaomojis with optional prefix/suffix appendages (e.g. (*•̀ᴗ•́*)و ̑̑, (｡♥‿♥｡), ٩(ˊᗜˋ*)و, (✿◠‿◠), (o^▽^o))
   cleaned = cleaned.replace(/(?:[٩۶つﾉシ]\s*)?[\(（][^)）]*[♥♡★☆✿♪♫•ᴗ‿◠^▽><~✧ω≧≦Дд｡⁄`´˙˚*]+[^)）]*[\)）](?:\s*[و̑✧つﾉシ\u0648\u0311~☆★]+)*/gu, " ");

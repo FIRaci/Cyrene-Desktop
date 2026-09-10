@@ -162,5 +162,24 @@ describe("chat-context-analyzer - 9 mood spectrum", () => {
       expect(result.gestureEmotionPromptSnippet).toContain("CRITICAL EMOTION AWARENESS");
       expect(result.gestureFallback.kaomoji).toBe("(・へ・)");
     });
+
+    it("does not falsely trigger study mood on generic dev/app words like test, schedule, or code", () => {
+      const messages = [
+        { role: "user", content: "Tôi phải test chức năng này trước đã" },
+        { role: "user", content: "Check the schedule and run the code tests" },
+      ];
+      const result = detectConversationMood(messages);
+      expect(result.mood).not.toBe("study");
+    });
+
+    it("provides serene quiet support for study mood without assuming Master is tired", () => {
+      const messages = [{ role: "user", content: "Tối nay em phải ôn thi bài vở nhiều quá" }];
+      const result = analyzeConversationContext(messages);
+
+      expect(result.mood).toBe("study");
+      expect(STUDY_IDLE_THOUGHTS).toContainEqual(result.recommendedThought);
+      expect(result.gestureEmotionPromptSnippet).not.toContain("tired from studying");
+      expect(result.gestureFallback.headPat).toContain('"Cyrene will quietly stay right by your side, Master."');
+    });
   });
 });

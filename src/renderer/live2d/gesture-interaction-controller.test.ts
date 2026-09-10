@@ -70,6 +70,42 @@ describe("sanitizeBubbleSpeech & extractSpokenText", () => {
     expect(spoken).not.toContain("*");
     expect(spoken).not.toContain("/");
   });
+
+  it("strips third-person novel narration paragraphs preceding the structured action/thought/dialogue", () => {
+    const raw =
+      "Cyrene leans into Master's gentle caress on her head, a soft smile on her lips. Her warm pink eyes flutter closed for a moment as she savors the comforting touch.\n\n" +
+      "*gently leans in, pressing her cheek to Master's hand*\n" +
+      "/Master must be tired... I'm always here for you/\n" +
+      '"Remember, dear Master, every moment is precious. Savor the moment~"';
+
+    const bubble = sanitizeBubbleSpeech(raw);
+    expect(bubble).not.toContain("Cyrene leans into");
+    expect(bubble).not.toContain("Her warm pink eyes");
+    expect(bubble).toContain("*gently leans in, pressing her cheek to Master's hand*");
+    expect(bubble).toContain("/Master must be tired... I'm always here for you/");
+    expect(bubble).toContain("Remember, dear Master, every moment is precious. Savor the moment~");
+
+    const spoken = extractSpokenText(raw);
+    expect(spoken).not.toContain("Cyrene leans");
+    expect(spoken).not.toContain("Her warm pink eyes");
+    expect(spoken).not.toContain("gently leans in");
+    expect(spoken).not.toContain("Master must be tired");
+    expect(spoken).not.toContain("*");
+    expect(spoken).not.toContain("/");
+    expect(spoken).not.toContain('"');
+    expect(spoken).toBe("Remember, dear Master, every moment is precious. Savor the moment~");
+  });
+
+  it("extracts multiple quoted sentences and ignores all surrounding narration", () => {
+    const raw =
+      'She looks up gently. *smiles warmly* "Hello Master!" /feeling so happy/ *nuzzles* "I missed you so much today!"';
+    const spoken = extractSpokenText(raw);
+    expect(spoken).not.toContain("She looks up");
+    expect(spoken).not.toContain("smiles warmly");
+    expect(spoken).not.toContain("feeling so happy");
+    expect(spoken).not.toContain("nuzzles");
+    expect(spoken).toBe("Hello Master! I missed you so much today!");
+  });
 });
 
 describe("GestureInteractionController", () => {

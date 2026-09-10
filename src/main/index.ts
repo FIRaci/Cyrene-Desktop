@@ -1277,7 +1277,14 @@ async function prepareGptsovitsVoicePayload(payload: {
   // --- Fix 3 & 4: Translation LRU cache + parallel race ---
   // Clean leaked timestamps, actions (*...*), thoughts (/.../), markdown symbols and kaomojis
   let text = stripLeakedChatTimeContext(payload.text || "");
-  text = text.replace(/\*[^*]*\*/g, " ").replace(/\/[^/]+\//g, " ");
+  const quoteMatches = [...text.matchAll(/["“「『]([^"”」』]+)["”」』]/gu)]
+    .map((m) => m[1].trim())
+    .filter(Boolean);
+  if (quoteMatches.length > 0) {
+    text = quoteMatches.join(" ");
+  } else {
+    text = text.replace(/\*[^*]*\*/g, " ").replace(/\/[^/]+\//g, " ");
+  }
   text = text.replace(/[*_~#>]+/g, " ");
   text = text.replace(/(?:[٩۶つﾉシ]\s*)?[\(（][^)）]*[♥♡★☆✿♪♫•ᴗ‿◠^▽><~✧ω≧≦Дд｡⁄`´˙˚*]+[^)）]*[\)）](?:\s*[و̑✧つﾉシ\u0648\u0311~☆★]+)*/gu, " ");
   text = text.replace(/\s+/g, " ").trim();

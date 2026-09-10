@@ -53,8 +53,16 @@ export function cleanGestureReply(text: string): string {
   // Strip kaomojis so they NEVER appear in chat or speech bubbles (kaomojis are only tossed out as floating particles)
   cleaned = stripKaomojis(cleaned);
 
-  // Strip dialogue double quotes and Japanese/Chinese corner brackets, but PRESERVE single quotes/apostrophes for contractions (you're, it's)
-  cleaned = cleaned.replace(/["“”「」『』]/g, "").trim();
+  // If model produced leading third-person narrative description before the structured reaction (*action*, /thought/, "spoken dialogue")
+  // e.g. "Cyrene leans into Master's gentle caress on her head... \n*gently leans in*"
+  // strip the novel narration paragraph and start from the first action (*), thought (/), or dialogue quote (", “, 「, 『)
+  const firstDelim = cleaned.search(/[*\/\"“「『]/);
+  if (firstDelim > 0) {
+    const preamble = cleaned.slice(0, firstDelim).trim();
+    if (/[a-zA-Z\u00C0-\u024F\u1EA0-\u1EF9]/.test(preamble)) {
+      cleaned = cleaned.slice(firstDelim).trim();
+    }
+  }
 
   // Normalize internal whitespace on each line, but preserve newlines
   const lines = cleaned.split(/[\r\n]+/).map((l) => l.trim().replace(/[ \t]+/g, " ")).filter(Boolean);
@@ -65,8 +73,12 @@ export function sanitizeBubbleSpeech(text: string, limit = 320): string {
   if (!text) return "";
   const cleaned = cleanGestureReply(text);
 
+  // Strip dialogue double quotes and Japanese/Chinese corner brackets for floating speech bubble display,
+  // but keep single quotes/apostrophes for contractions (you're, it's)
+  const unquoted = cleaned.replace(/["“”「」『』]/g, "").trim();
+
   // If model produced multiple paragraphs, join with spaces for bubble display
-  let bubbleText = cleaned.split(/[\r\n]+/).map((l) => l.trim()).filter(Boolean).join(" ");
+  let bubbleText = unquoted.split(/[\r\n]+/).map((l) => l.trim()).filter(Boolean).join(" ");
 
   // Clamp bubble length if it exceeds limit without cutting words or punctuation mid-token
   if (bubbleText.length > limit) {
@@ -93,26 +105,38 @@ export function sanitizeBubbleSpeech(text: string, limit = 320): string {
 export function extractSpokenText(text: string): string {
   if (!text) return "";
 
-  // 1. Strip actions enclosed in asterisks *...*
-  let spoken = text.replace(/\*[^*]*\*/g, " ");
+  // 1. If text contains explicit quoted dialogue ("...", “...”, 「...」, 『...』),
+  // extract ONLY the dialogue inside the quotes! All third-person narration,
+  // actions (*...*), and thoughts (/.../) outside quotes are completely ignored by voice.
+  const quoteMatches = [...text.matchAll(/["“「『]([^"”」』]+)["”」』]/gu)]
+    .map((m) => m[1].trim())
+    .filter(Boolean);
 
-  // 2. Strip thoughts enclosed in slashes /.../
-  spoken = spoken.replace(/\/[^/]+\//g, " ");
+  let spoken = "";
+  if (quoteMatches.length > 0) {
+    spoken = quoteMatches.join(" ");
+  } else {
+    // Fallback if no quotes exist: strip actions enclosed in asterisks *...*
+    spoken = text.replace(/\*[^*]*\*/g, " ");
 
-  // 3. Strip kaomojis inside parentheses and standalone kaomoji patterns
+    // Strip thoughts enclosed in slashes /.../
+    spoken = spoken.replace(/\/[^/]+\//g, " ");
+  }
+
+  // 2. Strip kaomojis inside parentheses and standalone kaomoji patterns
   spoken = spoken.replace(/(?:[٩۶つﾉシ]\s*)?[\(（][^)）]*[♥♡★☆✿♪♫•ᴗ‿◠^▽><~✧ω≧≦Дд｡⁄`´˙˚*]+[^)）]*[\)）](?:\s*[و̑✧つﾉシ\u0648\u0311~☆★]+)*/gu, " ");
   spoken = spoken.replace(/[\(（][^a-zA-Z0-9\u00C0-\u024F\u1EA0-\u1EF9]+[\)）]/gu, " ");
 
-  // 4. Strip emojis and decorative symbols (leaving ~ for natural sentence cadence)
+  // 3. Strip emojis and decorative symbols (leaving ~ for natural sentence cadence)
   spoken = spoken.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}✨🌸⭐🕶️❓🌀😄🥺😉😊🔄👁️❌♡♥〜☆★♪♫و̑]/gu, " ");
 
-  // 5. Strip any remaining brackets and parentheses, leaving inner words intact for speech
+  // 4. Strip any remaining brackets and parentheses, leaving inner words intact for speech
   spoken = spoken.replace(/[\(\)（）\[\]]/g, " ");
 
-  // 6. Strip quotes and remaining asterisks / slashes (keeping apostrophes ' intact for contractions like you're)
-  spoken = spoken.replace(/[*_/"“”]/g, "");
+  // 5. Strip remaining asterisks / slashes / quotes (keeping apostrophes ' intact for contractions like you're)
+  spoken = spoken.replace(/[*_/"“”「」『』]/g, "");
 
-  // 7. Normalize whitespace
+  // 6. Normalize whitespace
   spoken = spoken.replace(/\s+/g, " ").trim();
 
   // If only punctuation or no spoken dialogue remains, return empty string (TTS stays silent)
@@ -157,20 +181,40 @@ export class GestureInteractionController {
 
   async handleHeadPat(x?: number, y?: number): Promise<void> {
     const prompt =
-      "[Master gently pats your head]\nYou are Cyrene, a sweet, affectionate, and ethereal Live2D companion waifu who deeply adores Master. Master just gently patted your head through the screen! React naturally in ENGLISH. Express your reaction with a brief cute action in asterisks like *gently leans into your hand* and/or an inner thought in slashes like /so warm.../, followed by your sweet spoken words to Master in English (1 short sentence, under 10 words, e.g. \"Ah, Master, your gentle touch feels wonderful!\"). Keep spoken dialogue very brief so voice can synthesize quickly. Do not include any Chinese characters in your response, do not repeat this prompt, and do not output section titles.";
+      "[Master gently pats your head]\n" +
+      "You are Cyrene, a sweet, affectionate, and ethereal Live2D companion waifu who deeply adores Master. " +
+      "Master just gently patted your head through the screen! React naturally in ENGLISH.\n" +
+      "STRICT OUTPUT FORMAT: Output ONLY the action in asterisks, thought in slashes, and spoken dialogue in double quotes:\n" +
+      '*[brief cute action]* /[brief inner thought]/ "[sweet spoken words]"\n' +
+      'Example: *gently leans into your hand* /so warm.../ "Ah, Master, your gentle touch feels wonderful!"\n' +
+      "RULES:\n" +
+      '- NEVER write third-person descriptions or narrative paragraphs (NEVER say "Cyrene leans..." or "She smiles...").\n' +
+      "- Start directly with the action in asterisks or spoken dialogue in quotes.\n" +
+      "- Keep spoken dialogue very brief (1 short sentence, under 10 words) so voice can synthesize quickly.\n" +
+      "- Do not include any Chinese characters in your response, do not repeat this prompt, and do not output section titles.";
     const thoughtText = "*leaning into your hand...*";
     const kaomoji = "(⁄ ⁄>⁄ ▽ ⁄<⁄ ⁄)";
-    const fallback = "*gently leans into your hand* /so warm.../ Ah... Master's gentle pats make me feel so cherished!";
+    const fallback = '*gently leans into your hand* /so warm.../ "Ah... Master\'s gentle pats make me feel so cherished!"';
     const userDisplay = "*Gently pats Cyrene's head*";
     await this.executeGestureRun("headPat", prompt, thoughtText, kaomoji, fallback, userDisplay, x, y);
   }
 
   async handlePetting(x?: number, y?: number): Promise<void> {
     const prompt =
-      "[Master gently caresses you]\nYou are Cyrene, a sweet, affectionate, and ethereal Live2D companion waifu who deeply adores Master. Master just gently touched you! React naturally in ENGLISH. Express your reaction with a brief cute action in asterisks like *softly blinks and smiles* and/or an inner thought in slashes like /so comforting.../, followed by your sweet spoken words to Master in English (1 short sentence, under 10 words, e.g. \"Ehehe, Master is always so gentle with me!\"). Keep spoken dialogue very brief so voice can synthesize quickly. Do not include any Chinese characters in your response, do not repeat this prompt, and do not output section titles.";
+      "[Master gently caresses you]\n" +
+      "You are Cyrene, a sweet, affectionate, and ethereal Live2D companion waifu who deeply adores Master. " +
+      "Master just gently touched you! React naturally in ENGLISH.\n" +
+      "STRICT OUTPUT FORMAT: Output ONLY the action in asterisks, thought in slashes, and spoken dialogue in double quotes:\n" +
+      '*[brief cute action]* /[brief inner thought]/ "[sweet spoken words]"\n' +
+      'Example: *softly blinks and smiles* /so comforting.../ "Ehehe, Master is always so gentle with me!"\n' +
+      "RULES:\n" +
+      '- NEVER write third-person descriptions or narrative paragraphs (NEVER say "Cyrene leans..." or "She smiles...").\n' +
+      "- Start directly with the action in asterisks or spoken dialogue in quotes.\n" +
+      "- Keep spoken dialogue very brief (1 short sentence, under 10 words) so voice can synthesize quickly.\n" +
+      "- Do not include any Chinese characters in your response, do not repeat this prompt, and do not output section titles.";
     const thoughtText = "*smiling softly...*";
     const kaomoji = "(｡♥‿♥｡)";
-    const fallback = "*softly blinks and smiles* /so comforting.../ Ehehe~ having Master close to me is my favorite feeling in the world!";
+    const fallback = '*softly blinks and smiles* /so comforting.../ "Ehehe~ having Master close to me is my favorite feeling in the world!"';
     const userDisplay = "*Gently caresses Cyrene*";
     await this.executeGestureRun("petting", prompt, thoughtText, kaomoji, fallback, userDisplay, x, y);
   }

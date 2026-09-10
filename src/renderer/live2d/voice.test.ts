@@ -75,6 +75,20 @@ describe("cleanTextForSpeech", () => {
     expect(cleaned).not.toContain("2026");
     expect(cleaned).not.toContain("UTC-5");
   });
+
+  it("extracts only quoted dialogue when quotes exist, ignoring surrounding third-person novel narration", () => {
+    const raw =
+      "Cyrene leans into Master's gentle caress on her head, a soft smile on her lips.\n\n" +
+      "*gently leans in, pressing her cheek to Master's hand*\n" +
+      "/Master must be tired... I'm always here for you/\n" +
+      '"Remember, dear Master, every moment is precious. Savor the learning process~"';
+    const cleaned = cleanTextForSpeech(raw);
+    expect(cleaned).toBe("Remember, dear Master, every moment is precious. Savor the learning process");
+    expect(cleaned).not.toContain("Cyrene leans");
+    expect(cleaned).not.toContain("soft smile");
+    expect(cleaned).not.toContain("gently leans in");
+    expect(cleaned).not.toContain("Master must be tired");
+  });
 });
 
 describe("CompanionVoiceService", () => {
