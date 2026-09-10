@@ -50,6 +50,13 @@ export function cleanGestureReply(text: string): string {
   // Strip any language translation echo headers like "(Original Chinese): ..."
   cleaned = cleaned.replace(/\(?(?:Original\s+)?(?:Chinese|English)\)?:\s*[\s\S]*$/i, "");
 
+  // Strip any Bond Level / Affection Score dating-sim metrics
+  cleaned = cleaned
+    .replace(/(?:Current\s+)?Bond\s+Level:[^\r\n]*(?:\r?\n|$)/gmi, "")
+    .replace(/Affection\s+Score:[^\r\n]*(?:\r?\n|$)/gmi, "")
+    .replace(/(?:Current\s+)?Bond\s+Level:\s*Level\s*\d+[^\r\n]*/gi, "")
+    .replace(/Affection\s+Score:\s*\d+\/\d+[^\r\n]*/gi, "");
+
   // Strip kaomojis so they NEVER appear in chat or speech bubbles (kaomojis are only tossed out as floating particles)
   cleaned = stripKaomojis(cleaned);
 

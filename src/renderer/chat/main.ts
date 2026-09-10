@@ -1872,18 +1872,26 @@ function appendBubbleForMessage(messageId: string): HTMLElement | null {
   return bubble;
 }
 
+function cleanBondMetadata(text: string): string {
+  if (!text) return "";
+  return text
+    .replace(/(?:Current\s+)?Bond\s+Level:[^\r\n]*(?:\r?\n|$)/gmi, "")
+    .replace(/Affection\s+Score:[^\r\n]*(?:\r?\n|$)/gmi, "")
+    .replace(/(?:Current\s+)?Bond\s+Level:\s*Level\s*\d+[^\r\n]*/gi, "")
+    .replace(/Affection\s+Score:\s*\d+\/\d+[^\r\n]*/gi, "")
+    .trim();
+}
+
 /**
- * ： Markdown HTML，Global render()。
- * - （ → replaceChildren）
- * - ：
- * -  has-rich-content（//）
+ * Finalize streaming bubble into rich Markdown HTML.
  */
 function finalizeStreamingBubble(messageId: string, rawContent: string): void {
   const bubble = getLastBubbleForMessage(messageId);
   if (!bubble) return;
 
-  //  Markdown 
-  const result = renderMarkdown(rawContent);
+  const cleanContent = cleanBondMetadata(rawContent);
+  // Markdown render
+  const result = renderMarkdown(cleanContent);
 
   // 
   const wasAtBottom = messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 80;
@@ -2105,6 +2113,10 @@ function render(preserveScroll = false): void {
             .replace(/<\/?(?:assistant|thought|system)[^>]*>/gi, "")
             .replace(/<\|[^|>]+\|>/g, "")
             .replace(/(?![♪♫\u2669-\u266f])[\u2600-\u27BF\uFE00-\uFE0F]|[\u{1F300}-\u{1FAFF}]/gu, "")
+            .replace(/(?:Current\s+)?Bond\s+Level:[^\r\n]*(?:\r?\n|$)/gmi, "")
+            .replace(/Affection\s+Score:[^\r\n]*(?:\r?\n|$)/gmi, "")
+            .replace(/(?:Current\s+)?Bond\s+Level:\s*Level\s*\d+[^\r\n]*/gi, "")
+            .replace(/Affection\s+Score:\s*\d+\/\d+[^\r\n]*/gi, "")
             .trim()
         : m.content;
       const segments = getAssistantReplyBubbleTexts(cleanContent, currentMode, segmentedOutputMode, {
@@ -3490,8 +3502,12 @@ async function triggerCyreneGreeting(): Promise<void> {
     const startPlayback = (): void => {
       if (playbackTimer !== null) return;
       playbackTimer = window.setInterval(() => {
-        const next = deltaQueue.shift();
-        if (next !== undefined) {
+        const batchSize = deltaQueue.length > 20 ? 2 : 1;
+        let consumed = 0;
+        for (let b = 0; b < batchSize; b++) {
+          const next = deltaQueue.shift();
+          if (next === undefined) break;
+          consumed++;
           streamContent += next;
           const bubble = startNextStreamingBubble
             ? (appendBubbleForMessage(streamMsgId) ?? getStreamingBubble())
@@ -3512,12 +3528,14 @@ async function triggerCyreneGreeting(): Promise<void> {
             startNextStreamingBubble = true;
             streamingBubbleCount += 1;
           }
+        }
+        if (consumed > 0) {
           messagesEl.scrollTop = messagesEl.scrollHeight;
           return;
         }
         if (playbackTimer !== null) { clearInterval(playbackTimer); playbackTimer = null; }
         tryFinish();
-      }, 40);
+      }, 20);
     };
     const offEvent = registerAguiListener((rawEvent) => {
       try {
@@ -3647,7 +3665,7 @@ async function triggerCyreneGreeting(): Promise<void> {
     if (msg) {
       msg.thinking = false;
       msg.transient = false;
-      msg.content = streamContent;
+      msg.content = cleanBondMetadata(streamContent);
       msg.sticker = sticker;
       msg.musicCard = pendingMusicCard ?? undefined;
     }
@@ -4038,8 +4056,12 @@ async function send(): Promise<void> {
     const startPlayback = (): void => {
       if (playbackTimer !== null) return;
       playbackTimer = window.setInterval(() => {
-        const next = deltaQueue.shift();
-        if (next !== undefined) {
+        const batchSize = deltaQueue.length > 20 ? 2 : 1;
+        let consumed = 0;
+        for (let b = 0; b < batchSize; b++) {
+          const next = deltaQueue.shift();
+          if (next === undefined) break;
+          consumed++;
           streamContent += next;
           // Incrementally append span to bubble with CSS fade-in. Avoid full render() stutter.
           const bubble = startNextStreamingBubble
@@ -4061,13 +4083,15 @@ async function send(): Promise<void> {
             startNextStreamingBubble = true;
             streamingBubbleCount += 1;
           }
+        }
+        if (consumed > 0) {
           messagesEl.scrollTop = messagesEl.scrollHeight;
           return;
         }
         // Queue empty
         if (playbackTimer !== null) { clearInterval(playbackTimer); playbackTimer = null; }
         tryFinish();
-      }, 40);
+      }, 20);
     };
     const offEvent = registerAguiListener((rawEvent) => {
       try {
@@ -4232,7 +4256,7 @@ async function send(): Promise<void> {
     if (msg) {
       msg.thinking = false;
       msg.transient = false;
-      msg.content = streamContent;
+      msg.content = cleanBondMetadata(streamContent);
       msg.sticker = sticker;
       msg.musicCard = pendingMusicCard ?? undefined;
     }

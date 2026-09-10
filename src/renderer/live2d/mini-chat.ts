@@ -305,7 +305,10 @@ export class MiniChatWidget {
 
         if (event.type === "TEXT_MESSAGE_CONTENT" && event.delta) {
           this.currentReply += event.delta;
-          this.bubbles.say(stripKaomojis(this.currentReply), 60000);
+          const displaySoFar = this.currentReply
+            .replace(/(?:Current\s+)?Bond\s+Level:[^\r\n]*(?:\r?\n|$)/gmi, "")
+            .replace(/Affection\s+Score:[^\r\n]*(?:\r?\n|$)/gmi, "");
+          this.bubbles.say(stripKaomojis(displaySoFar), 60000);
         } else if (event.type === "RUN_FINISHED" || event.type === "RUN_ERROR") {
           const eventReply = (event as { reply?: string })?.reply;
           this.finishRun(sessionId, assistantTurnId, eventReply);
@@ -366,7 +369,13 @@ export class MiniChatWidget {
 
   private async finishRun(sessionId: string, assistantTurnId: string, eventReply?: string): Promise<void> {
     const rawReply = (this.currentReply || eventReply || "").trim();
-    const finalReply = stripKaomojis(rawReply);
+    const cleanNoBond = rawReply
+      .replace(/(?:Current\s+)?Bond\s+Level:[^\r\n]*(?:\r?\n|$)/gmi, "")
+      .replace(/Affection\s+Score:[^\r\n]*(?:\r?\n|$)/gmi, "")
+      .replace(/(?:Current\s+)?Bond\s+Level:\s*Level\s*\d+[^\r\n]*/gi, "")
+      .replace(/Affection\s+Score:\s*\d+\/\d+[^\r\n]*/gi, "")
+      .trim();
+    const finalReply = stripKaomojis(cleanNoBond);
     this.cleanupAgui();
     this.setBusy(false);
 

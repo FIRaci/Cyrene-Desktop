@@ -9,6 +9,7 @@ import {
   MAX_BOND_SCORE,
   computeBondLevel,
   formatBondPersonaPrompt,
+  stripBondMetadata,
 } from "./bond-persona-config";
 
 export {
@@ -19,6 +20,7 @@ export {
   MAX_BOND_SCORE,
   computeBondLevel,
   formatBondPersonaPrompt,
+  stripBondMetadata,
 };
 
 export type BondInteractionType =

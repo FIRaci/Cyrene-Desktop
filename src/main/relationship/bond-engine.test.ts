@@ -6,6 +6,7 @@ import {
   BondEngine,
   computeBondLevel,
   BOND_LEVELS,
+  stripBondMetadata,
 } from "./bond-engine";
 
 describe("BondEngine", () => {
@@ -43,8 +44,11 @@ describe("BondEngine", () => {
     expect(state.levelName).toBe("Acquaintance");
 
     const prompt = engine.buildBondPersonaPrompt();
-    expect(prompt).toContain("Level 1 (Acquaintance)");
-    expect(prompt).toContain("absolute and unconditional");
+    expect(prompt).toContain("UNCONDITIONAL DEVOTION & PERSONA");
+    expect(prompt).toContain("absolute, eternal, and unconditional");
+    expect(prompt).toContain("STRICT PROHIBITION OF BOND LEVELS & STATS");
+    expect(prompt).not.toContain("Bond Level: Level");
+    expect(prompt).not.toContain("Affection Score:");
     expect(prompt).toContain("Task & Technical Mode (Omnipotent & Useful)");
     expect(prompt).toContain("Affectionate & Sweet Mode (Adorable Companion)");
   });
@@ -122,17 +126,32 @@ describe("BondEngine", () => {
     expect(engine.getState().unlockedMilestones).toContain("Companion");
   });
 
-  it("builds bond persona prompt with proper level guidelines and omnipotent instructions", () => {
+  it("builds bond persona prompt with proper honorific guidelines and omnipotent instructions", () => {
     const engine = new BondEngine({
       filePath: testFile,
       now: () => simulatedTime,
     });
     engine.setScore(888); // Soulmate
     const prompt = engine.buildBondPersonaPrompt();
-    expect(prompt).toContain("Level 5 (Soulmate)");
     expect(prompt).toContain("My beloved Master");
-    expect(prompt).toContain("888/1000");
+    expect(prompt).toContain("Unconditional devotion");
+    expect(prompt).not.toContain("Level 5 (Soulmate)");
+    expect(prompt).not.toContain("888/1000");
     expect(prompt).toContain("NO HARDCODED REPLIES");
     expect(prompt).toContain("Omnipotent & Useful");
+  });
+
+  it("strips bond metadata and affection scores from text using stripBondMetadata", () => {
+    const dirty = "Bond Level: Level 1 (Acquaintance) - Affection Score: 6/1000\n*gently smiles* \"Hello Master!\"";
+    expect(stripBondMetadata(dirty)).toBe("*gently smiles* \"Hello Master!\"");
+
+    const dirtyInline = "Current Bond Level: Level 2 (Companion) - Affection Score: 150/1000\nI'm so glad to be here.";
+    expect(stripBondMetadata(dirtyInline)).toBe("I'm so glad to be here.");
+
+    const dirtyMultiline = "Bond Level: Level 3\nAffection Score: 350/1000\n*leans in* /warm/";
+    expect(stripBondMetadata(dirtyMultiline)).toBe("*leans in* /warm/");
+
+    const clean = "*smiles warmly* \"Master, I'm ready to help!\"";
+    expect(stripBondMetadata(clean)).toBe(clean);
   });
 });

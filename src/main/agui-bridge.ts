@@ -11,6 +11,7 @@ import {
 } from "./orchestrator/cyrene-agent";
 import { indexConversationTurn } from "./orchestrator/history-tools";
 import type { RelationshipChannel } from "./relationship/relationship-log";
+import { stripBondMetadata } from "./relationship/bond-persona-config";
 import { createThinkFilter, type ThinkStreamFilter, type ThinkFilterMode } from "./chat/think-filter";
 import { perf } from "./perf-trace";
 import type { StyleId } from "../shared/style-sampling";
@@ -503,6 +504,7 @@ export function registerAgUiIpc(
               onActivityLog?.("reasoning", `[Soul Reasoning] ${lastResult.soulPhaseReason}`, undefined, channel);
             }
             if (lastResult.reply) {
+              lastResult.reply = stripBondMetadata(lastResult.reply);
               onActivityLog?.("response", lastResult.reply, undefined, channel);
               // Backend persistence guarantee: ensure conversation turn is safely stored in chatsStore and broadcasted
               try {
