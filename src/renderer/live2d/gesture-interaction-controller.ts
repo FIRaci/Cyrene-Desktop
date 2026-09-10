@@ -210,6 +210,8 @@ export class GestureInteractionController {
   private disposed = false;
   private cachedSessionId: string | null = null;
   private cachedContext: ContextAnalysisResult = analyzeConversationContext([]);
+  private unsubscribeOnChanged: (() => void) | null = null;
+  private unsubscribeOnActiveChanged: (() => void) | null = null;
 
   constructor(options: GestureInteractionOptions) {
     this.bubbles = options.bubbles;
@@ -217,6 +219,53 @@ export class GestureInteractionController {
     this.voice = options.voice;
     this.onExpressionReset = options.onExpressionReset;
     this.autonomousThoughts = options.autonomousThoughts;
+    this.initSessionListeners();
+  }
+
+  private initSessionListeners(): void {
+    if (typeof window === "undefined") return;
+    try {
+      const store = (window as unknown as { chatStore?: {
+        onChanged?: (cb: () => void) => () => void;
+        onActiveSessionChanged?: (cb: (id: string | null) => void) => () => void;
+      } }).chatStore;
+
+      if (store?.onChanged) {
+        this.unsubscribeOnChanged = store.onChanged(() => {
+          void this.refreshCachedContext();
+        });
+      }
+      if (store?.onActiveSessionChanged) {
+        this.unsubscribeOnActiveChanged = store.onActiveSessionChanged((sessionId) => {
+          if (sessionId) this.cachedSessionId = sessionId;
+          void this.refreshCachedContext();
+        });
+      }
+      void this.refreshCachedContext();
+    } catch {
+      // Ignore if chatStore is unavailable
+    }
+  }
+
+  async refreshCachedContext(): Promise<void> {
+    if (typeof window === "undefined" || this.disposed) return;
+    try {
+      const store = (window as unknown as { chatStore?: {
+        getActiveSession?: () => Promise<string | { id: string } | null>;
+        get?: (id: string) => Promise<{ messages: Array<{ role: string; content: string }> } | null>;
+        list?: () => Promise<Array<{ id: string }>>;
+      } }).chatStore;
+
+      if (!store?.getActiveSession || !store?.get) return;
+      const sessionId = await this.getOrCreateActiveSessionId(store);
+      if (!sessionId) return;
+      const sessionData = await store.get(sessionId);
+      if (sessionData && Array.isArray(sessionData.messages)) {
+        this.cachedContext = analyzeConversationContext(sessionData.messages);
+      }
+    } catch {
+      // Fail silently and keep current cachedContext
+    }
   }
 
   private getResolvedContext(): ContextAnalysisResult {
@@ -581,5 +630,13 @@ export class GestureInteractionController {
   dispose(): void {
     this.disposed = true;
     this.cleanupAgui();
+    if (this.unsubscribeOnChanged) {
+      try { this.unsubscribeOnChanged(); } catch { /* ignore */ }
+      this.unsubscribeOnChanged = null;
+    }
+    if (this.unsubscribeOnActiveChanged) {
+      try { this.unsubscribeOnActiveChanged(); } catch { /* ignore */ }
+      this.unsubscribeOnActiveChanged = null;
+    }
   }
 }

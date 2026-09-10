@@ -45,6 +45,8 @@ export const IDLE_SMILE_KAOMOJIS = [
 export class FloatingKaomojiController {
   private readonly container: HTMLElement;
   private disposed = false;
+  private lastSpawnTimestamp = 0;
+  static readonly MIN_SPAWN_INTERVAL_MS = 1500;
 
   constructor(container?: HTMLElement | null) {
     if (container) {
@@ -62,10 +64,24 @@ export class FloatingKaomojiController {
   }
 
   /**
-   * Spawn a floating kaomoji particle that floats upwards and fades out.
+   * Reset cooldown timer (e.g. for unit tests or manual re-arming).
    */
-  spawn(text?: string, clientX?: number, clientY?: number): HTMLElement | null {
+  resetCooldown(): void {
+    this.lastSpawnTimestamp = 0;
+  }
+
+  /**
+   * Spawn a floating kaomoji particle that floats upwards and fades out.
+   * Debounced by MIN_SPAWN_INTERVAL_MS to prevent duplicate overlapping spawns.
+   */
+  spawn(text?: string, clientX?: number, clientY?: number, force = false): HTMLElement | null {
     if (this.disposed || !this.container) return null;
+
+    const now = Date.now();
+    if (!force && now - this.lastSpawnTimestamp < FloatingKaomojiController.MIN_SPAWN_INTERVAL_MS) {
+      return null;
+    }
+    this.lastSpawnTimestamp = now;
 
     const kaomojiText = text || EMOTION_KAOMOJIS[Math.floor(Math.random() * EMOTION_KAOMOJIS.length)];
     const el = document.createElement("div");
@@ -159,7 +175,7 @@ export class FloatingKaomojiController {
           if (!this.disposed) {
             const side = i % 2 === 0 ? -1 : 1;
             const x = side === -1 ? winWidth * 0.25 : winWidth * 0.75;
-            this.spawn(undefined, x, centerY);
+            this.spawn(undefined, x, centerY, true);
           }
         }, i * 180);
       }

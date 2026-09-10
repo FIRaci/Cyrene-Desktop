@@ -142,7 +142,7 @@ def update_tts_infer_config():
   device: cpu
   is_half: false
   t2s_weights_path: {str(GPT_CKPT)}
-  version: v2Pro
+  version: v2
   vits_weights_path: {str(SOVITS_PTH)}
 v1:
   bert_base_path: GPT_SoVITS/pretrained_models/chinese-roberta-wwm-ext-large

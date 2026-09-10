@@ -957,15 +957,15 @@ let gptsovitsChildProcess: import("child_process").ChildProcess | null = null;
 let gptsovitsAutoSpawnAttempted = false;
 
 // --- Fix 2: Server health check TTL cache ---
-// Avoids 1.5 s probe on every single TTS request.
+// Avoids repeated probe latency on active TTS requests.
 let _gptsovitsCachedOnline = false;
 let _gptsovitsLastCheckedAt = 0;
-const _GPTSOVITS_SERVER_CACHE_TTL_MS = 8000;
+const _GPTSOVITS_SERVER_CACHE_TTL_MS = 300_000; // 5 minutes
 
 export async function isGptsovitsServerOnline(baseUrl = "http://127.0.0.1:9880"): Promise<boolean> {
   try {
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 1500);
+    const timer = setTimeout(() => ctrl.abort(), 1200);
     const res = await fetch(`${baseUrl.replace(/\/+$/, "")}/docs`, { method: "GET", signal: ctrl.signal });
     clearTimeout(timer);
     return res.status < 500;
@@ -974,7 +974,7 @@ export async function isGptsovitsServerOnline(baseUrl = "http://127.0.0.1:9880")
   }
 }
 
-/** Cached variant: re-probes at most once every 8 seconds to avoid per-request latency. */
+/** Cached variant: keeps established online status for 5 minutes unless reset on error. */
 async function isGptsovitsServerOnlineCached(baseUrl: string): Promise<boolean> {
   const now = Date.now();
   if (_gptsovitsCachedOnline && (now - _gptsovitsLastCheckedAt) < _GPTSOVITS_SERVER_CACHE_TTL_MS) {
@@ -988,13 +988,13 @@ async function isGptsovitsServerOnlineCached(baseUrl: string): Promise<boolean> 
   return result;
 }
 
-export async function waitForGptsovitsServerOnline(baseUrl = "http://127.0.0.1:9880", maxWaitMs = 30000): Promise<boolean> {
+export async function waitForGptsovitsServerOnline(baseUrl = "http://127.0.0.1:9880", maxWaitMs = 15000): Promise<boolean> {
   const start = Date.now();
   while (Date.now() - start < maxWaitMs) {
     if (await isGptsovitsServerOnline(baseUrl)) {
       return true;
     }
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await new Promise((resolve) => setTimeout(resolve, 800));
   }
   return false;
 }
@@ -1133,10 +1133,30 @@ export async function warmUpLocalModelEndpoint(): Promise<void> {
 // --- Fix 3: Translation LRU Cache ---
 // Avoids redundant API round-trips for repeated phrases (gestures, greetings, autonomous thoughts).
 const _translationCache = new Map<string, { zh: string; at: number }>();
-const _TRANSLATION_CACHE_MAX = 200;
-const _TRANSLATION_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
+const _TRANSLATION_CACHE_MAX = 300;
+const _TRANSLATION_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+const COMMON_GESTURE_TRANSLATIONS: Record<string, string> = {
+  "Ah, Master, your gentle touch feels wonderful!": "啊，开拓者，你温柔的抚摸感觉真好！",
+  "Ehehe, Master is always so gentle with me!": "诶嘿嘿，开拓者对我总是这么温柔呢！",
+  "Ah... Master's gentle pats make me feel so cherished!": "啊……开拓者温柔的摸摸让我觉得好幸福！",
+  "Ehehe~ having Master close to me is my favorite feeling in the world!": "诶嘿嘿~能在开拓者身边是我世界上最喜欢的感觉！",
+  "Ehehe! Master's pats give me 100% extra energy today!": "诶嘿嘿！开拓者的摸头让我今天充满了一百倍的活力！",
+  "Waaa~ Master is tickling me! Hehe, let's keep playing!": "哇啊~开拓者在挠我痒痒呢！嘿嘿，我们继续一起玩吧！",
+  "M-Master... Please don't look at me so closely when you pat me...": "开、开拓者……摸头的时候请不要这么近盯着我看嘛……",
+  "A-Ah... Master's gentle caress makes me too shy to speak...": "啊、啊……开拓者温柔的轻抚让我害羞得说不出话了……",
+  "Hmph! If you're going to pat me, you better take full responsibility and stay by my side!": "哼！既然摸了我的头，你就要负起责任一直陪在我身边哦！",
+  "Cyrene will quietly stay right by your side, Master.": "希琳会安安静静地一直陪在开拓者身边的。",
+  "Cyrene is right here with you!": "希琳一直都在这里陪着你哦！",
+  "Cyrene is right here with you! ✨": "希琳一直都在这里陪着你哦！",
+  "I am always right here beside you, Master!": "希琳一直都在开拓者的身边哦！",
+};
 
 function _translationCacheGet(en: string): string | null {
+  const trimmed = en.trim();
+  if (COMMON_GESTURE_TRANSLATIONS[trimmed]) {
+    return COMMON_GESTURE_TRANSLATIONS[trimmed];
+  }
   const entry = _translationCache.get(en);
   if (!entry) return null;
   if (Date.now() - entry.at > _TRANSLATION_CACHE_TTL_MS) {
@@ -1257,20 +1277,26 @@ async function prepareGptsovitsVoicePayload(payload: {
   }
   refAudioPath = path.resolve(refAudioPath);
 
-  const promptText = (payload.promptText && payload.promptText.trim())
+  let rawPrompt = (payload.promptText && payload.promptText.trim())
     || (settings.ttsGptsovitsPromptText && settings.ttsGptsovitsPromptText.trim())
     || "开拓者，希琳一直都在这里陪着你哦。";
+  if (!/[\u4e00-\u9fa5]/.test(rawPrompt) || rawPrompt.includes("?")) {
+    rawPrompt = "开拓者，希琳一直都在这里陪着你哦。";
+  }
+  const promptText = rawPrompt;
 
-  // --- Fix 2: Use TTL-cached server health check ---
-  if (!(await isGptsovitsServerOnlineCached(baseUrl))) {
-    void ensureGptsovitsServerRunning();
-    const isOnline = await waitForGptsovitsServerOnline(baseUrl, 35000);
-    if (isOnline) {
-      _gptsovitsCachedOnline = true;
-      _gptsovitsLastCheckedAt = Date.now();
-    } else {
-      _gptsovitsCachedOnline = false;
-      _gptsovitsLastCheckedAt = 0;
+  // Optimized server health check: probe only if server has not been established as online
+  if (!_gptsovitsCachedOnline) {
+    if (!(await isGptsovitsServerOnlineCached(baseUrl))) {
+      void ensureGptsovitsServerRunning();
+      const isOnline = await waitForGptsovitsServerOnline(baseUrl, 15000);
+      if (isOnline) {
+        _gptsovitsCachedOnline = true;
+        _gptsovitsLastCheckedAt = Date.now();
+      } else {
+        _gptsovitsCachedOnline = false;
+        _gptsovitsLastCheckedAt = 0;
+      }
     }
   }
 
@@ -6261,17 +6287,26 @@ app.whenReady().then(async () => {
       throw new Error("The cache missed and required parameters are missing (baseUrl/refAudioPath/promptText/text)");
     }
 
-    const result = await gptsovitsSynthesize({
-      baseUrl: prepared.baseUrl,
-      refAudioPath: prepared.refAudioPath,
-      promptText: prepared.promptText,
-      text: prepared.text,
-      textLang: prepared.textLang,
-      promptLang: prepared.promptLang,
-      speed: prepared.speed,
-      format,
-      debugLog: appendGptsovitsTtsLog,
-    });
+    let result;
+    try {
+      result = await gptsovitsSynthesize({
+        baseUrl: prepared.baseUrl,
+        refAudioPath: prepared.refAudioPath,
+        promptText: prepared.promptText,
+        text: prepared.text,
+        textLang: prepared.textLang,
+        promptLang: prepared.promptLang,
+        speed: prepared.speed,
+        format,
+        debugLog: appendGptsovitsTtsLog,
+      });
+    } catch (synthErr) {
+      if (String(synthErr).includes("ECONNREFUSED") || String(synthErr).includes("fetch failed")) {
+        _gptsovitsCachedOnline = false;
+        _gptsovitsLastCheckedAt = 0;
+      }
+      throw synthErr;
+    }
     const finalAudio = await applyConfiguredRvc(result.audio, prepared);
     const finalCacheKey = buildGptsovitsCacheKey({
       ...prepared,

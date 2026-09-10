@@ -104,17 +104,40 @@ describe("FloatingKaomojiController", () => {
     expect(el).toBeNull();
   });
 
+  it("debounces rapid successive spawn calls within MIN_SPAWN_INTERVAL_MS", () => {
+    const container = createFakeElement("div");
+    const controller = new FloatingKaomojiController(container);
+
+    const first = controller.spawn("(｡♥‿♥｡)", 100, 200);
+    expect(first).not.toBeNull();
+
+    // Immediate second call should be blocked by cooldown
+    const second = controller.spawn("(≧◡≦) ♡", 100, 200);
+    expect(second).toBeNull();
+    expect(container.children.length).toBe(1);
+
+    // After MIN_SPAWN_INTERVAL_MS, spawning is allowed again
+    vi.advanceTimersByTime(FloatingKaomojiController.MIN_SPAWN_INTERVAL_MS + 10);
+    const third = controller.spawn("(≧◡≦) ♡", 100, 200);
+    expect(third).not.toBeNull();
+    expect(container.children.length).toBe(2);
+
+    controller.dispose();
+  });
+
   it("keeps kaomoji coordinates strictly within window boundaries and clear of edges", () => {
     vi.stubGlobal("window", { innerWidth: 400, innerHeight: 500 });
     const container = createFakeElement("div");
     const controller = new FloatingKaomojiController(container);
 
     for (let i = 0; i < 20; i++) {
+      controller.resetCooldown();
       const leftEl = controller.spawn("(੭ु´͈ ᐜ `͈)੭ु⁾⁾", 50, 200);
       const leftX = parseInt(leftEl?.style.left || "0", 10);
       expect(leftX).toBeGreaterThanOrEqual(81);
       expect(leftX).toBeLessThanOrEqual(140);
 
+      controller.resetCooldown();
       const rightEl = controller.spawn("(੭ु´͈ ᐜ `͈)੭ु⁾⁾", 350, 200);
       const rightX = parseInt(rightEl?.style.left || "0", 10);
       expect(rightX).toBeGreaterThanOrEqual(265);
@@ -132,12 +155,15 @@ describe("FloatingKaomojiController", () => {
     expect(musicEl).not.toBeNull();
     expect(musicEl?.classList.contains("pet-kaomoji")).toBe(true);
 
+    controller.resetCooldown();
     const swingEl = controller.spawnIdle("swing");
     expect(swingEl).not.toBeNull();
 
+    controller.resetCooldown();
     const winkEl = controller.spawnIdle("wink");
     expect(winkEl).not.toBeNull();
 
+    controller.resetCooldown();
     const smileEl = controller.spawnIdle("smile");
     expect(smileEl).not.toBeNull();
 

@@ -87,6 +87,9 @@ export async function synthesize(opts: GptsovitsSynthesizeOptions): Promise<Gpts
     speed_factor: opts.speed ?? 1,
     streaming_mode: false,
     media_type: format,
+    parallel_infer: true,
+    batch_size: 1,
+    text_split_method: "cut5",
   });
 
   // Strip trailing slash from baseUrl, append /api/tts
