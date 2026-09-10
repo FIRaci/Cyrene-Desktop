@@ -488,8 +488,71 @@ describe("GestureInteractionController", () => {
       expect.any(Number),
       expect.anything(),
     );
+    // Crucial: exactly one kaomoji is spawned, never two
+    expect(kaomoji.spawn).toHaveBeenCalledTimes(1);
+
+    controller.dispose();
+  });
+
+  it("spawns exactly one kaomoji matching active context mood during head-pat (no duplicate kaomojis)", async () => {
+    let aguiCallback: ((event: any) => void) | null = null;
+    const run = vi.fn().mockResolvedValue({ success: true });
+    const onEvent = vi.fn().mockImplementation((cb: (event: any) => void) => {
+      aguiCallback = cb;
+      return () => {
+        aguiCallback = null;
+      };
+    });
+
+    const append = vi.fn().mockResolvedValue(true);
+    const getActiveSession = vi.fn().mockResolvedValue("active-session-excited");
+    const get = vi.fn().mockResolvedValue({
+      id: "active-session-excited",
+      messages: [
+        { role: "user", content: "Yay thắng rồi, vui quá đi thôi Cyrene ơi!" },
+      ],
+    });
+
+    vi.stubGlobal("window", {
+      agui: { run, onEvent },
+      chatStore: { append, getActiveSession, get },
+    });
+
+    const mockThoughts = {
+      pause: vi.fn(),
+      resume: vi.fn(),
+      getCurrentMood: vi.fn().mockReturnValue("excited"),
+      getCurrentContext: vi.fn().mockReturnValue({
+        mood: "excited",
+        detectedKeywords: ["vui quá", "thắng rồi"],
+        recommendedThought: { text: "Bouncing with excitement!" },
+        gestureEmotionPromptSnippet: "SUPER EXCITED",
+        gestureFallback: {
+          headPat: "Ehehe! Master's pats give me extra energy!",
+          petting: "Waaa~ Master is tickling me!",
+          kaomoji: "(≧◡≦) ♡",
+          thought: "*bouncing with joyful energy...*",
+        },
+      }),
+    };
+
+    const controller = new GestureInteractionController({
+      bubbles,
+      kaomoji,
+      voice,
+      autonomousThoughts: mockThoughts,
+    });
+
+    await controller.handleHeadPat(120, 150);
+
+    // Verify kaomoji is spawned EXACTLY ONCE with the excited kaomoji "(≧◡≦) ♡"
+    expect(kaomoji.spawn).toHaveBeenCalledTimes(1);
+    expect(kaomoji.spawn).toHaveBeenCalledWith("(≧◡≦) ♡", 120, 150);
+    // Verify default pat kaomoji "(⁄ ⁄>⁄ ▽ ⁄<⁄ ⁄)" was NOT spawned
+    expect(kaomoji.spawn).not.toHaveBeenCalledWith("(⁄ ⁄>⁄ ▽ ⁄<⁄ ⁄)", expect.anything(), expect.anything());
 
     controller.dispose();
   });
 });
+
 

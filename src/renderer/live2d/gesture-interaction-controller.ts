@@ -1,14 +1,20 @@
 import type { CompanionBubbleController } from "./companion-bubbles";
 import type { FloatingKaomojiController } from "./floating-kaomoji";
 import type { CompanionVoiceService } from "./voice";
-import { analyzeConversationContext } from "./chat-context-analyzer";
+import { analyzeConversationContext, type ContextAnalysisResult } from "./chat-context-analyzer";
 
 export interface GestureInteractionOptions {
   bubbles: CompanionBubbleController;
   kaomoji?: FloatingKaomojiController;
   voice?: CompanionVoiceService;
   onExpressionReset?: () => void;
-  autonomousThoughts?: { pause: () => void; resume: () => void };
+  autonomousThoughts?: {
+    pause: () => void;
+    resume: () => void;
+    getCurrentMood?: () => string;
+    getCurrentContext?: () => ContextAnalysisResult;
+    setExplicitContext?: (ctx: ContextAnalysisResult) => void;
+  };
 }
 
 interface AguiEvent {
@@ -188,7 +194,13 @@ export class GestureInteractionController {
   private readonly kaomoji?: FloatingKaomojiController;
   private readonly voice?: CompanionVoiceService;
   private readonly onExpressionReset?: () => void;
-  private readonly autonomousThoughts?: { pause: () => void; resume: () => void };
+  private readonly autonomousThoughts?: {
+    pause: () => void;
+    resume: () => void;
+    getCurrentMood?: () => string;
+    getCurrentContext?: () => ContextAnalysisResult;
+    setExplicitContext?: (ctx: ContextAnalysisResult) => void;
+  };
 
   private static readonly COOLDOWN_MS = 3000;
   private isGenerating = false;
@@ -197,6 +209,7 @@ export class GestureInteractionController {
   private aguiOff: (() => void) | null = null;
   private disposed = false;
   private cachedSessionId: string | null = null;
+  private cachedContext: ContextAnalysisResult = analyzeConversationContext([]);
 
   constructor(options: GestureInteractionOptions) {
     this.bubbles = options.bubbles;
@@ -204,6 +217,17 @@ export class GestureInteractionController {
     this.voice = options.voice;
     this.onExpressionReset = options.onExpressionReset;
     this.autonomousThoughts = options.autonomousThoughts;
+  }
+
+  private getResolvedContext(): ContextAnalysisResult {
+    const fromThoughts = this.autonomousThoughts?.getCurrentContext?.();
+    if (fromThoughts && fromThoughts.mood !== "default") {
+      return fromThoughts;
+    }
+    if (this.cachedContext && this.cachedContext.mood !== "default") {
+      return this.cachedContext;
+    }
+    return fromThoughts ?? this.cachedContext;
   }
 
   get isGeneratingGesture(): boolean {
@@ -273,8 +297,20 @@ export class GestureInteractionController {
     this.autonomousThoughts?.pause();
     this.onExpressionReset?.();
 
-    this.kaomoji?.spawn(kaomojiText, x, y);
-    this.bubbles.think(thoughtText, 30000);
+    // Resolve context synchronously from primed autonomous thoughts or cached session
+    const syncContext = this.getResolvedContext();
+    const hasSyncContextMood = syncContext.mood !== "default";
+
+    const initialKaomoji = hasSyncContextMood
+      ? syncContext.gestureFallback.kaomoji
+      : kaomojiText;
+    const initialThought = hasSyncContextMood
+      ? syncContext.gestureFallback.thought
+      : thoughtText;
+
+    // Spawn EXACTLY ONE kaomoji particle immediately upon touch
+    this.kaomoji?.spawn(initialKaomoji, x, y);
+    this.bubbles.think(initialThought, 30000);
     this.currentReply = "";
 
     const win = typeof window !== "undefined" ? window : (globalThis as unknown as Window);
@@ -315,6 +351,9 @@ export class GestureInteractionController {
     }
 
     const context = analyzeConversationContext(rawHistory);
+    this.cachedContext = context;
+    this.autonomousThoughts?.setExplicitContext?.(context);
+
     let effectiveFallback = fallbackText;
     let effectivePrompt = prompt;
 
@@ -326,7 +365,8 @@ export class GestureInteractionController {
         effectivePrompt = prompt + "\n" + context.gestureEmotionPromptSnippet;
       }
       this.bubbles.think(context.gestureFallback.thought, 30000);
-      this.kaomoji?.spawn(context.gestureFallback.kaomoji, x, y);
+      // NOTE: Strictly do NOT spawn kaomoji again.
+      // Exactly ONE kaomoji particle is spawned per gesture interaction.
     }
 
     // Append clean immersive user action (e.g. "*Gently pats Cyrene's head*") into chatStore

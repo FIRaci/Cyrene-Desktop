@@ -111,6 +111,10 @@ export class AutonomousThoughtController {
     return this.currentContext.mood;
   }
 
+  getCurrentContext(): ContextAnalysisResult {
+    return this.currentContext;
+  }
+
   setExplicitContext(result: ContextAnalysisResult): void {
     this.currentContext = result;
   }
