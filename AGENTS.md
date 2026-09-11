@@ -78,9 +78,9 @@
    - Phản hồi xoa đầu (head-pat) và vuốt ve (petting) phải do AI / LLM sinh tự nhiên trong thời gian thực qua `agui.run({ executionMode: "chat" })`.
    - Không được dùng các chuỗi hardcode thô thiển; hãy truyền system prompt phong phú bằng **Tiếng Anh** để AI tự do nhập vai waifu Cyrene.
 2. **Cú pháp Hành động & Suy nghĩ (`*...*` và `/.../`)**:
-   - Cho phép AI viết miêu tả hành động trong dấu sao `*...*` (ví dụ: `*gently leans into your hand*`).
-   - Cho phép AI viết dòng suy nghĩ nội tâm trong dấu gạch `/.../` (ví dụ: `/so warm.../`).
-   - **Yêu cầu Nội dung Suy nghĩ Thật trong `/.../` (Mandatory Real Inner Thoughts)**: Nếu có dùng dấu gạch suy nghĩ `/.../`, bên trong BẮT BUỘC PHẢI CHỨA CÂU CHỮ SUY NGHĨ NỘI TÂM THẬT (ví dụ: `/my heart is racing so fast.../`, `/I never want this closeness to end/`). TUYỆT ĐỐI CẤM để dấu gạch rỗng `//`, CẤM để dấu chấm ba chấm `/.../` hay `/[...]/`. Nếu không có suy nghĩ nội tâm cụ thể tại khoảnh khắc đó, phải lược bỏ hoàn toàn dấu gạch `/`, tuyệt đối không được xuất hiện `/.../` rỗng.
+   - Cho phép AI viết miêu tả hành động trong dấu sao `*...*` tự nhiên, phong phú theo ngữ cảnh.
+   - Cho phép AI viết dòng suy nghĩ nội tâm trong dấu gạch `/.../`.
+   - **Tự Do Sáng Tạo Tuyệt Đối & Yêu Cầu Nội Dung Thật (Maximum Creative Freedom & Mandatory Real Thoughts)**: Dấu gạch suy nghĩ `/.../` trao toàn quyền tự do sáng tạo cho AI tự nhiên bộc lộ những cảm xúc, rung động, cảm giác hay mong muốn chân thật nhất tại khoảnh khắc hiện tại mà không bị gò bó bởi bất kỳ câu mẫu (example / e.g.) nào. Tuy nhiên, BẮT BUỘC PHẢI CHỨA CÂU CHỮ SUY NGHĨ THẬT: TUYỆT ĐỐI CẤM để dấu gạch rỗng `//`, CẤM để dấu chấm ba chấm `/.../` hay `/[...]/`. Nếu không có suy nghĩ nội tâm cụ thể tại khoảnh khắc đó, phải lược bỏ hoàn toàn dấu gạch `/`, tuyệt đối không được xuất hiện `/.../` rỗng.
    - **Hiển thị trên Bong bóng thoại (Speech Bubble)**: Giữ nguyên hành động và suy nghĩ để người dùng đọc được cảm xúc sống động của Cyrene.
    - **Bộ lọc âm thanh (Voice Speech Filter)**: Hàm `extractSpokenText` / `cleanTextForSpeech` **bắt buộc phải loại bỏ toàn bộ** `*...*` và `/.../` trước khi gửi cho TTS, để giọng nói chỉ phát ra lời thoại ngọt ngào, không bao giờ đọc ra dấu sao hay ký hiệu.
 3. **Tuyệt đối Không đưa Kaomoji vào Văn bản (Kaomojis Are Particles ONLY)**:
