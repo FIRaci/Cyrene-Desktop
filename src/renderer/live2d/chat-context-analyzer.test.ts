@@ -72,6 +72,14 @@ describe("chat-context-analyzer - 9 mood spectrum", () => {
       expect(result.mood).toBe("pouting");
     });
 
+    it("detects pouting mood when user teases Cyrene playfully (trêu ghẹo, chọc em, đồ ngốc, just teasing)", () => {
+      const messages = [
+        { role: "user", content: "Anh trêu em tí thôi mà, đồ ngốc xít" },
+      ];
+      const result = detectConversationMood(messages);
+      expect(result.mood).toBe("pouting");
+    });
+
     it("detects study mood from study and exam keywords (học, ôn thi, exam, homework)", () => {
       const messages = [
         { role: "user", content: "Tối nay anh phải học bài và ôn thi giải tích" },

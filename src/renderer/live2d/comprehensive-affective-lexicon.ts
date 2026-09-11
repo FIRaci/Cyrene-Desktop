@@ -110,15 +110,15 @@ export const COMPREHENSIVE_LEXICON: Record<LexiconMood, LexiconItem[]> = {
     },
   ],
 
-  // ── 3. POUTING: Genuine tsundere sulking, petty grievance, playful upset ──
+  // ── 3. POUTING: Genuine tsundere sulking, petty grievance, playful upset, teasing & banter ──
   pouting: [
-    // Tier 1 (Weight: 3.5): Explicit interpersonal complaints, tantrums, and clear sulking
+    // Tier 1 (Weight: 3.5): Explicit interpersonal complaints, tantrums, sulking, and playful teasing/bullying
     {
-      regex: /\b(stop teasing me|why are you teasing me|you're teasing me|stop bullying me|giving me the silent treatment|don't talk to me|ignoring me|stop ignoring me|mad at (?:you|me)|angry with (?:you|me)|you're so mean|mean to me|so mean to me|won't forgive you|not talking to you|hmph|b-baka|baka)\b/i,
+      regex: /\b(stop teasing me|why are you teasing me|you're teasing me|stop bullying me|giving me the silent treatment|don't talk to me|ignoring me|stop ignoring me|mad at (?:you|me)|angry with (?:you|me)|you're so mean|mean to me|so mean to me|won't forgive you|not talking to you|teasing you|just teasing|poke fun|poking fun|you dummy|silly girl|so clumsy|clumsy girl|hmph|b-baka|baka)\b/i,
       weight: 3.5,
     },
     {
-      regex: /(dỗi|giận dỗi|hờn dỗi|không thèm nói|nghỉ chơi|bắt nạt em|đáng ghét quá|phạt anh|phạt master)/i,
+      regex: /(dỗi|giận dỗi|hờn dỗi|không thèm nói|nghỉ chơi|bắt nạt em|đáng ghét quá|phạt anh|phạt master|trêu em|trêu ghẹo|chọc em|chọc tức|đồ ngốc|ngốc xít|đồ baka|lêu lêu|trêu tí|trêu tí thôi|chọc tí)/i,
       weight: 3.5,
     },
     {
@@ -126,13 +126,13 @@ export const COMPREHENSIVE_LEXICON: Record<LexiconMood, LexiconItem[]> = {
       weight: 2.8,
     },
 
-    // Tier 2 (Weight: 2.0): Standard sulking terminology (must NOT be negated)
+    // Tier 2 (Weight: 2.0): Standard sulking and teasing terminology (must NOT be negated)
     {
-      regex: /\b(pout|pouting|pouts|sulking|sulk|sulky|grumpy|bicker|bickering|grump|tantrum|peeved|miffed|sulks)\b/i,
+      regex: /\b(pout|pouting|pouts|sulking|sulk|sulky|grumpy|bicker|bickering|grump|tantrum|peeved|miffed|sulks|tease|teasing|teased|banter|bantering)\b/i,
       weight: 2.0,
     },
     {
-      regex: /(dỗi|giận|hờn|ghét)/i,
+      regex: /(dỗi|giận|hờn|ghét|trêu|chọc)/i,
       weight: 1.8,
     },
 

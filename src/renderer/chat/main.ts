@@ -742,6 +742,7 @@ async function renderRailList(): Promise<void> {
     console.warn("[Cyrene Chat] Sidebar load sessions failed:", err);
   }
 
+  const prevScrollTop = chatRailList.scrollTop;
   chatRailList.innerHTML = "";
   if (sessions.length === 0) {
     if (chatRailEmpty) chatRailEmpty.classList.remove("is-hidden");
@@ -753,6 +754,7 @@ async function renderRailList(): Promise<void> {
     const item = buildRailItem(session);
     chatRailList.appendChild(item);
   }
+  chatRailList.scrollTop = prevScrollTop;
 }
 
 function buildRailItem(session: ChatSessionMetaUI): HTMLLIElement {
@@ -773,17 +775,37 @@ function buildRailItem(session: ChatSessionMetaUI): HTMLLIElement {
   timeEl.className = "chat__rail-time";
   timeEl.textContent = formatChatRelativeTime(session.updatedAt);
 
-
   metaEl.appendChild(timeEl);
 
-  //  = Local（ IPC，Settings）
+  // Switch session on click with auto-cancel of active generation, immediate visual feedback, and reliable fallback
   li.addEventListener("click", async () => {
     if (sending) {
-      announceScreenshotStatus("Cyrene is still replying. Please wait or stop generation first.");
-      return;
+      console.warn("[Cyrene Chat] Cancelling active generation for session switch via sidebar");
+      void window.agui?.cancel?.().catch(() => {});
+      sending = false;
+      sendBtn.disabled = false;
+      hideRunningProgress(0);
     }
-    if (session.id === currentSessionId) return;
-    await loadSessionTailIntoUI(session.id);
+    chatRailList?.querySelectorAll(".chat__rail-item").forEach((el) => el.classList.remove("is-active"));
+    li.classList.add("is-active");
+
+    let ok = false;
+    try {
+      ok = await loadSessionTailIntoUI(session.id);
+    } catch (err) {
+      console.warn("[Cyrene Chat] loadSessionTailIntoUI failed for session:", session.id, err);
+    }
+    if (!ok && window.chatStore) {
+      try {
+        const full = await window.chatStore.get(session.id);
+        if (full) {
+          loadSessionIntoUI(full as ChatStoreSession);
+          ok = true;
+        }
+      } catch (err) {
+        console.warn("[Cyrene Chat] fallback window.chatStore.get failed for session:", session.id, err);
+      }
+    }
   });
 
   li.appendChild(titleEl);
@@ -791,19 +813,21 @@ function buildRailItem(session: ChatSessionMetaUI): HTMLLIElement {
   return li;
 }
 
-// loader  toggle 
+// loader toggle
 chatStatusBtn?.addEventListener("click", () => {
   if (!chatRail) return;
   chatRail.toggleAttribute("hidden");
-  // （ onChanged Refresh）
   if (!chatRail.hidden) void renderRailList();
 });
 
 // +New Chat
 chatRailNew?.addEventListener("click", async () => {
   if (sending) {
-    announceScreenshotStatus("Cyrene is still replying. Please wait or stop generation first.");
-    return;
+    console.warn("[Cyrene Chat] Cancelling active generation for new session creation");
+    void window.agui?.cancel?.().catch(() => {});
+    sending = false;
+    sendBtn.disabled = false;
+    hideRunningProgress(0);
   }
   if (!window.chatStore) return;
   try {

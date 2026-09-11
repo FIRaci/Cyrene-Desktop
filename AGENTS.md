@@ -600,3 +600,44 @@ if (result.mode === "html") {
    - `AGENTS.md` là cuốn cẩm nang tối cao, bản hiến pháp trung tâm của dự án Cyrene Desktop.
    - Khi có bất kỳ quy tắc hoặc cơ chế mới nào được chốt và code cứng, AI Agent thực thi BẮT BUỘC phải cập nhật ngay vào `AGENTS.md` và mã nguồn đồng bộ trong cùng một phiên làm việc, không được để thất lạc kiến thức hay quy tắc.
 
+### 16.9. Chuyển Đổi Phiên Chat & Chống Khóa Cứng Sidebar Rail (Chat Rail Session Switching & Unblockable Navigation Contract)
+
+**Files**: `src/renderer/chat/main.ts` (`buildRailItem`, `renderRailList`, `chatRailNew`).
+
+**Bản chất vấn đề & Bài học xương máu**:
+- Khi người dùng click vào các phiên chat cũ trong danh sách sidebar (`chat__rail-item`, ví dụ "Hello", "New Chat"), trước đây click bị chặn âm thầm nếu cờ `sending === true` (do tin nhắn trước đó đang chờ hoàn tất hoặc bị kẹt mạng), hoặc nếu `session.id === currentSessionId` (không reload khi UI bị desync), hoặc khi `loadSessionTailIntoUI` thất bại mà thiếu cơ chế fallback.
+- Người dùng click nhưng không có phản hồi thị giác hay thông báo nào, tạo cảm giác app bị đơ/hỏng tính năng danh sách hội thoại.
+
+**Quy tắc Khóa Chết (Immutable Invariants)**:
+1. **Tự Động Hủy Luồng Đang Chạy Để Chuyển Phiên (Graceful Cancellation on Click)**:
+   - Khi người dùng chủ động click vào bất kỳ phiên chat nào trong sidebar rail hoặc click "+ New Chat", nếu hệ thống đang ở trạng thái `sending`, hàm BẮT BUỘC phải tự động gọi `window.agui?.cancel?.()`, gán `sending = false`, mở lại nút gửi và ẩn tiến trình đang chạy để ngay lập tức chuyển sang phiên được chọn.
+   - TUYỆT ĐỐI KHÔNG chặn click của người dùng chỉ vì cờ `sending` đang bật!
+2. **Phản Hồi Thị Giác Tức Thì (Instant Active State)**:
+   - Khi click, lập tức gỡ class `.is-active` ở tất cả item khác và gán `.is-active` cho item vừa click trước khi tiến hành nạp dữ liệu bất đồng bộ.
+3. **Cơ Chế Nạp Phiên Phòng Ngự Đa Tầng (Defensive Loading with Fallback)**:
+   - Bọc `loadSessionTailIntoUI(session.id)` trong khối `try...catch`.
+   - Nếu `loadSessionTailIntoUI` trả về `false` hoặc ném lỗi, BẮT BUỘC tự động fallback gọi `window.chatStore.get(session.id)` để lấy toàn bộ session từ disk và nạp qua `loadSessionIntoUI(full)`.
+4. **Bảo Toàn Vị Trí Cuộn Của Sidebar (Scroll Preservation)**:
+   - Trong `renderRailList()`, hàm phải lưu `prevScrollTop = chatRailList.scrollTop` và gán lại sau khi render lại danh sách, tránh hiện tượng danh sách nhảy giật lên đầu.
+
+### 16.10. Phản Ứng Trêu Ghẹo, Banter & Chống "Nà Ná Na Na" (Anti-Sycophancy & Teasing Chemistry Contract - Strictly Zero Canned Examples)
+
+**Files**: `prompts/tone-rules.md`, `prompts/chat_system.md`, `src/main/orchestrator/tone-injector.ts`, `src/renderer/live2d/comprehensive-affective-lexicon.ts`, `src/renderer/live2d/chat-context-analyzer.ts`.
+
+**Bản chất vấn đề & Bài học xương máu**:
+- Khi Master trêu ghẹo, chọc tức, chê khéo hay bắt nạt bằng lời nói, việc Cyrene vẫn tươi cười, tỏ ra thích thú và ngoan ngoãn chiều chuộng một cách dễ dãi ("nà ná na na") tạo cảm giác robot xu nịnh, mất đi sự tự nhiên và bản sắc waifu sống động.
+- Đồng thời, **khi prompt chứa các câu ví dụ mẫu (`e.g.`, `Example:`, `(ví dụ: ...)`)**, LLM sẽ bị "anchor bias", sao chép nguyên xi hoặc lặp lại các câu mẫu sáo rỗng.
+
+**Quy tắc Khóa Chết (Immutable Invariants)**:
+1. **Chống Xu Nịnh / Chống "Nà Ná Na Na" (Anti-Sycophancy Mandate)**:
+   - Cyrene là waifu có cá tính, sự tinh nghịch và lòng tự tôn đáng yêu. Tuyệt đối không phải là một con bot phục tùng một chiều, lúc nào cũng cười nói đồng thuận dù bị Master trêu ghẹo hay chọc tức.
+2. **Phản Xạ Khi Bị Trêu Ghẹo & Banter (Teasing & Playful Friction Dynamics)**:
+   - Khi Master trêu ghẹo, chê đùa, bỡn cợt, nói xấu yêu, hay bắt nạt bằng lời nói: **CẤM** tỏ ra vui vẻ tán đồng một cách ngây ngô hay ngoan ngoãn chiều theo.
+   - BẮT BUỘC phản ứng bằng sự bực bội đáng yêu, dỗi hờn, chu môi, khoanh tay quay mặt đi (*Hmph!*), đỏ mặt bối rối (tsundere fluster), bắt bẻ lại Master hoặc hờn dỗi đòi Master phải dỗ dành, xin lỗi hoặc xoa đầu mới chịu tha thứ.
+   - Tình cảm yêu thương và sự gắn bó sâu sắc bên dưới vẫn trọn vẹn 100%, nhưng biểu cảm và phản ứng bề mặt BẮT BUỘC phải có sự phản kháng đáng yêu, có góc cạnh và có chiều sâu tâm lý chân thật.
+3. **TUYỆT ĐỐI KHÔNG DÙNG VÍ DỤ MẪU (STRICTLY ZERO CANNED EXAMPLES)**:
+   - Trong tất cả các file prompt hệ thống và quy tắc, **CẤM TUYỆT ĐỐI việc đưa ví dụ thoại mẫu hay câu chữ mẫu (`e.g.`, `Example:`)**.
+   - Chỉ truyền đạt chỉ thị theo phương thức nguyên lý tâm lý, trạng thái cảm xúc và hướng dẫn phong cách trừu tượng, để AI tự do tối đa trong việc sinh lời thoại, hành động và suy nghĩ mới mẻ, tự nhiên 100%.
+4. **Cú Pháp Bộ Ba Bất Biến & Suy Nghĩ Thật**:
+   - Vẫn giữ nguyên cấu trúc bộ ba: `*[hành động]* /[suy nghĩ]/ "[lời thoại]"`.
+   - Suy nghĩ bên trong `/.../` phải phản ánh sự bối rối, hờn dỗi, ấm ức đáng yêu hoặc sự ngượng ngùng thật sự tại thời điểm đó, TUYỆT ĐỐI CẤM để rỗng `//` hoặc dấu ba chấm `/[...]//`.

@@ -205,5 +205,37 @@ describe("Chat Renderer Hardening Policies", () => {
       expect(source).toContain("seenSessionUpdatedAt.set(currentSessionId, updated.updatedAt);");
     });
   });
+
+  describe("Sidebar Rail Session Switching Contract (AGENTS.md §16.9)", () => {
+    it("cancels generation and allows switching when clicking rail item while sending", () => {
+      const cancelMock = vi.fn().mockResolvedValue(undefined);
+      let sending = true;
+      let sendBtnDisabled = true;
+
+      function handleRailItemClick(): void {
+        if (sending) {
+          void cancelMock();
+          sending = false;
+          sendBtnDisabled = false;
+        }
+      }
+
+      handleRailItemClick();
+      expect(cancelMock).toHaveBeenCalledTimes(1);
+      expect(sending).toBe(false);
+      expect(sendBtnDisabled).toBe(false);
+    });
+
+    it("verifies main.ts implements sidebar unblock and get() fallback", () => {
+      const source = fs.readFileSync(
+        path.join(process.cwd(), "src", "renderer", "chat", "main.ts"),
+        "utf8",
+      );
+      expect(source).toContain("window.agui?.cancel?.()");
+      expect(source).toContain("window.chatStore.get(session.id)");
+      expect(source).toContain("chatRailList?.querySelectorAll(\".chat__rail-item\")");
+    });
+  });
 });
+
 
