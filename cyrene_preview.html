@@ -238,7 +238,7 @@
     </div>
     <div class="status-tag">
       <div class="dot"></div>
-      <span id="status-text">Đang kết nối...</span>
+      <span id="status-text">Connecting...</span>
     </div>
   </header>
 
@@ -246,46 +246,46 @@
     <div id="stage-container">
       <div id="loading-overlay">
         <div class="spinner"></div>
-        <p id="loading-msg">Đang khởi tạo PixiJS & Cubism SDK...</p>
+        <p id="loading-msg">Initializing PixiJS & Cubism SDK...</p>
       </div>
       <canvas id="canvas-live2d"></canvas>
     </div>
 
     <div id="controls-panel">
       <div class="panel-section">
-        <div class="panel-title">🎬 Chuyển động (Motions)</div>
+        <div class="panel-title">Motions</div>
         <div class="btn-grid">
           <button class="btn" onclick="playMotion('动作#6', 1)">Wink ~</button>
-          <button class="btn" onclick="playMotion('动作#6', 2)">Khoe dễ thương</button>
-          <button class="btn" onclick="playMotion('动作#6', 3)">Cười tươi</button>
-          <button class="btn" onclick="playMotion('Tick3', 3)">Đu đu quay</button>
-          <button class="btn btn-full" onclick="playMotion('动作#6', 0)">Reset Tư Thế</button>
+          <button class="btn" onclick="playMotion('动作#6', 2)">Cute Pose</button>
+          <button class="btn" onclick="playMotion('动作#6', 3)">Bright Smile</button>
+          <button class="btn" onclick="playMotion('Tick3', 3)">Swing</button>
+          <button class="btn btn-full" onclick="playMotion('动作#6', 0)">Reset Pose</button>
         </div>
       </div>
 
       <div class="panel-section">
-        <div class="panel-title">😊 Biểu cảm (Expressions)</div>
+        <div class="panel-title">Expressions</div>
         <div class="btn-grid">
-          <button class="btn" onclick="setExpression('墨镜')">🕶️ Kính râm</button>
-          <button class="btn" onclick="setExpression('问号')">❓ Dấu hỏi</button>
-          <button class="btn" onclick="setExpression('闪耀')">✨ Lấp lánh</button>
-          <button class="btn" onclick="setExpression('星星眼')">⭐ Mắt sao</button>
-          <button class="btn" onclick="setExpression('圈圈眼')">🌀 Mắt xoáy</button>
-          <button class="btn" onclick="setExpression('开心眼')">😄 Vui vẻ</button>
-          <button class="btn btn-full" onclick="setExpression('表情回正')">🔄 Reset Biểu cảm</button>
+          <button class="btn" onclick="setExpression('墨镜')">Sunglasses</button>
+          <button class="btn" onclick="setExpression('问号')">Question</button>
+          <button class="btn" onclick="setExpression('闪耀')">Sparkle</button>
+          <button class="btn" onclick="setExpression('星星眼')">Star Eyes</button>
+          <button class="btn" onclick="setExpression('圈圈眼')">Spiral Eyes</button>
+          <button class="btn" onclick="setExpression('开心眼')">Happy Eyes</button>
+          <button class="btn btn-full" onclick="setExpression('表情回正')">Reset Expression</button>
         </div>
       </div>
 
       <div class="panel-section">
-        <div class="panel-title">📋 Nhật ký Lệnh</div>
-        <div id="log-box">Sẵn sàng.</div>
+        <div class="panel-title">Command Log</div>
+        <div id="log-box">Ready.</div>
       </div>
 
       <div class="panel-section">
-        <div class="panel-title">⚙️ Điều khiển</div>
-        <button class="btn btn-full" onclick="resetScale()">Canh giữa & Chuẩn Tỷ lệ</button>
+        <div class="panel-title">Controls</div>
+        <button class="btn btn-full" onclick="resetScale()">Center & Reset Scale</button>
         <p class="tip" style="margin-top: 0.5rem;">
-          💡 <b>Mẹo</b>: Rê chuột để Cyrene nhìn theo. Bấm trực tiếp vào Cyrene để phát animation ngẫu nhiên!
+          <b>Tip</b>: Move mouse to let Cyrene look around. Click Cyrene to play a random animation.
         </p>
       </div>
     </div>
@@ -308,7 +308,7 @@
       const loadingOverlay = document.getElementById('loading-overlay');
 
       try {
-        log('Khởi tạo PixiJS App...');
+        log('Initializing PixiJS App...');
         
         // Init PixiJS Application
         app = new PIXI.Application({
@@ -323,7 +323,7 @@
         const PIXILive2D = window.PIXI.live2d;
         PIXILive2D.Live2DModel.registerTicker(PIXI.Ticker);
 
-        log('Đang tải Cyrene Live2D Model...');
+        log('Loading Cyrene Live2D Model...');
         // Load Cyrene Model
         model = await PIXILive2D.Live2DModel.from(MODEL_PATH, {
           autoInteract: true
@@ -339,7 +339,7 @@
 
         // Hit areas & interactions
         model.on('hit', (hitAreas) => {
-          log('Chạm vào HitArea: ' + hitAreas.join(', '));
+          log('Touched HitArea: ' + hitAreas.join(', '));
           if (hitAreas.includes('ArtMesh11') || hitAreas.includes('ArtMesh12')) {
             playMotion('秋千#1', 1);
           } else {
@@ -351,14 +351,14 @@
         // Hide overlay
         loadingOverlay.style.opacity = '0';
         setTimeout(() => loadingOverlay.style.display = 'none', 500);
-        statusText.innerText = 'Đã kết nối Live2D';
-        log('Cyrene đã tải xong! Bấm nút để thử animation.');
+        statusText.innerText = 'Live2D Connected';
+        log('Cyrene loaded successfully! Click buttons to test animations.');
 
       } catch (err) {
         console.error('Error loading Live2D model:', err);
-        document.getElementById('loading-msg').innerText = 'Lỗi: ' + err.message;
-        statusText.innerText = 'Lỗi kết nối';
-        log('Lỗi: ' + err.message);
+        document.getElementById('loading-msg').innerText = 'Error: ' + err.message;
+        statusText.innerText = 'Connection Error';
+        log('Error: ' + err.message);
       }
     }
 
@@ -388,28 +388,28 @@
 
     function playMotion(group, index) {
       if (!model) {
-        log('Mô hình chưa sẵn sàng!');
+        log('Model not ready yet!');
         return;
       }
-      log(`Phát Motion: Group [${group}] - Index [${index}]`);
+      log(`Play Motion: Group [${group}] - Index [${index}]`);
       try {
         // Priority 3 = FORCE in pixi-live2d-display
         model.motion(group, index, 3);
       } catch (e) {
-        log(`Lỗi Motion: ${e.message}`);
+        log(`Motion Error: ${e.message}`);
       }
     }
 
     function setExpression(nameOrIndex) {
       if (!model) {
-        log('Mô hình chưa sẵn sàng!');
+        log('Model not ready yet!');
         return;
       }
-      log(`Đặt Biểu cảm: [${nameOrIndex}]`);
+      log(`Set Expression: [${nameOrIndex}]`);
       try {
         model.expression(nameOrIndex);
       } catch (e) {
-        log(`Lỗi Biểu cảm: ${e.message}`);
+        log(`Expression Error: ${e.message}`);
       }
     }
 

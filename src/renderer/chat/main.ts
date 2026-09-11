@@ -1909,10 +1909,83 @@ function cleanBondMetadata(text: string): string {
   return cleaned;
 }
 
+function buildMessageActions(m: Message): HTMLElement | null {
+  if (m.transient || m.thinking) return null;
+  const actions = document.createElement("div");
+  actions.className = "msg__actions";
+
+  let hasActionItem = false;
+
+  // Model read aloud button
+  if (m.role === "model" && m.content.trim()) {
+    const speakBtn = document.createElement("button");
+    speakBtn.type = "button";
+    speakBtn.className = "msg__speak";
+    speakBtn.title = "Read aloud";
+    speakBtn.setAttribute("aria-label", "Read this message aloud");
+    speakBtn.innerHTML = (typeof currentSpeakingMsgId !== "undefined" && currentSpeakingMsgId === m.id)
+      ? SPEAK_ICON_ACTIVE
+      : SPEAK_ICON_IDLE;
+    speakBtn.addEventListener("click", () => {
+      console.log("[TTS] Speaker clicked, currentTtsAudio=", currentTtsAudio ? "yes" : "no");
+      if (currentSpeakingMsgId === m.id) {
+        stopCurrentTts();
+        setSpeakingMsgId(null);
+      } else {
+        void speakMessage(m);
+      }
+    });
+    actions.appendChild(speakBtn);
+    hasActionItem = true;
+  }
+
+  // Copy button for user and model messages
+  if (m.content.trim()) {
+    const copyBtn = document.createElement("button");
+    copyBtn.type = "button";
+    copyBtn.className = "msg__copy";
+    copyBtn.title = "Copy";
+    copyBtn.setAttribute("aria-label", "Copy this message");
+    copyBtn.innerHTML = COPY_ICON_IDLE;
+    copyBtn.addEventListener("click", () => {
+      const text = m.role === "user"
+        ? m.content.replace(/\[sticker:[^\]]+\]/g, "").trim()
+        : (m.role === "model"
+            ? m.content.trimStart().replace(/^\s*(?:\[\d{4}[-/.]\d{2}[-/.]\d{2}[ T]\d{2}:\d{2}(?::\d{2})?(?:,\s*[^\]]+)?\]\s*)+/, "").trimStart()
+            : m.content);
+      if (!text) return;
+      void copyTextToClipboard(text).then((ok) => {
+        if (!ok) return;
+        copyBtn.classList.add("is-copied");
+        copyBtn.innerHTML = COPY_ICON_DONE;
+        const label = document.createElement("span");
+        label.className = "msg__copy-label";
+        label.textContent = "Copied";
+        copyBtn.appendChild(label);
+        window.setTimeout(() => {
+          copyBtn.classList.remove("is-copied");
+          copyBtn.innerHTML = COPY_ICON_IDLE;
+        }, 1500);
+      });
+    });
+    actions.appendChild(copyBtn);
+    hasActionItem = true;
+  }
+
+  // Timestamp
+  const time = document.createElement("div");
+  time.className = "msg__time";
+  time.textContent = formatTime(m.at);
+  actions.appendChild(time);
+  hasActionItem = true;
+
+  return hasActionItem ? actions : null;
+}
+
 /**
  * Finalize streaming bubble into rich Markdown HTML.
  */
-function finalizeStreamingBubble(messageId: string, rawContent: string): void {
+function finalizeStreamingBubble(messageId: string, rawContent: string, targetMsg?: Message): void {
   const bubble = getLastBubbleForMessage(messageId);
   if (!bubble) return;
 
@@ -1938,6 +2011,25 @@ function finalizeStreamingBubble(messageId: string, rawContent: string): void {
     bubble.textContent = result.content;
   }
   bubble.hidden = false;
+
+  // Immediately attach or update action buttons (Speak, Copy, Time) so user doesn't have to reopen the window
+  const row = messagesEl.querySelector(`[data-msg-id="${messageId}"]`);
+  const body = row?.querySelector<HTMLElement>(".msg__body");
+  if (body) {
+    const msg = targetMsg ?? messages.find(m => m.id === messageId) ?? (typeof runMessages !== "undefined" ? runMessages.find(m => m.id === messageId) : undefined);
+    if (msg) {
+      const nonTransientMsg: Message = { ...msg, content: cleanContent, transient: false, thinking: false };
+      const actionsEl = buildMessageActions(nonTransientMsg);
+      if (actionsEl) {
+        const existingActions = body.querySelector<HTMLElement>(".msg__actions");
+        if (existingActions) {
+          existingActions.replaceWith(actionsEl);
+        } else {
+          body.appendChild(actionsEl);
+        }
+      }
+    }
+  }
 
   // ：
   if (wasAtBottom) {
@@ -2162,10 +2254,6 @@ function render(preserveScroll = false): void {
       }
     }
 
-    const time = document.createElement("div");
-    time.className = "msg__time";
-    time.textContent = formatTime(m.at);
-
     for (const item of bubbles) body.appendChild(item);
     if (m.role === "user") renderMessageAttachments(body, m.attachments);
 
@@ -2188,81 +2276,8 @@ function render(preserveScroll = false): void {
 
     if (m.musicCard) body.appendChild(buildMusicCardEl(m.musicCard));
 
-    // actions ： /  / 。
-    //  transient ； actions，
-    // 。
-    const actions = document.createElement("div");
-    actions.className = "msg__actions";
-
-    let hasActionItem = false;
-
-    // model  SVG （thinking ）
-    if (!m.transient && m.role === "model" && !m.thinking && m.content.trim()) {
-      const speakBtn = document.createElement("button");
-      speakBtn.type = "button";
-      speakBtn.className = "msg__speak";
-      speakBtn.title = "Read aloud";
-      speakBtn.setAttribute("aria-label", "Read this message aloud");
-      //  SVG  emoji，，
-      speakBtn.innerHTML = SPEAK_ICON_IDLE;
-      // ：，（）
-      speakBtn.addEventListener("click", () => {
-        console.log("[TTS] Speaker clicked, currentTtsAudio=", currentTtsAudio ? "yes" : "no");
-        if (currentSpeakingMsgId === m.id) {
-          //  →  UI
-          stopCurrentTts();
-          setSpeakingMsgId(null);
-        } else {
-          void speakMessage(m);
-        }
-      });
-      actions.appendChild(speakBtn);
-      hasActionItem = true;
-    }
-
-    // ：user / model ，thinking /  / 
-    //   user  [sticker:xxx] ，model  content
-    if (!m.transient && !m.thinking && m.content.trim()) {
-      const copyBtn = document.createElement("button");
-      copyBtn.type = "button";
-      copyBtn.className = "msg__copy";
-      copyBtn.title = "Copy";
-      copyBtn.setAttribute("aria-label", "Copy this message");
-      copyBtn.innerHTML = COPY_ICON_IDLE;
-      copyBtn.addEventListener("click", () => {
-        const text = m.role === "user"
-          ? m.content.replace(/\[sticker:[^\]]+\]/g, "").trim()
-          : (m.role === "model"
-              ? m.content.trimStart().replace(/^\s*(?:\[\d{4}[-/.]\d{2}[-/.]\d{2}[ T]\d{2}:\d{2}(?::\d{2})?(?:,\s*[^\]]+)?\]\s*)+/, "").trimStart()
-              : m.content);
-        if (!text) return;
-        void copyTextToClipboard(text).then((ok) => {
-          if (!ok) return;
-          // ： + "Copied"，1.5s 
-          copyBtn.classList.add("is-copied");
-          copyBtn.innerHTML = COPY_ICON_DONE;
-          const label = document.createElement("span");
-          label.className = "msg__copy-label";
-          label.textContent = "Copied";
-          copyBtn.appendChild(label);
-          window.setTimeout(() => {
-            copyBtn.classList.remove("is-copied");
-            copyBtn.innerHTML = COPY_ICON_IDLE;
-          }, 1500);
-        });
-      });
-      actions.appendChild(copyBtn);
-      hasActionItem = true;
-    }
-
-    // ；， actions 。
-    //  transient ， render 。
-    if (!m.transient) {
-      actions.appendChild(time);
-      hasActionItem = true;
-    }
-
-    if (hasActionItem) body.appendChild(actions);
+    const actions = buildMessageActions(m);
+    if (actions) body.appendChild(actions);
 
     row.appendChild(avatar);
     row.appendChild(body);
@@ -3381,6 +3396,7 @@ function getCurrentStyleId(): StyleId {
 }
 
 let sending = false;
+let sendStartedAt = 0;
 
 // Proactive-chat changes arriving during sending (e.g. Cyrene sends a proactive message) are not reloaded immediately,
 // otherwise transient thinking messages / recent replies could get overwritten. Record sessionId and wait until sending finishes,
@@ -3478,12 +3494,17 @@ async function triggerCyreneGreeting(): Promise<void> {
   if (emptyEl) emptyEl.setAttribute("hidden", "");
 
   sending = true;
-  sendBtn.disabled = true;
-  await refreshModelConfig();
-  chatHintEl.textContent = currentModelConfig?.connected ? `${currentModelConfig.model} thinking…` : "Model disconnected";
+  sendStartedAt = Date.now();
+  // NOTE: Do NOT disable sendBtn here — disabling the submit button blocks the form submit event
+  // so any text typed while Cyrene is greeting stays stuck forever. Instead rely on the
+  // chatMessageQueue (send() enqueues while sending===true) or Escape to cancel.
 
   let streamMsgId = "";
+  let watchdogTimer: any = null;
   try {
+    await refreshModelConfig();
+    chatHintEl.textContent = currentModelConfig?.connected ? `${currentModelConfig.model} thinking…` : "Model disconnected";
+
     streamMsgId = String(Date.now() + 1);
     const streamMsg = { id: streamMsgId, role: "model" as const, content: "", at: Date.now(), thinking: true, transient: true };
     messages.push(streamMsg);
@@ -3673,8 +3694,22 @@ async function triggerCyreneGreeting(): Promise<void> {
       throw new Error(ack.error || "Failed to initiate model request");
     }
 
-    await runDone;
-    offEvent();
+    const watchdogPromise = new Promise<never>((_, reject) => {
+      watchdogTimer = setTimeout(() => {
+        reject(new Error("Greeting request timed out waiting for completion (20s watchdog)"));
+        void window.agui?.cancel?.().catch(() => {});
+      }, 20000);
+    });
+
+    try {
+      await Promise.race([runDone, watchdogPromise]);
+    } finally {
+      if (watchdogTimer) {
+        clearTimeout(watchdogTimer);
+        watchdogTimer = null;
+      }
+      offEvent();
+    }
 
     // flush + dispose streaming Markdown session (finalizeStreamingBubble will atomically replace in final state)
     if (streamSession) {
@@ -3730,11 +3765,25 @@ async function triggerCyreneGreeting(): Promise<void> {
     void saveSession();
     finalizeStreamingBubble(streamMsgId, userMessage);
   } finally {
+    if (watchdogTimer) {
+      clearTimeout(watchdogTimer);
+      watchdogTimer = null;
+    }
     sending = false;
     sendBtn.disabled = false;
     chatHintEl.textContent = formatModelHint(currentModelConfig);
     inputEl.focus();
     void flushPendingProactiveReload();
+
+    // Check message queue and process next turn if available
+    if (chatMessageQueue.length > 0) {
+      const nextTurn = chatMessageQueue.shift()!;
+      updateQueueUi();
+      inputEl.value = nextTurn.text;
+      attachedFiles = [...nextTurn.files];
+      renderFileTags();
+      void send();
+    }
   }
 }
 
@@ -3799,38 +3848,29 @@ function hideRunningProgress(delayMs = 600): void {
   }, delayMs);
 }
 
-function switchToWorkMode(): void {
-  const modeOptions = document.querySelectorAll(".mode-switch__option");
-  modeOptions.forEach((option) => {
-    const isWork = (option as HTMLElement).dataset.modeValue === "work";
-    option.classList.toggle("is-active", isWork);
-    option.setAttribute("aria-pressed", isWork ? "true" : "false");
-  });
-  try {
-    localStorage.setItem("cyrene_chat_mode", "work");
-  } catch {}
-}
-
 async function send(): Promise<void> {
   const text = inputEl.value.trim();
   if (!text && attachedFiles.length === 0) return;
 
   if (sending) {
-    chatMessageQueue.push({
-      text,
-      files: [...attachedFiles],
-    });
-    inputEl.value = "";
-    autosize();
-    removeAttachedFiles();
-    updateQueueUi();
-    return;
-  }
-
-  // Auto-switch to Work mode if operational intent detected in Chat mode
-  const operationalRegex = /\b(schedule|reschedule|calendar|reminder|remind|appointment|meeting|due|alarm|deadline|weather|forecast|l\u1eadp l\u1ecbch|\u0111\u1eb7t l\u1ecbch|l\u1ecbch tr\u00ecnh|h\u1eb9n gi\u1edd|nh\u1eafc nh\u1edf|b\u00e1o th\u1ee9c|th\u1eddi ti\u1ebft)\b/i;
-  if (isChatMode() && operationalRegex.test(text)) {
-    switchToWorkMode();
+    if (Date.now() - sendStartedAt > 15_000) {
+      // Auto-heal any hung AG-UI run after 15s so the user can always send again
+      console.warn("[Cyrene Chat] Previous run exceeded 15s threshold, force-clearing stuck state");
+      void window.agui?.cancel?.().catch(() => {});
+      sending = false;
+      sendBtn.disabled = false;
+      hideRunningProgress(0);
+    } else {
+      chatMessageQueue.push({
+        text,
+        files: [...attachedFiles],
+      });
+      inputEl.value = "";
+      autosize();
+      removeAttachedFiles();
+      updateQueueUi();
+      return;
+    }
   }
 
   if (!currentSessionId) {
@@ -3851,9 +3891,15 @@ async function send(): Promise<void> {
   const runTailStart = sessionTailStart;
 
   sending = true;
+  sendStartedAt = Date.now();
   updateRunningProgress("Analyzing request...", 15);
-  await refreshModelConfig();
-  chatHintEl.textContent = currentModelConfig?.connected ? `${currentModelConfig.model} thinking…` : "Model disconnected";
+  let streamMsgId = "";
+  let streamContent = "";
+  let sticker: string | null = null;
+  let pendingMusicCard: MusicCardData | null = null;
+  try {
+    await refreshModelConfig();
+    chatHintEl.textContent = currentModelConfig?.connected ? `${currentModelConfig.model} thinking…` : "Model disconnected";
 
   const filesForThisTurn = [...attachedFiles];
   const attachmentsForMsg: MessageAttachment[] = filesForThisTurn
@@ -4117,26 +4163,24 @@ async function send(): Promise<void> {
   void saveSession();
   render();
 
-  let streamMsgId = "";
-  try {
-    streamMsgId = String(Date.now() + 1);
-    const streamMsg = { id: streamMsgId, role: "model", content: "", at: Date.now(), thinking: true, transient: true };
-    messages.push(streamMsg);
-    // Capture the complete turn only after both the user and assistant placeholder exist.
-    // The message objects remain shared with the visible session while the array itself
-    // cannot be replaced by a later session load.
-    runMessages = [...messages];
-    render();
+  streamMsgId = String(Date.now() + 1);
+  const streamMsg = { id: streamMsgId, role: "model", content: "", at: Date.now(), thinking: true, transient: true };
+  messages.push(streamMsg);
+  // Capture the complete turn only after both the user and assistant placeholder exist.
+  // The message objects remain shared with the visible session while the array itself
+  // cannot be replaced by a later session load.
+  runMessages = [...messages];
+  render();
 
-    let streamContent = "";
-    let ttsContent = "";
-    let autoSpeakTriggered = false;
-    const earlyMinimaxPlayback = createEarlyMinimaxPlayback();
-    textMouthStarted = false;
-    let pendingTtsCachePromise: Promise<{ cacheKey: string } | null> | null = null;
-    let sticker: string | null = null;
-    let pendingWeatherCard: Record<string, unknown> | null = null;
-    let pendingMusicCard: MusicCardData | null = null;
+  streamContent = "";
+  let ttsContent = "";
+  let autoSpeakTriggered = false;
+  const earlyMinimaxPlayback = createEarlyMinimaxPlayback();
+  textMouthStarted = false;
+  let pendingTtsCachePromise: Promise<{ cacheKey: string } | null> | null = null;
+  sticker = null;
+  let pendingWeatherCard: Record<string, unknown> | null = null;
+  pendingMusicCard = null;
 
     // Final signal: resolve triggered by RUN_FINISHED/RUN_ERROR in event stream,
     // does not rely on invoke resolve (invoke is only ack, may race with event delivery).
@@ -4364,15 +4408,15 @@ async function send(): Promise<void> {
       void window.chatStore.replaceTail(runSessionId, runTailStart, toPersistableMessages(runMessages));
     }
 
-    // AG-UI watchdog timer (180s) to prevent indefinite hang if completion events drop
+    // AG-UI watchdog timer (45s) to prevent indefinite hang if completion events drop
     let watchdogTimer: any = null;
     const watchdogPromise = new Promise<never>((_, reject) => {
       watchdogTimer = setTimeout(() => {
-        reject(new Error("Stream connection timed out waiting for completion signal (180s watchdog)"));
+        reject(new Error("Stream connection timed out waiting for completion signal (45s watchdog)"));
         void window.agui?.cancel?.().catch((cancelErr) => {
           console.warn("[Cyrene Chat] Failed to cancel AG-UI run on watchdog timeout:", cancelErr);
         });
-      }, 180000);
+      }, 45000);
     });
 
     try {
@@ -4413,7 +4457,7 @@ async function send(): Promise<void> {
 
     // DOM isolation: only update visible stream bubble if still viewing this exact session
     if (currentSessionId === runSessionId) {
-      finalizeStreamingBubble(streamMsgId, streamContent);
+      finalizeStreamingBubble(streamMsgId, streamContent, msg);
     }
 
     // Append weather card to the end (after model reply)
@@ -4443,7 +4487,7 @@ async function send(): Promise<void> {
         void window.chatStore.replaceTail(runSessionId, runTailStart, toPersistableMessages(runMessages));
       }
       if (currentSessionId === runSessionId) {
-        finalizeStreamingBubble(streamMsgId, cleanBondMetadata(streamContent));
+        finalizeStreamingBubble(streamMsgId, cleanBondMetadata(streamContent), msg);
       }
     } else {
       if (msg) {
@@ -4546,7 +4590,19 @@ formEl.addEventListener("submit", (e) => {
 });
 
 inputEl.addEventListener("input", autosize);
+// Auto-recovery: if sendBtn is somehow disabled while user is typing, immediately unlock it
+inputEl.addEventListener("focus", () => { if (sendBtn.disabled) sendBtn.disabled = false; });
+inputEl.addEventListener("input", () => { if (sendBtn.disabled) sendBtn.disabled = false; });
 inputEl.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && sending) {
+    e.preventDefault();
+    void window.agui?.cancel?.().catch(() => {});
+    sending = false;
+    sendBtn.disabled = false;
+    hideRunningProgress(0);
+    updateQueueUi();
+    return;
+  }
   if (e.key === "Enter" && !e.shiftKey) {
     e.preventDefault();
     void send();
@@ -5185,8 +5241,11 @@ window.settings?.onPermissionApprovalRequest?.((req) => {
 window.chatStore?.onSwitchSession(async (sessionId) => {
   if (!window.chatStore) return;
   if (sending) {
-    console.warn("[Cyrene Chat] Session switch deferred: active generation in progress");
-    return;
+    console.warn("[Cyrene Chat] Cancelling active generation for session switch");
+    void window.agui?.cancel?.().catch(() => {});
+    sending = false;
+    sendBtn.disabled = false;
+    hideRunningProgress(0);
   }
   if (sessionId === currentSessionId) {
     await loadSessionTailIntoUI(sessionId);
@@ -5234,7 +5293,7 @@ window.chatStore?.onChanged(async () => {
   if (next) loadSessionIntoUI(next);
 });
 
-window.addEventListener("focus", async () => {
+async function syncActiveSessionFromStore(): Promise<void> {
   if (!window.chatStore || !currentSessionId || sending) return;
   try {
     const activeId = await window.chatStore.getActiveSession?.();
@@ -5250,9 +5309,17 @@ window.addEventListener("focus", async () => {
       await loadSessionTailIntoUI(current.id);
     }
   } catch (err) {
-    console.warn("[Cyrene Chat] Failed to sync session on focus:", err);
+    console.warn("[Cyrene Chat] Failed to sync session from store:", err);
+  }
+}
+
+window.addEventListener("focus", () => void syncActiveSessionFromStore());
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") {
+    void syncActiveSessionFromStore();
   }
 });
+window.addEventListener("pageshow", () => void syncActiveSessionFromStore());
 
 autosize();
 inputEl.focus();

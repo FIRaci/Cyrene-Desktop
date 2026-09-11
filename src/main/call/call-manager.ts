@@ -504,12 +504,12 @@ async function runAgentTurn(userText: string): Promise<string | null> {
       console.warn(LOG_PREFIX, "No usable model configured, using companion response");
       const lower = userText.toLowerCase();
       let reply = "";
-      if (lower.includes("chào") || lower.includes("hello") || lower.includes("hi")) {
-        reply = "Dạ, em chào anh nha! Hôm nay anh của em thế nào rồi nè?";
-      } else if (lower.includes("yêu") || lower.includes("thích") || lower.includes("love")) {
-        reply = "Ehehe, Cyrene cũng thích ở bên cạnh trò chuyện với anh nhất trần đời luôn á~";
-      } else if (lower.includes("khỏe không") || lower.includes("thế nào")) {
-        reply = "Em lúc nào cũng khỏe và vui khi được on mic với anh nè! Còn anh thì sao?";
+      if (lower.includes("hello") || lower.includes("hi") || lower.includes("hey")) {
+        reply = "Hello Master! How are you doing today? I'm so happy to talk with you~";
+      } else if (lower.includes("love") || lower.includes("like you") || lower.includes("cherish")) {
+        reply = "Ehehe, Cyrene loves chatting and staying right by Master's side the most in the whole world~";
+      } else if (lower.includes("how are you") || lower.includes("how have you been")) {
+        reply = "I'm always energized and full of joy whenever I'm on call with you, Master! How about you?";
       } else {
         reply = getRandomCompanionCallReply();
       }

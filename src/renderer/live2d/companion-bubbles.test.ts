@@ -74,8 +74,8 @@ describe("pet companion bubble lifecycle", () => {
     const thoughtEl = { textContent: "", hidden: true } as HTMLElement;
     const controller = new CompanionBubbleController(speechEl, thoughtEl);
 
-    controller.think("Cyrene đang nhớ bạn đó... (*´˘`*)♡", 4000);
-    expect(thoughtEl.textContent).toBe("Cyrene đang nhớ bạn đó... (*´˘`*)♡");
+    controller.think("Cyrene is missing you right now... (*´˘`*)♡", 4000);
+    expect(thoughtEl.textContent).toBe("Cyrene is missing you right now... (*´˘`*)♡");
     expect(thoughtEl.hidden).toBe(false);
     expect(speechEl.hidden).toBe(true);
     controller.dispose();

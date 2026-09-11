@@ -147,6 +147,8 @@ describe("GestureInteractionController", () => {
 
     voice = {
       speak: vi.fn().mockResolvedValue(true),
+      stop: vi.fn(),
+      getIsSpeaking: vi.fn().mockReturnValue(false),
       isMuted: vi.fn().mockReturnValue(false),
       toggleMute: vi.fn().mockReturnValue(false),
     } as unknown as CompanionVoiceService;
@@ -176,7 +178,7 @@ describe("GestureInteractionController", () => {
     const getActiveSession = vi.fn().mockResolvedValue("active-session-abc");
     const get = vi.fn().mockResolvedValue({
       id: "active-session-abc",
-      messages: [{ role: "user", content: "Chào Cyrene" }],
+      messages: [{ role: "user", content: "Hello Cyrene" }],
     });
 
     vi.stubGlobal("window", {
@@ -208,7 +210,7 @@ describe("GestureInteractionController", () => {
         sessionId: "active-session-abc",
         executionMode: "chat",
         messages: expect.arrayContaining([
-          expect.objectContaining({ role: "user", content: "Chào Cyrene" }),
+          expect.objectContaining({ role: "user", content: "Hello Cyrene" }),
           expect.objectContaining({
             role: "user",
             content: expect.stringContaining("pats your head"),
@@ -247,9 +249,14 @@ describe("GestureInteractionController", () => {
         content: "*Gently pats Cyrene's head*",
       }),
     );
-    // Model turn is NOT appended from the renderer — agui-bridge backend persistence handles it
-    // to avoid the race condition that caused duplicate messages.
-    expect(append).toHaveBeenCalledTimes(1);
+    // Both user turn and model turn are persisted to store to guarantee Alt+1 chat sync
+    expect(append).toHaveBeenCalledTimes(2);
+    expect(append).toHaveBeenCalledWith(
+      "active-session-abc",
+      expect.objectContaining({
+        role: "model",
+      }),
+    );
 
     controller.dispose();
   });
@@ -289,7 +296,7 @@ describe("GestureInteractionController", () => {
     controller.dispose();
   });
 
-  it("enforces 7-second cooldown against repetitive spam", async () => {
+  it("enforces 600ms cooldown against repetitive spam", async () => {
     const run = vi.fn().mockResolvedValue({ success: true });
     const onEvent = vi.fn().mockReturnValue(() => {});
 
@@ -313,7 +320,7 @@ describe("GestureInteractionController", () => {
     await patPromise;
     expect(run).toHaveBeenCalledTimes(1);
 
-    // Even after first promise resolves, within 7s cooldown isBusy() remains true
+    // Even after first promise resolves, within 600ms cooldown isBusy() remains true
     expect(controller.isBusy()).toBe(true);
 
     // Another click during cooldown should also be ignored
@@ -429,9 +436,14 @@ describe("GestureInteractionController", () => {
         role: "user",
       }),
     );
-    // Model turn persistence is agui-bridge's responsibility — NOT the renderer's
-    // This ensures no duplicate messages in the chat window.
-    expect(append).toHaveBeenCalledTimes(1);
+    // Both user turn and model turn are persisted to store to guarantee Alt+1 chat sync
+    expect(append).toHaveBeenCalledTimes(2);
+    expect(append).toHaveBeenCalledWith(
+      "session-from-list-xyz",
+      expect.objectContaining({
+        role: "model",
+      }),
+    );
 
     controller.dispose();
   });
@@ -451,8 +463,8 @@ describe("GestureInteractionController", () => {
     const get = vi.fn().mockResolvedValue({
       id: "active-session-pouting",
       messages: [
-        { role: "user", content: "Sao em lại dỗi anh thế?" },
-        { role: "model", content: "Hmph, ai bảo Master trêu em chứ!" },
+        { role: "user", content: "Why are you pouting at me, Cyrene?" },
+        { role: "model", content: "Hmph, that's because Master was teasing me earlier!" },
       ],
     });
 
@@ -509,7 +521,7 @@ describe("GestureInteractionController", () => {
     const get = vi.fn().mockResolvedValue({
       id: "active-session-excited",
       messages: [
-        { role: "user", content: "Yay thắng rồi, vui quá đi thôi Cyrene ơi!" },
+        { role: "user", content: "Yay we won! I'm so excited and happy right now, Cyrene!" },
       ],
     });
 
@@ -524,7 +536,7 @@ describe("GestureInteractionController", () => {
       getCurrentMood: vi.fn().mockReturnValue("excited"),
       getCurrentContext: vi.fn().mockReturnValue({
         mood: "excited",
-        detectedKeywords: ["vui quá", "thắng rồi"],
+        detectedKeywords: ["Yay", "excited"],
         recommendedThought: { text: "Bouncing with excitement!" },
         gestureEmotionPromptSnippet: "SUPER EXCITED",
         gestureFallback: {
@@ -550,6 +562,59 @@ describe("GestureInteractionController", () => {
     expect(kaomoji.spawn).toHaveBeenCalledWith("(≧◡≦) ♡", 120, 150);
     // Verify default pat kaomoji "(⁄ ⁄>⁄ ▽ ⁄<⁄ ⁄)" was NOT spawned
     expect(kaomoji.spawn).not.toHaveBeenCalledWith("(⁄ ⁄>⁄ ▽ ⁄<⁄ ⁄)", expect.anything(), expect.anything());
+
+    controller.dispose();
+  });
+
+  it("allows consecutive head-pats after 600ms debounce and interrupts previous voice playback", async () => {
+    let aguiCallback: ((event: any) => void) | null = null;
+    const run = vi.fn().mockResolvedValue({ success: true });
+    const onEvent = vi.fn().mockImplementation((cb: (event: any) => void) => {
+      aguiCallback = cb;
+      return () => {
+        aguiCallback = null;
+      };
+    });
+
+    const append = vi.fn().mockResolvedValue(true);
+    const getActiveSession = vi.fn().mockResolvedValue("active-session-consecutive");
+
+    vi.stubGlobal("window", {
+      agui: { run, onEvent },
+      chatStore: { append, getActiveSession },
+    });
+
+    const controller = new GestureInteractionController({
+      bubbles,
+      kaomoji,
+      voice,
+    });
+
+    // First head-pat
+    await controller.handleHeadPat(100, 100);
+    expect(kaomoji.spawn).toHaveBeenCalledTimes(1);
+
+    // Finish first run, voice starts speaking
+    aguiCallback!({
+      type: "TEXT_MESSAGE_CONTENT",
+      delta: '*smiles warmly* /happy/ "Thank you, Master!"',
+    });
+    aguiCallback!({ type: "RUN_FINISHED" });
+
+    // Voice is currently speaking
+    (voice.getIsSpeaking as any).mockReturnValue(true);
+
+    // Wait 650ms for debounce to elapse
+    await new Promise((resolve) => setTimeout(resolve, 650));
+
+    // Second consecutive head-pat while voice is still speaking
+    await controller.handleHeadPat(120, 120);
+
+    // Previous voice should have been stopped
+    expect(voice.stop).toHaveBeenCalled();
+    // Second head pat triggers kaomoji and new run
+    expect(kaomoji.spawn).toHaveBeenCalledTimes(2);
+    expect(run).toHaveBeenCalledTimes(2);
 
     controller.dispose();
   });

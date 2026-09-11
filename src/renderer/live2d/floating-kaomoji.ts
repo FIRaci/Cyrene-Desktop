@@ -46,8 +46,10 @@ export class FloatingKaomojiController {
   private readonly container: HTMLElement;
   private disposed = false;
   private lastSpawnTimestamp = 0;
+  /** Tracks which side the last spawn went to, to alternate sides on consecutive spawns */
+  private lastSpawnSide: -1 | 1 = 1;
   static globalLastSpawnTimestamp = 0;
-  static readonly MIN_SPAWN_INTERVAL_MS = 2500;
+  static readonly MIN_SPAWN_INTERVAL_MS = 600;
 
   constructor(container?: HTMLElement | null) {
     if (container) {
@@ -135,31 +137,38 @@ export class FloatingKaomojiController {
     if (clientX !== undefined && Number.isFinite(clientX)) {
       side = clientX <= winWidth * 0.5 ? -1 : 1;
     } else {
-      side = Math.random() < 0.5 ? -1 : 1;
+      // Alternate sides on each spawn so consecutive kaomojis never land on the exact same spot
+      side = this.lastSpawnSide === -1 ? 1 : -1;
     }
+    this.lastSpawnSide = side as -1 | 1;
 
     let baseX: number;
     let drift: number;
+    let tilt: string;
 
     if (side === -1) {
+      el.classList.add("pet-kaomoji--left");
       // Left open air: safely between minX and inner boundary (~32% window width)
       const leftInnerBound = Math.max(minX, Math.min(winWidth * 0.32, maxX - 20));
       baseX = Math.round(minX + Math.random() * Math.max(0, leftInnerBound - minX));
-      // Subtle float drift, clamped so baseX + drift - maxHalfWidth >= safetyMargin
+      // Subtle float drift to the left
       const maxDriftLeft = Math.max(0, baseX - minX);
-      drift = -Math.min(maxDriftLeft, Math.random() * 8);
+      drift = -Math.min(maxDriftLeft, Math.max(6, Math.random() * 16));
+      tilt = "-5deg";
     } else {
+      el.classList.add("pet-kaomoji--right");
       // Right open air: safely between inner boundary (~68% window width) and maxX
       const rightInnerBound = Math.min(maxX, Math.max(minX + 20, winWidth * 0.68));
       baseX = Math.round(rightInnerBound + Math.random() * Math.max(0, maxX - rightInnerBound));
-      // Subtle float drift, clamped so baseX + drift + maxHalfWidth <= winWidth - safetyMargin
+      // Subtle float drift to the right
       const maxDriftRight = Math.max(0, maxX - baseX);
-      drift = Math.min(maxDriftRight, Math.random() * 8);
+      drift = Math.min(maxDriftRight, Math.max(6, Math.random() * 16));
+      tilt = "5deg";
     }
 
     const driftX = drift.toFixed(1);
 
-    // Keep vertical position safe so it doesn't float above top of window (animation travels -72px up)
+    // Keep vertical position safe so it doesn't float above top of window (animation travels -78px up)
     const minY = 85;
     const maxY = Math.max(minY, Math.round(winHeight * 0.52));
     const baseY = clientY !== undefined && Number.isFinite(clientY)
@@ -169,6 +178,7 @@ export class FloatingKaomojiController {
     el.style.left = `${Math.round(baseX)}px`;
     el.style.top = `${Math.round(baseY)}px`;
     el.style.setProperty("--drift-x", `${driftX}px`);
+    el.style.setProperty("--tilt", tilt);
 
     this.container.appendChild(el);
 
@@ -197,10 +207,84 @@ export class FloatingKaomojiController {
   }
 
   /**
+   * Spawn two distinct kaomojis simultaneously: exactly 1 on the left wing (~18-22%) and 1 on the right wing (~78-82%).
+   * Turns gesture reactions into a deliberate, charming 2-wing toss feature. Positions are fixed regardless of
+   * the Pet window width so the two kaomojis never overlap or land at the same spot.
+   */
+  spawnDual(leftText?: string, rightText?: string, centerY?: number): [HTMLElement | null, HTMLElement | null] {
+    if (this.disposed || !this.container) return [null, null];
+    const winWidth = typeof window !== "undefined" && window.innerWidth > 0 ? window.innerWidth : 400;
+    const winHeight = typeof window !== "undefined" && window.innerHeight > 0 ? window.innerHeight : 500;
+
+    const leftKaomoji = leftText || EMOTION_KAOMOJIS[Math.floor(Math.random() * EMOTION_KAOMOJIS.length)];
+    let rightKaomoji = rightText;
+    if (!rightKaomoji) {
+      const remaining = EMOTION_KAOMOJIS.filter((k) => k !== leftKaomoji);
+      rightKaomoji = remaining.length > 0
+        ? remaining[Math.floor(Math.random() * remaining.length)]
+        : EMOTION_KAOMOJIS[Math.floor(Math.random() * EMOTION_KAOMOJIS.length)];
+    }
+
+    // Left wing: strictly between 15% and 25% of viewport width
+    const leftX = Math.round(winWidth * (0.15 + Math.random() * 0.10));
+    // Right wing: strictly between 75% and 85% of viewport width
+    const rightX = Math.round(winWidth * (0.75 + Math.random() * 0.10));
+
+    // Vertical: near top-middle of the pet (40-50% of window height)
+    const minY = 85;
+    const maxY = Math.round(winHeight * 0.52);
+    const baseY = centerY !== undefined && Number.isFinite(centerY)
+      ? Math.max(minY, Math.min(maxY, centerY))
+      : Math.round(winHeight * 0.40 + Math.random() * 20 - 10);
+
+    // Directly create elements with precise positions, bypassing side-detection ambiguity
+    const elLeft = this.spawnAt(leftKaomoji, leftX, baseY, -1);
+    const elRight = this.spawnAt(rightKaomoji, rightX, baseY, 1);
+    return [elLeft, elRight];
+  }
+
+  /**
+   * Directly spawn a kaomoji at an explicit (x, y) coordinate and side. Used by spawnDual.
+   * Does NOT check cooldowns or clean existing elements — always produces a particle.
+   */
+  private spawnAt(text: string, x: number, y: number, side: -1 | 1): HTMLElement | null {
+    if (this.disposed || !this.container) return null;
+    const el = document.createElement("div");
+    el.className = "pet-kaomoji";
+    el.textContent = text;
+
+    if (side === -1) {
+      el.classList.add("pet-kaomoji--left");
+      el.style.setProperty("--drift-x", "-25px");
+      el.style.setProperty("--tilt", "-6deg");
+    } else {
+      el.classList.add("pet-kaomoji--right");
+      el.style.setProperty("--drift-x", "25px");
+      el.style.setProperty("--tilt", "6deg");
+    }
+    el.style.left = `${Math.round(x)}px`;
+    el.style.top = `${Math.round(y)}px`;
+
+    this.container.appendChild(el);
+
+    if (typeof globalThis.setTimeout === "function") {
+      globalThis.setTimeout(() => {
+        if (el.parentNode) el.parentNode.removeChild(el);
+      }, 1900);
+    }
+    return el;
+  }
+
+  /**
    * Spawn multiple kaomojis staggered in time for high-affection reactions (like head patting).
+   * If count is 2, executes the dual toss feature (1 left, 1 right).
    */
   spawnBurst(count = 1, centerX?: number, centerY?: number): void {
     if (this.disposed) return;
+    if (count === 2) {
+      this.spawnDual(undefined, undefined, centerY);
+      return;
+    }
     const winWidth = typeof window !== "undefined" && window.innerWidth > 0 ? window.innerWidth : 400;
     for (let i = 0; i < count; i++) {
       if (typeof globalThis.setTimeout === "function") {

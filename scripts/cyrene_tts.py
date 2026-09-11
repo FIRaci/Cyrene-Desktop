@@ -132,31 +132,48 @@ def ensure_pretrained_base_models():
         except Exception as e:
             print(f"[Warning] Could not download lid.176.bin: {e}")
 
+def resolve_device() -> tuple[str, bool]:
+    try:
+        import torch
+        if torch.cuda.is_available():
+            # Run a small tensor probe to ensure GPU has compatible kernels
+            _ = torch.zeros(1, device="cuda")
+            device_name = torch.cuda.get_device_name(0)
+            print(f"[Device] NVIDIA CUDA GPU active and verified: {device_name}")
+            return "cuda", True
+    except Exception as e:
+        print(f"[Device] CUDA capability check notice: {e}. Gracefully falling back to CPU.")
+    print("[Device] Using CPU mode.")
+    return "cpu", False
+
 def update_tts_infer_config():
     config_file = VENDOR_DIR / "GPT_SoVITS" / "configs" / "tts_infer.yaml"
     config_file.parent.mkdir(parents=True, exist_ok=True)
     
+    device, is_half = resolve_device()
+    is_half_str = "true" if is_half else "false"
+
     yaml_content = f"""custom:
   bert_base_path: GPT_SoVITS/pretrained_models/chinese-roberta-wwm-ext-large
   cnhuhbert_base_path: GPT_SoVITS/pretrained_models/chinese-hubert-base
-  device: cpu
-  is_half: false
+  device: {device}
+  is_half: {is_half_str}
   t2s_weights_path: {str(GPT_CKPT)}
   version: v2
   vits_weights_path: {str(SOVITS_PTH)}
 v1:
   bert_base_path: GPT_SoVITS/pretrained_models/chinese-roberta-wwm-ext-large
   cnhuhbert_base_path: GPT_SoVITS/pretrained_models/chinese-hubert-base
-  device: cpu
-  is_half: false
+  device: {device}
+  is_half: {is_half_str}
   t2s_weights_path: GPT_SoVITS/pretrained_models/s1bert25hz-2kh-longer-epoch=68e-step=50232.ckpt
   version: v1
   vits_weights_path: GPT_SoVITS/pretrained_models/s2G488k.pth
 v2:
   bert_base_path: GPT_SoVITS/pretrained_models/chinese-roberta-wwm-ext-large
   cnhuhbert_base_path: GPT_SoVITS/pretrained_models/chinese-hubert-base
-  device: cpu
-  is_half: false
+  device: {device}
+  is_half: {is_half_str}
   t2s_weights_path: GPT_SoVITS/pretrained_models/gsv-v2final-pretrained/s1bert25hz-5kh-longer-epoch=12-step=369668.ckpt
   version: v2
   vits_weights_path: GPT_SoVITS/pretrained_models/gsv-v2final-pretrained/s2G2333k.pth
@@ -171,6 +188,7 @@ def start_server(port: int, host: str = "127.0.0.1"):
     ensure_pretrained_base_models()
     ensure_nltk_resources()
     update_tts_infer_config()
+    device, is_half = resolve_device()
     
     print("\n" + "=" * 65)
     print("  CYRENE GPT-SoVITS VOICE SERVER (HUGGING FACE MODEL)")
@@ -179,6 +197,7 @@ def start_server(port: int, host: str = "127.0.0.1"):
     print(f"  GPT Model:       {GPT_CKPT.name}")
     print(f"  SoVITS Weights:  {SOVITS_PTH.name}")
     print(f"  Reference Audio: {REF_AUDIO.name}")
+    print(f"  Inference Device: {device.upper()} (is_half={is_half})")
     print("=" * 65 + "\n")
     
     # Optimize PyTorch CPU inference threads

@@ -89,6 +89,20 @@ describe("cleanTextForSpeech", () => {
     expect(cleaned).not.toContain("gently leans in");
     expect(cleaned).not.toContain("Master must be tired");
   });
+
+  it("extracts quoted dialogue and strips stage directions (*...*) and thoughts (/.../) nested inside quotes", () => {
+    const raw =
+      "Cyrene smiles warmly.\n" +
+      '"Ohhh yessss... *gulps down each pulse* I love it when you unleash like this... /so warm.../ Mmmm... You tasted so good today, Master~"';
+    const cleaned = cleanTextForSpeech(raw);
+    expect(cleaned).toContain("Ohhh yessss...");
+    expect(cleaned).toContain("I love it when you unleash like this...");
+    expect(cleaned).toContain("Mmmm... You tasted so good today, Master");
+    expect(cleaned).not.toContain("gulps down each pulse");
+    expect(cleaned).not.toContain("so warm");
+    expect(cleaned).not.toContain("*");
+    expect(cleaned).not.toContain("/");
+  });
 });
 
 describe("CompanionVoiceService", () => {

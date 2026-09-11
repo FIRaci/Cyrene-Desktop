@@ -235,7 +235,7 @@ async function executeFindNearbyPlaces(args: Record<string, unknown>): Promise<s
     return [
       "[Location Sharing Disabled] Location sharing is currently turned off in Settings for privacy.",
       "To get recommendations nearby:",
-      "1. Specify your desired neighborhood or area (e.g., 'quán ăn ở Cầu Giấy' or 'cafe in Hoan Kiem')",
+      "1. Specify your desired neighborhood or area (e.g., 'restaurants in Cau Giay' or 'cafe in Hoan Kiem')",
       "2. Or enable 'Share My Location' in Settings (Alt+6) so I can automatically use your configured location.",
     ].join("\n");
   }
@@ -295,7 +295,7 @@ export function registerTravelTools(): void {
     name: "Nearby places and recommendations",
     description:
       "Find and recommend nearby places such as restaurants, cafes, food spots, attractions, or services in a specified area.\n\n" +
-      "Use when the user asks for recommendations of places to eat, drink, visit, or explore (e.g., 'quán ăn quanh đây', 'cafe nearby', 'best hotpot in Cau Giay').\n\n" +
+      "Use when the user asks for recommendations of places to eat, drink, visit, or explore (e.g., 'food nearby', 'cafe nearby', 'best hotpot in Cau Giay').\n\n" +
       "Parameters:\n" +
       "- category (required): Category or type of place (e.g., 'restaurant', 'cafe', 'food', 'hotpot', 'coffee', 'bakery', 'attraction')\n" +
       "- location (optional): Explicit location or neighborhood (e.g., 'Cau Giay, Hanoi'). If not provided, uses the user's configured location if location sharing is enabled in Settings.",

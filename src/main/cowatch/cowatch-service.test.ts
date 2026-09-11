@@ -40,7 +40,7 @@ describe("CoWatchService", () => {
           choices: [
             {
               message: {
-                content: "Ôi nhìn cảnh này hồi hộp ghê nè!",
+                content: "Watching this scene is so exciting!",
               },
             },
           ],
@@ -76,7 +76,7 @@ describe("CoWatchService", () => {
     await new Promise((resolve) => setTimeout(resolve, 50));
 
     expect(deps.captureScreen).toHaveBeenCalled();
-    expect(deliveredReactions).toContain("Ôi nhìn cảnh này hồi hộp ghê nè!");
+    expect(deliveredReactions).toContain("Watching this scene is so exciting!");
     expect(broadcastedStates.length).toBeGreaterThan(0);
 
     service.stop();

@@ -192,4 +192,36 @@ describe("FloatingKaomojiController", () => {
     expect(container.children.length).toBe(1);
     controller.dispose();
   });
+
+  it("spawns dual kaomojis simultaneously with 1 on the left and 1 on the right", () => {
+    vi.stubGlobal("window", { innerWidth: 400, innerHeight: 500 });
+    const container = createFakeElement("div");
+    const controller = new FloatingKaomojiController(container);
+
+    const [leftEl, rightEl] = controller.spawnDual("(⁄ ⁄>⁄ ▽ ⁄<⁄ ⁄)", "(｡♥‿♥｡)", 200);
+    expect(leftEl).not.toBeNull();
+    expect(rightEl).not.toBeNull();
+    expect(leftEl?.textContent).toBe("(⁄ ⁄>⁄ ▽ ⁄<⁄ ⁄)");
+    expect(rightEl?.textContent).toBe("(｡♥‿♥｡)");
+    expect(leftEl?.classList.contains("pet-kaomoji--left")).toBe(true);
+    expect(rightEl?.classList.contains("pet-kaomoji--right")).toBe(true);
+    expect(container.children.length).toBe(2);
+
+    controller.dispose();
+  });
+
+  it("routes spawnBurst(2) to spawnDual creating 1 left and 1 right kaomoji", () => {
+    vi.stubGlobal("window", { innerWidth: 400, innerHeight: 500 });
+    const container = createFakeElement("div");
+    const controller = new FloatingKaomojiController(container);
+
+    controller.spawnBurst(2, 200, 200);
+    expect(container.children.length).toBe(2);
+    const leftEl = container.children[0];
+    const rightEl = container.children[1];
+    expect(leftEl.classList.contains("pet-kaomoji--left")).toBe(true);
+    expect(rightEl.classList.contains("pet-kaomoji--right")).toBe(true);
+
+    controller.dispose();
+  });
 });

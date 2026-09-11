@@ -27,7 +27,7 @@ export function buildCameraTools(deps: CameraToolsDeps): ToolDefinition[] {
     name: "Camera Vision (Look at Master)",
     description:
       "Look through the camera to observe the user (Master), inspect what they are holding, or view an object in front of the webcam.\n\n" +
-      "Use when the user asks you to look at them, comment on their appearance, check what they are showing you, or identify something in front of the camera (e.g. 'nhìn tôi này', 'xem tôi đang cầm gì nè', 'look at me', 'can you see what I am holding?').\n\n" +
+      "Use when the user asks you to look at them, comment on their appearance, check what they are showing you, or identify something in front of the camera (e.g. 'look at me', 'can you see what I am holding?', 'check what I am showing you').\n\n" +
       "Parameters:\n" +
       "- prompt (optional): Specific aspect or question the user asked about the scene (e.g., 'identify the held object', 'how do I look today?').",
     enabled: true,

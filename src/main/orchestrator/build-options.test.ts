@@ -718,6 +718,16 @@ describe("build-options", () => {
       expect(detectAssistantOperationalIntent("Thời tiết hôm nay thế nào em?")).toBe(true);
     });
 
+    it("detects operational intent for scheduling, weather (including typos), and music", () => {
+      expect(detectAssistantOperationalIntent("Can you schedule 12h30 pm at 10 September I have to go to study ?")).toBe(true);
+      expect(detectAssistantOperationalIntent("how about the weather today at 4pm")).toBe(true);
+      expect(detectAssistantOperationalIntent("how about the temperture")).toBe(true);
+      expect(detectAssistantOperationalIntent("what is the temperature outside")).toBe(true);
+      expect(detectAssistantOperationalIntent("play some music")).toBe(true);
+      expect(detectAssistantOperationalIntent("nhớ nhắc tôi 2h chiều đi học bài")).toBe(true);
+      expect(detectAssistantOperationalIntent("thời tiết hôm nay thế nào")).toBe(true);
+    });
+
     it("returns false for casual chat without assistant intent", () => {
       expect(detectAssistantOperationalIntent("Hello Cyrene, how are you?")).toBe(false);
       expect(detectAssistantOperationalIntent("Em ăn cơm chưa?")).toBe(false);
@@ -750,6 +760,46 @@ describe("build-options", () => {
       expect(result.options.executionMode).toBe("work");
       expect(result.options.tools?.length).toBe(1);
       expect(result.options.tools?.[0]?.id).toBe("schedule_task");
+    });
+
+    it("auto-promotes executionMode from chat to work for Vietnamese 'đặt thời gian' and weather queries", async () => {
+      const deps = createBuildDeps();
+      deps.toolRegistry = {
+        getEnabled: () => [
+          { id: "schedule_task", name: "schedule_task" } as any,
+          { id: "weather", name: "weather" } as any,
+        ],
+      };
+
+      // 1. "đặt thời gian"
+      const resultTime = await buildAgentRunOptions({
+        messages: [{ role: "user", content: "đặt thời gian 8h sáng mai nhắc tôi dậy đi học" }],
+        style: "talk_normal",
+        executionMode: "chat",
+      }, deps);
+      expect(resultTime.options.executionMode).toBe("work");
+      expect(resultTime.options.tools?.length).toBe(2);
+
+      // 2. Weather question
+      const resultWeather = await buildAgentRunOptions({
+        messages: [{ role: "user", content: "hôm nay có mưa không em ơi?" }],
+        style: "talk_normal",
+        executionMode: "chat",
+      }, deps);
+      expect(resultWeather.options.executionMode).toBe("work");
+      expect(resultWeather.options.tools?.length).toBe(2);
+    });
+
+    it("correctly identifies operational intents with detectAssistantOperationalIntent", () => {
+      expect(detectAssistantOperationalIntent("đặt thời gian nhắc anh lúc 3h chiều")).toBe(true);
+      expect(detectAssistantOperationalIntent("hẹn thời gian 15 phút nữa")).toBe(true);
+      expect(detectAssistantOperationalIntent("hôm nay có mưa không")).toBe(true);
+      expect(detectAssistantOperationalIntent("thời tiết Hà Nội thế nào")).toBe(true);
+      expect(detectAssistantOperationalIntent("mở nhạc lofi nghe chill đi")).toBe(true);
+      expect(detectAssistantOperationalIntent("set a timer for 10 minutes")).toBe(true);
+      expect(detectAssistantOperationalIntent("what is the weather like today?")).toBe(true);
+      expect(detectAssistantOperationalIntent("Cyrene hôm nay dễ thương quá")).toBe(false);
+      expect(detectAssistantOperationalIntent("Hello, how are you?")).toBe(false);
     });
 
     it("keeps executionMode strictly 'work' with enabled tools when work mode is requested", async () => {

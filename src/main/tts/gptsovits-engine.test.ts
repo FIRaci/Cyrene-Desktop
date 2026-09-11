@@ -86,4 +86,23 @@ describe("gptsovits-engine synthesize input validation", () => {
     expect(body.text_lang).toBe("zh");
     expect(body.prompt_lang).toBe("zh");
   });
+
+  it("defaults text_split_method to cut5 to prevent voice truncation on long dialogues", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      arrayBuffer: async () => new TextEncoder().encode("RIFFaudio").buffer,
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await synthesize({
+      baseUrl: "http://localhost:9880",
+      refAudioPath: "D:/voices/cyrene-zh.wav",
+      promptText: "reference transcript",
+      text: "Long conversational dialogue with multiple sentences.",
+    });
+
+    const request = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    const body = JSON.parse(String(request.body));
+    expect(body.text_split_method).toBe("cut5");
+  });
 });

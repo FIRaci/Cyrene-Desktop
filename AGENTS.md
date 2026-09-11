@@ -435,5 +435,84 @@ Hàm `formatBondPersonaPrompt()` tại `bond-persona-config.ts` điều hướng
   3. `npm run package:win:dir`: Đóng gói ứng dụng thành file thực thi độc lập tại `release\win-unpacked\Cyrene.exe`.
 - Nếu bỏ qua bước `package:win:dir`, file `.exe` của người dùng sẽ không nhận được mã nguồn mới nhất!
 
+---
 
+## 16. HỢP ĐỒNG KHÓA CHẾT — KHÔNG ĐƯỢC PHÉP SỬA ĐỔI (LOCKED CODE CONTRACTS — DO NOT TOUCH)
 
+> 🚨 **CÁC HỢP ĐỒNG NÀY ĐÃ ĐƯỢC XÁC NHẬN LÀ ĐÚNG VÀ KHÓA CHẾT. TUYỆT ĐỐI CẤM REVERT HOẶC SỬA ĐỔI MÀ KHÔNG CÓ SỰ CHO PHÉP RÕ RÀNG CỦA MASTER.**
+
+### 16.1. Nút Gửi Chat KHÔNG ĐƯỢC Disable (Send Button Non-Disable Contract)
+
+**File**: `src/renderer/chat/main.ts`
+
+**Quy tắc**:
+- **TUYỆT ĐỐI KHÔNG BAO GIỜ** đặt `sendBtn.disabled = true;` trong hàm `triggerCyreneGreeting()`.
+- Lý do: Khi `<button type="submit">` bị `disabled`, trình duyệt không phát sự kiện `submit` của form, khiến văn bản người dùng gõ bị mắc kẹt vĩnh viễn trong ô nhập → Bug "cấm chat".
+- **Cơ chế đúng**: Khi `sending === true`, hàm `send()` tự động đẩy tin nhắn vào `chatMessageQueue` (hàng đợi), sau đó xử lý tuần tự. Không cần disable nút.
+- **Auto-recovery**: `inputEl` lắng nghe sự kiện `focus` và `input`, tự động đặt `sendBtn.disabled = false` nếu phát hiện nút bị khoá.
+- **Auto-heal**: `send()` tự động phá vỡ trạng thái bị kẹt sau **15 giây** (không phải 30s cũ) bằng cách gọi `agui.cancel()` và reset `sending = false`.
+
+```typescript
+// ✅ ĐÚNG — trong triggerCyreneGreeting:
+sending = true;
+sendStartedAt = Date.now();
+// KHÔNG có sendBtn.disabled = true;
+
+// ✅ ĐÚNG — auto-recovery:
+inputEl.addEventListener("focus", () => { if (sendBtn.disabled) sendBtn.disabled = false; });
+inputEl.addEventListener("input", () => { if (sendBtn.disabled) sendBtn.disabled = false; });
+```
+
+### 16.2. Kaomoji Kép Cánh Trái-Phải (Dual Kaomoji Wing-Toss Contract)
+
+**Files**: `src/renderer/live2d/floating-kaomoji.ts`, `src/renderer/live2d/gesture-interaction-controller.ts`
+
+**Quy tắc**:
+- Mỗi phản hồi cử chỉ (xoa đầu, vuốt ve) LUÔN tung **2 kaomoji**, một cái sang **cánh trái (15-25% viewport width)**, một cái sang **cánh phải (75-85% viewport width)**.
+- Đây là **tính năng chủ động**, không phải bug: 2 kaomoji đối xứng tạo hiệu ứng "2 cánh tung lên" đáng yêu khi chạm vào Cyrene.
+- **Phương thức**: `executeGestureRun()` gọi `this.kaomoji.spawnDual(initialKaomoji, undefined, y)` thay vì `spawn(initialKaomoji, x, y)`.
+- **`spawnDual()`** tạo element trực tiếp qua `spawnAt(text, x, y, side)` với vị trí cứng (không phụ thuộc vào logic side-detection của `spawn()`), đảm bảo 2 kaomoji luôn ở 2 phía đối nhau.
+- **`lastSpawnSide`**: `FloatingKaomojiController` theo dõi cạnh spawn cuối để đảm bảo các lần gọi `spawn()` đơn lẻ liên tiếp luôn xen kẽ trái-phải.
+
+```typescript
+// ✅ ĐÚNG — trong executeGestureRun:
+if (this.kaomoji?.spawnDual) {
+  this.kaomoji.spawnDual(initialKaomoji, undefined, y); // ← 1 trái + 1 phải
+} else {
+  this.kaomoji?.spawn(initialKaomoji, x, y); // fallback
+}
+
+// ✅ ĐÚNG — trong spawnDual:
+const leftX = Math.round(winWidth * (0.15 + Math.random() * 0.10));  // 15-25%
+const rightX = Math.round(winWidth * (0.75 + Math.random() * 0.10)); // 75-85%
+const elLeft = this.spawnAt(leftKaomoji, leftX, baseY, -1);
+const elRight = this.spawnAt(rightKaomoji, rightX, baseY, 1);
+```
+
+### 16.3. GPT-SoVITS `cut5` Text Split (Voice Continuity Contract)
+
+**File**: `src/main/tts/gptsovits-engine.ts`
+
+**Quy tắc**:
+- Tham số `text_split_method` trong payload API `/tts` của GPT-SoVITS v2 **BẮT BUỘC** là `"cut5"`.
+- Lý do: `cut5` chia văn bản theo câu tự nhiên (dấu chấm, dấu phẩy, dấu chấm than, v.v.), giúp âm thanh phát ra liên tục và tự nhiên như giọng người thật.
+- Các giá trị `cut0` (no split), `cut1`, `cut2`, `cut3`, `cut4` đều tạo ra giọng bị đứt quãng, robot hoặc thiếu âm điệu.
+- **TUYỆT ĐỐI KHÔNG ĐỔI** `text_split_method` sang bất kỳ giá trị nào khác.
+
+```typescript
+// ✅ ĐÚNG:
+text_split_method: "cut5",
+
+// ❌ SAI — bất kỳ giá trị nào khác:
+// text_split_method: "cut0"
+// text_split_method: "cut4"
+```
+
+### 16.4. Lọc Văn Bản Trước Khi Đọc (Voice Speech Filter Contract)
+
+**Files**: `src/renderer/live2d/voice.ts`, `src/main/index.ts` (hàm `prepareGptsovitsVoicePayload`)
+
+**Quy tắc**:
+- Khi văn bản chứa lời thoại trong ngoặc kép (`"..."`, `"..."`, `「...」`): chỉ trích xuất **duy nhất phần trong ngoặc kép** để gửi cho TTS. Tất cả `*hành động*` và `/suy nghĩ/` bên ngoài ngoặc kép bị loại bỏ hoàn toàn.
+- Khi văn bản không có ngoặc kép: loại bỏ `*...*` và `/.../` trước khi gửi TTS.
+- Mục đích: Cyrene chỉ đọc lời nói thực sự, không đọc ký hiệu hay văn tả cảnh.

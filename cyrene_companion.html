@@ -898,7 +898,7 @@ function triggerRandomMotion() {
     () => { safeMotion('动作#6', 1); safeExpression('墨镜'); },
   ];
   motions[Math.floor(Math.random() * motions.length)]();
-  // Chỉ dùng kaomoji, không dùng emoji
+  // Kaomojis only, strictly no emojis
   spawnEmote(KAOMOJI_POOL[Math.floor(Math.random() * KAOMOJI_POOL.length)]);
 }
 

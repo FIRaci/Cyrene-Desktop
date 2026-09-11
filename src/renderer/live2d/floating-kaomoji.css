@@ -28,22 +28,22 @@
 @keyframes kaomoji-float-up {
   0% {
     opacity: 0;
-    transform: translate(-50%, 12px) scale(0.65);
+    transform: translate(-50%, 12px) scale(0.65) rotate(0deg);
   }
   20% {
     opacity: 1;
-    transform: translate(-50%, 0) scale(1.08);
+    transform: translate(-50%, 0) scale(1.08) rotate(calc(var(--tilt, 0deg) * 0.5));
   }
   35% {
-    transform: translate(calc(-50% + var(--drift-x, 0px) * 0.4), -18px) scale(1);
+    transform: translate(calc(-50% + var(--drift-x, 0px) * 0.4), -18px) scale(1) rotate(var(--tilt, 0deg));
   }
   75% {
     opacity: 0.95;
-    transform: translate(calc(-50% + var(--drift-x, 0px) * 0.8), -52px) scale(0.98);
+    transform: translate(calc(-50% + var(--drift-x, 0px) * 0.8), -52px) scale(0.98) rotate(var(--tilt, 0deg));
   }
   100% {
     opacity: 0;
-    transform: translate(calc(-50% + var(--drift-x, 0px)), -78px) scale(0.88);
+    transform: translate(calc(-50% + var(--drift-x, 0px)), -78px) scale(0.88) rotate(calc(var(--tilt, 0deg) * 1.2));
   }
 }
 

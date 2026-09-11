@@ -158,12 +158,14 @@ export function extractSpokenText(text: string): string {
   if (quoteMatches.length > 0) {
     spoken = quoteMatches.join(" ");
   } else {
-    // Fallback if no quotes exist: strip actions enclosed in asterisks *...*
-    spoken = text.replace(/\*[^*]*\*/g, " ");
-
-    // Strip thoughts enclosed in slashes /.../
-    spoken = spoken.replace(/\/[^/]+\//g, " ");
+    spoken = text;
   }
+
+  // Strip actions enclosed in asterisks *...* (including stage directions inside quotes)
+  spoken = spoken.replace(/\*[^*]*\*/g, " ");
+
+  // Strip thoughts enclosed in slashes /.../ (including thoughts inside quotes)
+  spoken = spoken.replace(/\/[^/]+\//g, " ");
 
   // 2. Strip kaomojis inside parentheses and standalone kaomoji patterns
   spoken = spoken.replace(/(?:[٩۶つﾉシ]\s*)?[\(（][^)）]*[♥♡★☆✿♪♫•ᴗ‿◠^▽><~✧ω≧≦Дд｡⁄`´˙˚*]+[^)）]*[\)）](?:\s*[و̑✧つﾉシ\u0648\u0311~☆★]+)*/gu, " ");
@@ -202,7 +204,7 @@ export class GestureInteractionController {
     setExplicitContext?: (ctx: ContextAnalysisResult) => void;
   };
 
-  private static readonly COOLDOWN_MS = 3000;
+  private static readonly COOLDOWN_MS = 600;
   private isGenerating = false;
   private lastInteractionTime = 0;
   private currentReply = "";
@@ -283,13 +285,31 @@ export class GestureInteractionController {
     return this.isGenerating;
   }
 
+  getLastInteractionTime(): number {
+    return this.lastInteractionTime;
+  }
+
   isBusy(): boolean {
     const inCooldown = Date.now() - this.lastInteractionTime < GestureInteractionController.COOLDOWN_MS;
-    return this.isGenerating || this.bubbles.isBusy || inCooldown;
+    return this.isGenerating || inCooldown;
+  }
+
+  private interruptCurrentSpeech(): void {
+    try {
+      this.voice?.stop();
+    } catch {
+      // ignore
+    }
+    if (typeof this.bubbles?.clearThought === "function") {
+      this.bubbles.clearThought();
+    }
   }
 
   async handleHeadPat(x?: number, y?: number): Promise<void> {
     if (this.disposed || this.isBusy()) return;
+    this.isGenerating = true;
+    this.lastInteractionTime = Date.now();
+    this.interruptCurrentSpeech();
     const prompt =
       "[Master gently pats your head]\n" +
       "You are Cyrene, a sweet, affectionate, and ethereal Live2D companion waifu who deeply adores Master. " +
@@ -312,6 +332,9 @@ export class GestureInteractionController {
 
   async handlePetting(x?: number, y?: number): Promise<void> {
     if (this.disposed || this.isBusy()) return;
+    this.isGenerating = true;
+    this.lastInteractionTime = Date.now();
+    this.interruptCurrentSpeech();
     const prompt =
       "[Master gently caresses you]\n" +
       "You are Cyrene, a sweet, affectionate, and ethereal Live2D companion waifu who deeply adores Master. " +
@@ -342,7 +365,7 @@ export class GestureInteractionController {
     x?: number,
     y?: number,
   ): Promise<void> {
-    if (this.disposed || this.isBusy()) return;
+    if (this.disposed) return;
     this.isGenerating = true;
     this.lastInteractionTime = Date.now();
     this.autonomousThoughts?.pause();
@@ -359,11 +382,16 @@ export class GestureInteractionController {
       ? syncContext.gestureFallback.thought
       : thoughtText;
 
-    // Spawn EXACTLY ONE kaomoji particle immediately upon touch
+    // Spawn dual kaomoji particles immediately upon touch — one left wing, one right wing
+    // This is deliberate: gesture reactions always produce a charming 2-wing toss
     let hasSpawnedKaomojiThisRun = false;
     if (!hasSpawnedKaomojiThisRun) {
       hasSpawnedKaomojiThisRun = true;
-      this.kaomoji?.spawn(initialKaomoji, x, y);
+      if (this.kaomoji?.spawnDual) {
+        this.kaomoji.spawnDual(initialKaomoji, undefined, y);
+      } else {
+        this.kaomoji?.spawn(initialKaomoji, x, y);
+      }
     }
     this.bubbles.think(initialThought, 30000);
     this.currentReply = "";
@@ -525,11 +553,13 @@ export class GestureInteractionController {
       void this.voice?.speak(spoken);
     }
 
-    // NOTE: chatStore persistence is intentionally omitted here.
-    // agui-bridge.ts backend persistence guarantee (complete() handler) already saves
-    // both the user turn (via userTurnId) and model turn (via assistantTurnId) with
-    // deduplication checks. A second append here races with those checks and produces duplicates.
-    void store; void sessionId; void assistantTurnId;
+    // Persist assistant message to active chat session so Alt+1 Chat window reliably displays model reply
+    void this.appendToStore(store, sessionId, {
+      id: assistantTurnId,
+      role: "model",
+      content: cleanFullReply,
+      at: Date.now(),
+    });
   }
 
   private finishFallback(store: { append: (arg1: unknown, arg2?: unknown) => Promise<unknown> } | undefined, sessionId: string, fallbackText: string): void {
@@ -565,11 +595,13 @@ export class GestureInteractionController {
 
   private async getOrCreateActiveSessionId(store?: {
     getActiveSession?: () => Promise<string | { id: string } | null>;
+    setActiveSession?: (id: string | null) => Promise<boolean>;
     list?: () => Promise<Array<{ id: string }>>;
     create?: (opts?: unknown) => Promise<{ id: string }>;
   }): Promise<string> {
-    if (!store) return this.cachedSessionId || "default";
+    if (!store) return (this.cachedSessionId && this.cachedSessionId !== "default") ? this.cachedSessionId : "default";
     try {
+      // 1. Dynamic query: check active session from Alt+1 or main process
       if (store.getActiveSession) {
         const active = await store.getActiveSession();
         const id = typeof active === "string" ? active : active?.id;
@@ -578,35 +610,35 @@ export class GestureInteractionController {
           return id;
         }
       }
-      if (this.cachedSessionId && this.cachedSessionId !== "default") {
-        return this.cachedSessionId;
-      }
+
+      // 2. Query most recent existing session from store.list()
       if (store.list) {
         const list = await store.list();
-        if (Array.isArray(list) && list.length > 0 && list[0]?.id) {
+        if (Array.isArray(list) && list.length > 0 && list[0]?.id && list[0].id !== "default") {
           this.cachedSessionId = list[0].id;
+          await store.setActiveSession?.(list[0].id);
           return list[0].id;
         }
       }
+
+      // 3. Fall back to cached session if valid
+      if (this.cachedSessionId && this.cachedSessionId !== "default") {
+        return this.cachedSessionId;
+      }
+
+      // 4. Create new valid session if none exists
       if (store.create) {
         const created = await store.create({ title: "Cyrene & Master" });
-        if (created?.id) {
+        if (created?.id && created.id !== "default") {
           this.cachedSessionId = created.id;
+          await store.setActiveSession?.(created.id);
           return created.id;
         }
       }
-      if (store.getActiveSession) {
-        const active = await store.getActiveSession();
-        const id = typeof active === "string" ? active : active?.id;
-        if (id) {
-          this.cachedSessionId = id;
-          return id;
-        }
-      }
-    } catch {
-      // ignore
+    } catch (err) {
+      console.warn("[GestureController] Failed to resolve active session ID:", err);
     }
-    return this.cachedSessionId || "default";
+    return (this.cachedSessionId && this.cachedSessionId !== "default") ? this.cachedSessionId : "default";
   }
 
   private async appendToStore(
@@ -614,14 +646,14 @@ export class GestureInteractionController {
     sessionId: string,
     message: unknown,
   ): Promise<void> {
-    if (!store?.append) return;
+    if (!store?.append || !sessionId || sessionId === "default") return;
     try {
       await store.append(sessionId, message);
     } catch {
       try {
         await store.append({ id: sessionId, message });
-      } catch {
-        // ignore
+      } catch (err) {
+        console.warn("[GestureController] Failed to append message to store:", err);
       }
     }
   }

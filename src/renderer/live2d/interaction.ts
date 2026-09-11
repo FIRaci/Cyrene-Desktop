@@ -99,6 +99,8 @@ export class InteractionController {
     this.downHits = this.resolveHits(e.clientX, e.clientY);
   };
 
+  private static readonly HEAD_PAT_DEBOUNCE_MS = 600;
+
   private handleMove = (e: PointerEvent): void => {
     if (this.disposed || !this.isPointerDown || this.suppressGesture || e.altKey) return;
 
@@ -123,7 +125,7 @@ export class InteractionController {
           !this.didTriggerHeadPat &&
           ((this.strokeAccum >= 40 && this.strokeDirectionChanges >= 1) || this.strokeAccum >= 70)
         ) {
-          if (now - this.lastPatTimestamp > 2500) {
+          if (now - this.lastPatTimestamp > InteractionController.HEAD_PAT_DEBOUNCE_MS) {
             this.lastPatTimestamp = now;
             this.didTriggerHeadPat = true;
             this.strokeAccum = 0;
@@ -154,7 +156,7 @@ export class InteractionController {
     }
 
     const now = Date.now();
-    if (this.didTriggerHeadPat || (now - this.lastPatTimestamp < 2500)) {
+    if (this.didTriggerHeadPat || (now - this.lastPatTimestamp < InteractionController.HEAD_PAT_DEBOUNCE_MS)) {
       this.didTriggerHeadPat = false;
       this.downHits = [];
       return;

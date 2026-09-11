@@ -98,7 +98,7 @@ const chatVisibilityOff = window.petCompanion?.onChatVisibilityChanged?.((visibl
   }
 }) ?? (() => {});
 
-function triggerRoleplayReactions(text: string): void {
+function triggerRoleplayReactions(text: string, allowKaomoji = true): void {
   const now = Date.now();
   if (now - lastRoleplayReactionTime < 4000) return;
   lastRoleplayReactionTime = now;
@@ -111,6 +111,11 @@ function triggerRoleplayReactions(text: string): void {
   const isCurious = /(\?|curious|wonder|confus|puzzl|what|why|how)/i.test(lower);
   const isAdmiring = /(amazing|sparkle|dazzl|shining|brilliant|incredible|wow)/i.test(lower);
 
+  // Suppress duplicate kaomoji spawn if gesture interaction (head-pat/petting) spawned one within the last 20 seconds,
+  // or if gesture generation is still in progress, or if mini-chat is busy (mini-chat handles its own kaomoji).
+  const isRecentGesture = gestureController.isGeneratingGesture || (now - gestureController.getLastInteractionTime()) < 20_000;
+  const shouldSpawnKaomoji = allowKaomoji && !isRecentGesture && !miniChat.isBusy;
+
   try {
     if (isAffectionate) {
       void manager?.playAction({ kind: "expression", name: "开心眼" });
@@ -119,30 +124,45 @@ function triggerRoleplayReactions(text: string): void {
       } else {
         void manager?.playAction({ kind: "motion", group: "动作#6", motionName: "Wink~" });
       }
-      const affectionKaomojis = ["(⁄ ⁄>⁄ ▽ ⁄<⁄ ⁄)", "(｡♥‿♥｡)", "(⸝⸝ᵕᴗᵕ⸝⸝)", "(੭ु´͈ ᐜ `͈)੭ु⁾⁾", "🌸 (✿◡‿◡) 🌸"];
-      kaomojiController.spawn(affectionKaomojis[Math.floor(Math.random() * affectionKaomojis.length)]);
+      if (shouldSpawnKaomoji) {
+        const affectionKaomojis = ["(⁄ ⁄>⁄ ▽ ⁄<⁄ ⁄)", "(｡♥‿♥｡)", "(⸝⸝ᵕᴗᵕ⸝⸝)", "(੭ु´͈ ᐜ `͈)੭ु⁾⁾", "🌸 (✿◡‿◡) 🌸"];
+        const left = affectionKaomojis[Math.floor(Math.random() * affectionKaomojis.length)];
+        const pool = affectionKaomojis.filter((k) => k !== left);
+        const right = pool[Math.floor(Math.random() * pool.length)] || left;
+        kaomojiController.spawnDual(left, right);
+      }
     } else if (isPlayful) {
       void manager?.playAction({ kind: "expression", name: "开心眼" });
       void manager?.playAction({ kind: "motion", group: "动作#6", motionName: "Wink~" });
-      const playfulKaomojis = ["(^_<)〜☆", "(>ω<)", "(*^▽^*)", "(o^▽^o)"];
-      kaomojiController.spawn(playfulKaomojis[Math.floor(Math.random() * playfulKaomojis.length)]);
+      if (shouldSpawnKaomoji) {
+        const playfulKaomojis = ["(^_<)〜☆", "(>ω<)", "(*^▽^*)", "(o^▽^o)"];
+        kaomojiController.spawn(playfulKaomojis[Math.floor(Math.random() * playfulKaomojis.length)]);
+      }
     } else if (isAdmiring) {
       void manager?.playAction({ kind: "expression", name: "闪耀" });
       void manager?.playAction({ kind: "motion", group: "动作#6", motionName: "笑一笑吧~" });
-      const sparkleKaomojis = ["✨ (*´˘`*) ✨", "(★ω★)", "(✿◠‿◠)"];
-      kaomojiController.spawn(sparkleKaomojis[Math.floor(Math.random() * sparkleKaomojis.length)]);
+      if (shouldSpawnKaomoji) {
+        const sparkleKaomojis = ["✨ (*´˘`*) ✨", "(★ω★)", "(✿◠‿◠)"];
+        kaomojiController.spawn(sparkleKaomojis[Math.floor(Math.random() * sparkleKaomojis.length)]);
+      }
     } else if (isCurious) {
       void manager?.playAction({ kind: "expression", name: "问号" });
-      const curiousKaomojis = ["(・ω・)?", "(o_O)?", "(*•̀ᴗ•́*)و"];
-      kaomojiController.spawn(curiousKaomojis[Math.floor(Math.random() * curiousKaomojis.length)]);
+      if (shouldSpawnKaomoji) {
+        const curiousKaomojis = ["(・ω・)?", "(o_O)?", "(*•̀ᴗ•́*)و"];
+        kaomojiController.spawn(curiousKaomojis[Math.floor(Math.random() * curiousKaomojis.length)]);
+      }
     } else if (isHappy) {
       void manager?.playAction({ kind: "expression", name: "开心眼" });
       void manager?.playAction({ kind: "motion", group: "动作#6", motionName: "笑一笑吧~" });
-      const happyKaomojis = ["(✿◠‿◠)", "(o^▽^o)", "(*^▽^*)"];
-      kaomojiController.spawn(happyKaomojis[Math.floor(Math.random() * happyKaomojis.length)]);
+      if (shouldSpawnKaomoji) {
+        const happyKaomojis = ["(✿◠‿◠)", "(o^▽^o)", "(*^▽^*)"];
+        kaomojiController.spawn(happyKaomojis[Math.floor(Math.random() * happyKaomojis.length)]);
+      }
     } else {
       void manager?.playAction({ kind: "expression", name: "开心眼" });
-      kaomojiController.spawn();
+      if (shouldSpawnKaomoji) {
+        kaomojiController.spawn();
+      }
     }
   } catch (err) {
     console.warn("[Cyrene] triggerRoleplayReactions error:", err);

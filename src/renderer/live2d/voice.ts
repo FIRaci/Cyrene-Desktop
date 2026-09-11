@@ -64,13 +64,13 @@ export function cleanTextForSpeech(text: string): string {
     if (plainNarrativeRegex.test(cleaned)) {
       cleaned = cleaned.replace(plainNarrativeRegex, "*$1") + "*";
     }
-
-    // Strip actions enclosed in asterisks *...*
-    cleaned = cleaned.replace(/\*[^*]*\*/g, " ");
-
-    // Strip thoughts enclosed in slashes /.../
-    cleaned = cleaned.replace(/\/[^/]+\//g, " ");
   }
+
+  // Strip actions enclosed in asterisks *...* (including stage directions inside quotes)
+  cleaned = cleaned.replace(/\*[^*]*\*/g, " ");
+
+  // Strip thoughts enclosed in slashes /.../ (including thoughts inside quotes)
+  cleaned = cleaned.replace(/\/[^/]+\//g, " ");
 
   // Strip kaomojis with optional prefix/suffix appendages (e.g. (*•̀ᴗ•́*)و ̑̑, (｡♥‿♥｡), ٩(ˊᗜˋ*)و, (✿◠‿◠), (o^▽^o))
   cleaned = cleaned.replace(/(?:[٩۶つﾉシ]\s*)?[\(（][^)）]*[♥♡★☆✿♪♫•ᴗ‿◠^▽><~✧ω≧≦Дд｡⁄`´˙˚*]+[^)）]*[\)）](?:\s*[و̑✧つﾉシ\u0648\u0311~☆★]+)*/gu, " ");

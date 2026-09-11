@@ -1355,8 +1355,8 @@ async function prepareGptsovitsVoicePayload(payload: {
     if (plainNarrativeRegex.test(text)) {
       text = text.replace(plainNarrativeRegex, "*$1") + "*";
     }
-    text = text.replace(/\*[^*]*\*/g, " ").replace(/\/[^/]+\//g, " ");
   }
+  text = text.replace(/\*[^*]*\*/g, " ").replace(/\/[^/]+\//g, " ");
   text = text.replace(/[*_~#>]+/g, " ");
   text = text.replace(/(?:[٩۶つﾉシ]\s*)?[\(（][^)）]*[♥♡★☆✿♪♫•ᴗ‿◠^▽><~✧ω≧≦Дд｡⁄`´˙˚*]+[^)）]*[\)）](?:\s*[و̑✧つﾉシ\u0648\u0311~☆★]+)*/gu, " ");
   text = text.replace(/\s+/g, " ").trim();
@@ -4524,6 +4524,15 @@ function toggleChatWindow(): void {
       chatWindow.show();
       chatWindow.focus();
       chatWindow.moveTop();
+      try {
+        const targetSessionId = ensureActiveChatSessionId();
+        if (targetSessionId) {
+          chatWindow.webContents.send(IPC.CHATS_SWITCH_SESSION, targetSessionId);
+        }
+        chatWindow.webContents.send(IPC.CHATS_CHANGED);
+      } catch (err) {
+        console.warn("[Cyrene] Failed to notify chatWindow on toggle:", err);
+      }
     }
   } else {
     createChatWindow();

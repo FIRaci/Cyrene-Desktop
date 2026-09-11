@@ -13,6 +13,7 @@ export interface GptsovitsSynthesizeOptions {
   promptLang?: "en" | "zh";
   speed?: number;           // 0.5~2, default 1
   format?: "wav" | "mp3";   // Default wav
+  textSplitMethod?: "cut0" | "cut1" | "cut2" | "cut3" | "cut4" | "cut5"; // Default "cut5"
   timeoutMs?: number;      // Default 60000 (local inference might be slow)
   debugLog?: (entry: Record<string, unknown>) => void;
 }
@@ -89,7 +90,7 @@ export async function synthesize(opts: GptsovitsSynthesizeOptions): Promise<Gpts
     media_type: format,
     parallel_infer: true,
     batch_size: 1,
-    text_split_method: "cut5",
+    text_split_method: opts.textSplitMethod ?? "cut5",
   });
 
   // Strip trailing slash from baseUrl, append /api/tts

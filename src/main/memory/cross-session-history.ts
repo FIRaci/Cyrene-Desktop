@@ -104,7 +104,7 @@ export function buildCrossSessionSummary(
   }
 
   lines.push(
-    "Seamless Continuity: Master may reference past topics (\"như lúc nãy\", \"hôm nọ anh bảo\"). Naturally connect with these shared memories without acting confused or like a stranger.",
+    "Seamless Continuity: Master may reference past topics (\"like earlier\", \"as mentioned previously\"). Naturally connect with these shared memories without acting confused or like a stranger.",
   );
 
   return lines.join("\n");
