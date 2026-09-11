@@ -80,6 +80,14 @@ describe("chat-context-analyzer - 9 mood spectrum", () => {
       expect(result.mood).toBe("pouting");
     });
 
+    it("detects pouting mood from English intimate teasing and edging (stop to tease, hold cum, not make climax)", () => {
+      const messages = [
+        { role: "user", content: "*stop to tease her nipples, to hold her cum to not make her climax* hehe" },
+      ];
+      const result = detectConversationMood(messages);
+      expect(result.mood).toBe("pouting");
+    });
+
     it("detects study mood from study and exam keywords (học, ôn thi, exam, homework)", () => {
       const messages = [
         { role: "user", content: "Tối nay anh phải học bài và ôn thi giải tích" },

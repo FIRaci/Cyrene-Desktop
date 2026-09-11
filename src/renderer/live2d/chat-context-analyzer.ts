@@ -227,16 +227,22 @@ export function detectConversationMood(
     return { mood: "jealous", detectedKeywords: detected.jealous };
   }
 
-  // 2. Affectionate Priority Override:
-  // If Master and Cyrene are sharing love, romance, erotic pleasure, or intimate cuddles,
-  // affectionate feelings immediately override casual teasing or faint sulking.
-  if (scores.affectionate >= 2.0 && scores.affectionate >= scores.pouting) {
+  // 2. Teasing / Pouting vs Affectionate (Anti-Sycophancy & Teasing Friction Priority):
+  // When active teasing, edging, or pouting friction is present and matches or exceeds affectionate cues,
+  // playful friction takes precedence so Cyrene does not react with docile sycophancy.
+  if (scores.pouting >= 2.5 && scores.pouting >= scores.affectionate) {
+    return { mood: "pouting", detectedKeywords: detected.pouting };
+  }
+
+  // 3. Affectionate Priority Override:
+  // If Master and Cyrene are sharing love, romance, erotic pleasure, or intimate cuddles without teasing friction,
+  // affectionate feelings take precedence.
+  if (scores.affectionate >= 2.0 && scores.affectionate > scores.pouting) {
     return { mood: "affectionate", detectedKeywords: detected.affectionate };
   }
 
-  // 3. Pouting / Tsundere:
-  // Requires strong pouting signal (>= 2.5) that genuinely dominates affectionate cues
-  if (scores.pouting >= 2.5 && scores.pouting > scores.affectionate * 1.5) {
+  // 4. Pouting / Tsundere general fallback:
+  if (scores.pouting >= 2.5 && scores.pouting > scores.affectionate * 1.2) {
     return { mood: "pouting", detectedKeywords: detected.pouting };
   }
 

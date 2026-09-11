@@ -112,7 +112,12 @@ export const COMPREHENSIVE_LEXICON: Record<LexiconMood, LexiconItem[]> = {
 
   // ── 3. POUTING: Genuine tsundere sulking, petty grievance, playful upset, teasing & banter ──
   pouting: [
-    // Tier 1 (Weight: 3.5): Explicit interpersonal complaints, tantrums, sulking, and playful teasing/bullying
+    // Tier 1 (Weight: 3.5 - 4.0): Explicit interpersonal complaints, tantrums, sulking, intimate teasing/edging, and playful teasing/bullying
+    // Intimate & sensual teasing, edging, and orgasm/climax denial (Master being a torturous tease)
+    {
+      regex: /\b(?:stop to tease|hold (?:her|my|your) cum|not make (?:her|me|you) climax|deny (?:her|my|your)? release|denying (?:her|my|your)? release|edging|edge (?:me|her|you)|keep (?:me|her|you) on edge|such a tease|torturous tease|cruel tease|teasing me like this|don't tease me|stop teasing|make (?:me|her) wait|torture me)\b/i,
+      weight: 4.0,
+    },
     {
       regex: /\b(stop teasing me|why are you teasing me|you're teasing me|stop bullying me|giving me the silent treatment|don't talk to me|ignoring me|stop ignoring me|mad at (?:you|me)|angry with (?:you|me)|you're so mean|mean to me|so mean to me|won't forgive you|not talking to you|teasing you|just teasing|poke fun|poking fun|you dummy|silly girl|so clumsy|clumsy girl|hmph|b-baka|baka)\b/i,
       weight: 3.5,

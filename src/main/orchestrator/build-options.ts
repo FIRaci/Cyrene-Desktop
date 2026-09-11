@@ -578,17 +578,15 @@ export async function buildAgentRunOptions(
   }
 
   let toneInjection = "";
-  if (deps.sceneEmbeddingIndex) {
-    try {
-      toneInjection = await perf.track("build_tone_injection", () => deps.buildToneInjection(
-        latestUserText,
-        slimLlmMessages,
-        deps.getSceneEmbeddingProvider(),
-        deps.sceneEmbeddingIndex,
-      ));
-    } catch (err) {
-      console.warn("[Cyrene] tone injection failed:", err);
-    }
+  try {
+    toneInjection = await perf.track("build_tone_injection", () => deps.buildToneInjection(
+      latestUserText,
+      slimLlmMessages,
+      deps.getSceneEmbeddingProvider ? deps.getSceneEmbeddingProvider() : null,
+      deps.sceneEmbeddingIndex ?? null,
+    ));
+  } catch (err) {
+    console.warn("[Cyrene] tone injection failed:", err);
   }
 
   let attachmentContext = "";
