@@ -155,8 +155,8 @@ export class FloatingKaomojiController {
       baseX = Math.round(minX + Math.random() * Math.max(0, leftInnerBound - minX));
       // Subtle float drift to the left
       const maxDriftLeft = Math.max(0, baseX - minX);
-      drift = -Math.min(maxDriftLeft, Math.max(6, Math.random() * 16));
-      tilt = "-5deg";
+      drift = -Math.min(maxDriftLeft, Math.max(8, Math.random() * 20));
+      tilt = "-7deg";
     } else {
       el.classList.add("pet-kaomoji--right");
       // Right open air: safely between inner boundary (~68% window width) and maxX
@@ -164,8 +164,8 @@ export class FloatingKaomojiController {
       baseX = Math.round(rightInnerBound + Math.random() * Math.max(0, maxX - rightInnerBound));
       // Subtle float drift to the right
       const maxDriftRight = Math.max(0, maxX - baseX);
-      drift = Math.min(maxDriftRight, Math.max(6, Math.random() * 16));
-      tilt = "5deg";
+      drift = Math.min(maxDriftRight, Math.max(8, Math.random() * 20));
+      tilt = "7deg";
     }
 
     const driftX = drift.toFixed(1);
@@ -240,8 +240,9 @@ export class FloatingKaomojiController {
       : Math.round(winHeight * 0.40 + Math.random() * 20 - 10);
 
     // Directly create elements with precise positions, bypassing side-detection ambiguity
-    const elLeft = this.spawnAt(leftKaomoji, leftX, baseY, -1);
-    const elRight = this.spawnAt(rightKaomoji, rightX, baseY, 1);
+    // Apply a 40ms micro-stagger between wings for an authentic, lively fluttering toss
+    const elLeft = this.spawnAt(leftKaomoji, leftX, baseY, -1, 0);
+    const elRight = this.spawnAt(rightKaomoji, rightX, baseY, 1, 40);
     this.lastSpawnSide = 1;
     return [elLeft, elRight];
   }
@@ -250,7 +251,7 @@ export class FloatingKaomojiController {
    * Directly spawn a kaomoji at an explicit (x, y) coordinate and side. Used by spawnDual.
    * Does NOT check cooldowns or clean existing elements — always produces a particle.
    */
-  private spawnAt(text: string, x: number, y: number, side: -1 | 1): HTMLElement | null {
+  private spawnAt(text: string, x: number, y: number, side: -1 | 1, delayMs = 0): HTMLElement | null {
     if (this.disposed || !this.container) return null;
     const el = document.createElement("div");
     el.className = "pet-kaomoji";
@@ -258,12 +259,15 @@ export class FloatingKaomojiController {
 
     if (side === -1) {
       el.classList.add("pet-kaomoji--left");
-      el.style.setProperty("--drift-x", "-25px");
-      el.style.setProperty("--tilt", "-6deg");
+      el.style.setProperty("--drift-x", "-38px");
+      el.style.setProperty("--tilt", "-8deg");
     } else {
       el.classList.add("pet-kaomoji--right");
-      el.style.setProperty("--drift-x", "25px");
-      el.style.setProperty("--tilt", "6deg");
+      el.style.setProperty("--drift-x", "38px");
+      el.style.setProperty("--tilt", "8deg");
+    }
+    if (delayMs > 0) {
+      el.style.animationDelay = `${delayMs}ms`;
     }
     el.style.left = `${Math.round(x)}px`;
     el.style.top = `${Math.round(y)}px`;

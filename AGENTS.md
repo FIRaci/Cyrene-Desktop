@@ -574,9 +574,9 @@ if (result.mode === "html") {
    - Tầng 1 (Renderer & Bubble): Cả `markdown-renderer.ts` (`md.renderer.rules.thought`), `companion-bubbles.ts` (`renderFormattedSpeech`), `gesture-interaction-controller.ts` (`cleanGestureReply`), `mini-chat.ts` (`cleanReplyForMiniChat`) đều có regex kiểm tra: nếu suy nghĩ rỗng hoặc chỉ có dấu chấm (`/^(?:\.{1,6}|…|\[\.\.\.\])$/`), BỎ QUA HOÀN TOÀN, không render ra giao diện.
    - Tầng 2 (Pre-cleaning): `cleanBondMetadata` và `stripBubbleMetaTags` tự động xóa các đoạn `/\s*(?:\.{1,6}|…|\[\.\.\.\])?\s*/` trước khi render.
 
-### 16.7. Tách Biệt Tuyệt Đối Kaomoji Hạt & Văn Bản Thoại (Kaomoji Strict Particle Separation Contract)
+### 16.7. Tách Biệt Tuyệt Đối Kaomoji Hạt, Văn Bản Thoại & Vật Lý Bay Mượt Mà (Kaomoji Strict Particle Separation & Ultra-Smooth Toss Physics Contract)
 
-**Files**: `src/renderer/live2d/floating-kaomoji.ts`, `src/renderer/live2d/gesture-interaction-controller.ts`, `src/renderer/live2d/companion-bubbles.ts`, `src/renderer/live2d/mini-chat.ts`
+**Files**: `src/renderer/live2d/floating-kaomoji.ts`, `src/renderer/live2d/floating-kaomoji.css`, `src/renderer/live2d/gesture-interaction-controller.ts`, `src/renderer/live2d/companion-bubbles.ts`, `src/renderer/live2d/mini-chat.ts`
 
 **Quy tắc Khóa Chết**:
 1. **Kaomoji CHỈ LÀ Hạt Visual Trôi Nổi (Particles ONLY)**:
@@ -584,6 +584,15 @@ if (result.mode === "html") {
 2. **TUYỆT ĐỐI KHÔNG XUẤT HIỆN TRONG VĂN BẢN (STRICTLY FORBIDDEN IN TEXT)**:
    - Kaomoji KHÔNG BAO GIỜ được phép xuất hiện trong bong bóng thoại của Live2D hoặc trong cửa sổ Chat (`Alt+1`, `Alt+5`).
    - Mọi hàm nạp và hiển thị text (`cleanGestureReply`, `sanitizeBubbleSpeech`, `cleanReplyForMiniChat`) BẮT BUỘC phải gọi `stripKaomojis()` để tẩy sạch mọi ký tự kaomoji và emoji trang trí trước khi đưa ra UI hoặc lưu vào chat store.
+3. **Vật Lý Quỹ Đạo Bay Mượt Mà & Triệt Tiêu Khựng Giật (Ultra-Smooth Parabolic Toss & Anti-Stutter Physics)**:
+   - **Bản chất lỗi khựng giật**: Việc chia nhỏ `@keyframes` thành nhiều điểm dừng (20%, 35%, 75%) với hàm `cubic-bezier` dùng chung trên animation shorthand làm cho CSS tự động giảm tốc về vận tốc bằng 0 tại mỗi điểm dừng, khiến hạt Kaomoji bị dừng hình/khựng giật 3 lần giữa không trung. Đồng thời việc thiếu độ lệch ngang ở 20% đầu tiên tạo cú giật góc đột ngột.
+   - **Tối ưu hóa GPU Compositor 100%**:
+     * Toàn bộ chuyển động sử dụng `translate3d` kết hợp `backface-visibility: hidden; perspective: 1000px; transform-style: preserve-3d; contain: layout style; will-change: transform, opacity;` để đưa hạt Kaomoji lên lớp Direct3D compositor độc lập, triệt tiêu 100% hiện tượng reflow hay repaint trên luồng chính.
+   - **Quỹ đạo bay liên tục & Giảm tốc đơn điệu (Monotonic Deceleration Arc)**:
+     * Chuyển vị ngang `--drift-x` được phân bổ mượt mà ngay từ frame đầu tiên ($0 \to 40\% \to 78\% \to 93\% \to 100\%$), tạo đường cong parabol mềm mại không giật góc.
+     * Từng phân đoạn keyframe sở hữu `animation-timing-function` riêng biệt nối tiếp nhau: Bật tung nảy nhẹ (`cubic-bezier(0.18, 0.89, 0.32, 1.25)`) $\to$ Lướt bay êm ái (`cubic-bezier(0.25, 1, 0.5, 1)`) $\to$ Lững lờ trôi nhẹ (`cubic-bezier(0.35, 1, 0.65, 1)`) $\to$ Tan biến thanh thoát (`ease-in`).
+   - **Độ trễ vi mô 40ms giữa hai cánh (`spawnDual`)**:
+     * Trong `spawnDual`, cánh trái bay ra tức thì (`delay = 0ms`), cánh phải có độ trễ 40ms (`animationDelay = 40ms`), tạo hiệu ứng đập cánh so le tự nhiên, thanh thoát và tràn ngập sức sống như hạt bụi phép thuật.
 
 ### 16.8. Chuẩn Mực Bắt Buộc: Chú Thích Mã Nguồn & Bản Quyền Quy Tắc (Mandatory In-Code Documentation & Rationale Contract)
 
