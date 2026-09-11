@@ -413,6 +413,18 @@ const formEl = document.getElementById("composer") as HTMLFormElement;
 const inputEl = document.getElementById("input") as HTMLTextAreaElement;
 if (inputEl) inputEl.style.overflowY = "hidden";
 const sendBtn = document.getElementById("send") as HTMLButtonElement;
+if (sendBtn) {
+  try {
+    sendBtn.removeAttribute("disabled");
+    Object.defineProperty(sendBtn, "disabled", {
+      get() { return false; },
+      set(_val) {
+        // Permanently non-disableable: prevent any script or DOM event from disabling send button
+      },
+      configurable: true,
+    });
+  } catch {}
+}
 const stickerPickerBtn = document.getElementById("sticker-picker-btn") as HTMLButtonElement;
 const stickerPicker = document.getElementById("sticker-picker") as HTMLElement;
 const stickerPickerGrid = document.getElementById("sticker-picker-grid") as HTMLElement;
@@ -3397,6 +3409,7 @@ function getCurrentStyleId(): StyleId {
 
 let sending = false;
 let sendStartedAt = 0;
+let lastSendAttemptWhileSending = 0;
 
 // Proactive-chat changes arriving during sending (e.g. Cyrene sends a proactive message) are not reloaded immediately,
 // otherwise transient thinking messages / recent replies could get overwritten. Record sessionId and wait until sending finishes,
@@ -3853,9 +3866,13 @@ async function send(): Promise<void> {
   if (!text && attachedFiles.length === 0) return;
 
   if (sending) {
-    if (Date.now() - sendStartedAt > 15_000) {
-      // Auto-heal any hung AG-UI run after 15s so the user can always send again
-      console.warn("[Cyrene Chat] Previous run exceeded 15s threshold, force-clearing stuck state");
+    const timeSinceSendStarted = Date.now() - sendStartedAt;
+    const isRapidRetry = Date.now() - lastSendAttemptWhileSending < 3_000;
+    lastSendAttemptWhileSending = Date.now();
+
+    if (timeSinceSendStarted > 10_000 || isRapidRetry) {
+      // Auto-heal hung AG-UI run after 10s or on rapid retry so the user is never stuck
+      console.warn("[Cyrene Chat] Clearing stuck/busy state via auto-heal (threshold or rapid retry)");
       void window.agui?.cancel?.().catch(() => {});
       sending = false;
       sendBtn.disabled = false;
@@ -4588,11 +4605,25 @@ formEl.addEventListener("submit", (e) => {
   e.preventDefault();
   void send();
 });
+sendBtn?.addEventListener("click", (e) => {
+  e.preventDefault();
+  void send();
+});
 
 inputEl.addEventListener("input", autosize);
 // Auto-recovery: if sendBtn is somehow disabled while user is typing, immediately unlock it
 inputEl.addEventListener("focus", () => { if (sendBtn.disabled) sendBtn.disabled = false; });
 inputEl.addEventListener("input", () => { if (sendBtn.disabled) sendBtn.disabled = false; });
+window.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && sending) {
+    e.preventDefault();
+    void window.agui?.cancel?.().catch(() => {});
+    sending = false;
+    sendBtn.disabled = false;
+    hideRunningProgress(0);
+    updateQueueUi();
+  }
+});
 inputEl.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && sending) {
     e.preventDefault();

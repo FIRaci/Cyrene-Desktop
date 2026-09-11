@@ -135,7 +135,9 @@ export class FloatingKaomojiController {
 
     let side: number;
     if (clientX !== undefined && Number.isFinite(clientX)) {
-      side = clientX <= winWidth * 0.5 ? -1 : 1;
+      const explicitSide = clientX <= winWidth * 0.45 ? -1 : clientX >= winWidth * 0.55 ? 1 : (this.lastSpawnSide === -1 ? 1 : -1);
+      // Guarantee consecutive spawns 100% alternate sides even if user repeatedly taps the exact same pixel
+      side = explicitSide === this.lastSpawnSide ? (this.lastSpawnSide === -1 ? 1 : -1) : explicitSide;
     } else {
       // Alternate sides on each spawn so consecutive kaomojis never land on the exact same spot
       side = this.lastSpawnSide === -1 ? 1 : -1;
@@ -240,6 +242,7 @@ export class FloatingKaomojiController {
     // Directly create elements with precise positions, bypassing side-detection ambiguity
     const elLeft = this.spawnAt(leftKaomoji, leftX, baseY, -1);
     const elRight = this.spawnAt(rightKaomoji, rightX, baseY, 1);
+    this.lastSpawnSide = 1;
     return [elLeft, elRight];
   }
 

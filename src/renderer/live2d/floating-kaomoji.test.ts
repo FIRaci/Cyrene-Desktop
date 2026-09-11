@@ -224,4 +224,26 @@ describe("FloatingKaomojiController", () => {
 
     controller.dispose();
   });
+
+  it("guarantees 100% alternating sides even on repeated clicks at the exact same coordinate", () => {
+    vi.stubGlobal("window", { innerWidth: 400, innerHeight: 500 });
+    const container = createFakeElement("div");
+    const controller = new FloatingKaomojiController(container);
+
+    controller.resetCooldown();
+    const first = controller.spawn("1", 100, 200);
+    expect(first?.classList.contains("pet-kaomoji--left")).toBe(true);
+
+    controller.resetCooldown();
+    // Same coordinate (100) MUST alternate to right wing
+    const second = controller.spawn("2", 100, 200);
+    expect(second?.classList.contains("pet-kaomoji--right")).toBe(true);
+
+    controller.resetCooldown();
+    // Same coordinate (100) MUST alternate back to left wing
+    const third = controller.spawn("3", 100, 200);
+    expect(third?.classList.contains("pet-kaomoji--left")).toBe(true);
+
+    controller.dispose();
+  });
 });

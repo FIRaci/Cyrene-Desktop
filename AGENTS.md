@@ -421,50 +421,49 @@ Hàm `formatBondPersonaPrompt()` tại `bond-persona-config.ts` điều hướng
 
 ### 16.1. Nút Gửi Chat KHÔNG ĐƯỢC Disable (Send Button Non-Disable Contract)
 
-**File**: `src/renderer/chat/main.ts`
+**Files**: `src/renderer/chat/main.ts`, `src/renderer/chat/chat.css`, `src/renderer/live2d/mini-chat.ts`
 
-**Quy tắc**:
-- **TUYỆT ĐỐI KHÔNG BAO GIỜ** đặt `sendBtn.disabled = true;` trong hàm `triggerCyreneGreeting()`.
-- Lý do: Khi `<button type="submit">` bị `disabled`, trình duyệt không phát sự kiện `submit` của form, khiến văn bản người dùng gõ bị mắc kẹt vĩnh viễn trong ô nhập → Bug "cấm chat".
-- **Cơ chế đúng**: Khi `sending === true`, hàm `send()` tự động đẩy tin nhắn vào `chatMessageQueue` (hàng đợi), sau đó xử lý tuần tự. Không cần disable nút.
-- **Auto-recovery**: `inputEl` lắng nghe sự kiện `focus` và `input`, tự động đặt `sendBtn.disabled = false` nếu phát hiện nút bị khoá.
-- **Auto-heal**: `send()` tự động phá vỡ trạng thái bị kẹt sau **15 giây** (không phải 30s cũ) bằng cách gọi `agui.cancel()` và reset `sending = false`.
+**Quy tắc — TUYỆT ĐỐI**:
+- **TUYỆT ĐỐI KHÔNG BAO GIỜ** đặt `sendBtn.disabled = true;` trong toàn bộ codebase.
+- **Khóa chết thuộc tính DOM**: Sử dụng `Object.defineProperty(sendBtn, "disabled", { get() { return false; }, set() {}, configurable: true })` để chặn triệt để mọi đoạn code hay event vô tình disable nút.
+- **Override CSS**: `.chat__send:disabled` bắt buộc giữ `opacity: 1 !important; cursor: pointer !important; pointer-events: auto !important;`, không bao giờ bị mờ (dimmed) hoặc vô hiệu hóa pointer events.
+- **Direct Click Handler**: `sendBtn.addEventListener("click", ...)` đảm bảo click trực tiếp luôn gọi `send()`.
+- **Auto-heal sau 10s & Rapid Retry**:
+  - `send()` tự động xóa trạng thái kẹt sau **10 giây** (hoặc khi click nút gửi 2 lần liên tiếp trong 3s) bằng cách hủy run treo và reset `sending = false`.
+  - Phím **Escape** ở cấp độ toàn màn hình (`window.addEventListener("keydown")`) lập tức hủy run đang treo và mở khóa gửi ngay lập tức.
 
 ```typescript
-// ✅ ĐÚNG — trong triggerCyreneGreeting:
-sending = true;
-sendStartedAt = Date.now();
-// KHÔNG có sendBtn.disabled = true;
+// ✅ ĐÚNG — khóa chết thuộc tính disabled:
+Object.defineProperty(sendBtn, "disabled", {
+  get() { return false; },
+  set(_val) {},
+  configurable: true,
+});
 
-// ✅ ĐÚNG — auto-recovery:
-inputEl.addEventListener("focus", () => { if (sendBtn.disabled) sendBtn.disabled = false; });
-inputEl.addEventListener("input", () => { if (sendBtn.disabled) sendBtn.disabled = false; });
+// ✅ ĐÚNG — direct click handler:
+sendBtn?.addEventListener("click", (e) => {
+  e.preventDefault();
+  void send();
+});
 ```
 
-### 16.2. Kaomoji Kép Cánh Trái-Phải (Dual Kaomoji Wing-Toss Contract)
+### 16.2. Kaomoji Kép Cánh Trái-Phải & Luân Phiên 100% (Dual Wing-Toss & Strict Alternation Contract)
 
 **Files**: `src/renderer/live2d/floating-kaomoji.ts`, `src/renderer/live2d/gesture-interaction-controller.ts`
 
 **Quy tắc**:
 - Mỗi phản hồi cử chỉ (xoa đầu, vuốt ve) LUÔN tung **2 kaomoji**, một cái sang **cánh trái (15-25% viewport width)**, một cái sang **cánh phải (75-85% viewport width)**.
 - Đây là **tính năng chủ động**, không phải bug: 2 kaomoji đối xứng tạo hiệu ứng "2 cánh tung lên" đáng yêu khi chạm vào Cyrene.
-- **Phương thức**: `executeGestureRun()` gọi `this.kaomoji.spawnDual(initialKaomoji, undefined, y)` thay vì `spawn(initialKaomoji, x, y)`.
 - **`spawnDual()`** tạo element trực tiếp qua `spawnAt(text, x, y, side)` với vị trí cứng (không phụ thuộc vào logic side-detection của `spawn()`), đảm bảo 2 kaomoji luôn ở 2 phía đối nhau.
-- **`lastSpawnSide`**: `FloatingKaomojiController` theo dõi cạnh spawn cuối để đảm bảo các lần gọi `spawn()` đơn lẻ liên tiếp luôn xen kẽ trái-phải.
+- **Luân phiên 100% (Strict Alternation)**: Khi gọi `spawn()` đơn lẻ, hệ thống đảm bảo **100% luân phiên trái-phải** (`side = explicitSide === this.lastSpawnSide ? (this.lastSpawnSide === -1 ? 1 : -1) : explicitSide;`). Ngay cả khi người dùng nhấn liên tục vào cùng 1 tọa độ x, các hạt kaomoji cũng không bao giờ rơi vào cùng một bên liên tiếp.
 
 ```typescript
-// ✅ ĐÚNG — trong executeGestureRun:
-if (this.kaomoji?.spawnDual) {
-  this.kaomoji.spawnDual(initialKaomoji, undefined, y); // ← 1 trái + 1 phải
-} else {
-  this.kaomoji?.spawn(initialKaomoji, x, y); // fallback
-}
-
 // ✅ ĐÚNG — trong spawnDual:
 const leftX = Math.round(winWidth * (0.15 + Math.random() * 0.10));  // 15-25%
 const rightX = Math.round(winWidth * (0.75 + Math.random() * 0.10)); // 75-85%
 const elLeft = this.spawnAt(leftKaomoji, leftX, baseY, -1);
 const elRight = this.spawnAt(rightKaomoji, rightX, baseY, 1);
+this.lastSpawnSide = 1; // reset để lượt tiếp theo đi sang cánh trái
 ```
 
 ### 16.3. GPT-SoVITS `cut5` Text Split (Voice Continuity Contract)

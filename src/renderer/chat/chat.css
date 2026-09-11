@@ -1354,10 +1354,11 @@ body {
 .chat__send:active:not(:disabled) { transform: translateY(0); }
 
 .chat__send:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
+  opacity: 1 !important;
+  cursor: pointer !important;
+  pointer-events: auto !important;
   transform: none;
-  box-shadow: none;
+  box-shadow: 0 0 22px rgba(236, 72, 153, 0.36), inset 0 1px 0 rgba(255, 255, 255, 0.24) !important;
 }
 
 /* Drag & drop visual feedback */
