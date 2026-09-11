@@ -308,7 +308,7 @@ const pendingMarkdownText = bubbleRawText;
 let renderGeneration = 0;
 let historyIdleId: number | null = null;
 
-const HISTORY_MAX_BATCH = 3;
+const HISTORY_MAX_BATCH = 20;
 const HISTORY_MIN_REMAINING_MS = 4;
 
 /** Cancel， generation */
@@ -348,22 +348,22 @@ function scheduleHistoryRender(): void {
       const result = renderMarkdown(text);
       if (result.mode === "html") {
         bubble.removeAttribute("data-md-mode");
-        // ： DOM，，Clear→→
         const prevHeight = bubble.getBoundingClientRect().height;
         const tpl = document.createElement("template");
         tpl.innerHTML = result.content;
         bubble.style.minHeight = `${prevHeight}px`;
         bubble.replaceChildren(tpl.content.cloneNode(true));
+        const hasRich = bubble.querySelector(".katex-display, .code-block, table");
+        if (hasRich) bubble.classList.add("has-rich-content");
         requestAnimationFrame(() => { bubble.style.minHeight = ""; });
       } else {
         bubble.setAttribute("data-md-mode", "text");
         bubble.textContent = result.content;
       }
       bubble.removeAttribute("data-md-pending");
-      pendingMarkdownText.delete(bubble);
       processed++;
 
-      // ： deadline ，None deadline 
+      // Time budget check
       if (processed >= HISTORY_MAX_BATCH) break;
       if (hasDeadline && deadline!.timeRemaining() < HISTORY_MIN_REMAINING_MS) break;
     }
@@ -389,19 +389,23 @@ function scheduleHistoryRender(): void {
  *  session （ B），。
  */
 function refreshMarkdownTheme(): void {
-  // Cancel
   cancelHistoryRender();
 
-  // FoundAll， pending 
   const assistantBubbles = messagesEl.querySelectorAll<HTMLElement>(".msg--model .msg__bubble");
   for (const bubble of assistantBubbles) {
     const text = bubbleRawText.get(bubble);
     if (text !== undefined && text.trim()) {
-      bubble.dataset.mdPending = "true";
+      const result = renderMarkdown(text);
+      if (result.mode === "html") {
+        bubble.removeAttribute("data-md-mode");
+        const tpl = document.createElement("template");
+        tpl.innerHTML = result.content;
+        bubble.replaceChildren(tpl.content.cloneNode(true));
+        const hasRich = bubble.querySelector(".katex-display, .code-block, table");
+        if (hasRich) bubble.classList.add("has-rich-content");
+      }
     }
   }
-
-  scheduleHistoryRender();
 }
 
 // 
@@ -667,7 +671,10 @@ function toPersistableMessages(arr: Message[]): Array<{
 async function saveSession(): Promise<void> {
   if (!currentSessionId || !window.chatStore) return;
   try {
-    await window.chatStore.replaceTail(currentSessionId, sessionTailStart, toPersistableMessages(messages));
+    const updated = await window.chatStore.replaceTail(currentSessionId, sessionTailStart, toPersistableMessages(messages));
+    if (updated?.updatedAt) {
+      seenSessionUpdatedAt.set(currentSessionId, updated.updatedAt);
+    }
   } catch (err) {
     console.warn("[Cyrene Chat] saveSession failed:", err);
   }
@@ -2022,6 +2029,7 @@ function finalizeStreamingBubble(messageId: string, rawContent: string, targetMs
     bubble.setAttribute("data-md-mode", "text");
     bubble.textContent = result.content;
   }
+  bubbleRawText.set(bubble, cleanContent);
   bubble.hidden = false;
 
   // Immediately attach or update action buttons (Speak, Copy, Time) so user doesn't have to reopen the window
@@ -2253,12 +2261,22 @@ function render(preserveScroll = false): void {
         if (text || m.transient) {
           const bubble = createMessageBubble();
           if (m.transient) {
-            // ：， StreamingMarkdownSession  DOM
+            // Streaming mode: plain text, StreamingMarkdownSession manages DOM
             bubble.textContent = text;
           } else {
-            // ：placeholder， pending，History Markdown
-            bubble.textContent = text;
-            bubble.dataset.mdPending = "true";
+            // Final mode: Render Markdown immediately so history & reloaded sessions never flash or revert to raw text
+            const result = renderMarkdown(text);
+            if (result.mode === "html") {
+              bubble.removeAttribute("data-md-mode");
+              const tpl = document.createElement("template");
+              tpl.innerHTML = result.content;
+              bubble.replaceChildren(tpl.content.cloneNode(true));
+              const hasRich = bubble.querySelector(".katex-display, .code-block, table");
+              if (hasRich) bubble.classList.add("has-rich-content");
+            } else {
+              bubble.setAttribute("data-md-mode", "text");
+              bubble.textContent = result.content;
+            }
           }
           bubbleRawText.set(bubble, text);
           bubbles.push(bubble);
@@ -4459,7 +4477,9 @@ async function send(): Promise<void> {
       msg.musicCard = pendingMusicCard ?? undefined;
     }
     if (runSessionId && window.chatStore) {
-      void window.chatStore.replaceTail(runSessionId, runTailStart, toPersistableMessages(runMessages));
+      void window.chatStore.replaceTail(runSessionId, runTailStart, toPersistableMessages(runMessages)).then((updated) => {
+        if (updated?.updatedAt) seenSessionUpdatedAt.set(runSessionId, updated.updatedAt);
+      });
     }
     const finishedMsgId = streamMsgId;
     void pendingTtsCachePromise?.then((cache) => {
@@ -4468,7 +4488,9 @@ async function send(): Promise<void> {
       if (!latestMsg) return;
       latestMsg.ttsCacheKey = cache.cacheKey;
       if (runSessionId && window.chatStore) {
-        void window.chatStore.replaceTail(runSessionId, runTailStart, toPersistableMessages(runMessages));
+        void window.chatStore.replaceTail(runSessionId, runTailStart, toPersistableMessages(runMessages)).then((updated) => {
+          if (updated?.updatedAt) seenSessionUpdatedAt.set(runSessionId, updated.updatedAt);
+        });
       }
     });
 
@@ -4501,7 +4523,9 @@ async function send(): Promise<void> {
         msg.musicCard = pendingMusicCard ?? undefined;
       }
       if (runSessionId && window.chatStore) {
-        void window.chatStore.replaceTail(runSessionId, runTailStart, toPersistableMessages(runMessages));
+        void window.chatStore.replaceTail(runSessionId, runTailStart, toPersistableMessages(runMessages)).then((updated) => {
+          if (updated?.updatedAt) seenSessionUpdatedAt.set(runSessionId, updated.updatedAt);
+        });
       }
       if (currentSessionId === runSessionId) {
         finalizeStreamingBubble(streamMsgId, cleanBondMetadata(streamContent), msg);
@@ -4520,7 +4544,9 @@ async function send(): Promise<void> {
         });
       }
       if (runSessionId && window.chatStore) {
-        void window.chatStore.replaceTail(runSessionId, runTailStart, toPersistableMessages(runMessages));
+        void window.chatStore.replaceTail(runSessionId, runTailStart, toPersistableMessages(runMessages)).then((updated) => {
+          if (updated?.updatedAt) seenSessionUpdatedAt.set(runSessionId, updated.updatedAt);
+        });
       }
       // Use single-bubble upgrade on error, avoiding full render()
       if (currentSessionId === runSessionId) {

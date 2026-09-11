@@ -183,4 +183,27 @@ describe("Chat Renderer Hardening Policies", () => {
       vi.useRealTimers();
     });
   });
+
+  describe("Synchronous Markdown Render Contract (No Raw Text Reversion)", () => {
+    it("renders Markdown synchronously during render() to prevent raw text flashing on Alt+1 reopen", () => {
+      const source = fs.readFileSync(
+        path.join(process.cwd(), "src", "renderer", "chat", "main.ts"),
+        "utf8",
+      );
+      // Assistant bubble in render() calls renderMarkdown synchronously
+      expect(source).toContain("const result = renderMarkdown(text);");
+      expect(source).toContain("bubble.replaceChildren(tpl.content.cloneNode(true));");
+      // Must NOT defer initial render to mdPending placeholder
+      expect(source).not.toMatch(/bubble\.dataset\.mdPending\s*=\s*["']true["']/);
+    });
+
+    it("records fresh session updatedAt on replaceTail resolve to avoid stale focus reloads", () => {
+      const source = fs.readFileSync(
+        path.join(process.cwd(), "src", "renderer", "chat", "main.ts"),
+        "utf8",
+      );
+      expect(source).toContain("seenSessionUpdatedAt.set(currentSessionId, updated.updatedAt);");
+    });
+  });
 });
+
