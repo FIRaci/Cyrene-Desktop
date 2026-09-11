@@ -1849,6 +1849,11 @@ function createMessageBubble(text?: string): HTMLElement {
   return item;
 }
 
+/**
+ * Hard Invariant: AGENTS.md §4.4, §16.5, §16.6
+ * Render formatted user message containing actions *...* and inner thoughts /.../.
+ * Strips placeholder dots (/.../, //) to prevent rendering empty bubbles.
+ */
 function renderFormattedUserMessage(el: HTMLElement, text: string): void {
   if (!text.includes("*") && !text.includes("/")) {
     el.textContent = text;
@@ -1895,6 +1900,11 @@ function appendBubbleForMessage(messageId: string): HTMLElement | null {
   return bubble;
 }
 
+/**
+ * Hard Invariant: AGENTS.md §4.4, §16.5, §16.6
+ * Strips internal bonding metadata, leaking reasoning tags, and empty/placeholder dot slashes.
+ * Guarantees that chat sessions on reload/restore never leak internal tags or empty dot thoughts.
+ */
 function cleanBondMetadata(text: string): string {
   if (!text) return "";
   let cleaned = text

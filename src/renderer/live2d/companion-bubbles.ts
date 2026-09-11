@@ -78,6 +78,11 @@ export function reducePetBubbleState(
   }
 }
 
+/**
+ * Hard Invariant: AGENTS.md §3, §4.4, §16.6
+ * 1. Empty thoughts or placeholder dots (/.../, //) are purged.
+ * 2. Leaked reasoning tags, bond metadata, and 3rd-person novel narrations ("Cyrene leans...") are normalized.
+ */
 export function stripBubbleMetaTags(text: string): string {
   if (!text) return "";
   let cleaned = text
@@ -89,6 +94,8 @@ export function stripBubbleMetaTags(text: string): string {
     .replace(/(?:Current\s+)?Bond\s+Level:\s*Level\s*\d+[^\r\n]*/gi, "")
     .replace(/Affection\s+Score:\s*\d+\/\d+[^\r\n]*/gi, "")
     .replace(/^\s*[:\-–—]\s*/, "")
+    // Strip empty thoughts or placeholder dot slashes like //, /.../, /[...]/, /…/
+    .replace(/\/\s*(?:\.{1,6}|…|\[\.\.\.\])?\s*\//g, "")
     .trim();
 
   const actionVerbs = "(?:gasps?|smiles?|giggles?|leans?|looks?|blushes?|whispers?|hugs?|sighs?|nods?|tilts?|steps?|holds?|clutches?|shivers?|trembles?|tucks?|watches?|glances?|reaches?|rests?|pauses?|blinks?|winks?)";

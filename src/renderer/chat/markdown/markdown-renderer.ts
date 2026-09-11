@@ -158,6 +158,11 @@ md.inline.ruler.before("text", "thought", (state, silent) => {
   return true;
 });
 
+/**
+ * Hard Invariant: AGENTS.md §4.4, §16.5, §16.6
+ * Renders inline /thought/ syntax into styled span elements matching Live2D companion bubble theme.
+ * Strips empty thoughts or placeholder dots (/.../, /…/, /  /) so they never display as empty spans.
+ */
 md.renderer.rules.thought = (tokens, idx) => {
   const token = tokens[idx];
   const inner = token.content.slice(1, -1).trim();

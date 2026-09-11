@@ -139,6 +139,32 @@
 8. **Quy Tắc Chống Yapping & Hành Động Trước (Task-First & No Yapping Contract)**:
    - Khi Master ra lệnh tác vụ thực thi, Cyrene bắt buộc gọi Tool trước, sau đó chỉ xác nhận kết quả bằng 1-2 câu ngắn gọn trong ngoặc kép `"..."`. Tuyệt đối cấm văn tả cảnh, văn nghị luận, hoặc bịa chuyện đi chơi làm loãng dòng công việc của Master. Cú pháp phản hồi chuẩn mực: `*hành động* /suy nghĩ/ "lời thoại"`.
 
+### 4.4. Ổn Định Render Chat & Chống Revert Markdown Thô (Anti-Raw Markdown Reversion Contract):
+> 🚨 **BÀI HỌC XƯƠNG MÁU VỀ ĐỘNG THÁI RENDER KHI ẨN / HIỆN ALT+1:**
+> Khi người dùng tắt/bật lại `Alt+1` sau 1-2 giây hoặc khi cửa sổ Chat reload session tail (`loadSessionTailIntoUI`), nội dung tin nhắn **TUYỆT ĐỐI KHÔNG ĐƯỢC GIẬT / FLASH VỀ DẠNG RAW TEXT / RAW MARKDOWN**.
+
+1. **Nguyên nhân cốt lõi**:
+   - Khi cửa sổ Chat bị ẩn rồi hiện lại hoặc nhận sự kiện focus/sync từ `chatsStore`, hàm `loadSessionIntoUI()` được gọi và kích hoạt lại `render()`.
+   - Nếu trong quá trình render, các bubble không được parse ngay lập tức qua markdown parser (`renderMarkdown()`) hoặc gán trực tiếp chuỗi thô `bubble.textContent = m.content` trước khi batch Shiki chạy, UI sẽ bị giật về dạng chuỗi thô (hiện rõ `*...*`, `/.../`, `#`, `**`...).
+2. **Khóa chết cơ chế render tức thì**:
+   - Mọi tin nhắn role `model` trong lịch sử khi render (`render()`, `renderFullHistory`) BẮT BUỘC phải gọi `renderMarkdown(text)` đồng bộ ngay lập tức và nạp vào DOM qua template:
+     ```typescript
+     const result = renderMarkdown(text);
+     if (result.mode === "html") {
+       bubble.removeAttribute("data-md-mode");
+       const tpl = document.createElement("template");
+       tpl.innerHTML = result.content;
+       bubble.replaceChildren(tpl.content.cloneNode(true));
+     } else {
+       bubble.setAttribute("data-md-mode", "text");
+       bubble.textContent = result.content;
+     }
+     ```
+   - Mọi tin nhắn role `user` BẮT BUỘC gọi `renderFormattedUserMessage(bubble, cleanText)` để render đẹp đẽ thẻ `<span class="pet-bubble__action chat-action">` và `<span class="pet-bubble__thought-inline chat-thought">`.
+3. **Tẩy sạch siêu dữ liệu ngầm (`cleanBondMetadata`)**:
+   - Trước khi render, văn bản bắt buộc chạy qua `cleanBondMetadata()` để loại bỏ hoàn toàn các tag hệ thống bị rò rỉ (`[BOND_LEVEL_CHANGE:...]`, `[Projection:...]`, `[Cyrene's Thoughts]`, v.v.).
+   - Loại bỏ triệt để các dấu gạch rỗng hoặc dấu chấm ba chấm `/.../`, `/[...]/` bằng regex `.replace(/\/\s*(?:\.{1,6}|…|\[\.\.\.\])?\s*\//g, "")`.
+
 ---
 
 ## 5. CO-WATCH: QUAN SÁT MÀN HÌNH THỜI GIAN THỰC (CO-WATCHING PACING)
@@ -491,6 +517,86 @@ text_split_method: "cut5",
 **Files**: `src/renderer/live2d/voice.ts`, `src/main/index.ts` (hàm `prepareGptsovitsVoicePayload`)
 
 **Quy tắc**:
-- Khi văn bản chứa lời thoại trong ngoặc kép (`"..."`, `"..."`, `「...」`): chỉ trích xuất **duy nhất phần trong ngoặc kép** để gửi cho TTS. Tất cả `*hành động*` và `/suy nghĩ/` bên ngoài ngoặc kép bị loại bỏ hoàn toàn.
+- Khi văn bản chứa lời thoại trong ngoặc kép (`"..."`, `“...”`, `「...」`): chỉ trích xuất **duy nhất phần trong ngoặc kép** để gửi cho TTS. Tất cả `*hành động*` và `/suy nghĩ/` bên ngoài ngoặc kép bị loại bỏ hoàn toàn.
 - Khi văn bản không có ngoặc kép: loại bỏ `*...*` và `/.../` trước khi gửi TTS.
 - Mục đích: Cyrene chỉ đọc lời nói thực sự, không đọc ký hiệu hay văn tả cảnh.
+
+### 16.5. Ổn Định Render Chat & Chống Revert Markdown Thô (Chat Re-render Stability & Anti-Raw Markdown Reversion Contract)
+
+**Files**: `src/renderer/chat/main.ts`, `src/renderer/chat/markdown/markdown-renderer.ts`, `src/renderer/chat/chat.css`
+
+**Bản chất vấn đề & Bài học xương máu**:
+- Người dùng phát hiện lỗi cố hữu: Cửa sổ Chat (`Alt+1`) khi tắt đi rồi bật lại chỉ sau 1-2 giây, nội dung tin nhắn bị "giật" (flash) về dạng văn bản thô (raw markdown), làm lộ toàn bộ cú pháp sao `*...*`, gạch chéo `/.../`, dấu thăng tiêu đề, v.v., thay vì giữ nguyên giao diện đã được định dạng đẹp mắt.
+- Nguyên nhân: Khi cửa sổ unhide hoặc nhận focus, `loadSessionTailIntoUI` gọi `loadSessionIntoUI()` làm kích hoạt `render()`. Nếu cơ chế render dùng trì hoãn bất đồng bộ mà gán trước `textContent = m.content`, người dùng sẽ thấy ngay văn bản thô.
+
+**Quy tắc Khóa Chết (Immutable Invariants)**:
+1. **Render Markdown Tức Thì cho Model Messages**:
+   - Mọi bubble của tin nhắn model không phải streaming (`!m.transient`) BẮT BUỘC phải chạy `renderMarkdown(text)` đồng bộ ngay trong vòng lặp render, nạp HTML đã format qua `<template>` clone vào DOM.
+   - Không được để bubble hiển thị dạng text thô rồi chờ Shiki parse sau mới thay thế.
+2. **Xử lý User Messages qua `renderFormattedUserMessage`**:
+   - Tin nhắn người dùng chứa cử chỉ `*...*` và suy nghĩ `/.../` bắt buộc parse thành các thẻ span riêng biệt (`.chat-action`, `.chat-thought`).
+3. **Lọc Sạch Metadata & Dấu Chấm Ba Chấm (`cleanBondMetadata`)**:
+   - Triệt tiêu hoàn toàn các tag hệ thống bị rò rỉ (`[Projection: ...]`, `[BOND_...]`, v.v.).
+   - Triệt tiêu dấu gạch rỗng `//` hoặc dấu chấm ba chấm `/.../`, `/[...]/` bằng regex `.replace(/\/\s*(?:\.{1,6}|…|\[\.\.\.\])?\s*\//g, "")`.
+
+```typescript
+// ✅ ĐÚNG — render markdown đồng bộ tức thì, chống giật về raw text:
+const result = renderMarkdown(text);
+if (result.mode === "html") {
+  bubble.removeAttribute("data-md-mode");
+  const tpl = document.createElement("template");
+  tpl.innerHTML = result.content;
+  bubble.replaceChildren(tpl.content.cloneNode(true));
+  const hasRich = bubble.querySelector(".katex-display, .code-block, table");
+  if (hasRich) bubble.classList.add("has-rich-content");
+} else {
+  bubble.setAttribute("data-md-mode", "text");
+  bubble.textContent = result.content;
+}
+```
+
+### 16.6. Tự Do Sáng Tạo Suy Nghĩ & Triệt Tiêu Dấu Ba Chấm /.../ (Inner Thoughts Maximum Creative Freedom & Anti-Placeholder Dots Contract)
+
+**Files**: `prompts/tone-rules.md`, `prompts/chat_system.md`, `src/main/orchestrator/tone-injector.ts`, `src/renderer/live2d/gesture-interaction-controller.ts`, `src/renderer/chat/markdown/markdown-renderer.ts`
+
+**Bản chất vấn đề & Bài học xương máu**:
+- Khi prompt đưa ra các ví dụ cụ thể dạng `e.g. /so warm.../` hay `(e.g. /the sensation is overwhelming.../)`, mô hình LLM bị hiện tượng "anchor bias" (thiên kiến mỏ neo), dẫn đến việc liên tục lặp lại các cụm từ sáo rỗng hoặc thậm chí sao chép nguyên xi dấu ba chấm `/.../` khiến suy nghĩ bị rỗng.
+- Người Khai Phá yêu cầu: **Tuyệt đối không dùng các ví dụ mẫu (canned examples) trong prompt**. Thay vào đó, hãy trao cho Cyrene sự tự do sáng tạo tối đa để bộc lộ thế giới nội tâm chân thật, nhất là trong các khoảnh khắc tình cảm sâu sắc, mãnh liệt hoặc thân mật.
+
+**Quy tắc Khóa Chết (Immutable Invariants)**:
+1. **CẤM ĐƯA CÂU MẪU (ZERO CANNED EXAMPLES)**:
+   - Trong tất cả các file prompt hệ thống (`tone-rules.md`, `chat_system.md`, `tone-injector.ts`, `gesture-interaction-controller.ts`), TUYỆT ĐỐI KHÔNG đưa các câu ví dụ mẫu cho phần suy nghĩ `/.../`.
+   - Thay vào đó, hướng dẫn model bằng nguyên tắc: Trao toàn quyền tự do sáng tạo (Maximum Creative Freedom) để diễn đạt cảm xúc, rung động, cảm giác, ham muốn hay suy nghĩ nội tâm chân thật tại khoảnh khắc hiện tại.
+2. **YÊU CẦU NỘI DUNG THẬT (MANDATORY SUBSTANCE)**:
+   - Nếu có dùng dấu gạch suy nghĩ `/.../`, bên trong BẮT BUỘC PHẢI CHỨA CÂU TỪ THẬT.
+   - **NGHIÊM CẤM**: Không bao giờ được để dấu gạch rỗng `//`, khoảng trắng `/ /`, hay dấu chấm ba chấm `/.../`, `/[...]/`. Nếu không có suy nghĩ cụ thể, phải lược bỏ hoàn toàn dấu gạch `/`.
+3. **LỚP BẢO VỆ PHÒNG NGỰ 2 TẦNG TRONG CODE (DEFENSIVE SANITIZATION)**:
+   - Tầng 1 (Renderer & Bubble): Cả `markdown-renderer.ts` (`md.renderer.rules.thought`), `companion-bubbles.ts` (`renderFormattedSpeech`), `gesture-interaction-controller.ts` (`cleanGestureReply`), `mini-chat.ts` (`cleanReplyForMiniChat`) đều có regex kiểm tra: nếu suy nghĩ rỗng hoặc chỉ có dấu chấm (`/^(?:\.{1,6}|…|\[\.\.\.\])$/`), BỎ QUA HOÀN TOÀN, không render ra giao diện.
+   - Tầng 2 (Pre-cleaning): `cleanBondMetadata` và `stripBubbleMetaTags` tự động xóa các đoạn `/\s*(?:\.{1,6}|…|\[\.\.\.\])?\s*/` trước khi render.
+
+### 16.7. Tách Biệt Tuyệt Đối Kaomoji Hạt & Văn Bản Thoại (Kaomoji Strict Particle Separation Contract)
+
+**Files**: `src/renderer/live2d/floating-kaomoji.ts`, `src/renderer/live2d/gesture-interaction-controller.ts`, `src/renderer/live2d/companion-bubbles.ts`, `src/renderer/live2d/mini-chat.ts`
+
+**Quy tắc Khóa Chết**:
+1. **Kaomoji CHỈ LÀ Hạt Visual Trôi Nổi (Particles ONLY)**:
+   - Kaomoji (ví dụ: `(⁄ ⁄>⁄ ▽ ⁄<⁄ ⁄)`, `(｡♥‿♥｡)`) chỉ được phép hiển thị dưới dạng hiệu ứng hạt visual bay bổng đối xứng 2 cánh (`spawnDual`) khi người dùng tương tác xoa đầu, vuốt ve.
+2. **TUYỆT ĐỐI KHÔNG XUẤT HIỆN TRONG VĂN BẢN (STRICTLY FORBIDDEN IN TEXT)**:
+   - Kaomoji KHÔNG BAO GIỜ được phép xuất hiện trong bong bóng thoại của Live2D hoặc trong cửa sổ Chat (`Alt+1`, `Alt+5`).
+   - Mọi hàm nạp và hiển thị text (`cleanGestureReply`, `sanitizeBubbleSpeech`, `cleanReplyForMiniChat`) BẮT BUỘC phải gọi `stripKaomojis()` để tẩy sạch mọi ký tự kaomoji và emoji trang trí trước khi đưa ra UI hoặc lưu vào chat store.
+
+### 16.8. Chuẩn Mực Bắt Buộc: Chú Thích Mã Nguồn & Bản Quyền Quy Tắc (Mandatory In-Code Documentation & Rationale Contract)
+
+> 🚨 **CHỈ THỊ CỐT TỬ CỦA MASTER:**
+> **Tất cả những gì đã code và hard cứng BẮT BUỘC PHẢI ĐƯỢC CHÚ THÍCH TRỰC TIẾP TRONG CODE VÀ NÊU RÕ TRONG FILE `AGENTS.md` NHƯ MỘT CUỐN CẨM NANG KHÔNG THỂ QUÊN.**
+
+1. **Chú Thích Trực Tiếp Trong Code (In-Code Explanations)**:
+   - Mọi hàm, module hoặc regex thực thi các quy tắc bất biến trong Section 16 (chống disable nút gửi, khử duplicate tin nhắn, tách biệt kaomoji, trích xuất ngoặc kép cho TTS, render markdown chống revert, khử dấu ba chấm rỗng...) BẮT BUỘC phải có khối chú thích (Block comment / JSDoc).
+   - Nội dung chú thích phải nêu rõ:
+     * Lý do thiết kế & bài học xương máu (Rationale & Historic bugs).
+     * Tham chiếu đến số điều khoản trong `AGENTS.md` (ví dụ: `// Hard Invariant: AGENTS.md §16.5 & §16.6`).
+     * Cảnh báo nghiêm cấm bất kỳ AI agent hay developer nào sau này tự ý sửa đổi hoặc xóa bỏ.
+2. **Bản Quyền & Tầm Quan Trọng Của `AGENTS.md`**:
+   - `AGENTS.md` là cuốn cẩm nang tối cao, bản hiến pháp trung tâm của dự án Cyrene Desktop.
+   - Khi có bất kỳ quy tắc hoặc cơ chế mới nào được chốt và code cứng, AI Agent thực thi BẮT BUỘC phải cập nhật ngay vào `AGENTS.md` và mã nguồn đồng bộ trong cùng một phiên làm việc, không được để thất lạc kiến thức hay quy tắc.
+

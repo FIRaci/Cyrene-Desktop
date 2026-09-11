@@ -307,6 +307,13 @@ export class GestureInteractionController {
     }
   }
 
+  /**
+   * Hard Invariant: AGENTS.md §3, §16.2, §16.6, §16.7
+   * Handles head-pat gesture:
+   * - Dual kaomoji particles tossed out (left & right wings).
+   * - Prompt enforces maximum creative freedom for thoughts without canned examples.
+   * - Thoughts must contain real words (empty // or dots /.../ forbidden).
+   */
   async handleHeadPat(x?: number, y?: number): Promise<void> {
     if (this.disposed || this.isBusy()) return;
     this.isGenerating = true;
@@ -333,6 +340,13 @@ export class GestureInteractionController {
     await this.executeGestureRun("headPat", prompt, thoughtText, kaomoji, fallback, userDisplay, x, y);
   }
 
+  /**
+   * Hard Invariant: AGENTS.md §3, §16.2, §16.6, §16.7
+   * Handles petting/caressing gesture:
+   * - Dual kaomoji particles tossed out (left & right wings).
+   * - Prompt enforces maximum creative freedom for thoughts without canned examples.
+   * - Thoughts must contain real words (empty // or dots /.../ forbidden).
+   */
   async handlePetting(x?: number, y?: number): Promise<void> {
     if (this.disposed || this.isBusy()) return;
     this.isGenerating = true;
