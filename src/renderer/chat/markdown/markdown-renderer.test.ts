@@ -313,5 +313,17 @@ describe("renderMarkdown - Companion Thoughts & Actions", () => {
     expect(result.mode).toBe("html");
     expect(result.content).not.toContain("chat-thought");
   });
+
+  test("does not render empty thoughts or placeholder dots like /.../ as thought spans", () => {
+    const result1 = renderMarkdown('Hello /.../ "Master"');
+    expect(result1.content).not.toContain("chat-thought");
+    expect(result1.content).not.toContain("/.../");
+
+    const result2 = renderMarkdown('Hello /…/ "Master"');
+    expect(result2.content).not.toContain("chat-thought");
+
+    const result3 = renderMarkdown('Hello /[...]/ "Master"');
+    expect(result3.content).not.toContain("chat-thought");
+  });
 });
 

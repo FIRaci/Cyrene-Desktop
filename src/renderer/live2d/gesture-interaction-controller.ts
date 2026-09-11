@@ -64,7 +64,9 @@ export function cleanGestureReply(text: string): string {
     .replace(/(?:Current\s+)?Bond\s+Level:[^\r\n]*(?:\r?\n|$)/gmi, "")
     .replace(/Affection\s+Score:[^\r\n]*(?:\r?\n|$)/gmi, "")
     .replace(/(?:Current\s+)?Bond\s+Level:\s*Level\s*\d+[^\r\n]*/gi, "")
-    .replace(/Affection\s+Score:\s*\d+\/\d+[^\r\n]*/gi, "");
+    .replace(/Affection\s+Score:\s*\d+\/\d+[^\r\n]*/gi, "")
+    // Strip empty thoughts or placeholder dot slashes like //, /.../, /[...]/, /…/
+    .replace(/\/\s*(?:\.{1,6}|…|\[\.\.\.\])?\s*\//g, "");
 
   // Strip kaomojis so they NEVER appear in chat or speech bubbles (kaomojis are only tossed out as floating particles)
   cleaned = stripKaomojis(cleaned);

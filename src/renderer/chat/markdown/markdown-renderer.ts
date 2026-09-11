@@ -160,6 +160,11 @@ md.inline.ruler.before("text", "thought", (state, silent) => {
 
 md.renderer.rules.thought = (tokens, idx) => {
   const token = tokens[idx];
+  const inner = token.content.slice(1, -1).trim();
+  // Strip empty thoughts or placeholder dots (/.../, /…/, /  /) so they never display as empty thought spans
+  if (!inner || /^(?:\.{1,6}|…|\[\.\.\.\])$/.test(inner)) {
+    return "";
+  }
   const escaped = escapeHtml(token.content);
   return `<span class="pet-bubble__thought-inline chat-thought">${escaped}</span>`;
 };

@@ -1864,6 +1864,10 @@ function renderFormattedUserMessage(el: HTMLElement, text: string): void {
       span.textContent = part;
       el.appendChild(span);
     } else if (part.startsWith("/") && part.endsWith("/") && part.length > 2) {
+      const inner = part.slice(1, -1).trim();
+      if (!inner || /^(?:\.{1,6}|…|\[\.\.\.\])$/.test(inner)) {
+        continue;
+      }
       const span = document.createElement("span");
       span.className = "pet-bubble__thought-inline chat-thought";
       span.textContent = part;
@@ -1902,6 +1906,8 @@ function cleanBondMetadata(text: string): string {
     .replace(/(?:Current\s+)?Bond\s+Level:\s*Level\s*\d+[^\r\n]*/gi, "")
     .replace(/Affection\s+Score:\s*\d+\/\d+[^\r\n]*/gi, "")
     .replace(/^\s*[:\-–—]\s*/, "")
+    // Strip empty thoughts or placeholder dot slashes like //, /.../, /[...]/, /…/
+    .replace(/\/\s*(?:\.{1,6}|…|\[\.\.\.\])?\s*\//g, "")
     .trim();
 
   const actionVerbs = "(?:gasps?|smiles?|giggles?|leans?|looks?|blushes?|whispers?|hugs?|sighs?|nods?|tilts?|steps?|holds?|clutches?|shivers?|trembles?|tucks?|watches?|glances?|reaches?|rests?|pauses?|blinks?|winks?)";

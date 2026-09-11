@@ -336,4 +336,10 @@ describe("MiniChatWidget", () => {
     expect(cleaned).toBe("*gasps as Master's hands suddenly encircle me*");
     expect(cleaned).not.toContain("[Cyrene's Thoughts]");
   });
+
+  it("strips empty thoughts or placeholder dots like /.../ in cleanReplyForMiniChat", () => {
+    const raw = 'Hello /.../ "Master"';
+    const cleaned = cleanReplyForMiniChat(raw);
+    expect(cleaned).toBe('Hello "Master"');
+  });
 });

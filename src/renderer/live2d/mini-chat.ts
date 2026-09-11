@@ -29,6 +29,8 @@ export function cleanReplyForMiniChat(raw: string): string {
     .replace(/(?:Current\s+)?Bond\s+Level:\s*Level\s*\d+[^\r\n]*/gi, "")
     .replace(/Affection\s+Score:\s*\d+\/\d+[^\r\n]*/gi, "")
     .replace(/^\s*[:\-–—]\s*/, "")
+    // Strip empty thoughts or placeholder dot slashes like //, /.../, /[...]/, /…/
+    .replace(/\/\s*(?:\.{1,6}|…|\[\.\.\.\])?\s*\//g, "")
     .trim();
 
   const actionVerbs = "(?:gasps?|smiles?|giggles?|leans?|looks?|blushes?|whispers?|hugs?|sighs?|nods?|tilts?|steps?|holds?|clutches?|shivers?|trembles?|tucks?|watches?|glances?|reaches?|rests?|pauses?|blinks?|winks?)";
