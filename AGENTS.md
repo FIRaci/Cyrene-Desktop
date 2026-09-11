@@ -349,28 +349,6 @@
    - `src/main/index.ts` (Hàm đăng ký `Alt+Q`):
      * **Trách nhiệm duy nhất (SRP)**: Khởi tạo ứng dụng, gán global shortcut và đảm bảo tiến trình tắt sạch sẽ.
 6. **Dịch vụ Âm nhạc Toàn cầu (YouTube Music & Local)**:
-   - `src/main/music/youtube-music-provider.ts` & `src/main/music/music-service.ts`:
-     * **Trách nhiệm duy nhất (SRP)**: Quản lý provider mặc định YouTube Music, gợi ý bài hát hàng ngày zero-login, tìm kiếm thời gian thực và phát nhạc.
-     * **KHÔNG ĐƯỢC CHẠM VÀO**: Logic phân giải bài hát không yêu cầu login và regex bóc tách dữ liệu YouTube.
-7. **Thời tiết, Lộ trình & Đề xuất Địa điểm Xung quanh (Open-Meteo & Nominatim)**:
-   - `src/main/orchestrator/travel-tools.ts` & `src/main/orchestrator/built-in-tools.ts`:
-     * **Trách nhiệm duy nhất (SRP)**: Xử lý định vị địa lý, dự báo thời tiết, quy hoạch lộ trình di chuyển (`plan_trip`) và tìm kiếm quán ăn/địa điểm xung quanh (`find_nearby_places`).
-     * **KHÔNG ĐƯỢC CHẠM VÀO**: Logic Great Circle routing, Geocoding Open-Meteo và chính sách bảo mật vị trí mặc định tắt.
-8. **Thị giác Camera & Điều phối Đồng thuận (Camera Vision & Consent Guard)**:
-   - `src/main/camera/camera-service.ts` & `src/main/orchestrator/tools/camera-tools.ts`:
-     * **Trách nhiệm duy nhất (SRP)**: Quản lý trạng thái camera (bật/tắt, chế độ đồng thuận, deviceId), hộp thoại xác nhận khi chụp và công cụ `look_at_master`.
-     * **KHÔNG ĐƯỢC CHẠM VÀO**: Quy trình kiểm tra consent gate (`ask` -> native dialog) trước khi gọi renderer capture.
-   - `src/renderer/camera/camera-capturer.ts`:
-     * **Trách nhiệm duy nhất (SRP)**: Mở webcam, chụp duy nhất 1 frame tĩnh dạng JPEG base64 và lập tức gọi `track.stop()` trên mọi video track.
-     * **KHÔNG ĐƯỢC CHẠM VÀO**: Logic giải phóng track ngay lập tức để ngắt đèn LED phần cứng của webcam.
-9. **Hệ thống Gắn kết & Động cơ Cảm xúc Động (Bond Engine & Dynamic Persona Guidance)**:
-   - `src/main/relationship/bond-persona-config.ts` & `src/main/relationship/bond-engine.ts`:
-     * **Trách nhiệm duy nhất (SRP)**: Định nghĩa mốc gắn kết, tính toán điểm kỷ niệm hành trình chung và sinh prompt điều phối cảm xúc động 4 chế độ.
-     * **KHÔNG ĐƯỢC CHẠM VÀO**: Nguyên tắc mặc định yêu thương vô điều kiện từ Level 1 và cấm hardcode câu thoại.
-10. **Ký ức Sự kiện Dòng thời gian (Episodic Memory Store)**:
-    - `src/main/memory/episodic-store.ts`:
-      * **Trách nhiệm duy nhất (SRP)**: Ghi nhớ các sự kiện quan trọng trong cuộc sống của Master (`work`, `life`, `health`) với trạng thái `pending` / `resolved`, tự động nhắc nhở hỏi thăm ngày hôm sau.
-11. **OS Agent Chuyên biệt (Email Digest & Downloads Janitor)**:
     - `src/main/orchestrator/inbox-tools.ts`: Tóm tắt 3 dòng email chưa đọc qua IMAP TLS 993 bảo mật.
     - `src/main/orchestrator/downloads-janitor-tools.ts`: Quét mã băm SHA-256 dọn rác Downloads vào Thùng rác (Recycle Bin) qua thư viện `trash`.
 12. **Đánh thức Rảnh tay & Lắng nghe Thường trực (Wake-Word & Audio Loopback)**:

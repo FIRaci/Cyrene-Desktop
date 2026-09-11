@@ -203,6 +203,18 @@
   cursor: not-allowed;
 }
 
+/* Visual-only busy state — button remains clickable for recovery, isGenerating prevents re-entry */
+@keyframes send-btn-pulse {
+  0%, 100% { box-shadow: 0 2px 10px rgba(168, 85, 247, 0.4); }
+  50% { box-shadow: 0 2px 20px rgba(236, 72, 153, 0.7); }
+}
+
+.pet-mini-chat__send-btn.is-busy {
+  opacity: 0.75;
+  cursor: wait;
+  animation: send-btn-pulse 1.2s ease-in-out infinite;
+}
+
 .pet-mini-chat__send-icon {
   width: 14px;
   height: 14px;

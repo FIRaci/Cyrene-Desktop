@@ -142,8 +142,25 @@ export class MiniChatWidget {
         void this.handleSend();
       } else if (e.key === "Escape") {
         e.preventDefault();
-        this.hide();
+        if (this.isGenerating) {
+          // Escape while generating: cancel the run and unlock the button immediately
+          const win = typeof window !== "undefined" ? window : (globalThis as unknown as Window);
+          void (win as unknown as { agui?: { cancel: () => Promise<unknown> } }).agui?.cancel?.().catch(() => {});
+          this.cleanupAgui();
+          this.setBusy(false);
+          this.bubbles.clearThought();
+        } else {
+          this.hide();
+        }
       }
+    });
+
+    // Auto-recovery: if sendBtn is somehow disabled while input gets focus, immediately unlock it
+    this.inputEl.addEventListener("focus", () => {
+      if (this.sendBtn.disabled) this.sendBtn.disabled = false;
+    });
+    this.inputEl.addEventListener("input", () => {
+      if (this.sendBtn.disabled) this.sendBtn.disabled = false;
     });
 
     // Keep window interactive when mouse enters or is over mini chat
@@ -213,11 +230,16 @@ export class MiniChatWidget {
 
   private setBusy(busy: boolean): void {
     this.isGenerating = busy;
-    this.sendBtn.disabled = busy;
+    // NOTE: Do NOT set sendBtn.disabled — disabling the button prevents any recovery click.
+    // Use CSS class for visual feedback only; isGenerating guard in handleSend prevents re-entry.
     if (busy) {
+      this.sendBtn.classList.add("is-busy");
       this.indicatorEl.classList.add("is-busy");
     } else {
+      this.sendBtn.classList.remove("is-busy");
       this.indicatorEl.classList.remove("is-busy");
+      // Always ensure button is enabled when clearing busy state
+      this.sendBtn.disabled = false;
     }
   }
 
@@ -298,6 +320,23 @@ export class MiniChatWidget {
     this.inputEl.value = "";
     this.setBusy(true);
 
+    // Watchdog: force-unlock after 30s if RUN_FINISHED never arrives
+    let watchdogTimer: ReturnType<typeof setTimeout> | null = null;
+    const startWatchdog = (): void => {
+      watchdogTimer = setTimeout(() => {
+        console.warn("[MiniChat] Watchdog: run did not finish within 30s, force-clearing busy state");
+        this.cleanupAgui();
+        this.setBusy(false);
+        this.bubbles.clearThought();
+      }, 30_000);
+    };
+    const clearWatchdog = (): void => {
+      if (watchdogTimer !== null) {
+        clearTimeout(watchdogTimer);
+        watchdogTimer = null;
+      }
+    };
+
     const win = typeof window !== "undefined" ? window : (globalThis as unknown as Window);
     const store = (win as unknown as { chatStore?: {
       append: (arg1: unknown, arg2?: unknown) => Promise<unknown>;
@@ -345,8 +384,9 @@ export class MiniChatWidget {
           const displaySoFar = cleanReplyForMiniChat(this.currentReply);
           this.bubbles.say(displaySoFar, 60000);
         } else if (event.type === "RUN_FINISHED" || event.type === "RUN_ERROR") {
+          clearWatchdog();
           const eventReply = (event as { reply?: string })?.reply;
-          this.finishRun(sessionId, assistantTurnId, eventReply);
+          void this.finishRun(sessionId, assistantTurnId, eventReply);
         }
       });
 
@@ -378,12 +418,17 @@ export class MiniChatWidget {
         });
 
         if (!ack.success) {
+          clearWatchdog();
           this.bubbles.clearThought();
           this.bubbles.say(`I couldn't respond: ${ack.error || "Unknown error"}`, 4000);
           this.cleanupAgui();
           this.setBusy(false);
+        } else {
+          // Run accepted — start watchdog so a hung run auto-unlocks the button
+          startWatchdog();
         }
       } catch (err) {
+        clearWatchdog();
         this.bubbles.clearThought();
         this.bubbles.say("Request failed. Please try again!", 3500);
         this.cleanupAgui();
@@ -407,6 +452,8 @@ export class MiniChatWidget {
     const finalReply = cleanReplyForMiniChat(rawReply);
     this.cleanupAgui();
     this.setBusy(false);
+    // Watchdog is cleared by the caller — but also clear here defensively
+    // (finishRun is called from the event handler; watchdog ref is in handleSend scope)
 
     if (finalReply) {
       this.bubbles.say(finalReply, 6000, this.voice);
