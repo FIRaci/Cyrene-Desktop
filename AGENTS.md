@@ -693,3 +693,66 @@ if (result.mode === "html") {
    - Vẫn giữ nguyên cấu trúc bộ ba: `*[hành động]* /[suy nghĩ]/ "[lời thoại]"`.
    - Suy nghĩ bên trong `/.../` phải phản ánh sự bối rối, hờn dỗi, ấm ức đáng yêu hoặc sự ngượng ngùng thật sự tại thời điểm đó, TUYỆT ĐỐI CẤM để rỗng `//` hoặc dấu ba chấm `/[...]//`.
 
+### 16.11. Kiến Trúc Đặt Lịch Điền Biểu Mẫu Rỗng & Parser Đa Ngôn Ngữ Bất Biến (Slot-Filling Scheduling & Multi-Language Date Parser Contract)
+
+**Files**: `src/main/orchestrator/scheduler-tools.ts`, `prompts/work_system.md`, `prompts/tools_system.md`, `src/main/orchestrator/scheduler-tools.test.ts`.
+
+**Bản chất vấn đề & Bài học xương máu**:
+- Khi yêu cầu LLM tính toán ngày giờ tuyệt đối ("hãy tính thứ Hai tuần sau lúc 3h chiều ra ISO timestamp `YYYY-MM-DDTHH:mm:ssZ`"), các mô hình AI thường xuyên bị hallucinate: nhầm năm, tính sai ngày trong tuần, nhầm múi giờ, hoặc từ chối gọi tool.
+- Master yêu cầu: Code sẵn các data mẫu rỗng (Slot-Filling Schema). Khi Master ra lệnh (bằng tiếng Việt hoặc tiếng Anh), Cyrene chỉ cần làm đúng một việc: bóc tách thông tin thô điền vào các slot rỗng (`title`, `date_time`, `kind`, `prompt`), sau đó backend TypeScript tự động làm toàn bộ phép tính toán thời gian tất định.
+
+**Quy tắc Khóa Chết (Immutable Invariants)**:
+1. **Schema Rỗng Chuẩn Mực (`schedule_task`)**:
+   - `title`: Tên công việc bằng tiếng Anh ngắn gọn.
+   - `date_time`: Chuỗi thời gian tự nhiên thô do người dùng nhập (ví dụ: `"15 minutes"`, `"tomorrow at 3pm"`, `"14h chiều mai"`, `"thứ 2 tuần sau lúc 9h"`).
+   - `kind`: `"once"` (sự kiện 1 lần hoặc đếm ngược), `"daily"` (thói quen hàng ngày), `"weekly"` (lịch hàng tuần), `"interval"` (lặp lại định kỳ).
+   - `prompt`: Câu thoại nhắc nhở Master khi đến giờ.
+2. **Bộ Giải Mã Thời Gian Tất Định Đa Ngôn Ngữ (`parseDateTimeInput`)**:
+   - Nằm tại `src/main/orchestrator/scheduler-tools.ts`, hỗ trợ 100% không phụ thuộc internet:
+     * Khoảng thời gian tương đối: `"15 phút nữa"`, `"30p nữa"`, `"2 tiếng nữa"`, `"in 15 mins"`, `"sau 1 giờ"`.
+     * Buổi trong ngày & Ngày cụ thể: `"chiều mai lúc 2h"`, `"8h tối nay"`, `"sáng mai 9h"`, `"ngày mai 15:30"`, `"ngày kia 10h"`, `"tomorrow at 3pm"`.
+     * Thứ trong tuần: `"thứ 2 tuần sau lúc 9h"`, `"chủ nhật 15:00"`, `"next Monday at 10am"`.
+     * Ngày tháng cụ thể: `"14h ngày 15/9"`, `"ngày 15 tháng 9 lúc 2h chiều"`, `"15/09/2026 14:00"`.
+3. **Đồng Bộ Dữ Liệu Tức Thì**:
+   - Gọi `broadcastSchedulerChanged()` bắn sự kiện IPC `IPC.SCHEDULER_CHANGED` cho tất cả cửa sổ (`Alt+3` Lịch trình, `Alt+1` Chat, Live2D Desktop Companion).
+   - TUYỆT ĐỐI KHÔNG xóa hoặc sửa các pattern tiếng Việt/tiếng Anh trong `parseDateTimeInput`.
+
+### 16.12. Cửa Sổ Chat Alt+1 Phóng To / Thu Nhỏ Cho Cửa Sổ Trong Suốt (Alt+1 Transparent Window Maximize/Restore & WorkArea Clamping Contract)
+
+**Files**: `src/main/index.ts`, `src/renderer/chat/main.ts`, `src/renderer/chat/chat.css`, `src/shared/ipc-channels.ts`, `src/preload/index.ts`, `src/main/chat-window-maximize.test.ts`.
+
+**Bản chất vấn đề & Bài học xương máu**:
+- Cửa sổ Chat (`Alt+1`) là một Frameless Transparent Window (`frame: false`, `transparent: true`). Trên Windows, loại cửa sổ này không được OS bật style `WS_MAXIMIZE`.
+- Do đó, `chatWindow.isMaximized()` của Electron **luôn trả về `false`**!
+- Nếu dùng logic mặc định `if (chatWindow.isMaximized()) chatWindow.unmaximize() else chatWindow.maximize()`, việc kiểm tra luôn thất bại khiến hàm liên tục gọi lại `maximize()`, còn `unmaximize()` bị Electron coi là no-op. Người dùng nhấn nút thu nhỏ sẽ hoàn toàn vô tác dụng, bị kẹt vĩnh viễn ở chế độ full màn hình.
+
+**Quy tắc Khóa Chết (Immutable Invariants)**:
+1. **Quản Lý Trạng Thái Cấp Main Process Độc Lập**:
+   - Quản lý qua 2 biến tại `src/main/index.ts`: `isChatMaximized: boolean` và `chatRestoreBounds: Electron.Rectangle | null`.
+   - Khi phóng to: Lưu lại bounds hiện tại vào `chatRestoreBounds`, lấy `screen.getDisplayMatching(bounds).workArea` (khu vực làm việc trừ thanh Taskbar), gán `chatWindow.setBounds(workArea)`, đặt `isChatMaximized = true`, phát IPC `chat:maximize-changed` (true).
+   - Khi thu nhỏ: Phục hồi lại đúng `chatRestoreBounds` (đã clamp an toàn trong `display.workArea`), đặt `isChatMaximized = false`, phát IPC `chat:maximize-changed` (false).
+2. **CẤM DÙNG API NATIVE `maximize()` / `unmaximize()`**:
+   - TUYỆT ĐỐI KHÔNG được gọi `chatWindow.maximize()` hay `chatWindow.unmaximize()`. Mọi thao tác phóng to / thu nhỏ phải đi qua `toggleChatMaximize()`.
+3. **Đồng Bộ Nút Bấm & Thao Tác Chuột (Dynamic Icon Swap & Double-Click)**:
+   - Khi thu nhỏ: Nút `#max-btn` hiển thị icon 1 ô vuông, tooltip `Maximize (Alt+1)`.
+   - Khi phóng to: Nút `#max-btn` hiển thị icon 2 ô vuông lồng nhau (`Restore Down`), tooltip `Restore Down`.
+   - Double-click vào `.chat__titlebar` (trừ các controls con) kích hoạt `window.chat.toggleMaximize()`.
+   - Lớp CSS `.chat.is-maximized` triệt tiêu bo góc và viền thừa để ôm sát màn hình.
+
+### 16.13. Hợp Đồng Bất Biến 100% English Prompts & Zero Canned Examples (Pure-English Prompts & Strict No-Canned-Examples Contract)
+
+**Files**: Thư mục `prompts/` (`prompts/work_system.md`, `prompts/tools_system.md`, `prompts/tone-rules.md`, `prompts/chat_system.md`, `prompts/soul.md`).
+
+**Bản chất vấn đề & Bài học xương máu**:
+- Đưa văn bản tiếng Việt hay chữ Hán vào trong file prompt hệ thống khiến mô hình LLM bị nhiễu loạn ngôn ngữ, làm rò rỉ tiếng Việt hoặc văn phong lạ vào câu trả lời, vi phạm nghiêm trọng Hợp đồng Ngôn ngữ Toàn hệ thống (100% English Surface).
+- Đưa ví dụ mẫu (`e.g.`, `Example:`) tạo ra "anchor bias", khiến LLM sao chép nguyên xi hoặc lặp lại rập khuôn.
+
+**Quy tắc Khóa Chết (Immutable Invariants)**:
+1. **100% Pure English Prompts**:
+   - Tất cả các file trong `prompts/` BẮT BUỘC 100% là tiếng Anh chuẩn mực.
+   - TUYỆT ĐỐI CẤM bất kỳ chữ có dấu tiếng Việt hoặc ký tự chữ Hán nào xuất hiện trong các file prompt hệ thống.
+2. **Không Ví Dụ Mẫu (Strictly Zero Canned Examples)**:
+   - Không đưa câu thoại hay suy nghĩ mẫu vào prompt.
+   - Chỉ đưa ra các khung biểu mẫu rỗng (Schema Slots) và các quy tắc ứng xử trừu tượng để AI tự do nhập vai và suy nghĩ tự nhiên.
+
+

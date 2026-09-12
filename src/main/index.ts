@@ -330,6 +330,8 @@ async function reconcileUserMemoryIndex(): Promise<void> {
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let chatWindow: BrowserWindow | null = null;
+let isChatMaximized = false;
+let chatRestoreBounds: Electron.Rectangle | null = null;
 let sidebarWindow: BrowserWindow | null = null;
 let tasksWindow: BrowserWindow | null = null;
 let settingsWindow: BrowserWindow | null = null;
@@ -4256,9 +4258,63 @@ function createChatWindow(sessionId?: string): void {
     }
   }, 1500);
 
+  isChatMaximized = false;
+  chatRestoreBounds = {
+    x: layout.chat.x,
+    y: layout.chat.y,
+    width: 1280,
+    height: 760,
+  };
+
+  const checkMaximizedStateOnBoundsChange = () => {
+    if (!chatWindow || chatWindow.isDestroyed()) return;
+    if (isChatMaximized) {
+      const current = chatWindow.getBounds();
+      const display = screen.getDisplayMatching(current);
+      if (
+        Math.abs(current.width - display.workArea.width) > 30 ||
+        Math.abs(current.height - display.workArea.height) > 30
+      ) {
+        isChatMaximized = false;
+        chatRestoreBounds = current;
+        try {
+          chatWindow.webContents.send(IPC.CHAT_MAXIMIZE_CHANGED, false);
+        } catch {}
+      }
+    } else {
+      chatRestoreBounds = chatWindow.getBounds();
+    }
+  };
+
+  chatWindow.on("resize", checkMaximizedStateOnBoundsChange);
+  chatWindow.on("move", checkMaximizedStateOnBoundsChange);
+
+  chatWindow.on("maximize", () => {
+    if (!isChatMaximized) {
+      isChatMaximized = true;
+      try {
+        chatWindow?.webContents.send(IPC.CHAT_MAXIMIZE_CHANGED, true);
+      } catch {}
+    }
+  });
+
+  chatWindow.on("unmaximize", () => {
+    if (isChatMaximized) {
+      isChatMaximized = false;
+      try {
+        chatWindow?.webContents.send(IPC.CHAT_MAXIMIZE_CHANGED, false);
+      } catch {}
+    }
+  });
+
   chatWindow.on("show", () => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send(IPC.CHAT_VISIBILITY_CHANGED, true);
+    }
+    if (chatWindow && !chatWindow.isDestroyed()) {
+      try {
+        chatWindow.webContents.send(IPC.CHAT_MAXIMIZE_CHANGED, isChatMaximized);
+      } catch {}
     }
   });
 
@@ -4270,6 +4326,8 @@ function createChatWindow(sessionId?: string): void {
 
   chatWindow.on("closed", () => {
     chatWindow = null;
+    isChatMaximized = false;
+    chatRestoreBounds = null;
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send(IPC.CHAT_VISIBILITY_CHANGED, false);
     }
@@ -5260,17 +5318,71 @@ ipcMain.on(IPC.CHAT_CLOSE, () => {
   chatWindow?.close();
 });
 
-ipcMain.on(IPC.CHAT_TOGGLE_MAXIMIZE, () => {
-  if (!chatWindow) return;
-  if (chatWindow.isMaximized()) {
-    chatWindow.unmaximize();
+// ============================================================================
+// 🔒 HARD INVARIANT: AGENTS.md §16.12 - ALT+1 TRANSPARENT WINDOW MAXIMIZE/RESTORE
+// DO NOT MODIFY OR REFACTOR THIS LOGIC.
+// Electron Windows Frameless Transparent Windows (`transparent: true`, `frame: false`)
+// do NOT receive the native OS `WS_MAXIMIZE` style, meaning `chatWindow.isMaximized()`
+// ALWAYS returns `false`. Never use `win.maximize()` or `win.unmaximize()` here!
+// State MUST be managed via `isChatMaximized` and `chatRestoreBounds`, bounded to `display.workArea`.
+// ============================================================================
+function toggleChatMaximize(): void {
+  if (!chatWindow || chatWindow.isDestroyed()) return;
+
+  if (isChatMaximized) {
+    // Restore to normal bounds
+    isChatMaximized = false;
+    if (chatRestoreBounds) {
+      const display = screen.getDisplayMatching(chatRestoreBounds);
+      const minW = 960;
+      const minH = 540;
+      const targetW = Math.max(minW, Math.min(chatRestoreBounds.width, display.workArea.width));
+      const targetH = Math.max(minH, Math.min(chatRestoreBounds.height, display.workArea.height));
+      const maxX = display.workArea.x + display.workArea.width - targetW;
+      const maxY = display.workArea.y + display.workArea.height - targetH;
+      const targetX = Math.max(display.workArea.x, Math.min(chatRestoreBounds.x, maxX));
+      const targetY = Math.max(display.workArea.y, Math.min(chatRestoreBounds.y, maxY));
+      chatWindow.setBounds({
+        x: targetX,
+        y: targetY,
+        width: targetW,
+        height: targetH,
+      });
+    } else {
+      const layout = computeLayout();
+      chatWindow.setBounds({
+        x: layout.chat.x,
+        y: layout.chat.y,
+        width: 1280,
+        height: 760,
+      });
+    }
+    try {
+      chatWindow.webContents.send(IPC.CHAT_MAXIMIZE_CHANGED, false);
+    } catch {
+      // ignore
+    }
   } else {
-    chatWindow.maximize();
+    // Maximize to display workArea
+    chatRestoreBounds = chatWindow.getBounds();
+    isChatMaximized = true;
+    const currentBounds = chatWindow.getBounds();
+    const display = screen.getDisplayMatching(currentBounds);
+    chatWindow.setBounds(display.workArea);
+    try {
+      chatWindow.webContents.send(IPC.CHAT_MAXIMIZE_CHANGED, true);
+    } catch {
+      // ignore
+    }
   }
+}
+
+ipcMain.on(IPC.CHAT_TOGGLE_MAXIMIZE, () => {
+  toggleChatMaximize();
 });
 
 ipcMain.handle(IPC.CHAT_IS_MAXIMIZED, () => {
-  return chatWindow?.isMaximized() ?? false;
+  return isChatMaximized;
 });
 
 ipcMain.handle(IPC.CHAT_IS_VISIBLE, () => {

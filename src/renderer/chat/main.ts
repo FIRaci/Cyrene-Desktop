@@ -98,6 +98,7 @@ interface ChatApi {
     close: () => void;
     toggleMaximize: () => void;
     isMaximized: () => Promise<boolean>;
+    onMaximizeChanged?: (callback: (maximized: boolean) => void) => () => void;
     ingestDroppedFiles: (files: File[]) => Promise<Attachment[]>;
     processDocuments: (filePaths: string[], query: string) => Promise<Attachment[]>;
     onDocumentIndexProgress?: (callback: (progress: DocumentIndexProgress) => void) => () => void;
@@ -4769,7 +4770,31 @@ async function clearChat(): Promise<void> {
   render();
 }
 
+// ============================================================================
+// 🔒 HARD INVARIANT: AGENTS.md §16.12 - ALT+1 WINDOW CONTROLS & DYNAMIC ICON SWAP
+// DO NOT MODIFY OR REFACTOR THIS LOGIC.
+// Window maximize toggle invokes `window.chat.toggleMaximize()`.
+// Maximize button SVG icon dynamically switches between single box (maximize)
+// and overlapping double boxes (restore), with corresponding aria-label & title.
+// Titlebar double-click triggers maximize/restore without interfering with controls.
+// ============================================================================
 /* ===== Window controls ===== */
+function updateMaximizeButton(maximized: boolean): void {
+  if (!maxBtn) return;
+  const chatContainer = document.querySelector(".chat");
+  if (maximized) {
+    maxBtn.title = "Restore";
+    maxBtn.setAttribute("aria-label", "Restore");
+    maxBtn.innerHTML = `<svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M2.5 2.5V1.5C2.5 1.08579 2.83579 0.75 3.25 0.75H8.75C9.16421 0.75 9.5 1.08579 9.5 1.5V7C9.5 7.41421 9.16421 7.75 8.75 7.75H7.5" fill="none" stroke="currentColor" stroke-width="1.2"/><rect x="0.75" y="2.5" width="6.75" height="6.75" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>`;
+    chatContainer?.classList.add("is-maximized");
+  } else {
+    maxBtn.title = "Maximize";
+    maxBtn.setAttribute("aria-label", "Maximize");
+    maxBtn.innerHTML = `<svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><rect x="0.75" y="0.75" width="8.5" height="8.5" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>`;
+    chatContainer?.classList.remove("is-maximized");
+  }
+}
+
 minBtn.addEventListener("click", () => {
   window.chat?.minimize();
 });
@@ -4781,6 +4806,23 @@ closeBtn.addEventListener("click", () => {
 });
 clearBtn?.addEventListener("click", () => {
   void clearChat();
+});
+
+window.chat?.onMaximizeChanged?.((maximized) => {
+  updateMaximizeButton(maximized);
+});
+
+void window.chat?.isMaximized?.().then((maximized) => {
+  updateMaximizeButton(Boolean(maximized));
+});
+
+const titlebarEl = document.querySelector(".chat__titlebar");
+titlebarEl?.addEventListener("dblclick", (e) => {
+  const target = e.target as HTMLElement | null;
+  if (target && target.closest("button, input, select, textarea, .chat__titlebar-actions, .dropdown-trigger, .mode-switch, a")) {
+    return;
+  }
+  window.chat?.toggleMaximize();
 });
 
 /* ===== Composer ===== */

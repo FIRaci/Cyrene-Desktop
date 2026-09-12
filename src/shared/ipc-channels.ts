@@ -41,6 +41,7 @@ export const IPC = {
   CHAT_CLOSE: "chat:close",
   CHAT_TOGGLE_MAXIMIZE: "chat:toggle-maximize",
   CHAT_IS_MAXIMIZED: "chat:is-maximized",
+  CHAT_MAXIMIZE_CHANGED: "chat:maximize-changed",
   CHAT_INGEST_FILES: "chat:ingest-files",
   CHAT_PROCESS_DOCUMENTS: "chat:process-documents",
   CHAT_DOCUMENT_INDEX_PROGRESS: "chat:document-index-progress",

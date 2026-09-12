@@ -76,7 +76,14 @@ const chatApi = {
   minimize: () => ipcRenderer.send(IPC.CHAT_MINIMIZE),
   close: () => ipcRenderer.send(IPC.CHAT_CLOSE),
   toggleMaximize: () => ipcRenderer.send(IPC.CHAT_TOGGLE_MAXIMIZE),
-  isMaximized: () => ipcRenderer.invoke(IPC.CHAT_IS_MAXIMIZED),
+  isMaximized: () => ipcRenderer.invoke(IPC.CHAT_IS_MAXIMIZED) as Promise<boolean>,
+  onMaximizeChanged: (cb: (maximized: boolean) => void) => {
+    const listener = (_e: unknown, val: boolean) => cb(Boolean(val));
+    ipcRenderer.on(IPC.CHAT_MAXIMIZE_CHANGED, listener);
+    return () => {
+      ipcRenderer.removeListener(IPC.CHAT_MAXIMIZE_CHANGED, listener);
+    };
+  },
   getEnabledStickers: () => ipcRenderer.invoke(IPC.STICKERS_GET_ENABLED),
   /** Extract file paths from dataTransfer.files or fileInput.files and batch ingest.
    *  Path extraction runs in preload (webUtils.getPathForFile) to avoid File.path unavailability in Electron 33. */
