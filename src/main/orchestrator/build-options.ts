@@ -397,12 +397,12 @@ export function detectAssistantOperationalIntent(text: string): boolean {
   const lower = trimmed.toLowerCase();
 
   // 1. Scheduling, reminders, calendar, deadlines, study plans, appointments, timers, alarms (English & Vietnamese)
-  const scheduleEn = /\b(schedule|reschedule|appointment|meeting|calendar|remind|reminder|due|alarm|event|deadline|study|exam|class|lesson|timetable|routine|todo|task|timer|clock|wake me|wake up|what time)\b/i;
-  const scheduleVi = /(l\u1eadp l\u1ecbch|\u0111\u1eb7t l\u1ecbch|th\u00eam l\u1ecbch|t\u1ea1o l\u1ecbch|x\u00f3a l\u1ecbch|h\u1ee7y l\u1ecbch|l\u1ecbch tr\u00ecnh|l\u1ecbch h\u00f4m nay|l\u1ecbch ng\u00e0y|h\u1eb9n gi\u1edd|h\u1eb9n th\u1eddi gian|\u0111\u1eb7t th\u1eddi gian|\u0111\u1eb7t gi\u1edd|c\u00e0i gi\u1edd|c\u00e0i th\u1eddi gian|ch\u1ec9nh gi\u1edd|b\u00e1o gi\u1edd|m\u1ea5y gi\u1edd|canh gi\u1edd|\u0111\u1eb7t chu\u00f4ng|chu\u00f4ng b\u00e1o|nh\u1eafc nh\u1edf|nh\u1eafc t\u00f4i|nh\u1eafc nh\u1edf t\u00f4i|nh\u1eafc anh|nh\u1eafc em|nh\u1eafc l\u1ecbch|b\u00e1o th\u1ee9c|th\u1eddi kh\u00f3a bi\u1ec3u|c\u00f4ng vi\u1ec7c|nhi\u1ec7m v\u1ee5|h\u1ea1n ch\u00f3t|deadline|h\u1ecdc b\u00e0i|ti\u1ebft h\u1ecdc|k\u1ef3 thi|cu\u1ed9c h\u1ecdp|h\u1ecdp)/iu;
+  const scheduleEn = /\b(schedule|reschedule|appointment|meeting|calendar|remind|reminder|due|alarm|event|deadline|study|exam|class|lesson|timetable|routine|todo|task|timer|clock|wake me|wake up|what time|agenda|free|busy|available|check my calendar|what's on my schedule)\b|what do I have|am I free|do I have any/i;
+  const scheduleVi = /(l\u1eadp l\u1ecbch|\u0111\u1eb7t l\u1ecbch|th\u00eam l\u1ecbch|t\u1ea1o l\u1ecbch|x\u00f3a l\u1ecbch|h\u1ee7y l\u1ecbch|l\u1ecbch tr\u00ecnh|l\u1ecbch h\u00f4m nay|l\u1ecbch ng\u00e0y|h\u1eb9n gi\u1edd|h\u1eb9n th\u1eddi gian|\u0111\u1eb7t th\u1eddi gian|\u0111\u1eb7t gi\u1edd|c\u00e0i gi\u1edd|c\u00e0i th\u1eddi gian|ch\u1ec9nh gi\u1edd|b\u00e1o gi\u1edd|m\u1ea5y gi\u1edd|canh gi\u1edd|\u0111\u1eb7t chu\u00f4ng|chu\u00f4ng b\u00e1o|nh\u1eafc nh\u1edf|nh\u1eafc t\u00f4i|nh\u1eafc nh\u1edf t\u00f4i|nh\u1eafc anh|nh\u1eafc em|nh\u1eafc l\u1ecbch|b\u00e1o th\u1ee9c|th\u1eddi kh\u00f3a bi\u1ec3u|c\u00f4ng vi\u1ec7c|nhi\u1ec7m v\u1ee5|h\u1ea1n ch\u00f3t|deadline|h\u1ecdc b\u00e0i|ti\u1ebft h\u1ecdc|k\u1ef3 thi|cu\u1ed9c h\u1ecdp|h\u1ecdp|c\u00f3 l\u1ecbch|h\u00f4m nay c\u00f3 g\u00ec|ng\u00e0y mai c\u00f3 g\u00ec|tu\u1ea7n n\u00e0y c\u00f3 g\u00ec|l\u1ecbch tr\u1ed1ng|r\u1ea3nh kh\u00f4ng|b\u1eadn kh\u00f4ng|c\u00f3 b\u1eadn|c\u00f3 cu\u1ed9c h\u1eb9n|h\u1eb9n g\u1eb7p|nh\u1edb nh\u1eafc|\u0111\u1eb7t h\u1eb9n)/iu;
 
   // 2. Weather & environment (including common typos like temperture)
-  const weatherEn = /\b(weather|forecast|temperature|temperture|temparature|temperatue|temp|temps|climate|rain|raining|sunny|cloudy|snow|snowing|wind|windy|storm|humid|humidity|outdoor)\b/i;
-  const weatherVi = /(th\u1eddi ti\u1ebft|d\u1ef1 b\u00e1o|nhi\u1ec7t \u0111\u1ed9|bao nhi\u00eau \u0111\u1ed9|tr\u1eddi m\u01b0a|tr\u1eddi n\u1eafng|tr\u1eddi l\u1ea1nh|tr\u1eddi n\u00f3ng|m\u01b0a kh\u00f4ng|c\u00f3 m\u01b0a|m\u01b0a ko|n\u1eafng kh\u00f4ng|c\u00f3 n\u1eafng|n\u1eafng ko|c\u00f3 l\u1ea1nh|l\u1ea1nh kh\u00f4ng|n\u00f3ng kh\u00f4ng|c\u00f3 n\u00f3ng|gi\u00f3|b\u00e3o|n\u1ed3m|kh\u00ed h\u1eadu)/iu;
+  const weatherEn = /\b(weather|forecast|temperature|temperture|temparature|temperatue|temp|temps|climate|rain|raining|sunny|cloudy|snow|snowing|wind|windy|storm|humid|humidity|outdoor)\b|how's the weather|is it raining|is it cold|is it hot|weather here/i;
+  const weatherVi = /(thời tiết|dự báo|nhiệt độ|bao nhiêu độ|trời mưa|trời nắng|trời lạnh|trời nóng|trời hôm nay|ngoài trời|mưa không|có mưa|mưa ko|nắng không|có nắng|nắng ko|có lạnh|lạnh không|nóng không|có nóng|gió|bão|nồm|khí hậu|thời tiết ở đây|thời tiết hôm nay)/iu;
 
   // 3. Music playback & control
   const musicEn = /\b(play|song|music|listen to|sing|track|pause music|resume music|stop music|next song|previous song)\b/i;
@@ -410,7 +410,14 @@ export function detectAssistantOperationalIntent(text: string): boolean {
 
   // 4. Explicit tool instructions (search, note, calculate, translate, travel)
   const toolEn = /\b(search online|google|search|calculate|take note|set a task|add task|create task|query task|view task|check schedule|cancel task|delete task|directions|route|travel|nearby)\b/i;
-  const toolVi = /(t\u00ecm ki\u1ebfm|tra c\u1ee9u|t\u00ecm tr\u00ean m\u1ea1ng|t\u00ednh to\u00e1n|ghi ch\u00fa|t\u1ea1o task|th\u00eam vi\u1ec7c|xem vi\u1ec7c|xem l\u1ecbch|ki\u1ec3m tra l\u1ecbch|ch\u1ec9 \u0111\u01b0\u1eddng|\u0111\u01b0\u1eddng \u0111i|l\u1ed9 tr\u00ecnh|qu\u00e1n \u0103n|qu\u00e1n cafe|qu\u00e1n c\u00e0 ph\u00ea|\u0111\u1ecba \u0111i\u1ec3m|xung quanh \u0111\u00e2y|g\u1ea7n \u0111\u00e2y)/iu;
+  const toolVi = /(tìm kiếm|tra cứu|tìm trên mạng|tính toán|ghi chú|tạo task|thêm việc|xem việc|xem lịch|kiểm tra lịch|chỉ đường|đường đi|lộ trình|quán ăn|quán cafe|quán cà phê|địa điểm|xung quanh đây|gần đây)/iu;
+
+  // 5. Vietnamese standalone schedule word "lịch" (calendar/schedule) -- but NOT "lịch sử" (history)
+  //    Matches "lịch" when not immediately preceded or followed by a Vietnamese diacritic letter.
+  const viLich = /(?<![\u00C0-\u024F\u1E00-\u1EFF\w])lịch(?!\s*sử)(?![\u00C0-\u024F\u1E00-\u1EFF\w])/iu;
+
+  // 6. Current-time queries in Vietnamese ("bây giờ", "giờ này", "mấy giờ rồi") not already captured by scheduleVi
+  const timeNowVi = /(bây giờ|giờ này|mấy giờ rồi|bây giờ là mấy|hôm nay thứ mấy|hôm nay ngày mấy|ngày hôm nay là|ngày bao nhiêu)/iu;
 
   return scheduleEn.test(lower) ||
     scheduleVi.test(lower) ||
@@ -419,7 +426,9 @@ export function detectAssistantOperationalIntent(text: string): boolean {
     musicEn.test(lower) ||
     musicVi.test(lower) ||
     toolEn.test(lower) ||
-    toolVi.test(lower);
+    toolVi.test(lower) ||
+    viLich.test(trimmed) ||
+    timeNowVi.test(trimmed);
 }
 
 /**

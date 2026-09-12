@@ -130,6 +130,74 @@ describe("scheduler-tools", () => {
       expect(parsed2?.getHours()).toBe(8);
       expect(parsed2?.getMinutes()).toBe(30);
     });
+
+    it("parses Vietnamese relative time offsets ('15 phút nữa', '30p nữa', '2 tiếng nữa', '2h nữa')", () => {
+      const now = new Date(2026, 8, 12, 10, 0, 0);
+      const parsed15m = parseDateTimeInput("15 phút nữa", now);
+      expect(parsed15m?.getTime()).toBe(now.getTime() + 15 * 60 * 1000);
+
+      const parsed30p = parseDateTimeInput("30p nữa", now);
+      expect(parsed30p?.getTime()).toBe(now.getTime() + 30 * 60 * 1000);
+
+      const parsed2h = parseDateTimeInput("2 tiếng nữa", now);
+      expect(parsed2h?.getTime()).toBe(now.getTime() + 2 * 3600 * 1000);
+
+      const parsed2hCasual = parseDateTimeInput("2h nữa", now);
+      expect(parsed2hCasual?.getTime()).toBe(now.getTime() + 2 * 3600 * 1000);
+    });
+
+    it("parses English relative time offsets ('in 15 minutes', 'in 2 hours')", () => {
+      const now = new Date(2026, 8, 12, 10, 0, 0);
+      const parsed15m = parseDateTimeInput("in 15 minutes", now);
+      expect(parsed15m?.getTime()).toBe(now.getTime() + 15 * 60 * 1000);
+
+      const parsed2h = parseDateTimeInput("in 2 hours", now);
+      expect(parsed2h?.getTime()).toBe(now.getTime() + 2 * 3600 * 1000);
+    });
+
+    it("parses Vietnamese named days ('chiều mai lúc 2h', '8h tối nay', 'sáng mai 9h', 'ngày kia lúc 10h')", () => {
+      const now = new Date(2026, 8, 12, 10, 0, 0); // Saturday 10:00
+
+      // 'chiều mai lúc 2h' -> tomorrow at 14:00 (10:00 today + 28h)
+      const parsedTomorrow2pm = parseDateTimeInput("chiều mai lúc 2h", now);
+      expect(parsedTomorrow2pm?.getDate()).toBe(13);
+      expect(parsedTomorrow2pm?.getHours()).toBe(14);
+      expect(parsedTomorrow2pm?.getMinutes()).toBe(0);
+
+      // '8h tối nay' -> today at 20:00
+      const parsedTonight8pm = parseDateTimeInput("8h tối nay", now);
+      expect(parsedTonight8pm?.getDate()).toBe(12);
+      expect(parsedTonight8pm?.getHours()).toBe(20);
+      expect(parsedTonight8pm?.getMinutes()).toBe(0);
+
+      // 'sáng mai 9h' -> tomorrow at 09:00
+      const parsedTomorrow9am = parseDateTimeInput("sáng mai 9h", now);
+      expect(parsedTomorrow9am?.getDate()).toBe(13);
+      expect(parsedTomorrow9am?.getHours()).toBe(9);
+      expect(parsedTomorrow9am?.getMinutes()).toBe(0);
+
+      // 'ngày kia lúc 10h' -> 2 days later at 10:00
+      const parsedDayAfterTomorrow = parseDateTimeInput("ngày kia lúc 10h", now);
+      expect(parsedDayAfterTomorrow?.getDate()).toBe(14);
+      expect(parsedDayAfterTomorrow?.getHours()).toBe(10);
+      expect(parsedDayAfterTomorrow?.getMinutes()).toBe(0);
+    });
+
+    it("parses specific date with time ('14h ngày 15/9', 'ngày 15 tháng 9 lúc 2h chiều')", () => {
+      const now = new Date(2026, 8, 12, 10, 0, 0);
+
+      const parsed1 = parseDateTimeInput("14h ngày 15/9", now);
+      expect(parsed1?.getDate()).toBe(15);
+      expect(parsed1?.getMonth()).toBe(8); // September
+      expect(parsed1?.getHours()).toBe(14);
+      expect(parsed1?.getMinutes()).toBe(0);
+
+      const parsed2 = parseDateTimeInput("ngày 15 tháng 9 lúc 2h chiều", now);
+      expect(parsed2?.getDate()).toBe(15);
+      expect(parsed2?.getMonth()).toBe(8);
+      expect(parsed2?.getHours()).toBe(14);
+      expect(parsed2?.getMinutes()).toBe(0);
+    });
   });
 
   describe("formatFriendlySchedule", () => {
@@ -216,6 +284,114 @@ describe("scheduler-tools", () => {
       expect(result).toContain("Go to study");
       expect(mockAddTask).toHaveBeenCalled();
       expect(sendMock).toHaveBeenCalledWith("scheduler:changed");
+    });
+
+    it("executes schedule_task with Vietnamese relative time ('15 phút nữa')", async () => {
+      registerSchedulerTools();
+      const scheduleTool = toolRegistry.getById("schedule_task");
+      expect(scheduleTool).toBeDefined();
+
+      const result = await scheduleTool!.execute({
+        title: "Take a break",
+        date_time: "15 phút nữa",
+        prompt: "Master, time for your 15-minute break!",
+      });
+
+      expect(result).toContain("[schedule_task] Successfully added to schedule");
+      expect(result).toContain("Take a break");
+      expect(mockAddTask).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "Take a break",
+          prompt: "Master, time for your 15-minute break!",
+          schedule: expect.objectContaining({ kind: "once" }),
+        })
+      );
+      expect(sendMock).toHaveBeenCalledWith("scheduler:changed");
+    });
+
+    it("executes schedule_task with named day ('chiều mai lúc 2h')", async () => {
+      registerSchedulerTools();
+      const scheduleTool = toolRegistry.getById("schedule_task");
+      expect(scheduleTool).toBeDefined();
+
+      const result = await scheduleTool!.execute({
+        title: "Client meeting",
+        date_time: "chiều mai lúc 2h",
+      });
+
+      expect(result).toContain("[schedule_task] Successfully added to schedule");
+      expect(result).toContain("Client meeting");
+      expect(mockAddTask).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "Client meeting",
+          schedule: expect.objectContaining({ kind: "once" }),
+        })
+      );
+    });
+
+    it("executes schedule_task with interval kind", async () => {
+      registerSchedulerTools();
+      const scheduleTool = toolRegistry.getById("schedule_task");
+      expect(scheduleTool).toBeDefined();
+
+      const result = await scheduleTool!.execute({
+        title: "Drink water reminder",
+        kind: "interval",
+        every: 30,
+        unit: "minutes",
+      });
+
+      expect(result).toContain("[schedule_task] Successfully added to schedule");
+      expect(result).toContain("Drink water reminder");
+      expect(mockAddTask).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "Drink water reminder",
+          schedule: { kind: "interval", every: 30, unit: "minutes" },
+        })
+      );
+    });
+
+    it("executes schedule_task with daily kind", async () => {
+      registerSchedulerTools();
+      const scheduleTool = toolRegistry.getById("schedule_task");
+      expect(scheduleTool).toBeDefined();
+
+      const result = await scheduleTool!.execute({
+        title: "Morning workout",
+        kind: "daily",
+        time_of_day: "07:00",
+      });
+
+      expect(result).toContain("[schedule_task] Successfully added to schedule");
+      expect(result).toContain("Morning workout");
+      expect(mockAddTask).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "Morning workout",
+          schedule: { kind: "daily", timeOfDay: "07:00" },
+        })
+      );
+    });
+
+    it("executes schedule_task with weekly kind", async () => {
+      registerSchedulerTools();
+      const scheduleTool = toolRegistry.getById("schedule_task");
+      expect(scheduleTool).toBeDefined();
+
+      const result = await scheduleTool!.execute({
+        title: "Weekly team sprint",
+        kind: "weekly",
+        day_of_week: 1, // Monday
+        time_of_day: "10:00",
+      });
+
+      expect(result).toContain("[schedule_task] Successfully added to schedule");
+      expect(result).toContain("Weekly team sprint");
+      expect(mockAddTask).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "Weekly team sprint",
+          schedule: { kind: "weekly", dayOfWeek: 1, timeOfDay: "10:00" },
+        })
+      );
     });
 
     it("executes query_scheduled_tasks correctly", async () => {

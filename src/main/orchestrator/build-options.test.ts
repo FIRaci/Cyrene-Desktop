@@ -711,11 +711,35 @@ describe("build-options", () => {
       expect(detectAssistantOperationalIntent("Lập lịch cho tôi 2h chiều ngày 8/9 đi học nhé")).toBe(true);
       expect(detectAssistantOperationalIntent("Nhắc nhở tôi lúc 8 giờ sáng mai")).toBe(true);
       expect(detectAssistantOperationalIntent("Hẹn giờ chiều nay đi họp")).toBe(true);
+      expect(detectAssistantOperationalIntent("lịch của tôi hôm nay")).toBe(true);
+      expect(detectAssistantOperationalIntent("tôi có lịch gì không")).toBe(true);
+      expect(detectAssistantOperationalIntent("hôm nay có lịch gì không")).toBe(true);
+      expect(detectAssistantOperationalIntent("xem lịch của tôi")).toBe(true);
+      expect(detectAssistantOperationalIntent("hôm nay thứ mấy")).toBe(true);
+      expect(detectAssistantOperationalIntent("bây giờ là mấy giờ rồi")).toBe(true);
+      expect(detectAssistantOperationalIntent("giờ này ở Hà Nội")).toBe(true);
+    });
+
+    it("distinguishes calendar 'lịch' from non-calendar words like 'lịch sử'", () => {
+      expect(detectAssistantOperationalIntent("kể cho tôi nghe về lịch sử Việt Nam")).toBe(false);
+      expect(detectAssistantOperationalIntent("lịch sử thế giới thời cổ đại")).toBe(false);
+    });
+
+    it("detects English schedule and calendar natural queries", () => {
+      expect(detectAssistantOperationalIntent("what do I have on my schedule today?")).toBe(true);
+      expect(detectAssistantOperationalIntent("what's on my schedule")).toBe(true);
+      expect(detectAssistantOperationalIntent("check my calendar")).toBe(true);
+      expect(detectAssistantOperationalIntent("am I free this afternoon?")).toBe(true);
     });
 
     it("detects weather queries", () => {
       expect(detectAssistantOperationalIntent("What's the weather like in Hanoi?")).toBe(true);
       expect(detectAssistantOperationalIntent("Thời tiết hôm nay thế nào em?")).toBe(true);
+      expect(detectAssistantOperationalIntent("trời hôm nay thế nào")).toBe(true);
+      expect(detectAssistantOperationalIntent("ở đây có mưa không")).toBe(true);
+      expect(detectAssistantOperationalIntent("ngoài trời có lạnh không")).toBe(true);
+      expect(detectAssistantOperationalIntent("how's the weather here")).toBe(true);
+      expect(detectAssistantOperationalIntent("is it raining outside")).toBe(true);
     });
 
     it("detects operational intent for scheduling, weather (including typos), and music", () => {

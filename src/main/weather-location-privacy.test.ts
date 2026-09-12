@@ -89,6 +89,36 @@ describe("Weather Location & Privacy Contract", () => {
     expect(result).toContain("Tokyo");
   });
 
+  it("normalizes Vietnamese city name Hà Nội to Hanoi", async () => {
+    setWeatherConfig(
+      () => "Hanoi",
+      () => "open-meteo",
+      () => "",
+      undefined,
+      () => true,
+    );
+    const weatherTool = toolRegistry.getById("weather");
+    const result = await weatherTool!.execute({ city: "Hà Nội" });
+    expect(result).not.toContain("No city was provided");
+    expect(result).toContain("Hanoi");
+  });
+
+  it("falls back to default city when placeholder values like 'here' or 'ở đây' are passed", async () => {
+    setWeatherConfig(
+      () => "Hanoi",
+      () => "open-meteo",
+      () => "",
+      undefined,
+      () => true,
+    );
+    const weatherTool = toolRegistry.getById("weather");
+    const resultHere = await weatherTool!.execute({ city: "here" });
+    expect(resultHere).toContain("Hanoi");
+
+    const resultOday = await weatherTool!.execute({ city: "ở đây" });
+    expect(resultOday).toContain("Hanoi");
+  });
+
   it("ensures privacy: does not depend on GPS, coordinates, or IP geolocators", () => {
     const weatherTool = toolRegistry.getById("weather");
     expect(weatherTool).toBeDefined();

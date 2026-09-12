@@ -475,7 +475,12 @@ interface OMCity { name: string; latitude: number; longitude: number; country: s
 
 /** Open-Meteo city geocoding query. */
 async function omResolveCity(city: string): Promise<OMCity | null> {
-  const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1&language=en&format=json`;
+  const normalized = /^h[àa]\s*n[ộo]i$/iu.test(city.trim())
+    ? "Hanoi"
+    : /^(s[àa]i\s*g[òo]n|saigon|tp\.?\s*hcm|tp\.?\s*h[ồo]\s*ch[íi]\s*minh)$/iu.test(city.trim())
+      ? "Ho Chi Minh City"
+      : city.trim();
+  const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(normalized)}&count=1&language=en&format=json`;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), WEATHER_TIMEOUT_MS);
   try {
@@ -627,8 +632,11 @@ async function executeWeather(args: Record<string, unknown>): Promise<string> {
 
   // City: argument preferred, fallback to user default city
   let city = String(args.city ?? "").trim();
-  if (!city) {
+  if (!city || /^(here|current location|my location|default|vị trí hiện tại|ở đây|hiện tại)$/i.test(city)) {
     city = (weatherCityGetter?.() ?? "").trim();
+  }
+  if (/^h[àa]\s*n[ộo]i$/iu.test(city)) {
+    city = "Hanoi";
   }
   // City resolution log to check user city parameters.
   // Sanitized: only city name and source tag recorded; no credentials.
