@@ -216,6 +216,17 @@ export function detectConversationMood(
     }
   });
 
+  // ── SOOTHING DYNAMICS: Tender Touch Soothes Sulking ─────────────────────────
+  // When Master performs gentle head pats, hair caresses, or comforting physical touch
+  // in the latest interaction turn, Master's affection naturally softens Cyrene's pouting friction.
+  const latestMsg = recent[recent.length - 1];
+  const latestIsHeadPatOrCaress = latestMsg && latestMsg.role === "user" &&
+    /\b(?:pats?|patting|petting|strokes?|stroking|caresses?|caressing|rubs?|headpat|head\s+pat|xoa đầu|vuốt tóc)\b/i.test(latestMsg.content || "");
+
+  if (latestIsHeadPatOrCaress && scores.pouting > 0) {
+    scores.pouting *= 0.45;
+  }
+
   // ── DECISION MATRIX & DOMINANCE EVALUATION ──────────────────────────────────
   // 1. High-intensity interpersonal conflict (Yandere / Jealous):
   // When rival girls or obsessive cues dominate affection (e.g. Master praises another girl),

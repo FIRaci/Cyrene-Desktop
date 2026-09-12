@@ -112,6 +112,9 @@ export const IPC = {
   CHATS_REPLACE_TAIL: "chats:replace-tail",
   CHATS_RENAME: "chats:rename",
   CHATS_DELETE: "chats:delete",
+  CHATS_DELETE_MESSAGE: "chats:delete-message",
+  CHATS_TRUNCATE_FROM_MESSAGE: "chats:truncate-from-message",
+  CHATS_CLEAR_MESSAGES: "chats:clear-messages",
   CHATS_OPEN_FOLDER: "chats:open-folder",
   CHATS_MIGRATE_LEGACY: "chats:migrate-legacy",
   // Broadcast from main to all renderer windows after any session change, triggering list/title refresh

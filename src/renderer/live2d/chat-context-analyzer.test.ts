@@ -262,6 +262,15 @@ describe("chat-context-analyzer - 9 mood spectrum", () => {
       const result = detectConversationMood(messages);
       expect(result.mood).toBe("affectionate");
     });
+
+    it("soothes pouting when Master gently pats Cyrene's head in the latest turn", () => {
+      const messages = [
+        { role: "model", content: "Hmph! Master is unfair, petting me when I'm trying to stay mad at you..." },
+        { role: "user", content: "*Gently pats Cyrene's head*" },
+      ];
+      const result = detectConversationMood(messages);
+      expect(result.mood).toBe("affectionate");
+    });
   });
 });
 

@@ -1026,6 +1026,55 @@ body {
   padding: 0 9px;
 }
 
+/* ── Message Rewind and Delete Buttons ── */
+.msg__rewind,
+.msg__delete {
+  flex: 0 0 auto;
+  height: 26px;
+  width: 26px;
+  min-width: 26px;
+  padding: 0;
+  border-radius: var(--rb-radius-md);
+  background: transparent;
+  border: 1px solid var(--rb-border-soft);
+  color: var(--rb-text-muted);
+  cursor: pointer;
+  opacity: 0.55;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.18s, background 0.18s, border-color 0.18s, color 0.18s, transform 0.18s;
+}
+
+.msg__rewind:hover {
+  opacity: 1;
+  background: rgba(168, 85, 247, 0.15);
+  border-color: rgba(168, 85, 247, 0.45);
+  color: #c084fc;
+  transform: translateY(-1px);
+}
+
+.msg__rewind:active {
+  transform: scale(0.94);
+}
+
+.msg__delete:hover {
+  opacity: 1;
+  background: rgba(244, 63, 94, 0.15);
+  border-color: rgba(244, 63, 94, 0.45);
+  color: #fb7185;
+  transform: translateY(-1px);
+}
+
+.msg__delete:active {
+  transform: scale(0.94);
+}
+
+.msg__action-icon {
+  display: block;
+  pointer-events: none;
+}
+
 
 /* ── Button ── */
 .chat__attach {

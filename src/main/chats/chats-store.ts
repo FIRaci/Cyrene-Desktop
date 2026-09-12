@@ -336,6 +336,44 @@ export function replaceMessagesTail(id: string, startIndex: number, messages: Ch
   return session;
 }
 
+export function deleteMessage(id: string, messageId: string): ChatSession | null {
+  const session = readSessionFile(id);
+  if (!session) return null;
+  const initialLength = session.messages.length;
+  session.messages = session.messages.filter((m) => m.id !== messageId);
+  if (session.messages.length === initialLength) return session;
+  session.updatedAt = Date.now();
+  if (!session.titleIsCustom) session.title = deriveTitle(session.messages);
+  writeSessionFile(session);
+  upsertMeta(metaFromSession(session));
+  return session;
+}
+
+export function truncateFromMessage(id: string, messageId: string, inclusive: boolean = true): ChatSession | null {
+  const session = readSessionFile(id);
+  if (!session) return null;
+  const targetIndex = session.messages.findIndex((m) => m.id === messageId);
+  if (targetIndex === -1) return session;
+  const cutIndex = inclusive ? targetIndex : targetIndex + 1;
+  session.messages = session.messages.slice(0, cutIndex);
+  session.updatedAt = Date.now();
+  if (!session.titleIsCustom) session.title = deriveTitle(session.messages);
+  writeSessionFile(session);
+  upsertMeta(metaFromSession(session));
+  return session;
+}
+
+export function clearMessages(id: string): ChatSession | null {
+  const session = readSessionFile(id);
+  if (!session) return null;
+  session.messages = [];
+  session.updatedAt = Date.now();
+  if (!session.titleIsCustom) session.title = "New Chat";
+  writeSessionFile(session);
+  upsertMeta(metaFromSession(session));
+  return session;
+}
+
 export function renameSession(id: string, title: string): ChatSession | null {
   const session = readSessionFile(id);
   if (!session) return null;

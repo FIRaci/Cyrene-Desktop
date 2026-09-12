@@ -131,4 +131,58 @@ describe("chats store", () => {
     expect(current?.messages[0].content).not.toContain("2026");
     expect(current?.messages[0].content).not.toContain("UTC-5");
   });
+
+  it("deletes a specified message from session", async () => {
+    const store = await import("./chats-store");
+    store.initialize();
+
+    const session = store.createSession({
+      initialMessages: [
+        { id: "m1", role: "user", content: "one", at: 1 },
+        { id: "m2", role: "model", content: "two", at: 2 },
+        { id: "m3", role: "user", content: "three", at: 3 },
+      ],
+    });
+
+    const updated = store.deleteMessage(session.id, "m2");
+    expect(updated?.messages).toHaveLength(2);
+    expect(updated?.messages.map((m) => m.id)).toEqual(["m1", "m3"]);
+
+    const unchanged = store.deleteMessage(session.id, "m999");
+    expect(unchanged?.messages).toHaveLength(2);
+  });
+
+  it("truncates/rewinds messages from a specified message downward", async () => {
+    const store = await import("./chats-store");
+    store.initialize();
+
+    const session = store.createSession({
+      initialMessages: [
+        { id: "m1", role: "user", content: "one", at: 1 },
+        { id: "m2", role: "model", content: "two", at: 2 },
+        { id: "m3", role: "user", content: "three", at: 3 },
+        { id: "m4", role: "model", content: "four", at: 4 },
+      ],
+    });
+
+    const rewound = store.truncateFromMessage(session.id, "m3", true);
+    expect(rewound?.messages).toHaveLength(2);
+    expect(rewound?.messages.map((m) => m.id)).toEqual(["m1", "m2"]);
+  });
+
+  it("clears all messages from session", async () => {
+    const store = await import("./chats-store");
+    store.initialize();
+
+    const session = store.createSession({
+      initialMessages: [
+        { id: "m1", role: "user", content: "one", at: 1 },
+        { id: "m2", role: "model", content: "two", at: 2 },
+      ],
+    });
+
+    const cleared = store.clearMessages(session.id);
+    expect(cleared?.messages).toHaveLength(0);
+    expect(cleared?.title).toBe("New Chat");
+  });
 });

@@ -98,6 +98,12 @@
    - Bong bóng thoại phải có kích thước co giãn linh hoạt (`width: max-content; min-width: 80px; max-width: min(380px, calc(100vw - 16px))`) để vừa vặn tự nhiên với cả câu nói ngắn lẫn câu nói dài.
    - CẤM gán `max-height` quá chật hẹp hoặc để `overflow-y: auto; scrollbar-width: none; pointer-events: none` làm cắt ngang (truncate) các dòng chữ ở cuối câu nói của Cyrene.
    - Các hành động `*...*` và suy nghĩ `/.../` bên trong bong bóng phải sử dụng `display: inline` (không dùng `display: inline-block`) để dòng chữ ngắt dòng mềm mại tự nhiên, không đẩy chữ xuống làm đội chiều cao bong bóng.
+7. **Phản Hồi Phi Ngôn Ngữ Khi Offline / Lỗi Model (Non-verbal Offline Fallback)**:
+   - Khi chưa bật Ollama / Model provider ngoại tuyến hoặc `agui.run()` thất bại, hệ thống **TUYỆT ĐỐI KHÔNG ĐƯỢC TỰ Ý TẠO THOẠI GIẢ (FAKE MODEL REPLY)** và **KHÔNG ĐƯỢC GHI THOẠI GIẢ VÀO `chatsStore`**.
+   - Live2D chỉ hiển thị phản ứng cử chỉ phi ngôn ngữ nhẹ nhàng trên bong bóng thoại (ví dụ: `*leans softly into Master's gentle touch...*`), không phát âm thanh TTS và dọn sạch `userTurnId` khỏi `chatStore` để giữ lịch sử chat sạch sẽ 100%.
+8. **Cơ Chế Xoa Dịu Tâm Trạng Của Cử Chỉ (Soothing Touch Mood Dynamics)**:
+   - Cử chỉ xoa đầu (`headpat`), vuốt ve (`petting`) có trọng số cao (Tier 1: 3.5) trong từ điển tình cảm (`affectionate`).
+   - Khi người dùng thực hiện xoa đầu/vuốt ve ở lượt tương tác mới nhất, hệ thống tự động suy giảm điểm dỗi hờn (`scores.pouting *= 0.45`), giúp tâm trạng Cyrene nhanh chóng tan chảy và trở lại vẻ ngọt ngào, dịu dàng, tránh tình trạng bị kẹt vĩnh viễn ở trạng thái dỗi (`pouting`).
 
 ---
 
@@ -164,6 +170,18 @@
 3. **Tẩy sạch siêu dữ liệu ngầm (`cleanBondMetadata`)**:
    - Trước khi render, văn bản bắt buộc chạy qua `cleanBondMetadata()` để loại bỏ hoàn toàn các tag hệ thống bị rò rỉ (`[BOND_LEVEL_CHANGE:...]`, `[Projection:...]`, `[Cyrene's Thoughts]`, v.v.).
    - Loại bỏ triệt để các dấu gạch rỗng hoặc dấu chấm ba chấm `/.../`, `/[...]/` bằng regex `.replace(/\/\s*(?:\.{1,6}|…|\[\.\.\.\])?\s*\//g, "")`.
+
+### 4.5. Quản Lý Xóa Tin Nhắn & Quay Lại Trạng Thái Trước (Message Deletion & Rewind Contract):
+1. **Xóa Từng Tin Nhắn Riêng Biệt (`Delete message`)**:
+   - Mỗi tin nhắn có nút thùng rác nhỏ tinh tế (`.msg__delete`). Khi nhấn, hiển thị modal xác nhận (`showConfirm`).
+   - Xóa tin nhắn khỏi danh sách hiển thị và gọi `window.chatStore.deleteMessage(sessionId, messageId)` để loại bỏ vĩnh viễn trên đĩa lưu trữ.
+2. **Quay Lại Trạng Thái Trước Đó (`Rewind chat to here`)**:
+   - Mỗi tin nhắn có nút rollback (`.msg__rewind`). Khi nhấn, hiển thị modal xác nhận (`showConfirm`).
+   - Cắt bỏ tin nhắn được chọn cùng toàn bộ các tin nhắn mới hơn sau nó (`messages.splice(idx)` và `window.chatStore.truncateFromMessage(sessionId, messageId, true)`), khôi phục phiên chat về trạng thái ngay trước thời điểm đó.
+3. **Xóa Sạch Phiên Chat Hiện Tại (`Clear Chat`)**:
+   - Nút chổi quét / thùng rác trên thanh tiêu đề (`#clear`) gọi `window.chatStore.clearMessages(sessionId)` xóa sạch toàn bộ nội dung của phiên chat hiện tại.
+4. **Đồng Bộ Tâm Trạng Live2D Ngay Lập Tức**:
+   - Mọi thao tác xóa tin nhắn, rewind hoặc clear chat đều phát tín hiệu IPC `chats:changed`. Controller Live2D (`AutonomousThoughtController`) lập tức reload ngữ cảnh 5 tin nhắn gần nhất và cập nhật lại tâm trạng (Mood Spectrum) của Cyrene ngay tức thì.
 
 ---
 

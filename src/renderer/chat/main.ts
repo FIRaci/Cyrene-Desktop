@@ -142,6 +142,13 @@ const COPY_ICON_IDLE = `<svg class="msg__copy-icon msg__copy-icon--idle" viewBox
 const COPY_ICON_DONE = `<svg class="msg__copy-icon msg__copy-icon--done" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
   <path d="M5 12.5l4 4 10-10" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>`;
+const DELETE_ICON = `<svg class="msg__action-icon" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/>
+</svg>`;
+const REWIND_ICON = `<svg class="msg__action-icon" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  <polyline points="1 4 1 10 7 10"/>
+  <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+</svg>`;
 
 interface AguiApi {
   run: (input: {
@@ -625,6 +632,9 @@ interface ChatStoreApi {
   append: (id: string, message: unknown) => Promise<ChatStoreSession | null>;
   replaceMessages: (id: string, messages: unknown[]) => Promise<ChatStoreSession | null>;
   replaceTail: (id: string, startIndex: number, messages: unknown[]) => Promise<ChatStoreSession | null>;
+  deleteMessage?: (id: string, messageId: string) => Promise<ChatStoreSession | null>;
+  truncateFromMessage?: (id: string, messageId: string, inclusive?: boolean) => Promise<ChatStoreSession | null>;
+  clearMessages?: (id: string) => Promise<ChatStoreSession | null>;
   rename: (id: string, title: string) => Promise<ChatStoreSession | null>;
   delete: (id: string) => Promise<boolean>;
   openFolder: () => Promise<boolean>;
@@ -1968,6 +1978,74 @@ function cleanBondMetadata(text: string): string {
   return cleaned;
 }
 
+async function handleDeleteMessage(targetMsg: Message): Promise<void> {
+  if (sending) return;
+  const ok = await showConfirm({
+    title: "Delete Message",
+    message: "Delete this message? This action cannot be undone.",
+    confirmText: "Delete",
+    cancelText: "Cancel",
+    danger: true,
+  });
+  if (!ok) return;
+
+  if (typeof currentSpeakingMsgId !== "undefined" && currentSpeakingMsgId === targetMsg.id) {
+    stopCurrentTts();
+    setSpeakingMsgId(null);
+  }
+
+  const idx = messages.findIndex((item) => item.id === targetMsg.id);
+  if (idx !== -1) {
+    messages.splice(idx, 1);
+  }
+
+  if (currentSessionId && window.chatStore?.deleteMessage) {
+    try {
+      await window.chatStore.deleteMessage(currentSessionId, targetMsg.id);
+    } catch (err) {
+      console.warn("[Cyrene Chat] deleteMessage failed:", err);
+    }
+  } else if (currentSessionId && window.chatStore) {
+    await saveSession();
+  }
+
+  render();
+}
+
+async function handleRewindMessage(targetMsg: Message): Promise<void> {
+  if (sending) return;
+  const ok = await showConfirm({
+    title: "Rewind Conversation",
+    message: "Rewind conversation to before this message? This message and all subsequent messages will be deleted.",
+    confirmText: "Rewind",
+    cancelText: "Cancel",
+    danger: true,
+  });
+  if (!ok) return;
+
+  stopCurrentTts();
+  if (typeof setSpeakingMsgId === "function") {
+    setSpeakingMsgId(null);
+  }
+
+  const idx = messages.findIndex((item) => item.id === targetMsg.id);
+  if (idx !== -1) {
+    messages.splice(idx);
+  }
+
+  if (currentSessionId && window.chatStore?.truncateFromMessage) {
+    try {
+      await window.chatStore.truncateFromMessage(currentSessionId, targetMsg.id, true);
+    } catch (err) {
+      console.warn("[Cyrene Chat] truncateFromMessage failed:", err);
+    }
+  } else if (currentSessionId && window.chatStore) {
+    await saveSession();
+  }
+
+  render();
+}
+
 function buildMessageActions(m: Message): HTMLElement | null {
   if (m.transient || m.thinking) return null;
   const actions = document.createElement("div");
@@ -2030,6 +2108,32 @@ function buildMessageActions(m: Message): HTMLElement | null {
     actions.appendChild(copyBtn);
     hasActionItem = true;
   }
+
+  // Rewind button: restore conversation to state before this message
+  const rewindBtn = document.createElement("button");
+  rewindBtn.type = "button";
+  rewindBtn.className = "msg__rewind";
+  rewindBtn.title = "Rewind chat to here";
+  rewindBtn.setAttribute("aria-label", "Rewind conversation to before this message");
+  rewindBtn.innerHTML = REWIND_ICON;
+  rewindBtn.addEventListener("click", () => {
+    void handleRewindMessage(m);
+  });
+  actions.appendChild(rewindBtn);
+  hasActionItem = true;
+
+  // Delete button: delete only this message
+  const deleteBtn = document.createElement("button");
+  deleteBtn.type = "button";
+  deleteBtn.className = "msg__delete";
+  deleteBtn.title = "Delete message";
+  deleteBtn.setAttribute("aria-label", "Delete this message");
+  deleteBtn.innerHTML = DELETE_ICON;
+  deleteBtn.addEventListener("click", () => {
+    void handleDeleteMessage(m);
+  });
+  actions.appendChild(deleteBtn);
+  hasActionItem = true;
 
   // Timestamp
   const time = document.createElement("div");
@@ -4628,7 +4732,9 @@ async function clearChat(): Promise<void> {
   if (!ok) return;
   if (currentSessionId && window.chatStore) {
     try {
-      const success = await window.chatStore.replaceTail(currentSessionId, 0, []);
+      const success = window.chatStore.clearMessages
+        ? await window.chatStore.clearMessages(currentSessionId)
+        : await window.chatStore.replaceTail(currentSessionId, 0, []);
       if (!success) {
         await showAlert({
           title: "Storage Error",
@@ -4647,6 +4753,8 @@ async function clearChat(): Promise<void> {
       return;
     }
   }
+  stopCurrentTts();
+  setSpeakingMsgId(null);
   messages.length = 0;
   sessionTailStart = 0;
   render();

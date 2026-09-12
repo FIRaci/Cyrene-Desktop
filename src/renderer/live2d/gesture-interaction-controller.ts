@@ -427,6 +427,7 @@ export class GestureInteractionController {
       get: (id: string) => Promise<{ messages: Array<{ role: string; content: string }> } | null>;
       list?: () => Promise<Array<{ id: string }>>;
       create?: (opts?: unknown) => Promise<{ id: string }>;
+      deleteMessage?: (id: string, messageId: string) => Promise<unknown>;
     } }).chatStore;
 
     const agui = (win as unknown as { agui?: {
@@ -480,8 +481,8 @@ export class GestureInteractionController {
     });
 
     if (!agui) {
-      // No agui available: show fallback immediately and persist it manually
-      this.finishFallback(store, sessionId, effectiveFallback);
+      // No agui available: show non-verbal reaction and clean up user turn
+      this.finishFallback(store, sessionId, userTurnId);
       return;
     }
 
@@ -495,10 +496,10 @@ export class GestureInteractionController {
         }
       } else if (event.type === "RUN_FINISHED") {
         if (this.isGenerating) {
-          void this.finishRun(store, sessionId, assistantTurnId, effectiveFallback);
+          void this.finishRun(store, sessionId, assistantTurnId);
         }
       } else if (event.type === "RUN_ERROR") {
-        this.finishFallback(store, sessionId, effectiveFallback);
+        this.finishFallback(store, sessionId, userTurnId);
       }
     });
 
@@ -538,10 +539,10 @@ export class GestureInteractionController {
       const ack = await Promise.race([runPromise, timeoutPromise]);
 
       if (!ack?.success && this.isGenerating && !this.currentReply.trim()) {
-        this.finishFallback(store, sessionId, effectiveFallback);
+        this.finishFallback(store, sessionId, userTurnId);
       }
     } catch {
-      this.finishFallback(store, sessionId, effectiveFallback);
+      this.finishFallback(store, sessionId, userTurnId);
     }
 
   }
@@ -550,16 +551,21 @@ export class GestureInteractionController {
     store: { append: (arg1: unknown, arg2?: unknown) => Promise<unknown> } | undefined,
     sessionId: string,
     assistantTurnId: string,
-    fallbackText: string,
   ): Promise<void> {
     // Guard against double invocation (isGenerating is set false here as a lock)
     if (!this.isGenerating) return;
     const rawReply = this.currentReply.trim();
-    const cleanFullReply = cleanGestureReply(rawReply) || fallbackText;
+    const cleanFullReply = cleanGestureReply(rawReply);
     this.cleanupAgui();
     this.isGenerating = false;
     this.lastInteractionTime = Date.now();
     this.scheduleAutonomousResume();
+
+    if (!cleanFullReply) {
+      // Model produced no content: non-verbal reaction, do not persist fake model dialogue
+      this.bubbles.say("*softly blushes and smiles*", 4500);
+      return;
+    }
 
     // Bubble displays full speech with action/thought styling, synchronized with voice playback
     const bubbleDisplay = sanitizeBubbleSpeech(cleanFullReply);
@@ -580,25 +586,25 @@ export class GestureInteractionController {
     });
   }
 
-  private finishFallback(store: { append: (arg1: unknown, arg2?: unknown) => Promise<unknown> } | undefined, sessionId: string, fallbackText: string): void {
+  private finishFallback(
+    store: { append: (arg1: unknown, arg2?: unknown) => Promise<unknown>; deleteMessage?: (id: string, messageId: string) => Promise<unknown> } | undefined,
+    sessionId: string,
+    userTurnId?: string,
+  ): void {
     this.cleanupAgui();
     this.isGenerating = false;
     this.lastInteractionTime = Date.now();
     this.scheduleAutonomousResume();
-    this.bubbles.say(fallbackText, 6000, this.voice);
-    const spoken = extractSpokenText(fallbackText);
-    if (spoken) {
-      void this.voice?.speak(spoken);
+
+    // Non-verbal gentle reaction: purely visual bubble, no spoken dialogue or fake speech
+    const nonVerbalReaction = "*leans softly into Master's gentle touch...*";
+    this.bubbles.say(nonVerbalReaction, 4500);
+
+    // If user turn was appended prior to agui failure/offline, remove it to keep chat history 100% clean
+    if (userTurnId && store?.deleteMessage) {
+      void store.deleteMessage(sessionId, userTurnId);
     }
-    // Fallback path: agui.run() never completed, so agui-bridge won't save anything.
-    // We must persist the fallback message ourselves.
-    const fallbackId = `asst-gesture-fallback-${Date.now()}`;
-    void this.appendToStore(store, sessionId, {
-      id: fallbackId,
-      role: "model",
-      content: fallbackText,
-      at: Date.now(),
-    });
+    // [ARCHITECTURAL CONTRACT] Strictly do NOT append fake model messages to chatStore when model is offline!
   }
 
   private scheduleAutonomousResume(): void {

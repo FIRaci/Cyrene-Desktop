@@ -330,16 +330,16 @@ describe("GestureInteractionController", () => {
     controller.dispose();
   });
 
-  it("falls back cleanly when agui is offline or returns an error", async () => {
+  it("reacts non-verbally when agui is offline or returns an error without fake model message", async () => {
     const run = vi.fn().mockResolvedValue({ success: false, error: "Model offline" });
     const onEvent = vi.fn().mockReturnValue(() => {});
     const append = vi.fn().mockResolvedValue(true);
+    const deleteMessage = vi.fn().mockResolvedValue(true);
     const getActiveSession = vi.fn().mockResolvedValue("fallback-session");
 
     vi.stubGlobal("window", {
       agui: { run, onEvent },
-      // chatStore must be present so finishFallback can persist the fallback message
-      chatStore: { append, getActiveSession },
+      chatStore: { append, deleteMessage, getActiveSession },
     });
 
     const controller = new GestureInteractionController({
@@ -351,23 +351,26 @@ describe("GestureInteractionController", () => {
     await controller.handleHeadPat();
 
     expect(bubbles.say).toHaveBeenCalledWith(
-      expect.stringContaining("Master's gentle pats"),
-      6000,
-      voice,
+      "*leans softly into Master's gentle touch...*",
+      4500,
     );
-    expect(voice.speak).toHaveBeenCalledWith(
-      expect.stringContaining("Master's gentle pats"),
-    );
-    // Fallback message is persisted by finishFallback (agui-bridge won't save since run failed)
-    expect(append).toHaveBeenCalledWith(
+    // Voice stays silent: do not invent fake voice synthesis when model is offline
+    expect(voice.speak).not.toHaveBeenCalled();
+    // Strictly do not persist fake model messages to chatStore
+    expect(append).not.toHaveBeenCalledWith(
       "fallback-session",
-      expect.objectContaining({ role: "model", content: expect.stringContaining("Master's gentle pats") }),
+      expect.objectContaining({ role: "model" }),
+    );
+    // User turn is cleaned up to prevent orphaned unanswered turns
+    expect(deleteMessage).toHaveBeenCalledWith(
+      "fallback-session",
+      expect.stringMatching(/^user-gesture-/),
     );
 
     controller.dispose();
   });
 
-  it("handles offline environment where window.agui is undefined", async () => {
+  it("handles offline environment where window.agui is undefined with non-verbal reaction", async () => {
     vi.stubGlobal("window", {});
 
     const controller = new GestureInteractionController({
@@ -379,13 +382,10 @@ describe("GestureInteractionController", () => {
     await controller.handleHeadPat();
 
     expect(bubbles.say).toHaveBeenCalledWith(
-      expect.stringContaining("Master's gentle pats"),
-      6000,
-      voice,
+      "*leans softly into Master's gentle touch...*",
+      4500,
     );
-    expect(voice.speak).toHaveBeenCalledWith(
-      expect.stringContaining("Master's gentle pats"),
-    );
+    expect(voice.speak).not.toHaveBeenCalled();
 
     controller.dispose();
   });
@@ -493,12 +493,11 @@ describe("GestureInteractionController", () => {
       }),
     );
 
-    // If timeout or fallback occurs, tsundere fallback is used
+    // If timeout or error occurs (e.g. Ollama offline), non-verbal gentle reaction is used without fake dialogue
     aguiCallback!({ type: "RUN_ERROR" });
     expect(bubbles.say).toHaveBeenCalledWith(
-      expect.stringContaining("H-Hmph... Master is unfair"),
+      expect.stringContaining("leans softly into Master's gentle touch"),
       expect.any(Number),
-      expect.anything(),
     );
     // Crucial: exactly one kaomoji is spawned, never two
     expect(kaomoji.spawn).toHaveBeenCalledTimes(1);

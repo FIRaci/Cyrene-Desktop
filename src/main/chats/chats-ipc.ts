@@ -122,6 +122,36 @@ export function registerChatsIpc(
     return ok;
   });
 
+  ipcMain.handle(
+    IPC.CHATS_DELETE_MESSAGE,
+    (event, payload: { id: string; messageId: string }) => {
+      if (!payload || !isValidSessionId(payload.id) || !payload.messageId) return null;
+      const session = chatsStore.deleteMessage(payload.id, payload.messageId);
+      if (session) broadcastChanged(event.sender);
+      return session;
+    },
+  );
+
+  ipcMain.handle(
+    IPC.CHATS_TRUNCATE_FROM_MESSAGE,
+    (event, payload: { id: string; messageId: string; inclusive?: boolean }) => {
+      if (!payload || !isValidSessionId(payload.id) || !payload.messageId) return null;
+      const session = chatsStore.truncateFromMessage(payload.id, payload.messageId, payload.inclusive ?? true);
+      if (session) broadcastChanged(event.sender);
+      return session;
+    },
+  );
+
+  ipcMain.handle(
+    IPC.CHATS_CLEAR_MESSAGES,
+    (event, payload: { id: string }) => {
+      if (!payload || !isValidSessionId(payload.id)) return null;
+      const session = chatsStore.clearMessages(payload.id);
+      if (session) broadcastChanged(event.sender);
+      return session;
+    },
+  );
+
   ipcMain.handle(IPC.CHATS_OPEN_FOLDER, async () => {
     await chatsStore.openStorageFolder();
     return true;

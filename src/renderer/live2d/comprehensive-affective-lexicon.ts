@@ -59,6 +59,19 @@ export const COMPREHENSIVE_LEXICON: Record<LexiconMood, LexiconItem[]> = {
       regex: /(?:^|[^\p{L}\p{N}])(yêu em|thương em|nhớ em|hôn em|ôm em|yêu thương|ngọt ngào|ân ái|làm tình|cưới em|vợ yêu|nũng nịu)(?=[^\p{L}\p{N}]|$)/iu,
       weight: 3.5,
     },
+    // Head pats and soothing tender physical gestures from Master
+    {
+      regex: /\b(?:gently|softly|lovingly|tenderly)?\s*(?:pats?|patting|petting|strokes?|stroking|caresses?|caressing|rubs?|rubbing)\s+(?:cyrene's\s+|her\s+|your\s+)?(?:head|hair|cheeks?|chin)\b/i,
+      weight: 3.5,
+    },
+    {
+      regex: /\b(headpat|headpats|head\s+pat|head\s+pats|patting\s+(?:her\s+|cyrene's\s+)?head|pats\s+(?:her\s+|cyrene's\s+)?head)\b/i,
+      weight: 3.5,
+    },
+    {
+      regex: /(xoa đầu|xoa tóc|vuốt tóc|xoa má|vuốt má|xoa đầu em|vuốt đầu em)/i,
+      weight: 3.5,
+    },
 
     // Tier 2 (Weight: 2.0): Standard romantic words, affectionate gestures, sensory warmth
     {

@@ -541,6 +541,12 @@ const chatStoreApi = {
   rename: (id: string, title: string) =>
     ipcRenderer.invoke(IPC.CHATS_RENAME, { id, title }),
   delete: (id: string) => ipcRenderer.invoke(IPC.CHATS_DELETE, id),
+  deleteMessage: (id: string, messageId: string) =>
+    ipcRenderer.invoke(IPC.CHATS_DELETE_MESSAGE, { id, messageId }),
+  truncateFromMessage: (id: string, messageId: string, inclusive: boolean = true) =>
+    ipcRenderer.invoke(IPC.CHATS_TRUNCATE_FROM_MESSAGE, { id, messageId, inclusive }),
+  clearMessages: (id: string) =>
+    ipcRenderer.invoke(IPC.CHATS_CLEAR_MESSAGES, { id }),
   openFolder: () => ipcRenderer.invoke(IPC.CHATS_OPEN_FOLDER),
   migrateLegacy: (messages: unknown[]) =>
     ipcRenderer.invoke(IPC.CHATS_MIGRATE_LEGACY, messages),
