@@ -3438,11 +3438,11 @@ async function loadChannelsPanel(): Promise<void> {
   }
 
   // （Phase 1+ )
-  window.settings.onChannelsInstallProgress((progress) => {
+  window.settings?.onChannelsInstallProgress?.((progress) => {
     const target = progress.channel === "wechat" ? channelsWechatStatusEl : progress.channel === "feishu" ? channelsFeishuStatusEl : null;
     if (target) renderChannelStatus(target, "starting", `${progress.phase} ${progress.pct}%`);
   });
-  window.settings.onChannelsStatusChanged((status) => {
+  window.settings?.onChannelsStatusChanged?.((status) => {
     const s = status as Record<string, { phase: string; message?: string }>;
     renderProactiveDeliveryAvailability(s);
     renderChannelStatus(channelsWechatStatusEl, s.wechat?.phase ?? "offline", s.wechat?.message);
@@ -3527,14 +3527,12 @@ async function loadChannelsPanel(): Promise<void> {
     }
   });
 
-  //  Main （)
-  window.settings.onChannelsWechatQrcode((dataUrl) => {
+  window.settings?.onChannelsWechatQrcode?.((dataUrl) => {
     console.log("[WechatSettings] QR event received, dataUrl prefix:", dataUrl?.slice(0, 40), "len:", dataUrl?.length);
     showWechatQr(dataUrl);
     setWechatFeedback("info", "Please scan QR code with WeChat");
   });
-  //  Main （ /  / )
-  window.settings.onChannelsWechatLoginDone((payload) => {
+  window.settings?.onChannelsWechatLoginDone?.((payload) => {
     hideWechatQr();
     if (payload.ok) {
       setWechatFeedback("ok", `Logged in (botId=${payload.botId ?? "?"})`);

@@ -5232,10 +5232,14 @@ document.addEventListener("drop", async (e) => {
   let reasoningProviderKey = "";
   let reasoningDropdownDisabled = false;
   let reasoningActivePreference: unknown = null;
+  const reasoningTrigger = document.querySelector<HTMLElement>('.dropdown-trigger[data-dropdown="reasoning-dropdown"]');
 
   async function rebuildReasoningDropdown() {
     try {
-      const state = await window.chat!.getReasoningState() as {
+      if (!window.chat?.getReasoningState) {
+        throw new Error("window.chat.getReasoningState is not available");
+      }
+      const state = await window.chat.getReasoningState() as {
         providerKey: string; providerId: string; model: string;
         preference?: { mode: string; effort?: string };
       };
@@ -5274,7 +5278,7 @@ document.addEventListener("drop", async (e) => {
           opt.addEventListener("click", (e) => e.stopPropagation());
         } else {
           opt.addEventListener("click", () => {
-            if (!window.chat) return;
+            if (!window.chat?.setReasoning) return;
             window.chat.setReasoning({
               providerKey: reasoningProviderKey,
               preference: item.preference,
@@ -5306,7 +5310,7 @@ document.addEventListener("drop", async (e) => {
       }
       reasoningDropdownActive = true;
     } catch {
-      // Failedplaceholder（ #4）： disabled ""
+      // Fallback placeholder: disabled "Default"
       reasoningDropdownDisabled = true;
       reasoningDropdownActive = false;
       const menu = menus["reasoning-dropdown"];
@@ -5334,7 +5338,6 @@ document.addEventListener("drop", async (e) => {
   void rebuildReasoningDropdown();
 
   // Re-render on trigger click (model might have changed)
-  const reasoningTrigger = document.querySelector<HTMLElement>('.dropdown-trigger[data-dropdown="reasoning-dropdown"]');
   if (reasoningTrigger) {
     reasoningTrigger.addEventListener("click", async (e) => {
       if (reasoningDropdownDisabled) {
