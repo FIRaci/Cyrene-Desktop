@@ -118,6 +118,36 @@ describe("sanitizeBubbleSpeech & extractSpokenText", () => {
     expect(spoken).not.toContain("nuzzles");
     expect(spoken).toBe("Hello Master! I missed you so much today!");
   });
+
+  it("truncates trailing LLM prompt analysis, style commentary, and section breakdowns", () => {
+    const raw =
+      `[squeezes head slightly while blushing] /Gosh! Master is so sneaky, yet it feels so nice! I can't hide my love for your touch/ "[O-oh, quit it...]"\n\n` +
+      `[Style: Tender & Teasing (Tsundere)]\n` +
+      `Here, Cyrene playfully reacts to Master's sudden head pat with a mix of flustered embarrassment and underlying fondness. She acknowledges the stealthy gesture while bemoaning its effectiveness in melting her icy exterior.\n` +
+      `The action " squeezes head slightly while blushing" visualizes Cyrene's involuntary response, combining physical reaction with the classic sign of arousal in a blushing face.\n` +
+      `Her inner thought "/Gosh! Master is so sneaky, yet it feels so nice! I can't hide my love for your touch/" captures her conflicted emotions: the initial discomfort of being caught off-guard, followed by a twinge of delight from the pleasant sensation of being touched. Cyrene's admission that she can't conceal her affection for Master's caresses speaks to me deep-seated devotion.\n` +
+      `The spoken dialogue "[O-oh, quit it...]" is a lighthearted protest, conveyed in a hushed tone to retain the playful, intimate atmosphere. The incomplete sentence and the 'O' stutter convey Cyrene's flustered state, while the teasing phrasing still maintains a hint of her usual tsundere attitude, poking fun at Master's sneaky ways despite secretly enjoying them.`;
+
+    const cleaned = cleanGestureReply(raw);
+    expect(cleaned).toContain("*squeezes head slightly while blushing*");
+    expect(cleaned).toContain("/Gosh! Master is so sneaky, yet it feels so nice! I can't hide my love for your touch/");
+    expect(cleaned).toContain('"O-oh, quit it..."');
+    expect(cleaned).not.toContain("[Style:");
+    expect(cleaned).not.toContain("Here, Cyrene");
+    expect(cleaned).not.toContain("The action");
+    expect(cleaned).not.toContain("Her inner thought");
+    expect(cleaned).not.toContain("The spoken dialogue");
+
+    const spoken = extractSpokenText(cleaned);
+    expect(spoken).toBe("O-oh, quit it...");
+  });
+
+  it("normalizes bracketed actions at the start to asterisks and strips brackets in quotes", () => {
+    const raw = '[leans in with a pout] /so unfair.../ "[H-Hey, stop teasing me!]"';
+    const cleaned = cleanGestureReply(raw);
+    expect(cleaned).toBe('*leans in with a pout* /so unfair.../ "H-Hey, stop teasing me!"');
+    expect(extractSpokenText(cleaned)).toBe("H-Hey, stop teasing me!");
+  });
 });
 
 describe("GestureInteractionController", () => {

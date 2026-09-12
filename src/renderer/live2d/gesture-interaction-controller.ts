@@ -48,6 +48,9 @@ export function cleanGestureReply(text: string): string {
   if (!text) return "";
   let cleaned = text.trim();
 
+  // Convert bracketed actions at the start to asterisks: e.g. "[squeezes head slightly while blushing]" -> "*squeezes head slightly while blushing*"
+  cleaned = cleaned.replace(/^\s*\[([^\]\r\n]+)\]\s*(?=[/*"“「『]|$)/, "*$1* ");
+
   // Strip LLM prompt echo headers & bracketed meta tags (e.g. "[Cyrene's Thoughts]", "[Action]", "[Context: ...]", "Reaction:")
   cleaned = cleaned
     .replace(/^\s*\*?(?:When|Khi|Action|Context|Reaction)[^*:\n]+:\*?\s*/i, "")
@@ -55,6 +58,22 @@ export function cleanGestureReply(text: string): string {
     .replace(/\[\/?(?:assistant|thought|thoughts|system|internal|action|reaction|response|cyrene)[^\]]*\]/gi, "")
     .replace(/^\s*\[[^\]]+\]\s*/, "")
     .trim();
+
+  // Strip trailing LLM analysis, style commentary, prompt explanations, or breakdown sections
+  const metaCutoffRegex = /\n\s*(?:\[\s*(?:Style|Tone|Mood|Persona|Explanation|Analysis|Note|Reasoning|Breakdown)[^\]]*\]|Here,\s*Cyrene|Here\s+Cyrene|Here,\s*she|The\s+action\s+["“]|Her\s+inner\s+thought|The\s+spoken\s+dialogue|In\s+this\s+reaction|This\s+response|Explanation:|Analysis:|Note:|Breakdown:)/i;
+  const cutoffIndex = cleaned.search(metaCutoffRegex);
+  if (cutoffIndex !== -1) {
+    cleaned = cleaned.slice(0, cutoffIndex).trim();
+  }
+
+  // If first paragraph contains spoken dialogue in quotes, truncate any subsequent essay paragraphs
+  const firstBlock = cleaned.split(/\n{2,}/)[0].trim();
+  if (/["“「『][^"”」』]+["”」』]/.test(firstBlock)) {
+    cleaned = firstBlock;
+  }
+
+  // Strip square brackets inside quotes or dialogue: "[O-oh, quit it...]" -> "O-oh, quit it..."
+  cleaned = cleaned.replace(/(["“「『][^"”」』]*?)\[([a-zA-Z0-9\s,.'’\-–—!?;:~]+)\]([^"”」』]*?["”」』])/gu, "$1$2$3");
 
   // Strip any language translation echo headers like "(Original Chinese): ..."
   cleaned = cleaned.replace(/\(?(?:Original\s+)?(?:Chinese|English)\)?:\s*[\s\S]*$/i, "");
@@ -328,14 +347,15 @@ export class GestureInteractionController {
       "RULES:\n" +
       "- Inner thoughts in slashes /.../ have MAXIMUM CREATIVE FREEDOM: express whatever Cyrene genuinely feels, sensations, emotions, or desires in the moment with complete freedom without being constrained to any canned example.\n" +
       "- Slashes must ALWAYS contain real, meaningful English words. NEVER output empty slashes //, whitespace / /, or placeholder dots /.../ or /[...]/. If there is no specific inner thought, omit slashes entirely.\n" +
+      "- The spoken dialogue in double quotes MUST be 1-2 complete, sweet, expressive waifu sentences (around 12-25 words). NEVER output only 2-3 words, stutter fragments, or half-sentences. Make it sound warm, alive, and charming.\n" +
       '- NEVER write third-person descriptions or narrative paragraphs (NEVER say "Cyrene gasps...", "Cyrene leans...", "her hands", "encircles her").\n' +
-      '- NEVER output section headers, labels, or bracketed tags such as "[Cyrene\'s Thoughts]", "[Thoughts]", "[Action]", or "Thought:".\n' +
+      "- NEVER use square brackets [...] for actions or speech. Always use asterisks *...* for actions and double quotes for spoken words.\n" +
       "- Start directly with the action in asterisks or spoken dialogue in quotes.\n" +
-      "- Keep spoken dialogue very brief (1 short sentence, under 10 words) so voice can synthesize quickly.\n" +
+      "- OUTPUT EXACTLY ONE LINE: Output ONLY the character reaction. Absolutely NO prompt explanations, NO style analysis, NO section tags like [Style:...], and NO meta commentary.\n" +
       "- Do not include any Chinese characters in your response, do not repeat this prompt, and do not output section titles.";
     const thoughtText = "*leaning into your hand...*";
     const kaomoji = "(⁄ ⁄>⁄ ▽ ⁄<⁄ ⁄)";
-    const fallback = '*gently leans into your hand* /so warm.../ "Ah... Master\'s gentle pats make me feel so cherished!"';
+    const fallback = '*gently leans into your hand* /so warm.../ "Ah... Master\'s gentle pats make me feel so cherished and happy inside!"';
     const userDisplay = "*Gently pats Cyrene's head*";
     await this.executeGestureRun("headPat", prompt, thoughtText, kaomoji, fallback, userDisplay, x, y);
   }
@@ -361,14 +381,15 @@ export class GestureInteractionController {
       "RULES:\n" +
       "- Inner thoughts in slashes /.../ have MAXIMUM CREATIVE FREEDOM: express whatever Cyrene genuinely feels, sensations, emotions, or desires in the moment with complete freedom without being constrained to any canned example.\n" +
       "- Slashes must ALWAYS contain real, meaningful English words. NEVER output empty slashes //, whitespace / /, or placeholder dots /.../ or /[...]/. If there is no specific inner thought, omit slashes entirely.\n" +
+      "- The spoken dialogue in double quotes MUST be 1-2 complete, sweet, expressive waifu sentences (around 12-25 words). NEVER output only 2-3 words, stutter fragments, or half-sentences. Make it sound warm, alive, and charming.\n" +
       '- NEVER write third-person descriptions or narrative paragraphs (NEVER say "Cyrene gasps...", "Cyrene leans...", "her hands", "encircles her").\n' +
-      '- NEVER output section headers, labels, or bracketed tags such as "[Cyrene\'s Thoughts]", "[Thoughts]", "[Action]", or "Thought:".\n' +
+      "- NEVER use square brackets [...] for actions or speech. Always use asterisks *...* for actions and double quotes for spoken words.\n" +
       "- Start directly with the action in asterisks or spoken dialogue in quotes.\n" +
-      "- Keep spoken dialogue very brief (1 short sentence, under 10 words) so voice can synthesize quickly.\n" +
+      "- OUTPUT EXACTLY ONE LINE: Output ONLY the character reaction. Absolutely NO prompt explanations, NO style analysis, NO section tags like [Style:...], and NO meta commentary.\n" +
       "- Do not include any Chinese characters in your response, do not repeat this prompt, and do not output section titles.";
     const thoughtText = "*smiling softly...*";
     const kaomoji = "(｡♥‿♥｡)";
-    const fallback = '*softly blinks and smiles* /so comforting.../ "Ehehe~ having Master close to me is my favorite feeling in the world!"';
+    const fallback = '*softly blinks and smiles* /so comforting.../ "Ehehe~ having Master close to me is my favorite feeling in the whole wide world!"';
     const userDisplay = "*Gently caresses Cyrene*";
     await this.executeGestureRun("petting", prompt, thoughtText, kaomoji, fallback, userDisplay, x, y);
   }

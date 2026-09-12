@@ -4226,6 +4226,13 @@ function createChatWindow(sessionId?: string): void {
 
   attachExternalLinkHandler(chatWindow);
 
+  chatWindow.webContents.on("before-input-event", (_event, input) => {
+    if (!chatWindow || chatWindow.isDestroyed()) return;
+    if (input.type === "keyDown" && ((input.control && input.key.toLowerCase() === "r") || input.key === "F5")) {
+      chatWindow.webContents.reload();
+    }
+  });
+
   const queryString = targetSessionId ? "?sessionId=" + encodeURIComponent(targetSessionId) : "";
   if (isDev) {
     chatWindow.loadURL("http://localhost:5173/chat/" + queryString);

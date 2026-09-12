@@ -104,6 +104,13 @@
 8. **Cơ Chế Xoa Dịu Tâm Trạng Của Cử Chỉ (Soothing Touch Mood Dynamics)**:
    - Cử chỉ xoa đầu (`headpat`), vuốt ve (`petting`) có trọng số cao (Tier 1: 3.5) trong từ điển tình cảm (`affectionate`).
    - Khi người dùng thực hiện xoa đầu/vuốt ve ở lượt tương tác mới nhất, hệ thống tự động suy giảm điểm dỗi hờn (`scores.pouting *= 0.45`), giúp tâm trạng Cyrene nhanh chóng tan chảy và trở lại vẻ ngọt ngào, dịu dàng, tránh tình trạng bị kẹt vĩnh viễn ở trạng thái dỗi (`pouting`).
+9. **Chốt Chặn Triệt Để Bài Văn Nghị Luận & Thoại Trọn Vẹn (Anti-Meta Essay Cutoff & Complete Voice Dialogue)**:
+   - CẤM LLM xuất ra các đoạn phân tích prompt, phong cách `[Style: ...]`, hoặc văn nghị luận ngôi thứ ba (`Here, Cyrene playfully reacts...`, `The action "..." visualizes...`, `Her inner thought "..." captures...`, `The spoken dialogue "..." is...`).
+   - Hàm `cleanGestureReply` kích hoạt chốt chặn cắt bỏ triệt để (`metaCutoffRegex`) ngay khi phát hiện bất kỳ đoạn phân tích phong cách hoặc giải thích nào ở đuôi.
+   - Hành động đóng ngoặc vuông `[action]` ở đầu câu bắt buộc được chuẩn hóa thành `*action*`. Các dấu ngoặc vuông bên trong lời thoại `"[O-oh, quit it...]"` phải được tẩy sạch thành `"O-oh, quit it..."`.
+   - **Độ dài câu thoại (Spoken Dialogue Completeness)**: Prompt yêu cầu Cyrene nói từ 1-2 câu trọn vẹn, tự nhiên, ngọt ngào (khoảng 12-25 từ). TUYỆT ĐỐI CẤM ép prompt "under 10 words" khiến LLM sinh câu cụt ngủn 2-3 từ rồi ngắt âm thanh GPT-SoVITS đột ngột.
+10. **Phím Tắt Nạp Lại Tức Thì Cửa Sổ Chat (`Ctrl+R` / `F5`)**:
+   - Cửa sổ Chat được gắn bộ bắt sự kiện `before-input-event` hỗ trợ `Ctrl+R` và `F5` để nạp lại giao diện tức thời mà không cần khởi động lại toàn bộ tiến trình Electron.
 
 ---
 
