@@ -1051,8 +1051,12 @@ function renderPlanCard(snapshot: PlanSnapshot): void {
     : "paused";
 
   const stepIcons: Record<string, string> = {
-    pending: "⬜", running: "🔄", completed: "✅",
-    failed: "❌", skipped: "⏭️", superseded: "──",
+    pending: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"/></svg>`,
+    running: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spin" aria-hidden="true"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>`,
+    completed: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.5" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>`,
+    failed: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#f43f5e" stroke-width="2.5" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
+    skipped: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>`,
+    superseded: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"/></svg>`,
   };
 
   const stepsHtml = snapshot.steps.map((s) => {
@@ -1642,7 +1646,15 @@ function buildWeatherCardEl(data: Record<string, unknown>): HTMLElement {
     const dateLabel = escapeHtml(String(d.date ?? ""));
     const fcIllClass = weatherIllustrationClass(textDay);
     // ： emoji ，
-    const fcIcon = textDay.includes("Thunder") ? "⛈️" : textDay.includes("Snow") ? "❄️" : textDay.includes("Rain") ? "🌧️" : textDay.includes("Clear") ? "☀️" : "⛅";
+    const fcIcon = textDay.includes("Thunder")
+      ? `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#eab308" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 16.9A5 5 0 0 0 18 7h-1.26a8 8 0 1 0-11.62 9"/><polygon points="13 11 9 17 15 17 11 23"/></svg>`
+      : textDay.includes("Snow")
+      ? `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#67e8f9" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/><line x1="19.07" y1="4.93" x2="4.93" y2="19.07"/></svg>`
+      : textDay.includes("Rain")
+      ? `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 16.6A5 5 0 0 0 18 7a7 7 0 1 0-13.9 1.6A4.5 4.5 0 0 0 5.5 17H17"/><path d="M8 19v2M12 18v2M16 19v2"/></svg>`
+      : textDay.includes("Clear")
+      ? `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`
+      : `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>`;
     return `<div class="forecast-row">
       <span class="forecast-date">${dateLabel} ${weekDay}</span>
       <span class="forecast-icon">${fcIcon}</span>
@@ -2530,14 +2542,14 @@ function installSchedulerEventListener(): void {
     if (!msg) return;
 
     if (event.type === "TOOL_CALL_START") {
-      state.toolLines.push(`🔧 Calling: ${event.toolCallName ?? "tool"}`);
+      state.toolLines.push(`Calling: ${event.toolCallName ?? "tool"}`);
       renderState(state);
     } else if (event.type === "TOOL_CALL_RESULT") {
       const preview = (event.content ?? "").slice(0, 240);
-      state.toolLines.push(`✅ Tool result: ${preview || "Completed"}`);
+      state.toolLines.push(`Tool result: ${preview || "Completed"}`);
       renderState(state);
     } else if (event.type === "TOOL_CALL_END") {
-      state.toolLines.push("✅ Tool execution completed");
+      state.toolLines.push("Tool execution completed");
       renderState(state);
     } else if (event.type === "TEXT_MESSAGE_START") {
       msg.thinking = false;
@@ -4726,7 +4738,6 @@ async function clearChat(): Promise<void> {
     message: "Clear current conversation? This cannot be undone.",
     confirmText: "Clear",
     cancelText: "Cancel",
-    icon: "🗑️",
     danger: true,
   });
   if (!ok) return;
@@ -4739,7 +4750,6 @@ async function clearChat(): Promise<void> {
         await showAlert({
           title: "Storage Error",
           message: "Failed to clear chat on disk. Storage operation was unsuccessful.",
-          icon: "⚠️",
         });
         return;
       }
@@ -4748,7 +4758,6 @@ async function clearChat(): Promise<void> {
       await showAlert({
         title: "Storage Error",
         message: "Failed to clear chat on disk. Please try again.",
-        icon: "⚠️",
       });
       return;
     }
@@ -4834,7 +4843,6 @@ async function ingestDroppedFiles(files: File[]): Promise<void> {
     await showAlert({
       title: "File Ingestion Failed",
       message: "File ingestion failed: " + ((err as Error)?.message || String(err)),
-      icon: "⚠️",
     });
   } finally {
     attachBtn!.disabled = false;

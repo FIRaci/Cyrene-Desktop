@@ -2433,13 +2433,12 @@ pluginAddBtn?.addEventListener("click", async () => {
     title: "MCP Server Name",
     message: "Give this MCP server a name (display only)",
     placeholder: "e.g.: weather-tools",
-    icon: "🏷️",
   });
   const name = (nameInput && nameInput.trim()) || "Unnamed MCP";
   const serverId = "mcp-" + Date.now();
   const parsed = parseCommandLine(command.trim());
   if (!parsed.command) {
-    await showModal({ title: "Failed to Add", message: "Please enter a valid start command", icon: "⚠️" });
+    await showModal({ title: "Failed to Add", message: "Please enter a valid start command" });
     return;
   }
 
@@ -2459,14 +2458,12 @@ pluginAddBtn?.addEventListener("click", async () => {
       await showModal({
         title: "Added Successfully",
         message: '"' + name + '" connected, found ' + (result.toolIds?.length || 0) + " tools. Details.",
-        icon: "✅",
       });
     } else {
       console.error("[settings] Failed to add MCP server:", result?.error);
       await showModal({
         title: "Failed to Add",
         message: (result?.error || "Unknown error") + " (see terminal log for details)",
-        icon: "⚠️",
       });
     }
   } catch (err) {
@@ -2474,7 +2471,6 @@ pluginAddBtn?.addEventListener("click", async () => {
     await showModal({
       title: "Error Adding",
       message: "An error occurred during execution. See terminal logs for details.",
-      icon: "⚠️",
     });
   }
 });
@@ -2485,7 +2481,6 @@ clearChatHistoryBtn.addEventListener("click", async () => {
     message: "Clear all chat sessions?\nThis will delete all conversations and cannot be undone.",
     confirmText: "Clear All",
     cancelText: "Cancel",
-    icon: "🗑️",
     danger: true,
   });
   if (!confirmed) return;
@@ -3643,7 +3638,6 @@ channelsLogClearBtn?.addEventListener("click", async () => {
     message: "Clear all bot message logs?",
     confirmText: "Clear",
     cancelText: "Cancel",
-    icon: "🗑️",
     danger: true,
   });
   if (!confirmed) return;
@@ -4215,7 +4209,6 @@ window.settings?.onSwitchSection?.((section) => {
     const confirmed = await showConfirm({
       title: "Delete Model",
       message: `Delete model: ${name}?`,
-      icon: "⚠️",
       confirmText: "Delete",
       cancelText: "Cancel",
       danger: true,
@@ -4741,9 +4734,9 @@ memoryImportedList?.addEventListener("click", async (event) => {
   const confirmed = await showModal({
     title: "Delete imported knowledge",
     message: "Delete this imported document?\n\nFile: " + fileName + "\n\nThis cannot be undone. Re-import if needed.",
-    icon: "⚠️",
     confirmText: "Delete",
     cancelText: "Cancel",
+    danger: true,
   });
 
   if (!confirmed) return;
@@ -5271,7 +5264,6 @@ async function deleteChatSession(session: ChatSessionMetaUI): Promise<void> {
     message: prompt,
     confirmText: "Delete",
     cancelText: "Cancel",
-    icon: "🗑️",
     danger: true,
   });
   if (!ok) return;
@@ -6317,7 +6309,7 @@ document.getElementById("tts-mossland-list-voices")?.addEventListener("click", a
       setMosslandListStatus(`✅ Found ${result.voices.length}  voice(s). Click "Use" to fill the voice ID.`, "ok");
     }
   } catch (err) {
-    setMosslandListStatus("❌ " + (err instanceof Error ? err.message : String(err)), "error");
+    setMosslandListStatus("Failed: " + (err instanceof Error ? err.message : String(err)), "error");
   }
 });
 

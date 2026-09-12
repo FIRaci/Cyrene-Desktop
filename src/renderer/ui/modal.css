@@ -56,6 +56,12 @@
   justify-content: center;
 }
 
+.cy-modal__icon svg {
+  display: block;
+  width: 22px;
+  height: 22px;
+}
+
 .cy-modal__title {
   margin: 0;
   color: #ffffff;

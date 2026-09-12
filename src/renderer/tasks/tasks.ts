@@ -836,7 +836,6 @@ function setupEventHandlers(): void {
       await showAlert({
         title: "Schedule Task Error",
         message: err instanceof Error ? err.message : "Failed to save event",
-        icon: "⚠️",
       });
     } finally {
       if (saveBtn) {
